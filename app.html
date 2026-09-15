@@ -25,40 +25,38 @@
   }
   *{box-sizing:border-box;}
   body{ margin:0; min-height:100vh; font-family:var(--font-ui); background:var(--bg); color:var(--tx1); }
-  #standalone-note{ position:fixed; inset:0; display:flex; align-items:center; justify-content:center; text-align:center; color:var(--tx3); font-family:var(--font-mono); font-size:12px; line-height:1.6; padding:20px; pointer-events:none; }
 
-  #todo-trigger{
-    position:fixed; right:20px; bottom:20px; width:52px; height:52px; border-radius:50%;
-    background:var(--panel-2); border:1px solid var(--bd); display:flex; align-items:center; justify-content:center;
-    cursor:pointer; z-index:9999; box-shadow:0 4px 16px rgba(0,0,0,.5); transition:transform .15s ease, border-color .15s ease;
+  .app-shell{ display:flex; min-height:100vh; }
+
+  .app-sidebar{
+    width:220px; flex-shrink:0; background:var(--panel); border-right:1px solid var(--bd);
+    display:flex; flex-direction:column; padding:22px 0;
   }
-  #todo-trigger:hover{ transform:translateY(-2px); border-color:var(--accent); }
-  #todo-trigger svg{ width:20px; height:20px; stroke:var(--accent); }
-  #todo-badge{ position:absolute; top:-4px; right:-4px; min-width:18px; height:18px; padding:0 4px; border-radius:9px; background:var(--accent); color:#04070C; font-family:var(--font-mono); font-size:10px; font-weight:700; border:2px solid var(--bg); display:flex; align-items:center; justify-content:center; line-height:1; }
-  #todo-badge.overdue{ background:var(--crit); }
-  #todo-badge.hidden{ display:none; }
-
-  #todo-panel{
-    position:fixed; right:20px; bottom:84px; width:460px; max-height:min(780px, 86vh);
-    background:var(--panel); border:1px solid var(--bd); border-radius:8px;
-    box-shadow:0 16px 48px rgba(0,0,0,.6); z-index:9998; display:flex; flex-direction:column;
-    opacity:0; transform:translateY(8px) scale(.98); pointer-events:none; transition:opacity .16s ease, transform .16s ease;
+  .app-sidebar-head{ padding:0 20px 18px; }
+  .app-sidebar-head h1{ font-size:13px; font-weight:700; margin:0 0 4px; letter-spacing:.3px; font-family:var(--font-mono); color:var(--tx1); text-transform:uppercase; }
+  .app-sidebar .head-stats{ font-family:var(--font-mono); font-size:11px; color:var(--tx3); }
+  .app-sidebar-back{
+    margin-top:auto; padding:12px 20px 0; font-family:var(--font-mono); font-size:10.5px; color:var(--tx3);
+    text-decoration:none; border-top:1px solid var(--bd); padding-top:14px;
   }
-  #todo-panel.open{ opacity:1; transform:translateY(0) scale(1); pointer-events:auto; }
-  #todo-panel.pip-mode{ position:static !important; width:100% !important; height:100% !important; max-height:100% !important; border:none !important; border-radius:0 !important; opacity:1 !important; transform:none !important; pointer-events:auto !important; box-shadow:none !important; }
+  .app-sidebar-back:hover{ color:var(--accent); }
 
-  .panel-head{ display:flex; align-items:center; justify-content:space-between; padding:13px 15px; border-bottom:1px solid var(--bd); flex-shrink:0; }
-  .panel-head h1{ font-size:13px; font-weight:700; margin:0; letter-spacing:.3px; font-family:var(--font-mono); color:var(--tx1); text-transform:uppercase; }
-  .head-stats{ font-family:var(--font-mono); font-size:11px; color:var(--tx3); }
-  .head-actions{ display:flex; align-items:center; gap:2px; }
+  #todo-panel{ display:flex; flex-direction:column; flex:1; min-width:0; max-height:100vh; }
+
+  .panel-head{ display:none; }
   .icon-btn{ background:none; border:none; color:var(--tx3); cursor:pointer; padding:6px; display:flex; border-radius:var(--radius); }
   .icon-btn:hover{ color:var(--tx1); background:var(--panel-2); }
   .icon-btn.active-toggle{ color:var(--accent); }
   .icon-btn svg{ width:16px; height:16px; }
 
-  .tabs{ display:flex; gap:2px; padding:8px 15px 0; border-bottom:1px solid var(--bd); flex-shrink:0; }
-  .tab{ font-family:var(--font-mono); font-size:11px; color:var(--tx3); padding:7px 8px 9px; cursor:pointer; border-bottom:2px solid transparent; user-select:none; text-transform:uppercase; letter-spacing:.3px; }
-  .tab.active{ color:var(--tx1); border-bottom-color:var(--accent); }
+  .tabs{ display:flex; flex-direction:column; gap:2px; padding:0 12px; border-bottom:none; flex-shrink:0; }
+  .tab{
+    font-family:var(--font-mono); font-size:11px; color:var(--tx3); padding:10px 10px; cursor:pointer;
+    border-bottom:none; border-left:3px solid transparent; border-radius:0 6px 6px 0; user-select:none;
+    text-transform:uppercase; letter-spacing:.3px; display:flex; align-items:center;
+  }
+  .tab:hover{ color:var(--tx1); background:var(--panel-2); }
+  .tab.active{ color:var(--accent); background:var(--accent-dim); border-left-color:var(--accent); }
   .tab-panel{ display:flex; flex-direction:column; min-height:0; flex:1; }
   .tab-panel.hidden{ display:none; }
 
@@ -169,10 +167,13 @@
 
   #task-list.view-bloc{ display:flex; flex-direction:row; align-items:stretch; overflow-x:auto; }
   .kanban-col{ min-width:190px; max-width:190px; display:flex; flex-direction:column; border-right:1px solid var(--bd); flex-shrink:0; }
+  .kanban-col{ min-width:280px; max-width:340px; }
   .kanban-col-header{ padding:10px 12px; font-family:var(--font-mono); font-size:10.5px; font-weight:700; border-bottom:1px solid var(--bd); background:var(--panel-2); position:sticky; top:0; text-transform:uppercase; letter-spacing:.3px; }
   .kanban-col-body{ overflow-y:auto; flex:1; min-height:80px; }
   .kanban-col .task-title-compact{ font-size:12.5px; }
 
+  #task-list:not(.view-bloc){ display:grid; grid-template-columns:repeat(auto-fill, minmax(340px, 1fr)); gap:0; align-content:start; }
+  .group-header{ grid-column:1 / -1; }
 
   #tab-lists{ padding:15px; overflow-y:auto; gap:22px; }
   .list-manager h2{ font-family:var(--font-mono); font-size:11px; font-weight:700; margin:0 0 4px; color:var(--tx1); text-transform:uppercase; letter-spacing:.4px; }
@@ -224,37 +225,24 @@
 </head>
 <body>
 
-<div id="standalone-note">Widget todo — clique le bouton en bas à droite ↘<br>Ctrl/Cmd+K ouvre aussi le panneau<br>(ce message disparaît une fois le widget intégré à une autre page)</div>
+<div class="app-shell">
+  <nav class="app-sidebar">
+    <div class="app-sidebar-head">
+      <h1>Tasks</h1>
+      <span class="head-stats" id="head-stats">0</span>
+    </div>
 
-<div id="todo-trigger">
-  <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
-  <span id="todo-badge" class="hidden">0</span>
-</div>
+    <div class="tabs">
+      <span class="tab active" data-tab="tasks">Tâches</span>
+      <span class="tab" data-tab="inbox">Boîte mail<span class="tab-badge" id="inbox-badge"></span></span>
+      <span class="tab" data-tab="archive">Archive</span>
+      <span class="tab" data-tab="lists">Réf. &amp; data</span>
+    </div>
+
+    <a href="index.html" class="app-sidebar-back">← Widget</a>
+  </nav>
 
 <div id="todo-panel">
-  <div class="panel-head">
-    <h1>Tasks</h1>
-    <div class="head-actions">
-      <span class="head-stats" id="head-stats" style="margin-right:6px;">0</span>
-      <button class="icon-btn" id="mini-btn" title="Mode mini (toujours visible, Chrome/Edge)">
-        <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><rect x="12" y="12" width="8" height="7" rx="1"/></svg>
-      </button>
-      <button class="icon-btn" id="max-btn" title="Vue complète">
-        <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg>
-      </button>
-      <button class="icon-btn" id="close-panel">
-        <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg>
-      </button>
-    </div>
-  </div>
-
-  <div class="tabs">
-    <span class="tab active" data-tab="tasks">Tâches</span>
-    <span class="tab" data-tab="inbox">Boîte mail<span class="tab-badge" id="inbox-badge"></span></span>
-    <span class="tab" data-tab="archive">Archive</span>
-    <span class="tab" data-tab="lists">Réf. &amp; data</span>
-  </div>
-
   <div class="tab-panel" id="tab-tasks">
     <div class="add-trigger-row" id="add-trigger-row">
       <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>
@@ -382,6 +370,7 @@
     </div>
   </div>
 </div>
+</div>
 
 <div id="snooze-popover">
   <button data-days="1">+1 jour</button>
@@ -405,7 +394,6 @@
 <script>
 (function(){
   const $ = id => document.getElementById(id);
-  const trigger=$('todo-trigger'), panel=$('todo-panel'), closeBtn=$('close-panel'), miniBtn=$('mini-btn'), maxBtn=$('max-btn');
   const taskList=$('task-list'), badge=$('todo-badge'), headStats=$('head-stats');
   const filters=$('filters'), viewSwitch=$('view-switch'), snoozePopover=$('snooze-popover');
   const reminderToggle=$('reminder-toggle'), reminderRow=$('reminder-row'), recurToggle=$('recur-toggle'), recurRow=$('recur-row');
@@ -426,7 +414,7 @@
 
   let tasks=[], clientsList=[], projectsList=[];
   let currentFilter='ouvertes', currentView='liste', searchQuery='';
-  let notifiedIds=new Set(), selectedTaskId=null, currentSnoozeId=null, editingId=null, pipWindow=null;
+  let notifiedIds=new Set(), selectedTaskId=null, currentSnoozeId=null, editingId=null;
 
   const TASKS_KEY='todo-widget-tasks', CLIENTS_KEY='todo-widget-clients', PROJECTS_KEY='todo-widget-projects';
 
@@ -888,21 +876,6 @@
     reader.readAsText(file);
   }
 
-  async function toggleMiniMode(){
-    if(pipWindow){ pipWindow.close(); return; }
-    if(!('documentPictureInPicture'in window)){ alert('Le mode mini (toujours au premier plan) nécessite Chrome ou Edge récent.'); return; }
-    try{ pipWindow=await documentPictureInPicture.requestWindow({width:380,height:580}); }catch(e){ pipWindow=null; return; }
-    [...document.styleSheets].forEach(sheet=>{ try{ const css=[...sheet.cssRules].map(r=>r.cssText).join(''); const st=document.createElement('style'); st.textContent=css; pipWindow.document.head.appendChild(st); }catch(e){ if(sheet.href){ const l=document.createElement('link'); l.rel='stylesheet'; l.href=sheet.href; pipWindow.document.head.appendChild(l); } } });
-    pipWindow.document.body.style.margin='0'; pipWindow.document.body.style.background='#0A0D12';
-    panel.classList.add('open','pip-mode'); pipWindow.document.body.appendChild(panel); miniBtn.classList.add('active-toggle');
-    pipWindow.addEventListener('pagehide',()=>{ document.body.appendChild(panel); panel.classList.remove('pip-mode'); miniBtn.classList.remove('active-toggle'); pipWindow=null; },{once:true});
-  }
-  function goFullView(){ window.location.href = 'app.html'; }
-
-  trigger.onclick=()=>panel.classList.toggle('open');
-  closeBtn.onclick=()=>{ if(pipWindow){ pipWindow.close(); return; } panel.classList.remove('open'); };
-  miniBtn.onclick=toggleMiniMode; maxBtn.onclick=goFullView;
-
   tabs.forEach(el=>{ el.onclick=()=>{ tabs.forEach(t=>t.classList.remove('active')); el.classList.add('active'); const tgt=el.dataset.tab; tabTasks.classList.toggle('hidden',tgt!=='tasks'); tabInbox.classList.toggle('hidden',tgt!=='inbox'); tabArchive.classList.toggle('hidden',tgt!=='archive'); tabLists.classList.toggle('hidden',tgt!=='lists'); if(tgt==='archive')renderArchive(); if(tgt==='lists')renderLists(); if(tgt==='inbox')fetchInbox(); }; });
 
   $('submit-task').onclick=addTask;
@@ -933,10 +906,9 @@
   document.addEventListener('click',e=>{ if(snoozePopover.style.display==='flex'&&!snoozePopover.contains(e.target))closeSnoozePopover(); });
 
   document.addEventListener('keydown',e=>{
-    if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='k'){ e.preventDefault(); panel.classList.add('open'); openAddForm(); return; }
-    if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='f'&&panel.classList.contains('open')){ e.preventDefault(); searchInput.focus(); return; }
-    if(!panel.classList.contains('open'))return;
-    if(e.key==='Escape'){ if(snoozePopover.style.display==='flex'){ closeSnoozePopover(); return; } if(editingId){ editingId=null; render(); return; } if(document.activeElement&&document.activeElement.id==='f-title'){ closeAddForm(); return; } if(document.activeElement===searchInput&&searchQuery){ searchInput.value=''; searchQuery=''; searchClear.classList.remove('show'); render(); return; } panel.classList.remove('open'); return; }
+    if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='k'){ e.preventDefault(); openAddForm(); return; }
+    if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='f'){ e.preventDefault(); searchInput.focus(); return; }
+    if(e.key==='Escape'){ if(snoozePopover.style.display==='flex'){ closeSnoozePopover(); return; } if(editingId){ editingId=null; render(); return; } if(document.activeElement&&document.activeElement.id==='f-title'){ closeAddForm(); return; } if(document.activeElement===searchInput&&searchQuery){ searchInput.value=''; searchQuery=''; searchClear.classList.remove('show'); render(); return; } return; }
     const tag=document.activeElement.tagName; if(tag==='INPUT'||tag==='TEXTAREA'||tag==='SELECT')return;
     if(e.key==='n'){ e.preventDefault(); openAddForm(); }
     else if(e.key==='j'||e.key==='k'){ e.preventDefault(); moveSelection(e.key==='j'?1:-1); }
