@@ -2,6 +2,7 @@ const CACHE = 'todo-pwa-v1';
 const ASSETS = [
   './',
   './index.html',
+  './app.html',
   './manifest.json',
   './share-target.html',
   './icons/icon-192.png',
