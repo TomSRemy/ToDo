@@ -48,7 +48,7 @@
 
   #pip-bubble{ display:none; flex:1; flex-direction:column; align-items:center; justify-content:center; cursor:pointer; gap:6px; }
   #todo-panel.pip-collapsed #pip-bubble{ display:flex; }
-  #todo-panel.pip-collapsed .add-trigger-row,
+  #todo-panel.pip-collapsed .quick-add-bar,
   #todo-panel.pip-collapsed #add-section,
   #todo-panel.pip-collapsed .see-all-row,
   #todo-panel.pip-collapsed #task-list{ display:none; }
@@ -67,9 +67,23 @@
   .icon-btn svg{ width:15px; height:15px; stroke:currentColor; }
   .icon-btn.hidden{ display:none; }
 
-  .add-trigger-row{ display:flex; align-items:center; gap:8px; padding:10px 14px; border-bottom:1px solid var(--bd); cursor:pointer; color:var(--accent); font-size:12px; font-weight:600; flex-shrink:0; }
-  .add-trigger-row:hover{ background:var(--panel-2); }
-  .add-trigger-row svg{ width:14px; height:14px; stroke:var(--accent); }
+  .quick-add-bar{ display:flex; align-items:center; gap:6px; padding:9px 14px; border-bottom:1px solid var(--bd); flex-shrink:0; }
+  #quick-add-input{ flex:1; min-width:0; background:var(--panel-2); border:1px solid var(--bd); border-radius:var(--radius); color:var(--tx1); font-family:var(--font-ui); font-size:12.5px; padding:7px 9px; }
+  #quick-add-input::placeholder{ color:var(--tx3); }
+  #quick-add-input:focus{ outline:none; border-color:var(--accent); }
+  #quick-add-more{ flex-shrink:0; }
+
+  .combo-wrap{ position:relative; }
+  .combo-dropdown{ display:none; position:absolute; top:calc(100% + 4px); left:0; right:0; max-height:170px; overflow-y:auto; background:var(--panel-3); border:1px solid var(--bd); border-radius:var(--radius); box-shadow:0 8px 24px rgba(0,0,0,.5); z-index:50; }
+  .combo-dropdown.open{ display:block; }
+  .combo-item{ display:flex; align-items:center; gap:8px; padding:7px 9px; cursor:pointer; font-size:12px; color:var(--tx1); }
+  .combo-item:hover{ background:var(--panel-2); }
+  .combo-item-dot{ width:8px; height:8px; border-radius:50%; flex-shrink:0; }
+  .combo-item-label{ flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .combo-item-del{ background:none; border:none; color:var(--tx3); cursor:pointer; padding:2px; display:flex; flex-shrink:0; }
+  .combo-item-del:hover{ color:var(--crit); }
+  .combo-item-del svg{ width:11px; height:11px; stroke:currentColor; }
+  .combo-empty{ padding:8px 9px; font-size:10.5px; color:var(--tx3); font-family:var(--font-mono); }
 
   #add-section{ padding:12px 14px; border-bottom:1px solid var(--bd); flex-shrink:0; display:none; flex-direction:column; gap:9px; }
   #add-section.open{ display:flex; }
@@ -191,9 +205,11 @@
     </div>
   </div>
 
-  <div class="add-trigger-row" id="add-trigger-row">
-    <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>
-    <span>Ajouter une tâche</span>
+  <div class="quick-add-bar">
+    <input type="text" id="quick-add-input" placeholder="Ajouter une tâche… (Entrée)">
+    <button class="icon-btn" id="quick-add-more" type="button" title="Plus d'options">
+      <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="5" cy="12" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="19" cy="12" r="1.5"/></svg>
+    </button>
   </div>
   <div id="add-section">
     <div>
@@ -207,13 +223,17 @@
     <div class="form-row">
       <div>
         <span class="field-label">Client</span>
-        <div class="input-with-dot"><span class="color-dot" id="client-dot"></span><input type="text" id="f-client" list="client-datalist" placeholder="Client" autocomplete="off"></div>
-        <datalist id="client-datalist"></datalist>
+        <div class="combo-wrap">
+          <div class="input-with-dot"><span class="color-dot" id="client-dot"></span><input type="text" id="f-client" placeholder="Client" autocomplete="off"></div>
+          <div class="combo-dropdown" id="client-dropdown"></div>
+        </div>
       </div>
       <div>
         <span class="field-label">Projet</span>
-        <div class="input-with-dot"><span class="color-dot" id="project-dot"></span><input type="text" id="f-project" list="project-datalist" placeholder="Projet" autocomplete="off"></div>
-        <datalist id="project-datalist"></datalist>
+        <div class="combo-wrap">
+          <div class="input-with-dot"><span class="color-dot" id="project-dot"></span><input type="text" id="f-project" placeholder="Projet" autocomplete="off"></div>
+          <div class="combo-dropdown" id="project-dropdown"></div>
+        </div>
       </div>
     </div>
     <div class="form-row">
@@ -261,6 +281,9 @@
   </div>
 </div>
 
+<datalist id="client-datalist"></datalist>
+<datalist id="project-datalist"></datalist>
+
 <div id="snooze-popover">
   <button data-days="1">+1 jour</button>
   <button data-days="3">+3 jours</button>
@@ -286,8 +309,8 @@
   const snoozePopover=$('snooze-popover');
   const reminderToggle=$('reminder-toggle'), reminderRow=$('reminder-row'), recurToggle=$('recur-toggle'), recurRow=$('recur-row');
   const clientInput=$('f-client'), projectInput=$('f-project'), clientDot=$('client-dot'), projectDot=$('project-dot');
-  const clientDatalist=$('client-datalist'), projectDatalist=$('project-datalist');
-  const addSection=$('add-section'), addTriggerRow=$('add-trigger-row'), cancelTaskBtn=$('cancel-task');
+  const addSection=$('add-section'), cancelTaskBtn=$('cancel-task');
+  const quickAddInput=$('quick-add-input'), quickAddMore=$('quick-add-more');
   const seeAllLink=$('see-all-link'), seeAllText=$('see-all-text');
   const pipBubble=$('pip-bubble'), pipBubbleCount=$('pip-bubble-count');
 
@@ -343,8 +366,8 @@
     });
   }
   function refreshDatalists(){
-    clientDatalist.innerHTML = clientsList.slice().sort().map(c=>'<option value="'+escapeHtml(c)+'">').join('');
-    projectDatalist.innerHTML = projectsList.slice().sort().map(p=>'<option value="'+escapeHtml(p)+'">').join('');
+    $('client-datalist').innerHTML = clientsList.slice().sort().map(c=>'<option value="'+escapeHtml(c)+'">').join('');
+    $('project-datalist').innerHTML = projectsList.slice().sort().map(p=>'<option value="'+escapeHtml(p)+'">').join('');
   }
 
   function makeDot(hex,label,shape){ const d=document.createElement('span'); d.className='meta-dot'+(shape==='square'?' square':''); d.style.background=hex; d.title=label; return d; }
@@ -524,8 +547,14 @@
       urgency:$('f-urgency').value, status:$('f-status').value, reminder:$('f-reminder').value, link:$('f-link').value.trim(), due, recur });
     render(); closeAddForm();
   }
-  function openAddForm(){ addSection.classList.add('open'); addTriggerRow.style.display='none'; $('f-title').focus(); }
-  function closeAddForm(){ addSection.classList.remove('open'); addTriggerRow.style.display='flex'; resetAddForm(); }
+  function openAddForm(){ addSection.classList.add('open'); $('f-title').focus(); }
+  function closeAddForm(){ addSection.classList.remove('open'); resetAddForm(); }
+  function quickAdd(){
+    const title=quickAddInput.value.trim(); if(!title) return;
+    createTask({ title, urgency:'moyenne', status:'a_faire' });
+    quickAddInput.value='';
+    render();
+  }
   function resetAddForm(){
     ['f-title','f-description','f-due','f-reminder','f-link','f-recur-start','f-recur-end'].forEach(id=>$(id).value='');
     clientInput.value=''; projectInput.value=''; clientDot.style.background='var(--bd)'; projectDot.style.background='var(--bd)';
@@ -591,10 +620,44 @@
 
   $('submit-task').onclick=addTask;
   $('f-title').addEventListener('keydown', e=>{ if(e.key==='Enter') addTask(); });
-  addTriggerRow.onclick=openAddForm; cancelTaskBtn.onclick=closeAddForm;
+  quickAddInput.addEventListener('keydown', e=>{ if(e.key==='Enter') quickAdd(); });
+  quickAddMore.onclick=()=>{ openAddForm(); if(quickAddInput.value.trim()){ $('f-title').value=quickAddInput.value.trim(); quickAddInput.value=''; } };
+  cancelTaskBtn.onclick=closeAddForm;
 
   clientInput.addEventListener('input', ()=>{ clientDot.style.background=clientInput.value.trim()?clientColor(clientInput.value.trim()):'var(--bd)'; });
   projectInput.addEventListener('input', ()=>{ projectDot.style.background=projectInput.value.trim()?projectColor(projectInput.value.trim()):'var(--bd)'; });
+
+  function setupCombo(inputEl, dotEl, dropdownEl, getList, colorFn, onDelete){
+    function renderDropdown(){
+      const q=inputEl.value.trim().toLowerCase();
+      const items=getList().slice().sort().filter(n=>n.toLowerCase().includes(q));
+      dropdownEl.innerHTML='';
+      if(items.length===0){
+        const e=document.createElement('div'); e.className='combo-empty'; e.textContent=q?'Aucun résultat — tape pour créer':'Aucun enregistré — tape pour créer';
+        dropdownEl.appendChild(e);
+      } else {
+        items.forEach(name=>{
+          const row=document.createElement('div'); row.className='combo-item';
+          const dot=document.createElement('span'); dot.className='combo-item-dot'; dot.style.background=colorFn(name);
+          const label=document.createElement('span'); label.className='combo-item-label'; label.textContent=name;
+          row.appendChild(dot); row.appendChild(label);
+          row.onclick=()=>{ inputEl.value=name; dotEl.style.background=colorFn(name); dropdownEl.classList.remove('open'); };
+          const del=document.createElement('button'); del.className='combo-item-del'; del.type='button'; del.title='Supprimer de la liste';
+          del.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg>';
+          del.onclick=(e)=>{ e.stopPropagation(); onDelete(name); renderDropdown(); };
+          row.appendChild(del);
+          dropdownEl.appendChild(row);
+        });
+      }
+    }
+    inputEl.addEventListener('focus', ()=>{ renderDropdown(); dropdownEl.classList.add('open'); });
+    inputEl.addEventListener('input', renderDropdown);
+    document.addEventListener('click', (e)=>{ if(!inputEl.contains(e.target) && !dropdownEl.contains(e.target)) dropdownEl.classList.remove('open'); });
+  }
+  function removeClient(n){ clientsList=clientsList.filter(c=>c!==n); saveClients(); refreshDatalists(); }
+  function removeProject(n){ projectsList=projectsList.filter(p=>p!==n); saveProjects(); refreshDatalists(); }
+  setupCombo(clientInput, clientDot, $('client-dropdown'), ()=>clientsList, clientColor, removeClient);
+  setupCombo(projectInput, projectDot, $('project-dropdown'), ()=>projectsList, projectColor, removeProject);
 
   reminderToggle.onclick=()=>{ const o=reminderRow.style.display==='flex'; reminderRow.style.display=o?'none':'flex'; if(!o) $('f-reminder').focus(); };
   recurToggle.onclick=()=>{ recurRow.style.display=recurRow.style.display==='flex'?'none':'flex'; };
@@ -608,16 +671,17 @@
   document.addEventListener('click', e=>{ if(snoozePopover.style.display==='flex' && !snoozePopover.contains(e.target)) closeSnoozePopover(); });
 
   document.addEventListener('keydown', e=>{
-    if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='k'){ e.preventDefault(); panel.classList.add('open'); openAddForm(); return; }
+    if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='k'){ e.preventDefault(); panel.classList.add('open'); quickAddInput.focus(); return; }
     if(!panel.classList.contains('open')) return;
     if(e.key==='Escape'){
       if(snoozePopover.style.display==='flex'){ closeSnoozePopover(); return; }
       if(editingId){ editingId=null; render(); return; }
       if(document.activeElement && document.activeElement.id==='f-title'){ closeAddForm(); return; }
+      if(document.activeElement===quickAddInput){ quickAddInput.blur(); return; }
       panel.classList.remove('open'); return;
     }
     const tag=document.activeElement.tagName; if(tag==='INPUT'||tag==='TEXTAREA'||tag==='SELECT') return;
-    if(e.key==='n'){ e.preventDefault(); openAddForm(); }
+    if(e.key==='n'){ e.preventDefault(); quickAddInput.focus(); }
     else if(e.key==='j'||e.key==='k'){ e.preventDefault(); moveSelection(e.key==='j'?1:-1); }
     else if(e.key==='Enter'){ if(selectedTaskId) validateTask(selectedTaskId); }
     else if(e.key==='e'){ if(selectedTaskId){ e.preventDefault(); openEdit(selectedTaskId); } }
