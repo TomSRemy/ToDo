@@ -29,8 +29,8 @@
   .app-shell{ display:flex; min-height:100vh; }
 
   .app-sidebar{
-    width:220px; flex-shrink:0; background:var(--panel); border-right:1px solid var(--bd);
-    display:flex; flex-direction:column; padding:22px 0;
+    width:230px; flex-shrink:0; background:var(--panel); border-right:1px solid var(--bd);
+    display:flex; flex-direction:column; padding:22px 0; overflow-y:auto;
   }
   .app-sidebar-head{ padding:0 20px 18px; }
   .app-sidebar-head h1{ font-size:13px; font-weight:700; margin:0 0 4px; letter-spacing:.3px; font-family:var(--font-mono); color:var(--tx1); text-transform:uppercase; }
@@ -97,16 +97,28 @@
   #search-clear.show{ display:flex; }
   #search-clear svg{ position:static; transform:none; width:12px; height:12px; }
 
-  .toolbar{ display:flex; align-items:center; gap:8px; padding:8px 15px; border-bottom:1px solid var(--bd); flex-shrink:0; overflow-x:auto; }
-  .filter-chips{ display:flex; gap:5px; flex-shrink:0; }
-  .filter-chip{ font-family:var(--font-mono); font-size:10px; color:var(--tx2); background:var(--panel-2); border:1px solid var(--bd); border-radius:11px; padding:3px 9px; cursor:pointer; white-space:nowrap; user-select:none; text-transform:uppercase; letter-spacing:.3px; }
-  .filter-chip.active{ color:#04070C; background:var(--accent); border-color:var(--accent); }
-  .toolbar-divider{ width:1px; height:16px; background:var(--bd); flex-shrink:0; }
-  .view-icons{ display:flex; gap:1px; margin-left:auto; flex-shrink:0; }
-  .view-icon-btn{ width:26px; height:26px; display:flex; align-items:center; justify-content:center; background:none; border:none; border-radius:4px; color:var(--tx3); cursor:pointer; flex-shrink:0; }
+  .sidebar-section-label{ padding:14px 20px 6px; font-family:var(--font-mono); font-size:9.5px; color:var(--tx3); text-transform:uppercase; letter-spacing:.5px; }
+  .filter-chips{ display:flex; flex-direction:column; gap:2px; padding:0 12px; }
+  .filter-chip{ font-family:var(--font-mono); font-size:11px; color:var(--tx2); background:none; border:none; border-left:3px solid transparent; border-radius:0 6px 6px 0; padding:8px 10px; cursor:pointer; white-space:nowrap; user-select:none; text-transform:uppercase; letter-spacing:.3px; text-align:left; }
+  .filter-chip:hover{ color:var(--tx1); background:var(--panel-2); }
+  .filter-chip.active{ color:var(--accent); background:var(--accent-dim); border-left-color:var(--accent); }
+  .view-icons{ display:flex; flex-direction:column; gap:2px; padding:0 12px; }
+  .view-icon-btn{ width:100%; height:auto; display:flex; align-items:center; gap:9px; justify-content:flex-start; background:none; border:none; border-left:3px solid transparent; border-radius:0 6px 6px 0; color:var(--tx3); cursor:pointer; padding:7px 10px; font-family:var(--font-mono); font-size:11px; text-transform:uppercase; letter-spacing:.3px; }
   .view-icon-btn:hover{ color:var(--tx1); background:var(--panel-2); }
-  .view-icon-btn.active{ color:var(--accent); background:var(--accent-dim); }
-  .view-icon-btn svg{ width:15px; height:15px; }
+  .view-icon-btn.active{ color:var(--accent); background:var(--accent-dim); border-left-color:var(--accent); }
+  .view-icon-btn svg{ width:14px; height:14px; flex-shrink:0; stroke:currentColor; }
+
+  .combo-wrap{ position:relative; }
+  .combo-dropdown{ display:none; position:absolute; top:calc(100% + 4px); left:0; right:0; max-height:200px; overflow-y:auto; background:var(--panel-3); border:1px solid var(--bd); border-radius:var(--radius); box-shadow:0 8px 24px rgba(0,0,0,.5); z-index:50; }
+  .combo-dropdown.open{ display:block; }
+  .combo-item{ display:flex; align-items:center; gap:8px; padding:7px 10px; cursor:pointer; font-size:12px; color:var(--tx1); }
+  .combo-item:hover{ background:var(--panel-2); }
+  .combo-item-dot{ width:8px; height:8px; border-radius:50%; flex-shrink:0; }
+  .combo-item-label{ flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .combo-item-del{ background:none; border:none; color:var(--tx3); cursor:pointer; padding:2px; display:flex; flex-shrink:0; }
+  .combo-item-del:hover{ color:var(--crit); }
+  .combo-item-del svg{ width:12px; height:12px; stroke:currentColor; }
+  .combo-empty{ padding:9px 10px; font-size:11px; color:var(--tx3); font-family:var(--font-mono); }
 
   #task-list{ overflow-y:auto; flex:1; }
   #task-list::-webkit-scrollbar{ width:7px; }
@@ -128,6 +140,18 @@
   .task-body{ flex:1; min-width:0; }
   .task-title-compact{ font-size:13px; color:var(--tx1); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; cursor:text; margin-bottom:5px; }
   .task-title-compact .subtask-badge{ font-family:var(--font-mono); font-size:10px; color:var(--tx3); margin-left:7px; }
+  .subtask-arrow{ background:none; border:none; color:var(--tx3); cursor:pointer; padding:0 2px; margin-left:4px; display:inline-flex; align-items:center; vertical-align:middle; }
+  .subtask-arrow:hover{ color:var(--accent); }
+  .subtask-arrow svg{ width:11px; height:11px; stroke:currentColor; transition:transform .12s ease; }
+  .subtask-arrow.open svg{ transform:rotate(90deg); }
+  .subtask-inline-list{ display:flex; flex-direction:column; gap:5px; margin-top:7px; padding-left:2px; }
+  .subtask-inline-row{ display:flex; align-items:center; gap:7px; }
+  .subtask-inline-check{ width:14px; height:14px; border:1.5px solid var(--bd); border-radius:3px; flex-shrink:0; cursor:pointer; display:flex; align-items:center; justify-content:center; }
+  .subtask-inline-check.on{ background:var(--ok); border-color:var(--ok); }
+  .subtask-inline-check svg{ width:8px; height:8px; stroke:#04070C; display:none; }
+  .subtask-inline-check.on svg{ display:block; }
+  .subtask-inline-label{ font-size:11.5px; color:var(--tx2); }
+  .subtask-inline-label.done{ color:var(--tx3); text-decoration:line-through; }
   .task-desc{ font-size:11.5px; color:var(--tx3); line-height:1.45; margin-bottom:7px; overflow:hidden; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; }
 
   .task-meta-compact{ display:flex; flex-wrap:wrap; align-items:center; gap:6px; }
@@ -243,6 +267,24 @@
       <span class="tab" data-tab="lists">Réf. &amp; data</span>
     </div>
 
+    <div class="sidebar-section-label">Filtrer</div>
+    <div class="filter-chips" id="filters">
+      <span class="filter-chip active" data-filter="ouvertes">Ouvertes</span>
+      <span class="filter-chip" data-filter="critique">Critique</span>
+      <span class="filter-chip" data-filter="haute">Haute</span>
+      <span class="filter-chip" data-filter="toutes">Toutes</span>
+    </div>
+
+    <div class="sidebar-section-label">Vue</div>
+    <div class="view-icons" id="view-switch">
+      <button class="view-icon-btn active" data-view="liste" title="Liste"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg><span>Liste</span></button>
+      <button class="view-icon-btn" data-view="client" title="Par client"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg><span>Client</span></button>
+      <button class="view-icon-btn" data-view="projet" title="Par projet"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg><span>Projet</span></button>
+      <button class="view-icon-btn" data-view="urgence" title="Par urgence"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/></svg><span>Urgence</span></button>
+      <button class="view-icon-btn" data-view="date" title="Par date"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg><span>Date</span></button>
+      <button class="view-icon-btn" data-view="bloc" title="En bloc"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="5" height="18"/><rect x="10" y="3" width="5" height="10"/><rect x="17" y="3" width="4" height="14"/></svg><span>Bloc</span></button>
+    </div>
+
     <a href="index.html" class="app-sidebar-back">← Widget</a>
   </nav>
 
@@ -264,13 +306,17 @@
       <div class="form-row">
         <div>
           <span class="field-label">Client</span>
-          <div class="input-with-dot"><span class="color-dot" id="client-dot"></span><input type="text" id="f-client" list="client-datalist" placeholder="Client" autocomplete="off"></div>
-          <datalist id="client-datalist"></datalist>
+          <div class="combo-wrap">
+            <div class="input-with-dot"><span class="color-dot" id="client-dot"></span><input type="text" id="f-client" placeholder="Client" autocomplete="off"></div>
+            <div class="combo-dropdown" id="client-dropdown"></div>
+          </div>
         </div>
         <div>
           <span class="field-label">Projet</span>
-          <div class="input-with-dot"><span class="color-dot" id="project-dot"></span><input type="text" id="f-project" list="project-datalist" placeholder="Projet" autocomplete="off"></div>
-          <datalist id="project-datalist"></datalist>
+          <div class="combo-wrap">
+            <div class="input-with-dot"><span class="color-dot" id="project-dot"></span><input type="text" id="f-project" placeholder="Projet" autocomplete="off"></div>
+            <div class="combo-dropdown" id="project-dropdown"></div>
+          </div>
         </div>
       </div>
       <div class="form-row">
@@ -309,24 +355,6 @@
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
         <input type="text" id="search-input" placeholder="Rechercher (titre, client, projet, desc.)">
         <button id="search-clear"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
-      </div>
-    </div>
-
-    <div class="toolbar">
-      <div class="filter-chips" id="filters">
-        <span class="filter-chip active" data-filter="ouvertes">Ouvertes</span>
-        <span class="filter-chip" data-filter="critique">Critique</span>
-        <span class="filter-chip" data-filter="haute">Haute</span>
-        <span class="filter-chip" data-filter="toutes">Toutes</span>
-      </div>
-      <div class="toolbar-divider"></div>
-      <div class="view-icons" id="view-switch">
-        <button class="view-icon-btn active" data-view="liste" title="Liste"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg></button>
-        <button class="view-icon-btn" data-view="client" title="Par client"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></button>
-        <button class="view-icon-btn" data-view="projet" title="Par projet"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg></button>
-        <button class="view-icon-btn" data-view="urgence" title="Par urgence"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/></svg></button>
-        <button class="view-icon-btn" data-view="date" title="Par date"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg></button>
-        <button class="view-icon-btn" data-view="bloc" title="En bloc"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="5" height="18"/><rect x="10" y="3" width="5" height="10"/><rect x="17" y="3" width="4" height="14"/></svg></button>
       </div>
     </div>
 
@@ -376,6 +404,9 @@
 </div>
 </div>
 
+<datalist id="client-datalist"></datalist>
+<datalist id="project-datalist"></datalist>
+
 <div id="snooze-popover">
   <button data-days="1">+1 jour</button>
   <button data-days="3">+3 jours</button>
@@ -418,7 +449,7 @@
 
   let tasks=[], clientsList=[], projectsList=[];
   let currentFilter='ouvertes', currentView='liste', searchQuery='';
-  let notifiedIds=new Set(), selectedTaskId=null, currentSnoozeId=null, editingId=null;
+  let notifiedIds=new Set(), selectedTaskId=null, currentSnoozeId=null, editingId=null, expandedSubtaskIds=new Set();
 
   const TASKS_KEY='todo-widget-tasks', CLIENTS_KEY='todo-widget-clients', PROJECTS_KEY='todo-widget-projects';
 
@@ -531,13 +562,37 @@
     title.className='task-title-compact';
     title.textContent=t.title;
     const nSub=(t.subtasks||[]).length;
-    if(nSub){ const done=t.subtasks.filter(s=>s.done).length; const b=document.createElement('span'); b.className='subtask-badge'; b.textContent='☑ '+done+'/'+nSub; title.appendChild(b); }
+    if(nSub){
+      const done=t.subtasks.filter(s=>s.done).length;
+      const b=document.createElement('span'); b.className='subtask-badge'; b.textContent='☑ '+done+'/'+nSub;
+      title.appendChild(b);
+      const arrow=document.createElement('button'); arrow.type='button';
+      arrow.className='subtask-arrow'+(expandedSubtaskIds.has(t.id)?' open':'');
+      arrow.title='Voir les sous-tâches';
+      arrow.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg>';
+      arrow.onclick=e=>{ e.stopPropagation(); toggleSubtasksExpanded(t.id); };
+      title.appendChild(arrow);
+    }
     title.onclick=()=>openEdit(t.id);
     body.appendChild(title);
 
     if(t.description){
       const desc=document.createElement('div'); desc.className='task-desc'; desc.textContent=t.description;
       body.appendChild(desc);
+    }
+
+    if(nSub && expandedSubtaskIds.has(t.id)){
+      const subList=document.createElement('div'); subList.className='subtask-inline-list';
+      t.subtasks.forEach(s=>{
+        const row2=document.createElement('div'); row2.className='subtask-inline-row';
+        const chk=document.createElement('div'); chk.className='subtask-inline-check'+(s.done?' on':'');
+        chk.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>';
+        chk.onclick=e=>{ e.stopPropagation(); s.done=!s.done; saveTasks(); render(); };
+        const label=document.createElement('span'); label.className='subtask-inline-label'+(s.done?' done':''); label.textContent=s.text;
+        row2.appendChild(chk); row2.appendChild(label);
+        subList.appendChild(row2);
+      });
+      body.appendChild(subList);
     }
 
     const meta=document.createElement('div'); meta.className='task-meta-compact';
@@ -832,6 +887,7 @@
   }
   function restoreTask(id){ const t=tasks.find(x=>x.id===id); if(t){ t.archived=false; t.archivedAt=null; t.status='a_faire'; saveTasks(); render(); renderArchive(); } }
   function cycleStatus(id){ const t=tasks.find(x=>x.id===id); if(t){ const i=STATUS_CYCLE.indexOf(t.status); t.status=STATUS_CYCLE[(i+1)%STATUS_CYCLE.length]; saveTasks(); render(); } }
+  function toggleSubtasksExpanded(id){ if(expandedSubtaskIds.has(id)) expandedSubtaskIds.delete(id); else expandedSubtaskIds.add(id); render(); }
   function deleteTask(id){ tasks=tasks.filter(x=>x.id!==id); if(selectedTaskId===id)selectedTaskId=null; if(editingId===id)editingId=null; saveTasks(); render(); renderArchive(); }
 
   function createTask(f){
@@ -917,6 +973,36 @@
   addTriggerRow.onclick=openAddForm; cancelTaskBtn.onclick=closeAddForm;
   clientInput.addEventListener('input',()=>{ clientDot.style.background=clientInput.value.trim()?clientColor(clientInput.value.trim()):'var(--bd)'; });
   projectInput.addEventListener('input',()=>{ projectDot.style.background=projectInput.value.trim()?projectColor(projectInput.value.trim()):'var(--bd)'; });
+
+  function setupCombo(inputEl, dotEl, dropdownEl, getList, colorFn, onDelete){
+    function renderDropdown(){
+      const q=inputEl.value.trim().toLowerCase();
+      const items=getList().slice().sort().filter(n=>n.toLowerCase().includes(q));
+      dropdownEl.innerHTML='';
+      if(items.length===0){
+        const e=document.createElement('div'); e.className='combo-empty'; e.textContent=q?'Aucun résultat — tape pour créer':'Aucun enregistré — tape pour créer';
+        dropdownEl.appendChild(e);
+      } else {
+        items.forEach(name=>{
+          const row=document.createElement('div'); row.className='combo-item';
+          const dot=document.createElement('span'); dot.className='combo-item-dot'; dot.style.background=colorFn(name);
+          const label=document.createElement('span'); label.className='combo-item-label'; label.textContent=name;
+          row.appendChild(dot); row.appendChild(label);
+          row.onclick=()=>{ inputEl.value=name; dotEl.style.background=colorFn(name); dropdownEl.classList.remove('open'); };
+          const del=document.createElement('button'); del.className='combo-item-del'; del.type='button'; del.title='Supprimer de la liste';
+          del.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg>';
+          del.onclick=(e)=>{ e.stopPropagation(); onDelete(name); renderDropdown(); };
+          row.appendChild(del);
+          dropdownEl.appendChild(row);
+        });
+      }
+    }
+    inputEl.addEventListener('focus', ()=>{ renderDropdown(); dropdownEl.classList.add('open'); });
+    inputEl.addEventListener('input', renderDropdown);
+    document.addEventListener('click', (e)=>{ if(!inputEl.contains(e.target) && !dropdownEl.contains(e.target)) dropdownEl.classList.remove('open'); });
+  }
+  setupCombo(clientInput, clientDot, $('client-dropdown'), ()=>clientsList, clientColor, removeClient);
+  setupCombo(projectInput, projectDot, $('project-dropdown'), ()=>projectsList, projectColor, removeProject);
   reminderToggle.onclick=()=>{ const o=reminderRow.style.display==='flex'; reminderRow.style.display=o?'none':'flex'; if(!o)$('f-reminder').focus(); };
   recurToggle.onclick=()=>{ recurRow.style.display=recurRow.style.display==='flex'?'none':'flex'; };
 
