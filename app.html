@@ -16,7 +16,7 @@
     --bg:#0A0D12; --panel:#0F131A; --panel-2:#141922; --panel-3:#1A2029;
     --bd:#242B36; --bd-soft:#1C222B;
     --tx1:#E6EAF0; --tx2:#AEB6C2; --tx3:#6B7480;
-    --accent:#4DA3FF; --accent-dim:#1E3A5F;
+    --accent:#3DD68C; --accent-dim:#15382C;
     --crit:#FF5470; --high:#FF9F43; --med:#4DA3FF; --low:#6B7480;
     --ok:#3DD68C; --purple:#B98AFF;
     --radius:4px;
@@ -60,11 +60,20 @@
   .tab-panel{ display:flex; flex-direction:column; min-height:0; flex:1; }
   .tab-panel.hidden{ display:none; }
 
-  .quick-add-bar{ display:flex; align-items:center; gap:7px; padding:10px 15px; border-bottom:1px solid var(--bd); flex-shrink:0; }
+  .quick-add-bar{ display:flex; align-items:center; gap:8px; padding:10px 15px; border-bottom:1px solid var(--bd); flex-shrink:0; }
   #quick-add-input{ flex:1; min-width:0; background:var(--panel-2); border:1px solid var(--bd); border-radius:var(--radius); color:var(--tx1); font-family:var(--font-ui); font-size:13px; padding:8px 10px; }
   #quick-add-input::placeholder{ color:var(--tx3); }
   #quick-add-input:focus{ outline:none; border-color:var(--accent); }
-  #quick-add-more{ flex-shrink:0; }
+  #quick-add-more{ flex-shrink:0; background:var(--panel-2); border:1px solid var(--bd); border-radius:var(--radius); color:var(--tx2); font-family:var(--font-ui); font-size:12px; font-weight:600; padding:8px 12px; cursor:pointer; white-space:nowrap; }
+  #quick-add-more:hover{ color:var(--accent); border-color:var(--accent); }
+  .quick-add-bar .search-box{ position:relative; flex-shrink:0; width:220px; }
+  .quick-add-bar .search-box svg{ position:absolute; left:9px; top:50%; transform:translateY(-50%); width:13px; height:13px; color:var(--tx3); }
+  .quick-add-bar #search-input{ width:100%; background:var(--panel-2); border:1px solid var(--bd); border-radius:var(--radius); color:var(--tx1); font-family:var(--font-ui); font-size:12.5px; padding:7px 10px 7px 28px; }
+  .quick-add-bar #search-input::placeholder{ color:var(--tx3); }
+  .quick-add-bar #search-input:focus{ outline:none; border-color:var(--accent); }
+  .quick-add-bar #search-clear{ position:absolute; right:6px; top:50%; transform:translateY(-50%); background:none; border:none; color:var(--tx3); cursor:pointer; padding:3px; display:none; }
+  .quick-add-bar #search-clear.show{ display:flex; }
+  .quick-add-bar #search-clear svg{ position:static; transform:none; width:12px; height:12px; }
 
   #add-section{ padding:14px 15px; border-bottom:1px solid var(--bd); flex-shrink:0; display:none; flex-direction:column; gap:10px; }
   #add-section.open{ display:flex; }
@@ -88,16 +97,7 @@
   #submit-task{ background:var(--accent); color:#04070C; border:none; border-radius:var(--radius); padding:9px; font-size:13px; font-weight:700; cursor:pointer; flex:2; }
   #submit-task:hover{ opacity:.9; }
 
-  /* toolbar: search + filters + views */
-  .search-row{ padding:9px 15px 0; flex-shrink:0; }
-  .search-box{ position:relative; }
-  .search-box svg{ position:absolute; left:9px; top:50%; transform:translateY(-50%); width:13px; height:13px; color:var(--tx3); }
-  #search-input{ width:100%; background:var(--panel-2); border:1px solid var(--bd); border-radius:var(--radius); color:var(--tx1); font-family:var(--font-ui); font-size:12.5px; padding:7px 10px 7px 28px; }
-  #search-input::placeholder{ color:var(--tx3); }
-  #search-input:focus{ outline:none; border-color:var(--accent); }
-  #search-clear{ position:absolute; right:6px; top:50%; transform:translateY(-50%); background:none; border:none; color:var(--tx3); cursor:pointer; padding:3px; display:none; }
-  #search-clear.show{ display:flex; }
-  #search-clear svg{ position:static; transform:none; width:12px; height:12px; }
+  /* filters + views (sidebar) */
 
   .sidebar-section-label{ padding:14px 20px 6px; font-family:var(--font-mono); font-size:9.5px; color:var(--tx3); text-transform:uppercase; letter-spacing:.5px; }
   .filter-chips{ display:flex; flex-direction:column; gap:2px; padding:0 12px; }
@@ -308,9 +308,12 @@
   <div class="tab-panel" id="tab-tasks">
     <div class="quick-add-bar">
       <input type="text" id="quick-add-input" placeholder="Ajouter une tâche… (Entrée)">
-      <button class="icon-btn" id="quick-add-more" type="button" title="Plus d'options">
-        <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="5" cy="12" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="19" cy="12" r="1.5"/></svg>
-      </button>
+      <button id="quick-add-more" type="button">Tâche complète</button>
+      <div class="search-box">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+        <input type="text" id="search-input" placeholder="Rechercher">
+        <button id="search-clear"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
+      </div>
     </div>
     <div id="add-section">
       <div>
@@ -365,14 +368,6 @@
       <div class="form-btn-row">
         <button id="cancel-task" type="button">Annuler</button>
         <button id="submit-task" type="button">Ajouter</button>
-      </div>
-    </div>
-
-    <div class="search-row">
-      <div class="search-box">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
-        <input type="text" id="search-input" placeholder="Rechercher (titre, client, projet, desc.)">
-        <button id="search-clear"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
       </div>
     </div>
 
@@ -552,6 +547,30 @@
 
   function hexToRgb(hex){ const v=hex.replace('#',''); return { r:parseInt(v.substring(0,2),16), g:parseInt(v.substring(2,4),16), b:parseInt(v.substring(4,6),16) }; }
 
+  // Outlook deep links (outlook:<EntryID>) only work with classic Outlook's
+  // registered protocol handler. The new Outlook client doesn't register it,
+  // so browsers just navigate to a blank page. Fall back to a "copy subject"
+  // button so the mail can be found via Outlook's own search instead.
+  function makeLinkOrCopyBtn(t){
+    if(t.link.indexOf('outlook:') === 0){
+      const btn=document.createElement('button'); btn.type='button';
+      btn.title="Copier l'objet (Ctrl+E dans Outlook pour chercher)";
+      btn.innerHTML='<svg class="meta-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>';
+      btn.onclick=e=>{
+        e.stopPropagation();
+        navigator.clipboard.writeText(t.title).then(()=>{
+          const prev=btn.innerHTML;
+          btn.innerHTML='<svg class="meta-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>';
+          setTimeout(()=>{ btn.innerHTML=prev; }, 1200);
+        }).catch(()=>{});
+      };
+      return btn;
+    }
+    const a=document.createElement('a'); a.href=t.link; a.target='_blank'; a.rel='noopener noreferrer'; a.title='Mail lié'; a.onclick=e=>e.stopPropagation();
+    a.innerHTML='<svg class="meta-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>';
+    return a;
+  }
+
   function makeTag(label, hex, shape){
     const span=document.createElement('span');
     span.className='meta-tag'+(shape==='flag'?' flag':'');
@@ -634,7 +653,7 @@
     if(t.client) meta.appendChild(makeTag(t.client, clientColor(t.client), 'dot'));
     if(t.project) meta.appendChild(makeTag(t.project, projectColor(t.project), 'flag'));
     if(t.due){ const st=dueStatus(t.due); const d=document.createElement('span'); d.className='meta-date-compact'+(st?' '+st:''); d.textContent=fmtDateShort(t.due); meta.appendChild(d); }
-    if(t.link){ const a=document.createElement('a'); a.href=t.link; a.target='_blank'; a.rel='noopener noreferrer'; a.title='Mail lié'; a.onclick=e=>e.stopPropagation(); a.innerHTML='<svg class="meta-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>'; meta.appendChild(a); }
+    if(t.link){ meta.appendChild(makeLinkOrCopyBtn(t)); }
     body.appendChild(meta);
 
     row.appendChild(body);
@@ -715,7 +734,7 @@
     grid.appendChild(dateCell);
 
     const actions=document.createElement('div'); actions.className='task-actions-compact';
-    if(t.link){ const a=document.createElement('a'); a.href=t.link; a.target='_blank'; a.rel='noopener noreferrer'; a.title='Mail lié'; a.onclick=e=>e.stopPropagation(); a.innerHTML='<svg class="meta-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>'; actions.appendChild(a); }
+    if(t.link){ actions.appendChild(makeLinkOrCopyBtn(t)); }
     const editBtn=document.createElement('button'); editBtn.title='Éditer';
     editBtn.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4z"/></svg>';
     editBtn.onclick=e=>{ e.stopPropagation(); openEdit(t.id); };
