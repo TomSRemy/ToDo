@@ -115,29 +115,33 @@
   .group-header{ padding:12px 15px 5px; font-family:var(--font-mono); font-size:10px; font-weight:700; color:var(--tx3); text-transform:uppercase; letter-spacing:.5px; display:flex; align-items:center; gap:7px; }
   .group-count{ color:var(--tx3); font-weight:400; }
 
-  .task{ display:flex; align-items:center; gap:10px; padding:0 14px; height:40px; border-bottom:1px solid var(--bd-soft); }
+  .task{ display:flex; align-items:flex-start; gap:10px; padding:12px 14px; border-bottom:1px solid var(--bd-soft); }
   .task:hover{ background:var(--panel-2); }
   .task:hover .task-actions-compact{ opacity:1; }
   .task.selected{ background:var(--panel-2); box-shadow:inset 2px 0 0 var(--accent); }
-  .task.editing{ height:auto; padding:0; background:var(--panel-2); }
+  .task.editing{ padding:0; background:var(--panel-2); }
 
-  .task-check{ width:16px; height:16px; border:2px solid var(--bd); border-radius:50%; flex-shrink:0; cursor:pointer; display:flex; align-items:center; justify-content:center; }
+  .task-check{ width:16px; height:16px; border:2px solid var(--bd); border-radius:50%; flex-shrink:0; cursor:pointer; display:flex; align-items:center; justify-content:center; margin-top:2px; }
   .task-check:hover{ background:rgba(255,255,255,.05); }
   .task-check svg{ width:8px; height:8px; stroke:#04070C; display:none; }
 
-  .task-title-compact{ flex:1; min-width:0; font-size:13px; color:var(--tx1); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; cursor:text; }
+  .task-body{ flex:1; min-width:0; }
+  .task-title-compact{ font-size:13px; color:var(--tx1); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; cursor:text; margin-bottom:5px; }
   .task-title-compact .subtask-badge{ font-family:var(--font-mono); font-size:10px; color:var(--tx3); margin-left:7px; }
+  .task-desc{ font-size:11.5px; color:var(--tx3); line-height:1.45; margin-bottom:7px; overflow:hidden; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; }
 
-  .task-meta-compact{ display:flex; align-items:center; gap:8px; flex-shrink:0; }
-  .meta-dot{ width:9px; height:9px; border-radius:50%; flex-shrink:0; }
-  .meta-dot.square{ border-radius:2px; }
+  .task-meta-compact{ display:flex; flex-wrap:wrap; align-items:center; gap:6px; }
+  .meta-tag{ display:inline-flex; align-items:center; gap:5px; padding:2px 8px; border-radius:10px; font-family:var(--font-mono); font-size:10.5px; white-space:nowrap; }
+  .meta-tag.solid{ font-weight:700; cursor:pointer; }
+  .meta-tag.flag{ border-radius:3px; padding-left:7px; }
+  .tag-dot{ width:6px; height:6px; border-radius:50%; flex-shrink:0; }
   .meta-date-compact{ font-family:var(--font-mono); font-size:10.5px; color:var(--tx2); white-space:nowrap; }
   .meta-date-compact.overdue{ color:var(--crit); font-weight:600; }
   .meta-date-compact.soon{ color:var(--high); font-weight:600; }
   .meta-icon{ width:12px; height:12px; color:var(--tx3); flex-shrink:0; }
   .recur-icon{ width:11px; height:11px; color:var(--purple); flex-shrink:0; }
 
-  .task-actions-compact{ display:flex; gap:1px; flex-shrink:0; opacity:0; transition:opacity .1s ease; }
+  .task-actions-compact{ display:flex; gap:1px; flex-shrink:0; opacity:0; transition:opacity .1s ease; margin-top:1px; }
   .task-actions-compact button{ background:none; border:none; color:var(--tx3); cursor:pointer; padding:4px; display:flex; }
   .task-actions-compact button:hover{ color:var(--accent); }
   .task-actions-compact svg{ width:13px; height:13px; }
@@ -485,14 +489,34 @@
     projectDatalist.innerHTML=projectsList.slice().sort().map(p=>'<option value="'+escapeHtml(p)+'">').join('');
   }
 
-  function makeDot(hex,label,shape){ const d=document.createElement('span'); d.className='meta-dot'+(shape==='square'?' square':''); d.style.background=hex; d.title=label; return d; }
+  function hexToRgb(hex){ const v=hex.replace('#',''); return { r:parseInt(v.substring(0,2),16), g:parseInt(v.substring(2,4),16), b:parseInt(v.substring(4,6),16) }; }
+
+  function makeTag(label, hex, shape){
+    const span=document.createElement('span');
+    span.className='meta-tag'+(shape==='flag'?' flag':'');
+    const rgb=hexToRgb(hex);
+    span.style.color=hex;
+    span.style.background='rgba('+rgb.r+','+rgb.g+','+rgb.b+',.16)';
+    span.style.border='1px solid rgba('+rgb.r+','+rgb.g+','+rgb.b+',.4)';
+    if(shape==='flag'){ span.style.borderLeft='3px solid '+hex; }
+    else if(shape==='dot'){ const dot=document.createElement('span'); dot.className='tag-dot'; dot.style.background=hex; span.appendChild(dot); }
+    span.appendChild(document.createTextNode(label));
+    return span;
+  }
+  function makeSolidTag(label, hex, onClick){
+    const span=document.createElement('span');
+    span.className='meta-tag solid';
+    span.style.background=hex; span.style.color='#04070C';
+    span.textContent=label;
+    if(onClick) span.onclick=onClick;
+    return span;
+  }
 
   function buildTaskRow(t){
     if(t.id===editingId) return buildEditRow(t);
     const row=document.createElement('div');
     row.className='task'+(t.id===selectedTaskId?' selected':'');
     row.dataset.id=t.id;
-    if(t.description) row.title=t.description;
 
     const uColor=(URGENCY_META[t.urgency]||URGENCY_META.moyenne).color;
     const check=document.createElement('div');
@@ -501,25 +525,34 @@
     check.onclick=e=>{ e.stopPropagation(); validateTask(t.id); };
     row.appendChild(check);
 
+    const body=document.createElement('div'); body.className='task-body';
+
     const title=document.createElement('div');
     title.className='task-title-compact';
     title.textContent=t.title;
     const nSub=(t.subtasks||[]).length;
     if(nSub){ const done=t.subtasks.filter(s=>s.done).length; const b=document.createElement('span'); b.className='subtask-badge'; b.textContent='☑ '+done+'/'+nSub; title.appendChild(b); }
     title.onclick=()=>openEdit(t.id);
-    row.appendChild(title);
+    body.appendChild(title);
+
+    if(t.description){
+      const desc=document.createElement('div'); desc.className='task-desc'; desc.textContent=t.description;
+      body.appendChild(desc);
+    }
 
     const meta=document.createElement('div'); meta.className='task-meta-compact';
     if(t.recur){ const r=document.createElement('span'); r.title='Récurrente'; r.innerHTML='<svg class="recur-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 4v6h-6"/><path d="M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>'; meta.appendChild(r); }
-    if(t.client) meta.appendChild(makeDot(clientColor(t.client),t.client));
-    if(t.project) meta.appendChild(makeDot(projectColor(t.project),t.project,'square'));
     const sMeta=STATUS_META[t.status]||STATUS_META.a_faire;
-    const sDot=makeDot(sMeta.color,sMeta.label); sDot.style.cursor='pointer';
-    sDot.onclick=e=>{ e.stopPropagation(); cycleStatus(t.id); };
-    meta.appendChild(sDot);
+    meta.appendChild(makeSolidTag(sMeta.label, sMeta.color, e=>{ e.stopPropagation(); cycleStatus(t.id); }));
+    const uMeta=URGENCY_META[t.urgency]||URGENCY_META.moyenne;
+    meta.appendChild(makeTag(uMeta.label, uMeta.color));
+    if(t.client) meta.appendChild(makeTag(t.client, clientColor(t.client), 'dot'));
+    if(t.project) meta.appendChild(makeTag(t.project, projectColor(t.project), 'flag'));
     if(t.due){ const st=dueStatus(t.due); const d=document.createElement('span'); d.className='meta-date-compact'+(st?' '+st:''); d.textContent=fmtDateShort(t.due); meta.appendChild(d); }
     if(t.link){ const a=document.createElement('a'); a.href=t.link; a.target='_blank'; a.rel='noopener noreferrer'; a.title='Mail lié'; a.onclick=e=>e.stopPropagation(); a.innerHTML='<svg class="meta-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>'; meta.appendChild(a); }
-    row.appendChild(meta);
+    body.appendChild(meta);
+
+    row.appendChild(body);
 
     const actions=document.createElement('div'); actions.className='task-actions-compact';
     const editBtn=document.createElement('button'); editBtn.title='Éditer';
@@ -688,8 +721,8 @@
       if(it.sender){ const s = document.createElement('div'); s.className = 'inbox-item-sender'; s.textContent = it.sender; row.appendChild(s); }
       if(it.client || it.project || it.urgency || it.due){
         const meta = document.createElement('div'); meta.className = 'task-meta-compact'; meta.style.marginBottom = '8px';
-        if(it.client) meta.appendChild(makeDot(clientColor(it.client), it.client));
-        if(it.project) meta.appendChild(makeDot(projectColor(it.project), it.project, 'square'));
+        if(it.client) meta.appendChild(makeTag(it.client, clientColor(it.client), 'dot'));
+        if(it.project) meta.appendChild(makeTag(it.project, projectColor(it.project), 'flag'));
         if(it.urgency){ const u = URGENCY_META[it.urgency] || URGENCY_META.moyenne; const tag = document.createElement('span'); tag.className = 'meta-date-compact'; tag.style.color = u.color; tag.textContent = u.label; meta.appendChild(tag); }
         if(it.due){ const d = document.createElement('span'); d.className = 'meta-date-compact'; d.textContent = fmtDateShort(it.due); meta.appendChild(d); }
         row.appendChild(meta);
@@ -735,13 +768,14 @@
     if(!arch.length){ const e=document.createElement('div'); e.className='empty-state'; e.textContent='Aucune tâche archivée.'; tabArchive.appendChild(e); return; }
     arch.forEach(t=>{
       const row=document.createElement('div'); row.className='task';
-      if(t.description) row.title=t.description;
-      const title=document.createElement('div'); title.className='task-title-compact'; title.style.textDecoration='line-through'; title.style.opacity='.6'; title.textContent=t.title; row.appendChild(title);
+      const body=document.createElement('div'); body.className='task-body';
+      const title=document.createElement('div'); title.className='task-title-compact'; title.style.textDecoration='line-through'; title.style.opacity='.6'; title.textContent=t.title; body.appendChild(title);
       const meta=document.createElement('div'); meta.className='task-meta-compact';
-      if(t.client) meta.appendChild(makeDot(clientColor(t.client),t.client));
-      if(t.project) meta.appendChild(makeDot(projectColor(t.project),t.project,'square'));
+      if(t.client) meta.appendChild(makeTag(t.client, clientColor(t.client), 'dot'));
+      if(t.project) meta.appendChild(makeTag(t.project, projectColor(t.project), 'flag'));
       if(t.archivedAt){ const ad=document.createElement('span'); ad.className='archive-date-compact'; ad.textContent=fmtDateTime(t.archivedAt); meta.appendChild(ad); }
-      row.appendChild(meta);
+      body.appendChild(meta);
+      row.appendChild(body);
       const actions=document.createElement('div'); actions.className='task-actions-compact'; actions.style.opacity='.7';
       const restore=document.createElement('button'); restore.title='Restaurer'; restore.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/></svg>'; restore.onclick=()=>restoreTask(t.id); actions.appendChild(restore);
       const del=document.createElement('button'); del.className='del-btn'; del.title='Supprimer'; del.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg>'; del.onclick=()=>deleteTask(t.id); actions.appendChild(del);
