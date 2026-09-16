@@ -46,6 +46,17 @@
   #todo-panel.open{ opacity:1; transform:translateY(0) scale(1); pointer-events:auto; }
   #todo-panel.pip-mode{ position:static !important; width:100% !important; height:100% !important; max-height:100% !important; border:none !important; border-radius:0 !important; opacity:1 !important; transform:none !important; pointer-events:auto !important; box-shadow:none !important; }
 
+  #pip-bubble{ display:none; flex:1; flex-direction:column; align-items:center; justify-content:center; cursor:pointer; gap:6px; }
+  #todo-panel.pip-collapsed #pip-bubble{ display:flex; }
+  #todo-panel.pip-collapsed .add-trigger-row,
+  #todo-panel.pip-collapsed #add-section,
+  #todo-panel.pip-collapsed .see-all-row,
+  #todo-panel.pip-collapsed #task-list{ display:none; }
+  #todo-panel.pip-collapsed .head-stats{ display:none; }
+  #pip-bubble-count{ width:64px; height:64px; border-radius:50%; background:var(--panel-2); border:2px solid var(--accent); display:flex; align-items:center; justify-content:center; font-family:var(--font-mono); font-size:22px; font-weight:700; color:var(--accent); transition:border-color .15s ease, color .15s ease; }
+  #pip-bubble-count.overdue{ border-color:var(--crit); color:var(--crit); }
+  #pip-bubble-label{ font-family:var(--font-mono); font-size:10px; color:var(--tx3); text-transform:uppercase; letter-spacing:.5px; }
+
   .panel-head{ display:flex; align-items:center; justify-content:space-between; padding:12px 14px; border-bottom:1px solid var(--bd); flex-shrink:0; }
   .panel-head h1{ font-size:12.5px; font-weight:700; margin:0; letter-spacing:.3px; font-family:var(--font-mono); color:var(--tx1); text-transform:uppercase; }
   .head-stats{ font-family:var(--font-mono); font-size:11px; color:var(--tx3); }
@@ -53,7 +64,7 @@
   .icon-btn{ background:none; border:none; color:var(--tx3); cursor:pointer; padding:6px; display:flex; border-radius:var(--radius); }
   .icon-btn:hover{ color:var(--tx1); background:var(--panel-2); }
   .icon-btn.active-toggle{ color:var(--accent); }
-  .icon-btn svg{ width:15px; height:15px; }
+  .icon-btn svg{ width:15px; height:15px; stroke:currentColor; }
   .icon-btn.hidden{ display:none; }
 
   .add-trigger-row{ display:flex; align-items:center; gap:8px; padding:10px 14px; border-bottom:1px solid var(--bd); cursor:pointer; color:var(--accent); font-size:12px; font-weight:600; flex-shrink:0; }
@@ -165,6 +176,9 @@
       <button class="icon-btn hidden" id="install-btn" title="Installer l'app">
         <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="2" width="14" height="20" rx="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg>
       </button>
+      <button class="icon-btn hidden" id="collapse-btn" title="Réduire en bulle">
+        <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/></svg>
+      </button>
       <button class="icon-btn" id="mini-btn" title="Mode mini (toujours visible, Chrome/Edge)">
         <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><rect x="12" y="12" width="8" height="7" rx="1"/></svg>
       </button>
@@ -240,6 +254,11 @@
   </div>
 
   <div id="task-list"></div>
+
+  <div id="pip-bubble">
+    <div id="pip-bubble-count">0</div>
+    <div id="pip-bubble-label">tâches</div>
+  </div>
 </div>
 
 <div id="snooze-popover">
@@ -262,7 +281,7 @@
 <script>
 (function(){
   const $ = id => document.getElementById(id);
-  const trigger=$('todo-trigger'), panel=$('todo-panel'), closeBtn=$('close-panel'), miniBtn=$('mini-btn'), maxBtn=$('max-btn'), installBtn=$('install-btn');
+  const trigger=$('todo-trigger'), panel=$('todo-panel'), closeBtn=$('close-panel'), miniBtn=$('mini-btn'), maxBtn=$('max-btn'), installBtn=$('install-btn'), collapseBtn=$('collapse-btn');
   const taskList=$('task-list'), badge=$('todo-badge'), headStats=$('head-stats');
   const snoozePopover=$('snooze-popover');
   const reminderToggle=$('reminder-toggle'), reminderRow=$('reminder-row'), recurToggle=$('recur-toggle'), recurRow=$('recur-row');
@@ -270,6 +289,7 @@
   const clientDatalist=$('client-datalist'), projectDatalist=$('project-datalist');
   const addSection=$('add-section'), addTriggerRow=$('add-trigger-row'), cancelTaskBtn=$('cancel-task');
   const seeAllLink=$('see-all-link'), seeAllText=$('see-all-text');
+  const pipBubble=$('pip-bubble'), pipBubbleCount=$('pip-bubble-count');
 
   const SHORT_LIST_LIMIT = 8;
 
@@ -453,6 +473,8 @@
     if(open.length===0){ badge.classList.add('hidden'); }
     else{ badge.classList.remove('hidden'); badge.textContent=open.length; badge.classList.toggle('overdue', open.some(t=>dueStatus(t.due)==='overdue')); }
     headStats.textContent=open.length;
+    pipBubbleCount.textContent=open.length;
+    pipBubbleCount.classList.toggle('overdue', open.some(t=>dueStatus(t.due)==='overdue'));
   }
 
   function validateTask(id){
@@ -544,6 +566,8 @@
     selectedTaskId=rows[i].dataset.id; rows.forEach(r=>r.classList.toggle('selected', r.dataset.id===selectedTaskId)); rows[i].scrollIntoView({block:'nearest'});
   }
 
+  function toggleBubbleCollapse(){ panel.classList.toggle('pip-collapsed'); }
+
   async function toggleMiniMode(){
     if(pipWindow){ pipWindow.close(); return; }
     if(!('documentPictureInPicture' in window)){ alert('Le mode mini (toujours au premier plan) nécessite un navigateur Chrome ou Edge récent.'); return; }
@@ -554,13 +578,16 @@
     });
     pipWindow.document.body.style.margin='0'; pipWindow.document.body.style.background='#0A0D12';
     panel.classList.add('open','pip-mode'); pipWindow.document.body.appendChild(panel); miniBtn.classList.add('active-toggle');
-    pipWindow.addEventListener('pagehide', ()=>{ document.body.appendChild(panel); panel.classList.remove('pip-mode'); miniBtn.classList.remove('active-toggle'); pipWindow=null; }, {once:true});
+    collapseBtn.classList.remove('hidden');
+    pipWindow.addEventListener('pagehide', ()=>{ document.body.appendChild(panel); panel.classList.remove('pip-mode','pip-collapsed'); miniBtn.classList.remove('active-toggle'); collapseBtn.classList.add('hidden'); pipWindow=null; }, {once:true});
   }
   function goFullView(){ window.location.href='app.html'; }
 
   trigger.onclick=()=>panel.classList.toggle('open');
   closeBtn.onclick=()=>{ if(pipWindow){ pipWindow.close(); return; } panel.classList.remove('open'); };
   miniBtn.onclick=toggleMiniMode; maxBtn.onclick=goFullView;
+  collapseBtn.onclick=toggleBubbleCollapse;
+  pipBubble.onclick=toggleBubbleCollapse;
 
   $('submit-task').onclick=addTask;
   $('f-title').addEventListener('keydown', e=>{ if(e.key==='Enter') addTask(); });
