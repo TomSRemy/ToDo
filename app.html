@@ -17,8 +17,8 @@
     --bd:#242B36; --bd-soft:#1C222B;
     --tx1:#E6EAF0; --tx2:#AEB6C2; --tx3:#6B7480;
     --accent:#14D3A9; --accent-dim:#0F3A33;
-    --crit:#FF5470; --high:#FF9F43; --med:#4DA3FF; --low:#6B7480;
-    --ok:#3DD68C; --purple:#B98AFF;
+    --crit:#ED6965; --high:#BB3E03; --med:#7DD3FC; --low:#8B7FB5;
+    --ok:#14D3A9; --purple:#8B7FB5;
     --radius:4px;
     --font-ui: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
     --font-mono: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, monospace;
@@ -195,6 +195,24 @@
 
   .empty-state{ padding:36px 20px; text-align:center; color:var(--tx3); font-size:12px; font-family:var(--font-mono); }
 
+  /* today dashboard */
+  #today-stats-row{ display:flex; gap:1px; padding:15px; border-bottom:1px solid var(--bd); flex-shrink:0; }
+  .stat-card{ flex:1; background:var(--panel-2); border:1px solid var(--bd); border-radius:6px; padding:12px 14px; }
+  .stat-card-num{ font-family:var(--font-mono); font-size:22px; font-weight:700; color:var(--tx1); line-height:1; margin-bottom:4px; }
+  .stat-card-num.crit{ color:var(--crit); }
+  .stat-card-num.accent{ color:var(--accent); }
+  .stat-card-label{ font-family:var(--font-mono); font-size:9.5px; color:var(--tx3); text-transform:uppercase; letter-spacing:.4px; }
+  .today-empty{ padding:60px 20px; text-align:center; color:var(--tx3); font-size:13px; }
+
+  /* stats panel (Ref & data) */
+  .stats-row{ display:flex; align-items:center; gap:10px; margin-bottom:7px; font-size:12px; }
+  .stats-label{ width:110px; flex-shrink:0; color:var(--tx2); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .stats-bar-wrap{ flex:1; height:8px; background:var(--panel-2); border-radius:4px; overflow:hidden; }
+  .stats-bar{ height:100%; border-radius:4px; }
+  .stats-value{ width:32px; text-align:right; flex-shrink:0; font-family:var(--font-mono); font-size:11px; color:var(--tx3); }
+  .stats-group-label{ font-family:var(--font-mono); font-size:9.5px; color:var(--tx3); text-transform:uppercase; letter-spacing:.4px; margin:16px 0 8px; }
+  .stats-group-label:first-child{ margin-top:0; }
+
   #task-list.view-bloc{ display:flex; flex-direction:row; align-items:stretch; overflow-x:auto; }
   .kanban-col{ min-width:190px; max-width:190px; display:flex; flex-direction:column; border-right:1px solid var(--bd); flex-shrink:0; }
   .kanban-col{ min-width:280px; max-width:340px; }
@@ -277,7 +295,8 @@
     </div>
 
     <div class="tabs">
-      <span class="tab active" data-tab="tasks">Tâches</span>
+      <span class="tab active" data-tab="today">Aujourd'hui<span class="tab-badge" id="today-badge"></span></span>
+      <span class="tab" data-tab="tasks">Tâches</span>
       <span class="tab" data-tab="inbox">Boîte mail<span class="tab-badge" id="inbox-badge"></span></span>
       <span class="tab" data-tab="archive">Archive</span>
       <span class="tab" data-tab="lists">Réf. &amp; data</span>
@@ -305,7 +324,12 @@
   </nav>
 
 <div id="todo-panel">
-  <div class="tab-panel" id="tab-tasks">
+  <div class="tab-panel" id="tab-today">
+    <div id="today-stats-row"></div>
+    <div id="today-list"></div>
+  </div>
+
+  <div class="tab-panel hidden" id="tab-tasks">
     <div class="quick-add-bar">
       <input type="text" id="quick-add-input" placeholder="Ajouter une tâche… (Entrée)">
       <button id="quick-add-more" type="button">Tâche complète</button>
@@ -416,6 +440,10 @@
       <button class="data-btn" id="install-btn" style="width:100%;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="2" width="14" height="20" rx="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg>Installer l'app</button>
     </div>
     <div class="list-manager" style="margin-top:22px;">
+      <h2>Statistiques</h2>
+      <div id="stats-panel"></div>
+    </div>
+    <div class="list-manager" style="margin-top:22px;">
       <h2>Sauvegarde</h2>
       <p class="list-hint">Les données vivent dans ce navigateur. Exporte régulièrement pour ne rien perdre.</p>
       <div class="data-actions">
@@ -458,7 +486,7 @@
   const reminderToggle=$('reminder-toggle'), reminderRow=$('reminder-row'), recurToggle=$('recur-toggle'), recurRow=$('recur-row');
   const clientInput=$('f-client'), projectInput=$('f-project'), clientDot=$('client-dot'), projectDot=$('project-dot');
   const clientDatalist=$('client-datalist'), projectDatalist=$('project-datalist');
-  const tabs=document.querySelectorAll('.tab'), tabTasks=$('tab-tasks'), tabInbox=$('tab-inbox'), tabArchive=$('tab-archive'), tabLists=$('tab-lists');
+  const tabs=document.querySelectorAll('.tab'), tabToday=$('tab-today'), tabTasks=$('tab-tasks'), tabInbox=$('tab-inbox'), tabArchive=$('tab-archive'), tabLists=$('tab-lists');
   const clientChipRow=$('client-chip-row'), projectChipRow=$('project-chip-row');
   const addSection=$('add-section'), cancelTaskBtn=$('cancel-task');
   const quickAddInput=$('quick-add-input'), quickAddMore=$('quick-add-more');
@@ -466,8 +494,8 @@
 
   const URGENCY_RANK={critique:0,haute:1,moyenne:2,basse:3};
   const URGENCY_ORDER=['critique','haute','moyenne','basse'];
-  const URGENCY_META={critique:{label:'Critique',color:'#FF5470'},haute:{label:'Haute',color:'#FF9F43'},moyenne:{label:'Moyenne',color:'#4DA3FF'},basse:{label:'Basse',color:'#6B7480'}};
-  const STATUS_META={a_faire:{label:'À faire',color:'#6B7480'},en_cours:{label:'En cours',color:'#4DA3FF'},en_attente:{label:'En attente',color:'#B98AFF'}};
+  const URGENCY_META={critique:{label:'Critique',color:'#ED6965'},haute:{label:'Haute',color:'#BB3E03'},moyenne:{label:'Moyenne',color:'#7DD3FC'},basse:{label:'Basse',color:'#8B7FB5'}};
+  const STATUS_META={a_faire:{label:'À faire',color:'#1A7B8C'},en_cours:{label:'En cours',color:'#14D3A9'},en_attente:{label:'En attente',color:'#FFFD82'}};
   const STATUS_CYCLE=['a_faire','en_cours','en_attente'];
   const CLIENT_PALETTE=['#14D3A9','#ED6965','#FFFD82','#1A7B8C','#CA6702','#BB3E03','#7DD3FC','#8B7FB5'];
   const PROJECT_PALETTE=['#14D3A9','#ED6965','#FFFD82','#1A7B8C','#CA6702','#BB3E03','#7DD3FC','#8B7FB5'];
@@ -492,14 +520,39 @@
       if(t.project&&!projectsList.includes(t.project)){ projectsList.push(t.project); seeded=true; }
     });
     if(seeded){ saveTasks(); saveClients(); saveProjects(); }
-    render(); renderArchive(); renderLists();
+    render(); renderArchive(); renderLists(); renderToday();
     await loadSeenIds();
     fetchInbox();
     setInterval(fetchInbox, 5 * 60 * 1000);
+    checkDailyDigestNotification();
   }
   async function saveTasks(){ try{ await window.storage.set(TASKS_KEY,JSON.stringify(tasks),false); }catch(e){ console.error(e); } }
   async function saveClients(){ try{ await window.storage.set(CLIENTS_KEY,JSON.stringify(clientsList),false); }catch(e){ console.error(e); } }
   async function saveProjects(){ try{ await window.storage.set(PROJECTS_KEY,JSON.stringify(projectsList),false); }catch(e){ console.error(e); } }
+
+  async function checkDailyDigestNotification(){
+    if(!('Notification' in window) || Notification.permission !== 'granted') return;
+    const todayStr = toISO(new Date());
+    let lastDate = '';
+    try{ const r = await window.storage.get('last-daily-notif', false); lastDate = r && r.value ? r.value : ''; }catch(e){}
+    if(lastDate === todayStr) return;
+
+    const open = activeTasks();
+    const overdue = open.filter(t=>dueStatus(t.due)==='overdue').length;
+    const now = new Date(); now.setHours(0,0,0,0);
+    const dueToday = open.filter(t=>{
+      if(!t.due) return false;
+      return new Date(t.due+'T00:00:00').getTime() === now.getTime();
+    }).length;
+
+    if(overdue > 0 || dueToday > 0){
+      const parts = [];
+      if(overdue > 0) parts.push(overdue + ' en retard');
+      if(dueToday > 0) parts.push(dueToday + " due(s) aujourd'hui");
+      new Notification('Tâches du jour', { body: parts.join(' · ') });
+    }
+    try{ await window.storage.set('last-daily-notif', todayStr, false); }catch(e){}
+  }
 
   function escapeHtml(s){ const d=document.createElement('div'); d.textContent=s; return d.innerHTML; }
   function toISO(d){ return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
@@ -853,7 +906,7 @@
     const today=new Date(); today.setHours(0,0,0,0);
     const b={overdue:[],today:[],week:[],later:[],none:[]};
     list.forEach(t=>{ if(!t.due){b.none.push(t);return;} const d=new Date(t.due+'T00:00:00'); const diff=Math.round((d-today)/86400000); if(diff<0)b.overdue.push(t); else if(diff===0)b.today.push(t); else if(diff<=7)b.week.push(t); else b.later.push(t); });
-    [['overdue','En retard','#FF5470'],['today',"Aujourd'hui",'#4DA3FF'],['week','Cette semaine',null],['later','Plus tard',null],['none','Sans date',null]].forEach(([k,l,c])=>{ if(!b[k].length)return; taskList.appendChild(makeGroupHeader(l,c,b[k].length)); b[k].forEach(t=>taskList.appendChild(buildTableRow(t))); });
+    [['overdue','En retard','#ED6965'],['today',"Aujourd'hui",'#14D3A9'],['week','Cette semaine',null],['later','Plus tard',null],['none','Sans date',null]].forEach(([k,l,c])=>{ if(!b[k].length)return; taskList.appendChild(makeGroupHeader(l,c,b[k].length)); b[k].forEach(t=>taskList.appendChild(buildTableRow(t))); });
   }
   function renderBloc(list){
     STATUS_CYCLE.forEach(s=>{
@@ -996,6 +1049,54 @@
 
   $('inbox-refresh').onclick = fetchInbox;
 
+  function renderToday(){
+    const statsRow=$('today-stats-row'), list=$('today-list');
+    const open=activeTasks();
+    const overdueTasks=open.filter(t=>dueStatus(t.due)==='overdue');
+    const now=new Date(); now.setHours(0,0,0,0);
+    const todayTasks=open.filter(t=>t.due && new Date(t.due+'T00:00:00').getTime()===now.getTime());
+    const weekTasks=open.filter(t=>{
+      if(!t.due) return false;
+      const d=new Date(t.due+'T00:00:00');
+      const diff=Math.round((d-now)/86400000);
+      return diff>0 && diff<=7;
+    });
+
+    statsRow.innerHTML='';
+    const cards=[
+      ['En retard', overdueTasks.length, 'crit'],
+      ["Dues aujourd'hui", todayTasks.length, 'accent'],
+      ['Cette semaine', weekTasks.length, ''],
+      ['Total ouvertes', open.length, '']
+    ];
+    cards.forEach(([label,num,cls])=>{
+      const card=document.createElement('div'); card.className='stat-card';
+      const n=document.createElement('div'); n.className='stat-card-num'+(cls?' '+cls:''); n.textContent=num;
+      const l=document.createElement('div'); l.className='stat-card-label'; l.textContent=label;
+      card.appendChild(n); card.appendChild(l);
+      statsRow.appendChild(card);
+    });
+
+    const todayBadge=$('today-badge');
+    const urgentCount=overdueTasks.length+todayTasks.length;
+    todayBadge.textContent=urgentCount>0?urgentCount:'';
+
+    list.innerHTML='';
+    if(overdueTasks.length===0 && todayTasks.length===0){
+      const e=document.createElement('div'); e.className='today-empty'; e.textContent="Rien d'urgent aujourd'hui.";
+      list.appendChild(e);
+      return;
+    }
+    if(overdueTasks.length){
+      list.appendChild(makeGroupHeader('En retard · '+overdueTasks.length, URGENCY_META.critique.color));
+      sortedTasks(overdueTasks).forEach(t=>list.appendChild(buildTableRow(t)));
+    }
+    if(todayTasks.length){
+      list.appendChild(makeGroupHeader("Aujourd'hui · "+todayTasks.length, '#14D3A9'));
+      sortedTasks(todayTasks).forEach(t=>list.appendChild(buildTableRow(t)));
+    }
+  }
+
   function renderArchive(){
     tabArchive.innerHTML='';
     const arch=tasks.filter(t=>t.archived).sort((a,b)=>(b.archivedAt||0)-(a.archivedAt||0));
@@ -1020,26 +1121,145 @@
 
   function countFor(name,field){ return activeTasks().filter(t=>t[field]===name).length; }
 
+  function renderStats(){
+    const panel=$('stats-panel');
+    panel.innerHTML='';
+    const open=activeTasks();
+    const archived=tasks.filter(t=>t.archived);
+    const weekAgo=Date.now()-7*86400000;
+    const doneThisWeek=archived.filter(t=>t.archivedAt && t.archivedAt>=weekAgo).length;
+
+    function addBarRow(label,count,total,color){
+      const row=document.createElement('div'); row.className='stats-row';
+      const l=document.createElement('div'); l.className='stats-label'; l.textContent=label; l.title=label;
+      const wrap=document.createElement('div'); wrap.className='stats-bar-wrap';
+      const bar=document.createElement('div'); bar.className='stats-bar';
+      bar.style.width=(total>0 ? Math.round(count/total*100) : 0)+'%';
+      bar.style.background=color;
+      wrap.appendChild(bar);
+      const v=document.createElement('div'); v.className='stats-value'; v.textContent=count;
+      row.appendChild(l); row.appendChild(wrap); row.appendChild(v);
+      panel.appendChild(row);
+    }
+    function addGroupLabel(text){
+      const g=document.createElement('div'); g.className='stats-group-label'; g.textContent=text;
+      panel.appendChild(g);
+    }
+
+    addGroupLabel('Vue d\u2019ensemble ('+open.length+' ouvertes, '+archived.length+' archivées, '+doneThisWeek+' validées cette semaine)');
+
+    addGroupLabel('Par urgence');
+    URGENCY_ORDER.forEach(u=>{
+      const c=open.filter(t=>t.urgency===u).length;
+      if(c>0) addBarRow(URGENCY_META[u].label, c, open.length, URGENCY_META[u].color);
+    });
+
+    addGroupLabel('Par statut');
+    STATUS_CYCLE.forEach(s=>{
+      const c=open.filter(t=>t.status===s).length;
+      if(c>0) addBarRow(STATUS_META[s].label, c, open.length, STATUS_META[s].color);
+    });
+
+    const clientCounts={};
+    open.forEach(t=>{ if(t.client) clientCounts[t.client]=(clientCounts[t.client]||0)+1; });
+    const topClients=Object.entries(clientCounts).sort((a,b)=>b[1]-a[1]).slice(0,5);
+    if(topClients.length){
+      addGroupLabel('Top clients');
+      const maxC=topClients[0][1];
+      topClients.forEach(([name,c])=>addBarRow(name, c, maxC, clientColor(name)));
+    }
+
+    const projectCounts={};
+    open.forEach(t=>{ if(t.project) projectCounts[t.project]=(projectCounts[t.project]||0)+1; });
+    const topProjects=Object.entries(projectCounts).sort((a,b)=>b[1]-a[1]).slice(0,5);
+    if(topProjects.length){
+      addGroupLabel('Top projets');
+      const maxP=topProjects[0][1];
+      topProjects.forEach(([name,c])=>addBarRow(name, c, maxP, projectColor(name)));
+    }
+
+    if(open.length===0){
+      addGroupLabel('');
+      const e=document.createElement('div'); e.className='list-empty'; e.textContent='Rien à afficher pour le moment.';
+      panel.appendChild(e);
+    }
+  }
+
   function renderLists(){
     clientChipRow.innerHTML='';
     if(!clientsList.length){ const p=document.createElement('p'); p.className='list-empty'; p.textContent='Aucun client.'; clientChipRow.appendChild(p); }
-    else clientsList.slice().sort().forEach(n=>clientChipRow.appendChild(makeManageChip(n,clientColor(n),countFor(n,'client'),()=>removeClient(n))));
+    else clientsList.slice().sort().forEach(n=>clientChipRow.appendChild(makeManageChip(n,clientColor(n),countFor(n,'client'),()=>removeClient(n),()=>renameClient(n))));
     projectChipRow.innerHTML='';
     if(!projectsList.length){ const p=document.createElement('p'); p.className='list-empty'; p.textContent='Aucun projet.'; projectChipRow.appendChild(p); }
-    else projectsList.slice().sort().forEach(n=>projectChipRow.appendChild(makeManageChip(n,projectColor(n),countFor(n,'project'),()=>removeProject(n))));
+    else projectsList.slice().sort().forEach(n=>projectChipRow.appendChild(makeManageChip(n,projectColor(n),countFor(n,'project'),()=>removeProject(n),()=>renameProject(n))));
   }
-  function makeManageChip(name,hex,count,onDelete){
+  function makeManageChip(name,hex,count,onDelete,onRename){
     const chip=document.createElement('span'); chip.className='manage-chip';
     chip.style.color=hex; chip.style.background=hex+'22'; chip.style.border='1px solid '+hex+'55';
     const label=document.createElement('span'); label.textContent=name; chip.appendChild(label);
     if(count){ const c=document.createElement('span'); c.className='chip-count'; c.textContent=count; chip.appendChild(c); }
-    const btn=document.createElement('button'); btn.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke-width="2.5" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg>'; btn.onclick=onDelete; chip.appendChild(btn);
+    const editBtn=document.createElement('button'); editBtn.title='Renommer';
+    editBtn.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4z"/></svg>';
+    editBtn.onclick=onRename; chip.appendChild(editBtn);
+    const delBtn=document.createElement('button'); delBtn.title='Supprimer'; delBtn.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke-width="2.5" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg>'; delBtn.onclick=onDelete; chip.appendChild(delBtn);
     return chip;
   }
-  function addClientToList(n){ n=n.trim(); if(!n||clientsList.includes(n))return; clientsList.push(n); saveClients(); render(); renderLists(); }
-  function addProjectToList(n){ n=n.trim(); if(!n||projectsList.includes(n))return; projectsList.push(n); saveProjects(); render(); renderLists(); }
-  function removeClient(n){ clientsList=clientsList.filter(c=>c!==n); saveClients(); render(); renderLists(); }
-  function removeProject(n){ projectsList=projectsList.filter(p=>p!==n); saveProjects(); render(); renderLists(); }
+  function addClientToList(n){ n=n.trim(); if(!n||findExistingCI(clientsList,n))return; clientsList.push(n); saveClients(); render(); renderLists(); }
+  function addProjectToList(n){ n=n.trim(); if(!n||findExistingCI(projectsList,n))return; projectsList.push(n); saveProjects(); render(); renderLists(); }
+  function removeClient(n){
+    const affected=tasks.filter(t=>t.client===n);
+    if(affected.length>0){
+      if(!confirm('Retirer "'+n+'" de '+affected.length+' tâche(s) qui l\'utilisent ?')) return;
+      affected.forEach(t=>{ t.client=''; });
+      saveTasks();
+    }
+    clientsList=clientsList.filter(c=>c!==n); saveClients(); render(); renderLists();
+  }
+  function removeProject(n){
+    const affected=tasks.filter(t=>t.project===n);
+    if(affected.length>0){
+      if(!confirm('Retirer "'+n+'" de '+affected.length+' tâche(s) qui l\'utilisent ?')) return;
+      affected.forEach(t=>{ t.project=''; });
+      saveTasks();
+    }
+    projectsList=projectsList.filter(p=>p!==n); saveProjects(); render(); renderLists();
+  }
+  function renameClient(oldName){
+    const newName=prompt('Renommer "'+oldName+'" en :', oldName);
+    if(newName===null) return;
+    const trimmed=newName.trim();
+    if(!trimmed||trimmed===oldName) return;
+    const existing=findExistingCI(clientsList, trimmed);
+    if(existing && existing!==oldName){
+      const affected=tasks.filter(t=>t.client===oldName).length;
+      if(!confirm('"'+existing+'" existe déjà. Fusionner "'+oldName+'" dedans ? ('+affected+' tâche(s) transférées, le doublon disparaît)')) return;
+      tasks.forEach(t=>{ if(t.client===oldName) t.client=existing; });
+      clientsList=clientsList.filter(c=>c!==oldName);
+      saveClients(); saveTasks(); render(); renderLists();
+      return;
+    }
+    clientsList=clientsList.map(c=>c===oldName?trimmed:c);
+    tasks.forEach(t=>{ if(t.client===oldName) t.client=trimmed; });
+    saveClients(); saveTasks(); render(); renderLists();
+  }
+  function renameProject(oldName){
+    const newName=prompt('Renommer "'+oldName+'" en :', oldName);
+    if(newName===null) return;
+    const trimmed=newName.trim();
+    if(!trimmed||trimmed===oldName) return;
+    const existing=findExistingCI(projectsList, trimmed);
+    if(existing && existing!==oldName){
+      const affected=tasks.filter(t=>t.project===oldName).length;
+      if(!confirm('"'+existing+'" existe déjà. Fusionner "'+oldName+'" dedans ? ('+affected+' tâche(s) transférées, le doublon disparaît)')) return;
+      tasks.forEach(t=>{ if(t.project===oldName) t.project=existing; });
+      projectsList=projectsList.filter(p=>p!==oldName);
+      saveProjects(); saveTasks(); render(); renderLists();
+      return;
+    }
+    projectsList=projectsList.map(p=>p===oldName?trimmed:p);
+    tasks.forEach(t=>{ if(t.project===oldName) t.project=trimmed; });
+    saveProjects(); saveTasks(); render(); renderLists();
+  }
 
   function updateBadge(){
     const open=activeTasks();
@@ -1069,11 +1289,23 @@
   function toggleSubtasksExpanded(id){ if(expandedSubtaskIds.has(id)) expandedSubtaskIds.delete(id); else expandedSubtaskIds.add(id); render(); }
   function deleteTask(id){ tasks=tasks.filter(x=>x.id!==id); if(selectedTaskId===id)selectedTaskId=null; if(editingId===id)editingId=null; saveTasks(); render(); renderArchive(); }
 
+  function findExistingCI(list, name){
+    if(!name) return null;
+    const lower=name.toLowerCase();
+    return list.find(x=>x.toLowerCase()===lower) || null;
+  }
+
   function createTask(f){
     const task={ id:'task_'+Date.now()+'_'+Math.random().toString(36).slice(2,7), title:f.title, description:f.description||'', client:f.client||'', project:f.project||'', urgency:f.urgency||'moyenne', status:f.status||'a_faire', due:f.due||'', reminder:f.reminder||'', link:f.link||'', recur:f.recur||null, subtasks:[], archived:false, archivedAt:null, createdAt:Date.now() };
+    if(task.client){
+      const existing=findExistingCI(clientsList, task.client);
+      if(existing){ task.client=existing; } else { clientsList.push(task.client); saveClients(); }
+    }
+    if(task.project){
+      const existing=findExistingCI(projectsList, task.project);
+      if(existing){ task.project=existing; } else { projectsList.push(task.project); saveProjects(); }
+    }
     tasks.push(task);
-    if(task.client&&!clientsList.includes(task.client)){ clientsList.push(task.client); saveClients(); }
-    if(task.project&&!projectsList.includes(task.project)){ projectsList.push(task.project); saveProjects(); }
     saveTasks();
     if(task.reminder&&'Notification'in window&&Notification.permission==='default'){ Notification.requestPermission(); }
     return task;
@@ -1151,7 +1383,7 @@
     reader.readAsText(file);
   }
 
-  tabs.forEach(el=>{ el.onclick=()=>{ tabs.forEach(t=>t.classList.remove('active')); el.classList.add('active'); const tgt=el.dataset.tab; tabTasks.classList.toggle('hidden',tgt!=='tasks'); tabInbox.classList.toggle('hidden',tgt!=='inbox'); tabArchive.classList.toggle('hidden',tgt!=='archive'); tabLists.classList.toggle('hidden',tgt!=='lists'); if(tgt==='archive')renderArchive(); if(tgt==='lists')renderLists(); if(tgt==='inbox')fetchInbox(); }; });
+  tabs.forEach(el=>{ el.onclick=()=>{ tabs.forEach(t=>t.classList.remove('active')); el.classList.add('active'); const tgt=el.dataset.tab; tabToday.classList.toggle('hidden',tgt!=='today'); tabTasks.classList.toggle('hidden',tgt!=='tasks'); tabInbox.classList.toggle('hidden',tgt!=='inbox'); tabArchive.classList.toggle('hidden',tgt!=='archive'); tabLists.classList.toggle('hidden',tgt!=='lists'); if(tgt==='today')renderToday(); if(tgt==='archive')renderArchive(); if(tgt==='lists'){ renderLists(); renderStats(); } if(tgt==='inbox')fetchInbox(); }; });
 
   $('submit-task').onclick=addTask;
   $('f-title').addEventListener('keydown',e=>{ if(e.key==='Enter')addTask(); });
