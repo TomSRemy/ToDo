@@ -793,7 +793,7 @@
     const nSub=(t.subtasks||[]).length;
     if(nSub){
       const done=t.subtasks.filter(s=>s.done).length;
-      const b=document.createElement('span'); b.className='subtask-badge'; b.textContent='☑ '+done+'/'+nSub;
+      const b=document.createElement('span'); b.className='subtask-badge'; b.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="width:9px;height:9px;vertical-align:-1px;margin-right:2px;"><rect x="3" y="3" width="18" height="18" rx="3"/><path d="M8 12l3 3 5-6"/></svg>'+done+'/'+nSub;
       title.appendChild(b);
       const arrow=document.createElement('button'); arrow.type='button';
       arrow.className='subtask-arrow'+(expandedSubtaskIds.has(t.id)?' open':'');
@@ -944,7 +944,7 @@
     titleWrap.appendChild(titleText);
     if((t.subtasks||[]).length){
       const done=t.subtasks.filter(s=>s.done).length;
-      const b=document.createElement('span'); b.className='subtask-badge'; b.textContent='☑ '+done+'/'+t.subtasks.length;
+      const b=document.createElement('span'); b.className='subtask-badge'; b.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="width:9px;height:9px;vertical-align:-1px;margin-right:2px;"><rect x="3" y="3" width="18" height="18" rx="3"/><path d="M8 12l3 3 5-6"/></svg>'+done+'/'+t.subtasks.length;
       titleWrap.appendChild(b);
     }
     if(t.recur){ const r=document.createElement('span'); r.title='Récurrente'; r.style.marginLeft='6px'; r.innerHTML='<svg class="recur-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 4v6h-6"/><path d="M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>'; titleWrap.appendChild(r); }
