@@ -17,10 +17,12 @@ Optional env vars:
   TASKS_PATH    path to the synced tasks file (default: data/tasks.json)
   SEND_HOUR     Paris-local hour to actually send at (default: 9)
 """
+import html
 import json
 import os
 import smtplib
 from datetime import date, datetime
+from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from zoneinfo import ZoneInfo
 
