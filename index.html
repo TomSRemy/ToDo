@@ -76,7 +76,12 @@
   .tab-panel{ display:flex; flex-direction:column; min-height:0; flex:1; }
   .tab-panel.hidden{ display:none; }
 
-  .quick-add-bar{ display:flex; align-items:center; gap:8px; padding:10px 15px; border-bottom:1px solid var(--bd); flex-shrink:0; }
+  .hidden{ display:none !important; }
+  .quick-add-bar{ display:flex; align-items:center; gap:8px; padding:10px 15px; border-bottom:1px solid var(--bd); flex-shrink:0; flex-wrap:wrap; row-gap:8px; }
+  .quick-add-bar button, .quick-add-bar > label{ flex-shrink:0; background:var(--panel-2); border:1px solid var(--bd); border-radius:var(--radius); color:var(--tx2); font-family:var(--font-ui); font-size:12px; font-weight:600; padding:8px 12px; cursor:pointer; white-space:nowrap; }
+  .quick-add-bar button:hover{ color:var(--tx1); border-color:var(--accent); }
+  .quick-add-bar button.primary-btn{ background:var(--accent); color:#04070C; border-color:var(--accent); }
+  .quick-add-bar button.primary-btn:hover{ opacity:.9; color:#04070C; }
   #quick-add-input{ flex:1; min-width:0; background:var(--panel-2); border:1px solid var(--bd); border-radius:var(--radius); color:var(--tx1); font-family:var(--font-ui); font-size:13px; padding:8px 10px; }
   #quick-add-input::placeholder{ color:var(--tx3); }
   #quick-add-input:focus{ outline:none; border-color:var(--accent); }
@@ -84,12 +89,12 @@
   #quick-add-more:hover{ color:var(--accent); border-color:var(--accent); }
   .quick-add-bar .search-box{ position:relative; flex-shrink:0; width:220px; }
   .quick-add-bar .search-box svg{ position:absolute; left:9px; top:50%; transform:translateY(-50%); width:13px; height:13px; color:var(--tx3); }
-  .quick-add-bar #search-input{ width:100%; background:var(--panel-2); border:1px solid var(--bd); border-radius:var(--radius); color:var(--tx1); font-family:var(--font-ui); font-size:12.5px; padding:7px 10px 7px 28px; }
-  .quick-add-bar #search-input::placeholder{ color:var(--tx3); }
-  .quick-add-bar #search-input:focus{ outline:none; border-color:var(--accent); }
-  .quick-add-bar #search-clear{ position:absolute; right:6px; top:50%; transform:translateY(-50%); background:none; border:none; color:var(--tx3); cursor:pointer; padding:3px; display:none; }
-  .quick-add-bar #search-clear.show{ display:flex; }
-  .quick-add-bar #search-clear svg{ position:static; transform:none; width:12px; height:12px; }
+  .quick-add-bar .search-box input{ width:100%; background:var(--panel-2); border:1px solid var(--bd); border-radius:var(--radius); color:var(--tx1); font-family:var(--font-ui); font-size:12.5px; padding:7px 10px 7px 28px; box-sizing:border-box; }
+  .quick-add-bar .search-box input::placeholder{ color:var(--tx3); }
+  .quick-add-bar .search-box input:focus{ outline:none; border-color:var(--accent); }
+  .quick-add-bar .search-box button{ position:absolute; right:6px; top:50%; transform:translateY(-50%); background:none; border:none; color:var(--tx3); cursor:pointer; padding:3px; display:none; }
+  .quick-add-bar .search-box button.show{ display:flex; }
+  .quick-add-bar .search-box button svg{ position:static; transform:none; width:12px; height:12px; }
 
   #add-section{ padding:14px 15px; border-bottom:1px solid var(--bd); flex-shrink:0; display:none; flex-direction:column; gap:10px; }
   #add-section.open{ display:flex; }
@@ -297,14 +302,15 @@
   .crm-form-actions{ display:flex; gap:8px; }
   .crm-form-actions button{ font-family:var(--font-ui); font-size:12.5px; font-weight:600; padding:7px 14px; border-radius:var(--radius); cursor:pointer; border:1px solid var(--bd); background:var(--accent); color:#04070C; }
   .crm-form-actions .ghost-btn{ background:none; color:var(--tx2); }
-  .contact-row{ display:flex; align-items:center; gap:12px; padding:10px 15px; border-bottom:1px solid var(--bd-soft); cursor:default; }
+  .contact-row{ display:grid; grid-template-columns:22px 26px minmax(120px,1fr) minmax(30px,90px) minmax(30px,140px) minmax(30px,90px) 54px 56px; gap:10px; align-items:center; padding:9px 15px; border-bottom:1px solid var(--bd-soft); cursor:default; }
   .contact-row:hover{ background:var(--panel-2); }
-  .contact-avatar{ width:32px; height:32px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-family:var(--font-mono); font-size:11px; font-weight:700; flex-shrink:0; }
-  .contact-main{ flex:1; min-width:0; }
-  .contact-name{ font-size:13px; color:var(--tx1); font-weight:500; }
-  .contact-sub{ font-size:11px; color:var(--tx3); font-family:var(--font-mono); margin-top:1px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-  .contact-stars{ font-size:11px; color:var(--accent); flex-shrink:0; letter-spacing:1px; }
-  .contact-meta{ display:flex; gap:8px; flex-shrink:0; }
+  .contact-avatar{ width:26px; height:26px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-family:var(--font-mono); font-size:10px; font-weight:700; flex-shrink:0; }
+  .contact-main{ min-width:0; }
+  .contact-name{ font-size:12.5px; color:var(--tx1); font-weight:500; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .contact-sub{ font-size:10.5px; color:var(--tx3); font-family:var(--font-mono); margin-top:1px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .contact-company-cell{ font-size:11px; color:var(--tx2); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; min-width:0; }
+  .contact-stars{ font-size:10.5px; color:var(--accent); flex-shrink:0; letter-spacing:1px; white-space:nowrap; }
+  .contact-meta{ display:flex; gap:7px; flex-shrink:0; }
   .contact-meta a{ color:var(--tx3); display:flex; }
   .contact-meta a:hover{ color:var(--accent); }
   .contact-actions{ display:flex; gap:4px; opacity:0; flex-shrink:0; }
@@ -312,6 +318,7 @@
   .contact-actions button{ background:none; border:none; color:var(--tx3); cursor:pointer; padding:4px; display:flex; }
   .contact-actions button:hover{ color:var(--accent); }
   .contact-actions .del-btn:hover{ color:var(--crit); }
+  .contacts-header-row{ display:grid; grid-template-columns:22px 26px minmax(120px,1fr) minmax(30px,90px) minmax(30px,140px) minmax(30px,90px) 54px 56px; gap:10px; align-items:center; padding:9px 15px; border-bottom:1px solid var(--bd); font-family:var(--font-mono); font-size:9.5px; color:var(--tx3); text-transform:uppercase; letter-spacing:.4px; position:sticky; top:0; background:var(--panel); z-index:5; }
   .pending-section-label{ padding:12px 15px 6px; font-family:var(--font-mono); font-size:9.5px; color:var(--tx3); text-transform:uppercase; letter-spacing:.4px; }
   .pending-row{ display:flex; align-items:center; gap:10px; padding:9px 15px; border-bottom:1px solid var(--bd-soft); background:var(--panel-2); }
   .pending-row-main{ flex:1; min-width:0; }
@@ -537,7 +544,28 @@
     <div id="inbox-list"></div>
   </div>
 
-  <div class="tab-panel hidden" id="tab-archive"></div>
+  <div class="tab-panel hidden" id="tab-archive">
+    <div class="quick-add-bar">
+      <div class="search-box" style="width:100%;">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+        <input type="text" id="archive-search" placeholder="Rechercher dans l'archive">
+        <button id="archive-search-clear"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
+      </div>
+    </div>
+    <div class="top-toolbar">
+      <div class="filter-chips" id="archive-filters">
+        <span class="filter-chip active" data-filter="toutes">Toutes</span>
+        <span class="filter-chip" data-filter="critique">Critique</span>
+        <span class="filter-chip" data-filter="haute">Haute</span>
+      </div>
+    </div>
+    <div class="table-header">
+      <span></span><span></span>
+      <span>Tâche</span><span>Client</span><span>Projet</span><span>Statut</span><span>Urgence</span><span>Archivé le</span>
+      <span></span><span></span>
+    </div>
+    <div id="archive-list"></div>
+  </div>
 
   <div id="sig-paste-overlay" class="modal-overlay hidden">
     <div class="modal-box">
@@ -564,14 +592,20 @@
   <div class="tab-panel hidden" id="tab-contacts">
     <div class="quick-add-bar">
       <input type="text" id="contact-search" placeholder="Rechercher un contact ou une société…">
-      <button id="contact-add-btn" type="button">Nouveau contact</button>
+      <button id="contact-add-btn" type="button" class="primary-btn">Nouveau contact</button>
       <button id="sig-paste-btn" type="button">Coller une signature</button>
-      <button id="contacts-import-btn" type="button">Importer Excel</button>
-      <input type="file" id="contacts-import-input" accept=".xlsx,.xls,.csv" class="hidden">
-      <button id="contacts-export-btn" type="button">Exporter Excel</button>
       <button id="contact-import-btn" type="button">Importer Excel</button>
       <button id="contact-export-btn" type="button">Exporter Excel</button>
       <input type="file" id="contact-import-input" accept=".xlsx,.xls,.csv" class="hidden">
+    </div>
+    <div class="top-toolbar">
+      <div class="view-icons" id="contacts-view-switch">
+        <button class="view-icon-btn active" data-view="groupe" title="Par société"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></button>
+        <button class="view-icon-btn" data-view="liste" title="Liste (sans regroupement)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg></button>
+      </div>
+    </div>
+    <div class="contacts-header-row">
+      <span></span><span></span><span>Contact</span><span>Société</span><span>Email</span><span>Téléphone</span><span>Note</span><span></span>
     </div>
     <div id="contact-form" class="crm-form hidden">
       <div class="crm-form-row">
@@ -587,7 +621,10 @@
       </div>
       <div class="crm-form-row">
         <input type="email" id="ct-email" placeholder="Email">
-        <input type="text" id="ct-phone1" placeholder="Téléphone">
+      </div>
+      <div class="crm-form-row">
+        <input type="text" id="ct-phone1" placeholder="Téléphone 1">
+        <input type="text" id="ct-phone2" placeholder="Téléphone 2 (optionnel)">
       </div>
       <div class="crm-form-row">
         <div class="relevance-picker" id="ct-relevance-picker">
@@ -610,7 +647,7 @@
   <div class="tab-panel hidden" id="tab-pipeline">
     <div class="quick-add-bar">
       <input type="text" id="opp-search" placeholder="Rechercher une opportunité ou une société…">
-      <button id="opp-add-btn" type="button">Nouvelle opportunité</button>
+      <button id="opp-add-btn" type="button" class="primary-btn">Nouvelle opportunité</button>
     </div>
     <div id="pipeline-board"></div>
   </div>
@@ -645,6 +682,19 @@
       <div class="crm-form-actions">
         <button id="opp-save-btn" type="button">Enregistrer</button>
         <button id="opp-cancel-btn" type="button" class="ghost-btn">Annuler</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="company-edit-overlay" class="modal-overlay hidden">
+    <div class="modal-box">
+      <h3 id="co-edit-title"></h3>
+      <div class="crm-form-row"><input type="text" id="co-whatdo" placeholder="Ce qu'ils font (ex: Producteur solaire FR)"></div>
+      <div class="crm-form-row"><input type="text" id="co-website" placeholder="Site web / lien"></div>
+      <div class="crm-form-row"><input type="text" id="co-scope" placeholder="Périmètre marché, séparé par des virgules (ex: FR, EU)"></div>
+      <div class="crm-form-actions">
+        <button id="co-edit-save" type="button">Enregistrer</button>
+        <button id="co-edit-cancel" type="button" class="ghost-btn">Annuler</button>
       </div>
     </div>
   </div>
@@ -1510,7 +1560,7 @@
     taskList.className=currentView==='bloc'?'view-bloc':'';
     taskList.innerHTML='';
     rowCounter=1;
-    tableHeader.style.display=currentView==='liste'?'grid':'none';
+    tableHeader.style.display=currentView==='bloc'?'none':'grid';
     updateSortHeaderUI();
     if(list.length===0&&currentView!=='bloc'){ const e=document.createElement('div'); e.className='empty-state'; e.textContent=searchQuery?'Aucun résultat.':'Rien ici.'; taskList.appendChild(e); }
     else if(currentView==='liste') renderListView(list);
@@ -1684,12 +1734,18 @@
     }
   }
 
+  let archiveFilter='toutes';
   function renderArchive(){
-    tabArchive.innerHTML='';
-    const arch=tasks.filter(t=>t.archived && !t.deleted).sort((a,b)=>(b.archivedAt||0)-(a.archivedAt||0));
-    if(!arch.length){ const e=document.createElement('div'); e.className='empty-state'; e.textContent='Aucune tâche archivée.'; tabArchive.appendChild(e); return; }
+    const list=$('archive-list');
+    list.innerHTML='';
+    const q=($('archive-search').value||'').trim().toLowerCase();
+    let arch=tasks.filter(t=>t.archived && !t.deleted).sort((a,b)=>(b.archivedAt||0)-(a.archivedAt||0));
+    if(archiveFilter==='critique') arch=arch.filter(t=>t.urgency==='critique');
+    else if(archiveFilter==='haute') arch=arch.filter(t=>t.urgency==='haute'||t.urgency==='critique');
+    if(q) arch=arch.filter(t=>(t.title+' '+(t.client||'')+' '+(t.project||'')).toLowerCase().includes(q));
+    if(!arch.length){ const e=document.createElement('div'); e.className='empty-state'; e.textContent=q?'Aucun résultat.':'Aucune tâche archivée.'; list.appendChild(e); return; }
     let n=1;
-    arch.forEach(t=>tabArchive.appendChild(buildArchiveRow(t, n++)));
+    arch.forEach(t=>list.appendChild(buildArchiveRow(t, n++)));
   }
 
   function buildArchiveRow(t, rowNum){
@@ -1889,9 +1945,12 @@
     removeFromContactInboxOnGitHub(id);
   }
 
+  let contactsView='groupe';
+  let contactRowCounter=1;
   function renderContacts(){
     const list=$('contacts-list');
     list.innerHTML='';
+    contactRowCounter=1;
     const q=$('contact-search').value.trim().toLowerCase();
     let items=activeContacts().filter(c=>{
       if(!q) return true;
@@ -1902,6 +1961,11 @@
       list.appendChild(e);
       return;
     }
+    if(contactsView==='liste'){
+      items.sort((a,b)=>(b.relevance||0)-(a.relevance||0));
+      items.forEach(c=>list.appendChild(buildContactRow(c, contactRowCounter++)));
+      return;
+    }
     const groups={};
     items.forEach(c=>{ const k=c.company||'Sans société'; (groups[k]=groups[k]||[]).push(c); });
     Object.keys(groups).sort((a,b)=>a.localeCompare(b)).forEach(company=>{
@@ -1910,7 +1974,7 @@
       } else {
         list.appendChild(buildCompanyGroupHeader(company, groups[company].length));
       }
-      groups[company].sort((a,b)=>(b.relevance||0)-(a.relevance||0)).forEach(c=>list.appendChild(buildContactRow(c)));
+      groups[company].sort((a,b)=>(b.relevance||0)-(a.relevance||0)).forEach(c=>list.appendChild(buildContactRow(c, contactRowCounter++)));
     });
   }
 
@@ -1918,7 +1982,9 @@
     const header=document.createElement('div'); header.className='group-header';
     header.style.color=clientColor(companyName);
     header.style.display='flex'; header.style.alignItems='center'; header.style.gap='8px';
-    const label=document.createElement('span'); label.textContent=companyName; label.style.flex='1'; label.style.minWidth='0'; label.style.overflow='hidden'; label.style.textOverflow='ellipsis'; label.style.whiteSpace='nowrap';
+    const label=document.createElement('span'); label.textContent=companyName; label.style.flex='1'; label.style.minWidth='0'; label.style.overflow='hidden'; label.style.textOverflow='ellipsis'; label.style.whiteSpace='nowrap'; label.style.cursor='pointer';
+    label.title='Cliquer pour éditer les infos de la société';
+    label.onclick=()=>openCompanyEditForm(companyName);
     header.appendChild(label);
     const countEl=document.createElement('span'); countEl.className='group-count'; countEl.textContent='· '+count;
     header.appendChild(countEl);
@@ -1931,6 +1997,30 @@
     header.appendChild(typeTag);
 
     return header;
+  }
+
+  let editingCompanyName=null;
+  function openCompanyEditForm(companyName){
+    editingCompanyName=companyName;
+    let co=companies.find(x=>x.name===companyName);
+    if(!co){ co={ id:'co_'+Date.now()+'_'+Math.random().toString(36).slice(2,7), name:companyName, whatTheyDo:'', marketScope:[], website:'', type:'', createdAt:Date.now(), updatedAt:Date.now(), deleted:false }; companies.push(co); }
+    $('co-edit-title').textContent=companyName;
+    $('co-whatdo').value=co.whatTheyDo||'';
+    $('co-website').value=co.website||'';
+    $('co-scope').value=(co.marketScope||[]).join(', ');
+    $('company-edit-overlay').classList.remove('hidden');
+    $('co-whatdo').focus();
+  }
+  function closeCompanyEditForm(){ $('company-edit-overlay').classList.add('hidden'); editingCompanyName=null; }
+  function saveCompanyEdit(){
+    const co=companies.find(x=>x.name===editingCompanyName);
+    if(!co) return;
+    co.whatTheyDo=$('co-whatdo').value.trim();
+    co.website=$('co-website').value.trim();
+    co.marketScope=$('co-scope').value.split(',').map(s=>s.trim()).filter(Boolean);
+    touchCrm(co); saveCrm();
+    closeCompanyEditForm();
+    renderContacts();
   }
 
   function openCompanyTypePopover(e, companyName){
@@ -1992,8 +2082,12 @@
     input.focus();
   }
 
-  function buildContactRow(c){
+  function buildContactRow(c, rowNum){
     const row=document.createElement('div'); row.className='contact-row';
+
+    const numSpan=document.createElement('span'); numSpan.className='row-num'; numSpan.textContent=rowNum||'';
+    row.appendChild(numSpan);
+
     const av=document.createElement('div'); av.className='contact-avatar';
     const hex=c.company?clientColor(c.company):'#6B7480';
     av.style.background=hex+'2A'; av.style.color=hex;
@@ -2002,16 +2096,27 @@
 
     const main=document.createElement('div'); main.className='contact-main';
     const name=document.createElement('div'); name.className='contact-name'; name.textContent=[c.firstName,c.lastName].filter(Boolean).join(' ')||'(sans nom)';
-    const sub=document.createElement('div'); sub.className='contact-sub'; sub.textContent=[c.role,c.company].filter(Boolean).join(' · ');
+    const sub=document.createElement('div'); sub.className='contact-sub'; sub.textContent=c.role||'';
     main.appendChild(name); main.appendChild(sub);
     row.appendChild(main);
 
-    if(c.relevance){ const stars=document.createElement('div'); stars.className='contact-stars'; stars.textContent='★'.repeat(c.relevance); row.appendChild(stars); }
+    const companyCell=document.createElement('div'); companyCell.className='contact-company-cell';
+    companyCell.textContent=c.company||'';
+    companyCell.style.color=c.company?clientColor(c.company):'var(--tx3)';
+    row.appendChild(companyCell);
 
-    const meta=document.createElement('div'); meta.className='contact-meta';
-    if(c.email){ const a=document.createElement('a'); a.href='mailto:'+c.email; a.title=c.email; a.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>'; meta.appendChild(a); }
-    if(c.phone1){ const a=document.createElement('a'); a.href='tel:'+c.phone1; a.title=c.phone1; a.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/></svg>'; meta.appendChild(a); }
-    row.appendChild(meta);
+    const emailCell=document.createElement('div'); emailCell.className='contact-meta';
+    if(c.email){ const a=document.createElement('a'); a.href='mailto:'+c.email; a.title=c.email; a.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:13px;height:13px;"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>'; emailCell.appendChild(a); }
+    row.appendChild(emailCell);
+
+    const phoneCell=document.createElement('div'); phoneCell.className='contact-meta';
+    if(c.phone1){ const a=document.createElement('a'); a.href='tel:'+c.phone1; a.title=c.phone1+(c.phone2?(' · '+c.phone2):''); a.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:13px;height:13px;"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/></svg>'; phoneCell.appendChild(a); }
+    if(c.phone2){ const a2=document.createElement('a'); a2.href='tel:'+c.phone2; a2.title='2e numéro : '+c.phone2; a2.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:13px;height:13px;"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/></svg>'; phoneCell.appendChild(a2); }
+    row.appendChild(phoneCell);
+
+    const stars=document.createElement('div'); stars.className='contact-stars';
+    stars.textContent=c.relevance?'★'.repeat(c.relevance):'';
+    row.appendChild(stars);
 
     const actions=document.createElement('div'); actions.className='contact-actions';
     const editBtn=document.createElement('button'); editBtn.title='Éditer';
@@ -2037,6 +2142,7 @@
     $('ct-company').value=src?src.company||'':'';
     $('ct-email').value=src?src.email||'':'';
     $('ct-phone1').value=src?src.phone1||'':'';
+    $('ct-phone2').value=src?src.phone2||'':'';
     $('ct-meeting').value='';
     setRelevancePicker(c?c.relevance||0:0);
     $('ct-first').focus();
@@ -2101,7 +2207,7 @@
       contacts.push(c);
     }
     c.firstName=firstName; c.lastName=lastName; c.role=$('ct-role').value.trim();
-    c.email=$('ct-email').value.trim(); c.phone1=$('ct-phone1').value.trim();
+    c.email=$('ct-email').value.trim(); c.phone1=$('ct-phone1').value.trim(); c.phone2=$('ct-phone2').value.trim();
     c.relevance=parseInt($('ct-relevance-picker').dataset.value||'0',10);
     if(companyName){
       const existing=findExistingCI(clientsList, companyName);
@@ -2586,76 +2692,6 @@
     });
   }
 
-  let sheetjsLoaded=false;
-  function loadSheetJS(){
-    if(sheetjsLoaded) return Promise.resolve();
-    return new Promise((resolve, reject)=>{
-      const s=document.createElement('script');
-      s.src='https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
-      s.onload=()=>{ sheetjsLoaded=true; resolve(); };
-      s.onerror=()=>reject(new Error('SheetJS failed to load'));
-      document.head.appendChild(s);
-    });
-  }
-
-  function pickField(row, candidates){
-    const keys=Object.keys(row);
-    for(const cand of candidates){
-      const found=keys.find(k=>k.trim().toLowerCase()===cand);
-      if(found && row[found]!==undefined && row[found]!==null && String(row[found]).trim()!=='') return String(row[found]).trim();
-    }
-    return '';
-  }
-
-  async function exportContactsExcel(){
-    try{
-      await loadSheetJS();
-      const rows=activeContacts().map(c=>({
-        'Prénom':c.firstName||'', 'Nom':c.lastName||'', 'Rôle':c.role||'', 'Société':c.company||'',
-        'Email':c.email||'', 'Téléphone':c.phone1||'', 'Pertinence':c.relevance||''
-      }));
-      const ws=XLSX.utils.json_to_sheet(rows);
-      const wb=XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(wb, ws, 'Contacts');
-      XLSX.writeFile(wb, 'contacts_'+toISO(new Date())+'.xlsx');
-    }catch(e){ console.error('export failed', e); alert('Export impossible : '+e.message); }
-  }
-
-  async function importContactsExcel(file){
-    try{
-      await loadSheetJS();
-      const data=await file.arrayBuffer();
-      const wb=XLSX.read(data, { type:'array' });
-      const ws=wb.Sheets[wb.SheetNames[0]];
-      const rows=XLSX.utils.sheet_to_json(ws, { defval:'' });
-
-      let imported=0;
-      rows.forEach(row=>{
-        const firstName=pickField(row, ['prénom','prenom','first name','firstname']);
-        const lastName=pickField(row, ['nom','last name','lastname']);
-        if(!firstName && !lastName) return;
-        const role=pickField(row, ['rôle','role','fonction','job title']);
-        let company=pickField(row, ['société','societe','company','entreprise']);
-        const email=pickField(row, ['email','e-mail','mail']);
-        const phone1=pickField(row, ['téléphone','telephone','phone','contact number 1','contact number\n1']);
-        const relevanceRaw=pickField(row, ['pertinence','relevance','relevance \n(1-5)','relevance (1-5)']);
-        const relevance=parseInt(relevanceRaw,10)||0;
-
-        if(company){
-          const existing=findExistingCI(clientsList, company);
-          company=existing||company;
-          if(!existing){ clientsList.push(company); }
-          if(!companies.find(co=>co.name===company)){ companies.push({ id:'co_'+Date.now()+'_'+Math.random().toString(36).slice(2,7)+imported, name:company, whatTheyDo:'', marketScope:[], types:[], website:'', createdAt:Date.now(), updatedAt:Date.now(), deleted:false }); }
-        }
-        contacts.push({ id:'ct_'+Date.now()+'_'+Math.random().toString(36).slice(2,7)+imported, firstName, lastName, role, company, email, phone1, relevance, createdAt:Date.now(), updatedAt:Date.now(), deleted:false });
-        imported++;
-      });
-
-      if(imported>0){ saveClients(); saveCrm(); renderContacts(); }
-      alert(imported+' contact(s) importé(s).');
-    }catch(e){ console.error('import failed', e); alert('Import impossible : '+e.message); }
-  }
-
   let xlsxLoaded=false;
   function loadXlsx(){
     if(xlsxLoaded) return Promise.resolve();
@@ -2692,18 +2728,34 @@
       const role=pickHeader(row, ['role','rôle','fonction']);
       let company=pickHeader(row, ['company','société','societe','entreprise']);
       const email=pickHeader(row, ['email','e-mail','mail']);
-      const phone1=pickHeader(row, ['contact number 1','contact number','phone','téléphone','telephone']);
-      const relevanceRaw=pickHeader(row, ['relevance (1-5)','relevance','pertinence']);
+      const phone1=pickHeader(row, ['contact number 1','contact number\n1','contact number','phone','téléphone','telephone']);
+      const phone2=pickHeader(row, ['contact number 2','contact number\n2']);
+      const relevanceRaw=pickHeader(row, ['relevance (1-5)','relevance \n(1-5)','relevance','pertinence']);
       const relevance=parseInt(relevanceRaw,10)||0;
+      const whatTheyDo=pickHeader(row, ['what they do','activité','activite']);
+      const website=pickHeader(row, ['link','website','site web','lien']);
+      const countryRaw=pickHeader(row, ['country','pays','périmètre','perimetre']);
+      const meetingLabel=pickHeader(row, ['meetings & opportunities','meetings','rencontre']);
 
       if(company){
         const existing=findExistingCI(clientsList, company);
         company=existing||company;
         if(!existing){ clientsList.push(company); }
-        if(!companies.find(co=>co.name===company)){ companies.push({ id:'co_'+Date.now()+'_'+Math.random().toString(36).slice(2,7)+added, name:company, whatTheyDo:'', marketScope:[], website:'', type:'', createdAt:Date.now(), updatedAt:Date.now(), deleted:false }); }
+        let co=companies.find(x=>x.name===company);
+        if(!co){
+          co={ id:'co_'+Date.now()+'_'+Math.random().toString(36).slice(2,7)+added, name:company, whatTheyDo:'', marketScope:[], website:'', type:'', createdAt:Date.now(), updatedAt:Date.now(), deleted:false };
+          companies.push(co);
+        }
+        if(!co.whatTheyDo && whatTheyDo) co.whatTheyDo=whatTheyDo;
+        if(!co.website && website) co.website=website;
+        if(countryRaw && (!co.marketScope||!co.marketScope.length)){
+          co.marketScope=countryRaw.split(/[,/]/).map(s=>s.trim()).filter(Boolean);
+        }
       }
 
-      contacts.push({ id:'ct_'+Date.now()+'_'+Math.random().toString(36).slice(2,7)+added, firstName, lastName, role, company, email, phone1, relevance, createdAt:Date.now(), updatedAt:Date.now(), deleted:false });
+      const contactId='ct_'+Date.now()+'_'+Math.random().toString(36).slice(2,7)+added;
+      contacts.push({ id:contactId, firstName, lastName, role, company, email, phone1, phone2, relevance, createdAt:Date.now(), updatedAt:Date.now(), deleted:false });
+      if(meetingLabel){ meetings.push({ id:'mt_'+Date.now()+'_'+Math.random().toString(36).slice(2,7)+added, contactId, label:meetingLabel, date:toISO(new Date()), createdAt:Date.now(), updatedAt:Date.now(), deleted:false }); }
       added++;
     });
 
@@ -2713,15 +2765,22 @@
 
   function exportContactsExcel(){
     loadXlsx().then(()=>{
-      const rows=activeContacts().map(c=>({
-        'Prénom': c.firstName||'',
-        'Nom': c.lastName||'',
-        'Rôle': c.role||'',
-        'Société': c.company||'',
-        'Email': c.email||'',
-        'Téléphone': c.phone1||'',
-        'Pertinence (1-5)': c.relevance||''
-      }));
+      const rows=activeContacts().map(c=>{
+        const co=c.company?companies.find(x=>x.name===c.company):null;
+        return {
+          'Prénom': c.firstName||'',
+          'Nom': c.lastName||'',
+          'Rôle': c.role||'',
+          'Société': c.company||'',
+          'Email': c.email||'',
+          'Téléphone 1': c.phone1||'',
+          'Téléphone 2': c.phone2||'',
+          'Pertinence (1-5)': c.relevance||'',
+          'What they do': co?co.whatTheyDo||'':'',
+          'Link': co?co.website||'':'',
+          'Country': co&&co.marketScope?co.marketScope.join(', '):''
+        };
+      });
       const ws=XLSX.utils.json_to_sheet(rows);
       const wb=XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, ws, 'Contacts');
@@ -2738,9 +2797,16 @@
   }
   function clearSigImage(){ sigImageFile=null; $('sig-image-preview').classList.add('hidden'); $('sig-image-input').value=''; }
 
-  $('contacts-export-btn').onclick=exportContactsExcel;
-  $('contacts-import-btn').onclick=()=>$('contacts-import-input').click();
-  $('contacts-import-input').addEventListener('change', e=>{ if(e.target.files[0]){ importContactsExcel(e.target.files[0]); e.target.value=''; } });
+  $('archive-search').addEventListener('input', ()=>{ $('archive-search-clear').classList.toggle('show', !!$('archive-search').value); renderArchive(); });
+  $('archive-search-clear').onclick=()=>{ $('archive-search').value=''; $('archive-search-clear').classList.remove('show'); renderArchive(); };
+  document.querySelectorAll('#archive-filters .filter-chip').forEach(chip=>{
+    chip.onclick=()=>{
+      document.querySelectorAll('#archive-filters .filter-chip').forEach(c=>c.classList.remove('active'));
+      chip.classList.add('active');
+      archiveFilter=chip.dataset.filter;
+      renderArchive();
+    };
+  });
 
   $('sig-paste-btn').onclick=()=>{
     $('sig-paste-text').value='';
@@ -2801,7 +2867,18 @@
   };
   $('contact-save-btn').onclick=saveContact;
   $('contact-cancel-btn').onclick=closeContactForm;
+  $('co-edit-save').onclick=saveCompanyEdit;
+  $('co-edit-cancel').onclick=closeCompanyEditForm;
+  $('company-edit-overlay').addEventListener('click', e=>{ if(e.target.id==='company-edit-overlay') closeCompanyEditForm(); });
   $('contact-search').addEventListener('input', renderContacts);
+  document.querySelectorAll('#contacts-view-switch .view-icon-btn').forEach(btn=>{
+    btn.onclick=()=>{
+      document.querySelectorAll('#contacts-view-switch .view-icon-btn').forEach(b=>b.classList.remove('active'));
+      btn.classList.add('active');
+      contactsView=btn.dataset.view;
+      renderContacts();
+    };
+  });
   $('ct-relevance-picker').querySelectorAll('span').forEach(s=>{ s.onclick=()=>setRelevancePicker(parseInt(s.dataset.v,10)); });
   {
     const ctCompanyInput=$('ct-company'), ctCompanyDropdown=$('ct-company-dropdown');
