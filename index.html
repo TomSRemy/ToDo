@@ -178,9 +178,9 @@
   .meta-tag.solid{ font-weight:700; cursor:pointer; }
   .meta-tag.flag{ border-radius:3px; padding-left:7px; }
   .tag-dot{ width:6px; height:6px; border-radius:50%; flex-shrink:0; }
-  .meta-date-compact{ font-family:var(--font-mono); font-size:10.5px; color:var(--tx2); white-space:nowrap; }
-  .meta-date-compact.overdue{ color:var(--crit); font-weight:600; }
-  .meta-date-compact.soon{ color:var(--high); font-weight:600; }
+  .meta-date-compact{ font-family:var(--font-mono); font-size:11px; font-weight:600; color:var(--tx1); background:var(--panel-2); border:1px solid var(--bd); border-radius:10px; padding:2px 8px; white-space:nowrap; }
+  .meta-date-compact.overdue{ color:var(--crit); background:rgba(237,105,101,.14); border-color:var(--crit); }
+  .meta-date-compact.soon{ color:var(--high); background:rgba(187,62,3,.14); border-color:var(--high); }
   .meta-icon{ width:12px; height:12px; color:var(--tx3); flex-shrink:0; }
   .recur-icon{ width:11px; height:11px; color:var(--purple); flex-shrink:0; }
 
@@ -237,9 +237,8 @@
   .kanban-col-body{ overflow-y:auto; flex:1; min-height:80px; }
   .kanban-col .task-title-compact{ font-size:12.5px; }
 
-  .table-header{ display:flex; align-items:center; gap:6px; padding:9px 14px; border-bottom:1px solid var(--bd); flex-shrink:0; position:sticky; top:0; background:var(--panel); z-index:5; }
-  .table-header-label{ font-family:var(--font-mono); font-size:9.5px; color:var(--tx3); text-transform:uppercase; letter-spacing:.4px; margin-right:4px; }
-  .th-col{ font-family:var(--font-mono); font-size:9.5px; color:var(--tx3); text-transform:uppercase; letter-spacing:.4px; cursor:pointer; user-select:none; display:flex; align-items:center; gap:3px; }
+  .table-header{ display:grid; grid-template-columns:22px 22px minmax(130px,1fr) minmax(38px,82px) minmax(38px,82px) minmax(48px,74px) minmax(44px,70px) minmax(38px,56px) 28px 60px; gap:10px; align-items:center; padding:9px 14px; border-bottom:1px solid var(--bd); flex-shrink:0; position:sticky; top:0; background:var(--panel); z-index:5; }
+  .th-col{ font-family:var(--font-mono); font-size:9.5px; color:var(--tx3); text-transform:uppercase; letter-spacing:.4px; cursor:pointer; user-select:none; display:flex; align-items:center; gap:3px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; min-width:0; }
   .th-col:hover{ color:var(--tx1); }
   .th-col.sorted{ color:var(--accent); }
   .th-sort-arrow{ font-size:8px; }
@@ -250,7 +249,7 @@
 
   /* Wide layout: real aligned columns, like a spreadsheet row */
   .task-row-grid{
-    display:grid; grid-template-columns:22px 22px 1fr 82px 82px 74px 70px 56px 28px 60px;
+    display:grid; grid-template-columns:22px 22px minmax(130px,1fr) minmax(38px,82px) minmax(38px,82px) minmax(48px,74px) minmax(44px,70px) minmax(38px,56px) 28px 60px;
     gap:10px; align-items:center; padding:10px 14px;
   }
   .row-num{ font-family:var(--font-mono); font-size:10px; color:var(--tx3); text-align:right; }
@@ -321,6 +320,8 @@
   .pending-row-actions{ display:flex; gap:6px; flex-shrink:0; }
   .pending-row-actions button{ font-family:var(--font-ui); font-size:11px; font-weight:600; padding:5px 10px; border-radius:5px; cursor:pointer; border:1px solid var(--bd); background:none; color:var(--tx2); }
   .pending-row-actions .import-btn{ background:var(--accent); color:#04070C; border-color:var(--accent); }
+  .company-type-tag{ font-family:var(--font-mono); font-size:9.5px; color:var(--tx3); border:1px solid var(--bd); border-radius:8px; padding:2px 7px; cursor:pointer; flex-shrink:0; }
+  .company-type-tag:hover{ color:var(--accent); border-color:var(--accent); }
 
   /* CRM: pipeline */
   .modal-overlay{ position:fixed; inset:0; background:rgba(4,7,12,.7); z-index:20000; display:flex; align-items:center; justify-content:center; padding:20px; }
@@ -513,13 +514,14 @@
     </div>
 
     <div class="table-header" id="table-header">
-      <span class="table-header-label">Trier :</span>
-      <span class="filter-chip th-col" data-sort="title">Tâche</span>
-      <span class="filter-chip th-col" data-sort="client">Client</span>
-      <span class="filter-chip th-col" data-sort="project">Projet</span>
-      <span class="filter-chip th-col" data-sort="status">Statut</span>
-      <span class="filter-chip th-col" data-sort="urgency">Urgence</span>
-      <span class="filter-chip th-col" data-sort="due">Échéance</span>
+      <span></span><span></span>
+      <span class="th-col" data-sort="title">Tâche</span>
+      <span class="th-col" data-sort="client">Client</span>
+      <span class="th-col" data-sort="project">Projet</span>
+      <span class="th-col" data-sort="status">Statut</span>
+      <span class="th-col" data-sort="urgency">Urgence</span>
+      <span class="th-col" data-sort="due">Échéance</span>
+      <span></span><span></span>
     </div>
 
     <div id="task-list"></div>
@@ -564,6 +566,12 @@
       <input type="text" id="contact-search" placeholder="Rechercher un contact ou une société…">
       <button id="contact-add-btn" type="button">Nouveau contact</button>
       <button id="sig-paste-btn" type="button">Coller une signature</button>
+      <button id="contacts-import-btn" type="button">Importer Excel</button>
+      <input type="file" id="contacts-import-input" accept=".xlsx,.xls,.csv" class="hidden">
+      <button id="contacts-export-btn" type="button">Exporter Excel</button>
+      <button id="contact-import-btn" type="button">Importer Excel</button>
+      <button id="contact-export-btn" type="button">Exporter Excel</button>
+      <input type="file" id="contact-import-input" accept=".xlsx,.xls,.csv" class="hidden">
     </div>
     <div id="contact-form" class="crm-form hidden">
       <div class="crm-form-row">
@@ -783,6 +791,7 @@
 
   let tasks=[], clientsList=[], projectsList=[];
   let companies=[], contacts=[], meetings=[], opportunities=[];
+  let companyTypesList=['Client','Consultant','Fournisseur','Partenaire'];
   let syncConfig={owner:'',repo:'',token:'',enabled:false};
   let lastKnownSha=null, syncPushTimer=null;
   let currentFilter='ouvertes', currentView='liste', searchQuery='';
@@ -790,6 +799,7 @@
 
   const TASKS_KEY='todo-widget-tasks', CLIENTS_KEY='todo-widget-clients', PROJECTS_KEY='todo-widget-projects';
   const COMPANIES_KEY='todo-widget-companies', CONTACTS_KEY='todo-widget-contacts', MEETINGS_KEY='todo-widget-meetings', OPPS_KEY='todo-widget-opportunities';
+  const COMPANY_TYPES_KEY='todo-widget-company-types';
   const SYNC_CONFIG_KEY='sync-config';
   const SYNC_TASKS_PATH='data/tasks.json';
   const SYNC_CRM_PATH='data/crm.json';
@@ -802,7 +812,12 @@
     try{ const r=await window.storage.get(CONTACTS_KEY,false); contacts=r&&r.value?JSON.parse(r.value):[]; }catch(e){ contacts=[]; }
     try{ const r=await window.storage.get(MEETINGS_KEY,false); meetings=r&&r.value?JSON.parse(r.value):[]; }catch(e){ meetings=[]; }
     try{ const r=await window.storage.get(OPPS_KEY,false); opportunities=r&&r.value?JSON.parse(r.value):[]; }catch(e){ opportunities=[]; }
+    try{ const r=await window.storage.get(COMPANY_TYPES_KEY,false); companyTypesList=r&&r.value?JSON.parse(r.value):[]; }catch(e){ companyTypesList=[]; }
     let seeded=false, crmSeeded=false;
+    if(companyTypesList.length===0){
+      companyTypesList=['Client','Consultant','Fournisseur','Partenaire','Concurrent'];
+      window.storage.set(COMPANY_TYPES_KEY,JSON.stringify(companyTypesList),false).catch(()=>{});
+    }
     tasks.forEach(t=>{
       if(t.status==='termine'&&t.archived===undefined){ t.archived=true; t.archivedAt=t.archivedAt||Date.now(); t.status='a_faire'; seeded=true; }
       if(t.archived===undefined){ t.archived=false; seeded=true; }
@@ -838,6 +853,7 @@
       await window.storage.set(CONTACTS_KEY,JSON.stringify(contacts),false);
       await window.storage.set(MEETINGS_KEY,JSON.stringify(meetings),false);
       await window.storage.set(OPPS_KEY,JSON.stringify(opportunities),false);
+      await window.storage.set(COMPANY_TYPES_KEY,JSON.stringify(companyTypesList),false);
     }catch(e){ console.error(e); }
   }
   async function saveCrm(){ await saveCrmLocalOnly(); scheduleCrmSyncPush(); }
@@ -1494,7 +1510,7 @@
     taskList.className=currentView==='bloc'?'view-bloc':'';
     taskList.innerHTML='';
     rowCounter=1;
-    tableHeader.style.display=currentView==='liste'?'flex':'none';
+    tableHeader.style.display=currentView==='liste'?'grid':'none';
     updateSortHeaderUI();
     if(list.length===0&&currentView!=='bloc'){ const e=document.createElement('div'); e.className='empty-state'; e.textContent=searchQuery?'Aucun résultat.':'Rien ici.'; taskList.appendChild(e); }
     else if(currentView==='liste') renderListView(list);
@@ -1504,6 +1520,7 @@
     else if(currentView==='date') renderByDate(list);
     else if(currentView==='bloc') renderBloc(list);
     updateBadge(); refreshDatalists();
+    if(typeof renderToday==='function') renderToday();
   }
 
   // ===== Gmail inbox queue (data/tasks-inbox.json, written by the GitHub Action) =====
@@ -1671,22 +1688,60 @@
     tabArchive.innerHTML='';
     const arch=tasks.filter(t=>t.archived && !t.deleted).sort((a,b)=>(b.archivedAt||0)-(a.archivedAt||0));
     if(!arch.length){ const e=document.createElement('div'); e.className='empty-state'; e.textContent='Aucune tâche archivée.'; tabArchive.appendChild(e); return; }
-    arch.forEach(t=>{
-      const row=document.createElement('div'); row.className='task';
-      const body=document.createElement('div'); body.className='task-body';
-      const title=document.createElement('div'); title.className='task-title-compact'; title.style.textDecoration='line-through'; title.style.opacity='.6'; title.textContent=t.title; body.appendChild(title);
-      const meta=document.createElement('div'); meta.className='task-meta-compact';
-      if(t.client) meta.appendChild(makeTag(t.client, clientColor(t.client), 'dot'));
-      if(t.project) meta.appendChild(makeTag(t.project, projectColor(t.project), 'flag'));
-      if(t.archivedAt){ const ad=document.createElement('span'); ad.className='archive-date-compact'; ad.textContent=fmtDateTime(t.archivedAt); meta.appendChild(ad); }
-      body.appendChild(meta);
-      row.appendChild(body);
-      const actions=document.createElement('div'); actions.className='task-actions-compact'; actions.style.opacity='.7';
-      const restore=document.createElement('button'); restore.title='Restaurer'; restore.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/></svg>'; restore.onclick=()=>restoreTask(t.id); actions.appendChild(restore);
-      const del=document.createElement('button'); del.className='del-btn'; del.title='Supprimer'; del.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg>'; del.onclick=()=>deleteTask(t.id); actions.appendChild(del);
-      row.appendChild(actions);
-      tabArchive.appendChild(row);
-    });
+    let n=1;
+    arch.forEach(t=>tabArchive.appendChild(buildArchiveRow(t, n++)));
+  }
+
+  function buildArchiveRow(t, rowNum){
+    const row=document.createElement('div'); row.className='task-line';
+    row.dataset.id=t.id;
+    const grid=document.createElement('div'); grid.className='task-row-grid';
+
+    const numSpan=document.createElement('span'); numSpan.className='row-num'; numSpan.textContent=rowNum||'';
+    grid.appendChild(numSpan);
+
+    const restoreDot=document.createElement('div'); restoreDot.className='task-check'; restoreDot.style.borderColor='var(--tx3)'; restoreDot.title='Restaurer';
+    restoreDot.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:9px;height:9px;display:block;stroke:var(--tx3);"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/></svg>';
+    restoreDot.onclick=e=>{ e.stopPropagation(); restoreTask(t.id); };
+    grid.appendChild(restoreDot);
+
+    const titleWrap=document.createElement('div'); titleWrap.className='td-title';
+    const titleText=document.createElement('span'); titleText.className='td-title-text'; titleText.style.textDecoration='line-through'; titleText.style.opacity='.6'; titleText.textContent=t.title;
+    titleWrap.appendChild(titleText);
+    grid.appendChild(titleWrap);
+
+    const clientTag=t.client ? makeTag(t.client, clientColor(t.client), 'dot') : document.createElement('span');
+    grid.appendChild(clientTag);
+    const projectTag=t.project ? makeTag(t.project, projectColor(t.project), 'flag') : document.createElement('span');
+    grid.appendChild(projectTag);
+
+    const sMeta=STATUS_META[t.status]||STATUS_META.a_faire;
+    grid.appendChild(makeSolidTag(sMeta.label, sMeta.color, null));
+
+    const uMeta=URGENCY_META[t.urgency]||URGENCY_META.moyenne;
+    grid.appendChild(makeSolidTag(uMeta.label, uMeta.color, null));
+
+    const dateTag=document.createElement('span'); dateTag.className='meta-date-compact';
+    dateTag.textContent=t.archivedAt?fmtDateTime(t.archivedAt):'';
+    grid.appendChild(dateTag);
+
+    const mailWrap=document.createElement('span'); mailWrap.className='task-mail-icon';
+    if(t.link){ mailWrap.appendChild(makeLinkOrCopyBtn(t)); }
+    grid.appendChild(mailWrap);
+
+    const actions=document.createElement('div'); actions.className='task-actions-compact'; actions.style.opacity='.7';
+    const restore=document.createElement('button'); restore.title='Restaurer';
+    restore.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/></svg>';
+    restore.onclick=e=>{ e.stopPropagation(); restoreTask(t.id); };
+    actions.appendChild(restore);
+    const del=document.createElement('button'); del.className='del-btn'; del.title='Supprimer';
+    del.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg>';
+    del.onclick=e=>{ e.stopPropagation(); deleteTask(t.id); };
+    actions.appendChild(del);
+    grid.appendChild(actions);
+
+    row.appendChild(grid);
+    return row;
   }
 
   function countFor(name,field){ return activeTasks().filter(t=>t[field]===name).length; }
@@ -1850,9 +1905,91 @@
     const groups={};
     items.forEach(c=>{ const k=c.company||'Sans société'; (groups[k]=groups[k]||[]).push(c); });
     Object.keys(groups).sort((a,b)=>a.localeCompare(b)).forEach(company=>{
-      list.appendChild(makeGroupHeader(company, company==='Sans société'?null:clientColor(company), groups[company].length));
+      if(company==='Sans société'){
+        list.appendChild(makeGroupHeader(company, null, groups[company].length));
+      } else {
+        list.appendChild(buildCompanyGroupHeader(company, groups[company].length));
+      }
       groups[company].sort((a,b)=>(b.relevance||0)-(a.relevance||0)).forEach(c=>list.appendChild(buildContactRow(c)));
     });
+  }
+
+  function buildCompanyGroupHeader(companyName, count){
+    const header=document.createElement('div'); header.className='group-header';
+    header.style.color=clientColor(companyName);
+    header.style.display='flex'; header.style.alignItems='center'; header.style.gap='8px';
+    const label=document.createElement('span'); label.textContent=companyName; label.style.flex='1'; label.style.minWidth='0'; label.style.overflow='hidden'; label.style.textOverflow='ellipsis'; label.style.whiteSpace='nowrap';
+    header.appendChild(label);
+    const countEl=document.createElement('span'); countEl.className='group-count'; countEl.textContent='· '+count;
+    header.appendChild(countEl);
+
+    const co=companies.find(x=>x.name===companyName);
+    const typeTag=document.createElement('span'); typeTag.className='company-type-tag';
+    typeTag.textContent = co&&co.type ? co.type : '+ Type';
+    typeTag.title='Cliquer pour changer le type d\u2019entreprise';
+    typeTag.onclick=e=>openCompanyTypePopover(e, companyName);
+    header.appendChild(typeTag);
+
+    return header;
+  }
+
+  function openCompanyTypePopover(e, companyName){
+    e.stopPropagation();
+    closeInlinePopover();
+    const pop=document.createElement('div');
+    pop.className='combo-dropdown open';
+    pop.style.position='fixed';
+    const rect=e.currentTarget.getBoundingClientRect();
+    pop.style.top=Math.min(rect.bottom+4, window.innerHeight-200)+'px';
+    pop.style.left=Math.max(8, Math.min(rect.left, window.innerWidth-180))+'px';
+    pop.style.minWidth='160px';
+    pop.style.zIndex=10001;
+
+    const input=document.createElement('input');
+    input.type='text';
+    let co=companies.find(x=>x.name===companyName);
+    if(!co){ co={ id:'co_'+Date.now()+'_'+Math.random().toString(36).slice(2,7), name:companyName, whatTheyDo:'', marketScope:[], website:'', type:'', createdAt:Date.now(), updatedAt:Date.now(), deleted:false }; companies.push(co); }
+    input.value=co.type||'';
+    input.placeholder='Type d\u2019entreprise';
+    input.style.cssText='width:100%;padding:7px 9px;background:var(--panel);border:1px solid var(--bd);border-radius:4px;color:var(--tx1);font-size:12px;box-sizing:border-box;';
+    const itemsWrap=document.createElement('div');
+    itemsWrap.style.cssText='max-height:150px;overflow-y:auto;margin-top:4px;';
+
+    function apply(typeName){
+      typeName=typeName.trim();
+      co.type=typeName;
+      touchCrm(co);
+      if(typeName && !companyTypesList.includes(typeName)){ companyTypesList.push(typeName); }
+      saveCrm();
+      closeInlinePopover();
+      renderContacts();
+    }
+    function renderItems(){
+      const q=input.value.trim().toLowerCase();
+      itemsWrap.innerHTML='';
+      if(co.type){
+        const clearRow=document.createElement('div'); clearRow.className='combo-item'; clearRow.style.color='var(--tx3)';
+        clearRow.textContent='✕ Retirer';
+        clearRow.onclick=()=>apply('');
+        itemsWrap.appendChild(clearRow);
+      }
+      companyTypesList.slice().sort().filter(t=>t.toLowerCase().includes(q)).forEach(typeName=>{
+        const row=document.createElement('div'); row.className='combo-item';
+        const label=document.createElement('span'); label.className='combo-item-label'; label.textContent=typeName;
+        row.appendChild(label);
+        row.onclick=()=>apply(typeName);
+        itemsWrap.appendChild(row);
+      });
+    }
+    input.addEventListener('input', renderItems);
+    input.addEventListener('keydown', ev=>{ if(ev.key==='Enter') apply(input.value); if(ev.key==='Escape') closeInlinePopover(); });
+
+    pop.appendChild(input);
+    pop.appendChild(itemsWrap);
+    document.body.appendChild(pop);
+    activeInlinePopover=pop;
+    renderItems();
+    input.focus();
   }
 
   function buildContactRow(c){
@@ -2136,6 +2273,7 @@
     const delBtn=document.createElement('button'); delBtn.title='Supprimer'; delBtn.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke-width="2.5" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg>'; delBtn.onclick=onDelete; chip.appendChild(delBtn);
     return chip;
   }
+
   function addClientToList(n){ n=n.trim(); if(!n||findExistingCI(clientsList,n))return; clientsList.push(n); saveClients(); render(); renderLists(); }
   function addProjectToList(n){ n=n.trim(); if(!n||findExistingCI(projectsList,n))return; projectsList.push(n); saveProjects(); render(); renderLists(); }
   function removeClient(n){
@@ -2448,6 +2586,149 @@
     });
   }
 
+  let sheetjsLoaded=false;
+  function loadSheetJS(){
+    if(sheetjsLoaded) return Promise.resolve();
+    return new Promise((resolve, reject)=>{
+      const s=document.createElement('script');
+      s.src='https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
+      s.onload=()=>{ sheetjsLoaded=true; resolve(); };
+      s.onerror=()=>reject(new Error('SheetJS failed to load'));
+      document.head.appendChild(s);
+    });
+  }
+
+  function pickField(row, candidates){
+    const keys=Object.keys(row);
+    for(const cand of candidates){
+      const found=keys.find(k=>k.trim().toLowerCase()===cand);
+      if(found && row[found]!==undefined && row[found]!==null && String(row[found]).trim()!=='') return String(row[found]).trim();
+    }
+    return '';
+  }
+
+  async function exportContactsExcel(){
+    try{
+      await loadSheetJS();
+      const rows=activeContacts().map(c=>({
+        'Prénom':c.firstName||'', 'Nom':c.lastName||'', 'Rôle':c.role||'', 'Société':c.company||'',
+        'Email':c.email||'', 'Téléphone':c.phone1||'', 'Pertinence':c.relevance||''
+      }));
+      const ws=XLSX.utils.json_to_sheet(rows);
+      const wb=XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, 'Contacts');
+      XLSX.writeFile(wb, 'contacts_'+toISO(new Date())+'.xlsx');
+    }catch(e){ console.error('export failed', e); alert('Export impossible : '+e.message); }
+  }
+
+  async function importContactsExcel(file){
+    try{
+      await loadSheetJS();
+      const data=await file.arrayBuffer();
+      const wb=XLSX.read(data, { type:'array' });
+      const ws=wb.Sheets[wb.SheetNames[0]];
+      const rows=XLSX.utils.sheet_to_json(ws, { defval:'' });
+
+      let imported=0;
+      rows.forEach(row=>{
+        const firstName=pickField(row, ['prénom','prenom','first name','firstname']);
+        const lastName=pickField(row, ['nom','last name','lastname']);
+        if(!firstName && !lastName) return;
+        const role=pickField(row, ['rôle','role','fonction','job title']);
+        let company=pickField(row, ['société','societe','company','entreprise']);
+        const email=pickField(row, ['email','e-mail','mail']);
+        const phone1=pickField(row, ['téléphone','telephone','phone','contact number 1','contact number\n1']);
+        const relevanceRaw=pickField(row, ['pertinence','relevance','relevance \n(1-5)','relevance (1-5)']);
+        const relevance=parseInt(relevanceRaw,10)||0;
+
+        if(company){
+          const existing=findExistingCI(clientsList, company);
+          company=existing||company;
+          if(!existing){ clientsList.push(company); }
+          if(!companies.find(co=>co.name===company)){ companies.push({ id:'co_'+Date.now()+'_'+Math.random().toString(36).slice(2,7)+imported, name:company, whatTheyDo:'', marketScope:[], types:[], website:'', createdAt:Date.now(), updatedAt:Date.now(), deleted:false }); }
+        }
+        contacts.push({ id:'ct_'+Date.now()+'_'+Math.random().toString(36).slice(2,7)+imported, firstName, lastName, role, company, email, phone1, relevance, createdAt:Date.now(), updatedAt:Date.now(), deleted:false });
+        imported++;
+      });
+
+      if(imported>0){ saveClients(); saveCrm(); renderContacts(); }
+      alert(imported+' contact(s) importé(s).');
+    }catch(e){ console.error('import failed', e); alert('Import impossible : '+e.message); }
+  }
+
+  let xlsxLoaded=false;
+  function loadXlsx(){
+    if(xlsxLoaded) return Promise.resolve();
+    return new Promise((resolve, reject)=>{
+      const s=document.createElement('script');
+      s.src='https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
+      s.onload=()=>{ xlsxLoaded=true; resolve(); };
+      s.onerror=()=>reject(new Error('XLSX failed to load'));
+      document.head.appendChild(s);
+    });
+  }
+
+  function pickHeader(row, candidates){
+    const keys=Object.keys(row);
+    for(const cand of candidates){
+      const found=keys.find(k=>k.replace(/\s+/g,' ').trim().toLowerCase()===cand);
+      if(found && row[found]!=null && String(row[found]).trim()!=='') return String(row[found]).trim();
+    }
+    return '';
+  }
+
+  async function importContactsExcel(file){
+    await loadXlsx();
+    const buf=await file.arrayBuffer();
+    const wb=XLSX.read(buf, { type:'array' });
+    const sheet=wb.Sheets[wb.SheetNames[0]];
+    const rows=XLSX.utils.sheet_to_json(sheet, { defval:'' });
+
+    let added=0;
+    rows.forEach(row=>{
+      const firstName=pickHeader(row, ['first name','prénom','prenom']);
+      const lastName=pickHeader(row, ['last name','nom']);
+      if(!firstName && !lastName) return;
+      const role=pickHeader(row, ['role','rôle','fonction']);
+      let company=pickHeader(row, ['company','société','societe','entreprise']);
+      const email=pickHeader(row, ['email','e-mail','mail']);
+      const phone1=pickHeader(row, ['contact number 1','contact number','phone','téléphone','telephone']);
+      const relevanceRaw=pickHeader(row, ['relevance (1-5)','relevance','pertinence']);
+      const relevance=parseInt(relevanceRaw,10)||0;
+
+      if(company){
+        const existing=findExistingCI(clientsList, company);
+        company=existing||company;
+        if(!existing){ clientsList.push(company); }
+        if(!companies.find(co=>co.name===company)){ companies.push({ id:'co_'+Date.now()+'_'+Math.random().toString(36).slice(2,7)+added, name:company, whatTheyDo:'', marketScope:[], website:'', type:'', createdAt:Date.now(), updatedAt:Date.now(), deleted:false }); }
+      }
+
+      contacts.push({ id:'ct_'+Date.now()+'_'+Math.random().toString(36).slice(2,7)+added, firstName, lastName, role, company, email, phone1, relevance, createdAt:Date.now(), updatedAt:Date.now(), deleted:false });
+      added++;
+    });
+
+    if(added>0){ saveClients(); saveCrm(); renderContacts(); }
+    alert(added+' contact(s) importé(s).');
+  }
+
+  function exportContactsExcel(){
+    loadXlsx().then(()=>{
+      const rows=activeContacts().map(c=>({
+        'Prénom': c.firstName||'',
+        'Nom': c.lastName||'',
+        'Rôle': c.role||'',
+        'Société': c.company||'',
+        'Email': c.email||'',
+        'Téléphone': c.phone1||'',
+        'Pertinence (1-5)': c.relevance||''
+      }));
+      const ws=XLSX.utils.json_to_sheet(rows);
+      const wb=XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, 'Contacts');
+      XLSX.writeFile(wb, 'contacts-'+toISO(new Date())+'.xlsx');
+    }).catch(()=>alert('Le chargement de la librairie Excel a échoué. Vérifie ta connexion.'));
+  }
+
   function setSigImage(file){
     if(!file || !file.type.startsWith('image/')) return;
     sigImageFile=file;
@@ -2457,6 +2738,10 @@
   }
   function clearSigImage(){ sigImageFile=null; $('sig-image-preview').classList.add('hidden'); $('sig-image-input').value=''; }
 
+  $('contacts-export-btn').onclick=exportContactsExcel;
+  $('contacts-import-btn').onclick=()=>$('contacts-import-input').click();
+  $('contacts-import-input').addEventListener('change', e=>{ if(e.target.files[0]){ importContactsExcel(e.target.files[0]); e.target.value=''; } });
+
   $('sig-paste-btn').onclick=()=>{
     $('sig-paste-text').value='';
     clearSigImage();
@@ -2465,6 +2750,13 @@
     $('sig-paste-text').focus();
   };
   $('sig-paste-cancel').onclick=()=>{ $('sig-paste-overlay').classList.add('hidden'); };
+  $('contact-import-btn').onclick=()=>$('contact-import-input').click();
+  $('contact-import-input').addEventListener('change', e=>{
+    const file=e.target.files[0];
+    if(file) importContactsExcel(file);
+    e.target.value='';
+  });
+  $('contact-export-btn').onclick=exportContactsExcel;
   $('sig-paste-overlay').addEventListener('click', e=>{ if(e.target.id==='sig-paste-overlay') $('sig-paste-overlay').classList.add('hidden'); });
 
   $('sig-drop-zone').onclick=()=>$('sig-image-input').click();
