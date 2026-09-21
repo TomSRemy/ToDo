@@ -40,12 +40,13 @@
   #todo-badge.hidden{ display:none; }
 
   #todo-panel{
-    position:fixed; width:360px; max-height:min(620px, 78vh);
+    position:fixed; width:280px; max-height:min(360px, 60vh);
     background:var(--panel); border:1px solid var(--bd); border-radius:8px;
     box-shadow:0 16px 48px rgba(0,0,0,.6); z-index:9998; display:flex; flex-direction:column;
-    opacity:0; transform:scale(.98); pointer-events:none; transition:opacity .16s ease, transform .16s ease;
+    opacity:0; transform:scale(.98); pointer-events:none; transition:opacity .16s ease, transform .16s ease, width .16s ease, height .16s ease;
   }
   #todo-panel.open{ opacity:1; transform:scale(1); pointer-events:auto; }
+  #todo-panel.panel-expanded{ width:420px; max-height:min(620px, 78vh); }
   #todo-panel.pip-mode{ position:static !important; width:100% !important; height:100% !important; max-height:100% !important; border:none !important; border-radius:0 !important; opacity:1 !important; transform:none !important; pointer-events:auto !important; box-shadow:none !important; }
 
   #pip-bubble{ display:none; flex:1; flex-direction:column; align-items:center; justify-content:center; cursor:pointer; gap:6px; }
@@ -167,12 +168,20 @@
 
   .empty-state{ padding:30px 20px; text-align:center; color:var(--tx3); font-size:11.5px; font-family:var(--font-mono); }
 
-  #snooze-popover{ position:fixed; display:none; flex-direction:column; gap:2px; background:var(--panel-3); border:1px solid var(--bd); border-radius:var(--radius); box-shadow:0 8px 24px rgba(0,0,0,.6); padding:6px; z-index:10000; width:150px; }
-  #snooze-popover button{ background:none; border:none; color:var(--tx1); font-size:12px; text-align:left; padding:7px 8px; border-radius:2px; cursor:pointer; }
-  #snooze-popover button:hover{ background:var(--panel); color:var(--accent); }
-  .snooze-date-row{ display:flex; gap:4px; padding:4px 2px 2px; border-top:1px solid var(--bd); margin-top:2px; }
-  #snooze-date-input{ flex:1; min-width:0; background:var(--panel); border:1px solid var(--bd); border-radius:2px; color:var(--tx1); font-size:11px; padding:4px; }
-  #snooze-date-apply{ background:var(--accent) !important; color:#04070C !important; padding:4px 8px !important; flex-shrink:0; }
+  #snooze-popover{ position:fixed; display:none; flex-direction:column; gap:6px; background:var(--panel-3); border:1px solid var(--bd); border-radius:8px; box-shadow:0 12px 32px rgba(0,0,0,.6); padding:10px; z-index:10000; width:208px; }
+  .snooze-current{ font-family:var(--font-mono); font-size:10px; color:var(--tx3); padding:0 2px 7px; border-bottom:1px solid var(--bd); }
+  .snooze-quick-grid{ display:grid; grid-template-columns:1fr 1fr; gap:5px; }
+  .snooze-quick-grid button{ display:flex; flex-direction:column; align-items:flex-start; gap:1px; background:var(--panel-2); border:1px solid var(--bd); color:var(--tx1); padding:7px 9px; border-radius:6px; cursor:pointer; text-align:left; }
+  .snooze-quick-grid button:hover{ border-color:var(--accent); background:var(--accent-dim); }
+  .snooze-btn-label{ font-family:var(--font-ui); font-size:12px; font-weight:600; }
+  .snooze-btn-date{ font-family:var(--font-mono); font-size:9.5px; color:var(--tx3); }
+  .snooze-quick-grid button:hover .snooze-btn-date{ color:var(--accent); }
+  .snooze-date-row{ display:flex; gap:5px; padding-top:5px; border-top:1px solid var(--bd); }
+  #snooze-date-input{ flex:1; min-width:0; background:var(--panel-2); border:1px solid var(--bd); border-radius:5px; color:var(--tx1); font-family:var(--font-mono); font-size:11.5px; padding:6px 7px; }
+  #snooze-date-apply{ background:var(--accent); border:none; color:#04070C; font-weight:700; font-size:11.5px; padding:6px 12px; border-radius:5px; cursor:pointer; flex-shrink:0; }
+  #snooze-date-apply:hover{ opacity:.85; }
+  .snooze-clear-btn{ background:none; border:none; color:var(--tx3); font-size:11px; padding:5px 2px 0; cursor:pointer; text-align:left; font-family:var(--font-ui); }
+  .snooze-clear-btn:hover{ color:var(--crit); }
 </style>
 </head>
 <body>
@@ -194,6 +203,9 @@
       </button>
       <button class="icon-btn hidden" id="collapse-btn" title="Réduire en bulle">
         <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/></svg>
+      </button>
+      <button class="icon-btn" id="resize-btn" title="Agrandir">
+        <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg>
       </button>
       <button class="icon-btn" id="mini-btn" title="Mode mini (toujours visible, Chrome/Edge)">
         <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><rect x="12" y="12" width="8" height="7" rx="1"/></svg>
@@ -287,10 +299,15 @@
 <datalist id="project-datalist"></datalist>
 
 <div id="snooze-popover">
-  <button data-days="1">+1 jour</button>
-  <button data-days="3">+3 jours</button>
-  <button data-days="7">+1 semaine</button>
+  <div class="snooze-current" id="snooze-current"></div>
+  <div class="snooze-quick-grid">
+    <button data-abs="0"><span class="snooze-btn-label">Aujourd'hui</span><span class="snooze-btn-date" data-hint="abs0"></span></button>
+    <button data-abs="1"><span class="snooze-btn-label">Demain</span><span class="snooze-btn-date" data-hint="abs1"></span></button>
+    <button data-days="3"><span class="snooze-btn-label">+3 jours</span><span class="snooze-btn-date" data-hint="rel3"></span></button>
+    <button data-days="7"><span class="snooze-btn-label">+1 semaine</span><span class="snooze-btn-date" data-hint="rel7"></span></button>
+  </div>
   <div class="snooze-date-row"><input type="date" id="snooze-date-input"><button id="snooze-date-apply">OK</button></div>
+  <button id="snooze-clear-date" class="snooze-clear-btn">✕ Retirer la date</button>
 </div>
 
 <script>
@@ -693,14 +710,42 @@
   function openSnoozePopover(e,id){
     e.stopPropagation(); currentSnoozeId=id;
     const r=e.currentTarget.getBoundingClientRect(); snoozePopover.style.display='flex';
-    snoozePopover.style.top=Math.min(r.bottom+4, window.innerHeight-160)+'px';
-    snoozePopover.style.left=Math.max(8, Math.min(r.left-100, window.innerWidth-160))+'px';
+    snoozePopover.style.top=Math.min(r.bottom+4, window.innerHeight-260)+'px';
+    snoozePopover.style.left=Math.max(8, Math.min(r.left-100, window.innerWidth-216))+'px';
+
+    const t=tasks.find(x=>x.id===id);
+    const curEl=document.getElementById('snooze-current');
+    curEl.textContent = t && t.due ? ('Échéance actuelle : '+fmtDateShort(t.due)) : 'Pas d\u2019échéance';
+
+    const today=new Date();
+    const base = (t && t.due) ? new Date(t.due+'T00:00:00') : new Date();
+    const hints={
+      abs0: today,
+      abs1: (()=>{ const d=new Date(today); d.setDate(d.getDate()+1); return d; })(),
+      rel3: (()=>{ const d=new Date(base); d.setDate(d.getDate()+3); return d; })(),
+      rel7: (()=>{ const d=new Date(base); d.setDate(d.getDate()+7); return d; })()
+    };
+    snoozePopover.querySelectorAll('[data-hint]').forEach(el=>{
+      el.textContent = fmtDateShort(toISO(hints[el.dataset.hint]));
+    });
   }
   function closeSnoozePopover(){ snoozePopover.style.display='none'; currentSnoozeId=null; }
   function applySnoozeDays(days){
     if(!currentSnoozeId) return;
     const t=tasks.find(x=>x.id===currentSnoozeId);
     if(t){ const base=t.due?new Date(t.due+'T00:00:00'):new Date(); base.setDate(base.getDate()+days); t.due=toISO(base); touch(t); saveTasks(); render(); }
+    closeSnoozePopover();
+  }
+  function applySnoozeAbsolute(daysFromToday){
+    if(!currentSnoozeId) return;
+    const t=tasks.find(x=>x.id===currentSnoozeId);
+    if(t){ const d=new Date(); d.setDate(d.getDate()+daysFromToday); t.due=toISO(d); touch(t); saveTasks(); render(); }
+    closeSnoozePopover();
+  }
+  function clearSnoozeDate(){
+    if(!currentSnoozeId) return;
+    const t=tasks.find(x=>x.id===currentSnoozeId);
+    if(t){ t.due=''; touch(t); saveTasks(); render(); }
     closeSnoozePopover();
   }
 
@@ -735,7 +780,7 @@
     pipWindow.document.body.style.margin='0'; pipWindow.document.body.style.background='#0A0D12';
     panel.classList.add('open','pip-mode','pip-collapsed'); pipWindow.document.body.appendChild(panel); miniBtn.classList.add('active-toggle');
     collapseBtn.classList.remove('hidden');
-    pipWindow.addEventListener('pagehide', ()=>{ document.body.appendChild(panel); panel.classList.remove('pip-mode','pip-collapsed'); miniBtn.classList.remove('active-toggle'); collapseBtn.classList.add('hidden'); pipWindow=null; positionPanelNearTrigger(); }, {once:true});
+    pipWindow.addEventListener('pagehide', ()=>{ document.body.appendChild(panel); panel.classList.remove('pip-mode','pip-collapsed','panel-expanded'); panelExpanded=false; miniBtn.classList.remove('active-toggle'); collapseBtn.classList.add('hidden'); pipWindow=null; panelOriginPos=positionPanelNearTrigger(); }, {once:true});
   }
   function goFullView(){ window.location.href='index.html'; }
 
@@ -786,20 +831,46 @@
   document.addEventListener('touchmove', e=>{ if(dragging){ const t=e.touches[0]; moveDrag(t.clientX, t.clientY); } }, {passive:true});
   document.addEventListener('touchend', endDrag);
 
-  function positionPanelNearTrigger(){
+  function positionPanelNearTrigger(panelWidth, panelHeight){
+    panelWidth = panelWidth || 280;
+    panelHeight = panelHeight || Math.min(360, window.innerHeight*0.60);
     const rect=trigger.getBoundingClientRect();
-    const panelWidth=360, panelHeight=Math.min(620, window.innerHeight*0.78);
     let left=rect.left, top;
     if(rect.top - panelHeight - 12 > 8){ top=rect.top - panelHeight - 12; }
     else{ top=Math.min(rect.bottom + 12, window.innerHeight - panelHeight - 8); }
     left=Math.max(8, Math.min(left, window.innerWidth - panelWidth - 8));
     top=Math.max(8, top);
     panel.style.left=left+'px'; panel.style.top=top+'px';
+    return { left, top };
   }
+
+  let panelExpanded=false, panelOriginPos=null;
+  const resizeBtn=$('resize-btn');
+
+  function toggleResize(){
+    if(!panelExpanded){
+      panel.classList.add('panel-expanded');
+      positionPanelNearTrigger(420, Math.min(620, window.innerHeight*0.78));
+      resizeBtn.title='Réduire';
+      panelExpanded=true;
+    } else {
+      panel.classList.remove('panel-expanded');
+      if(panelOriginPos){ panel.style.left=panelOriginPos.left+'px'; panel.style.top=panelOriginPos.top+'px'; }
+      else { positionPanelNearTrigger(280, Math.min(360, window.innerHeight*0.60)); }
+      resizeBtn.title='Agrandir';
+      panelExpanded=false;
+    }
+  }
+  resizeBtn.onclick=toggleResize;
 
   trigger.onclick=()=>{
     if(dragMoved){ dragMoved=false; return; }
-    if(!panel.classList.contains('open')) positionPanelNearTrigger();
+    if(!panel.classList.contains('open')){
+      panel.classList.remove('panel-expanded');
+      panelExpanded=false;
+      panelOriginPos=positionPanelNearTrigger(280, Math.min(360, window.innerHeight*0.60));
+      resizeBtn.title='Agrandir';
+    }
     panel.classList.toggle('open');
   };
   closeBtn.onclick=()=>{ if(pipWindow){ pipWindow.close(); return; } panel.classList.remove('open'); };
@@ -808,7 +879,7 @@
   pipBubble.onclick=toggleBubbleCollapse;
 
   $('submit-task').onclick=addTask;
-  $('f-title').addEventListener('keydown', e=>{ if(e.key==='Enter') addTask(); });
+  addSection.addEventListener('keydown', e=>{ if(e.key==='Enter' && e.target.tagName!=='TEXTAREA'){ e.preventDefault(); addTask(); } });
   quickAddInput.addEventListener('keydown', e=>{ if(e.key==='Enter') quickAdd(); });
   quickAddMore.onclick=()=>{ openAddForm(); if(quickAddInput.value.trim()){ $('f-title').value=quickAddInput.value.trim(); quickAddInput.value=''; } };
   cancelTaskBtn.onclick=closeAddForm;
@@ -868,6 +939,8 @@
   recurToggle.onclick=()=>{ recurRow.style.display=recurRow.style.display==='flex'?'none':'flex'; };
 
   snoozePopover.querySelectorAll('[data-days]').forEach(b=>{ b.onclick=()=>applySnoozeDays(parseInt(b.dataset.days,10)); });
+  snoozePopover.querySelectorAll('[data-abs]').forEach(b=>{ b.onclick=()=>applySnoozeAbsolute(parseInt(b.dataset.abs,10)); });
+  $('snooze-clear-date').onclick=clearSnoozeDate;
   $('snooze-date-apply').onclick=()=>{
     const v=$('snooze-date-input').value; if(!currentSnoozeId||!v) return;
     const t=tasks.find(x=>x.id===currentSnoozeId); if(t){ t.due=v; touch(t); saveTasks(); render(); }
