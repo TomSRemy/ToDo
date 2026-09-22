@@ -2962,6 +2962,17 @@
   window.addEventListener('appinstalled', ()=>{ if(installSection) installSection.style.display = 'none'; });
 
   setInterval(checkReminders,30000);
+  // Console-only recovery: F12 → Console → recoverDeletedTasks()
+  // Un-deletes every soft-deleted task in this browser's local data and
+  // re-renders. Deliberately not exposed anywhere in the UI.
+  window.recoverDeletedTasks = function(){
+    const found = tasks.filter(t => t.deleted);
+    if(!found.length){ console.log('Aucune tâche supprimée trouvée dans ce navigateur.'); return; }
+    found.forEach(t => { t.deleted = false; touch(t); });
+    saveTasks(); render(); renderArchive();
+    console.log(found.length + ' tâche(s) restaurée(s) :', found.map(t => t.title));
+  };
+
   loadAll();
 })();
 
