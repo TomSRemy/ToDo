@@ -24,6 +24,7 @@ self.addEventListener('activate', e => {
 
 self.addEventListener('fetch', e => {
   if (e.request.method !== 'GET') return;
+  if (!e.request.url.startsWith('http')) return; // skip chrome-extension:// and similar, Cache API can't store them
 
   // Always go to the network for the inbox queue — it changes independently
   // of app deploys and must never be served stale from cache.
