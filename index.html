@@ -8,6 +8,7 @@
 <meta name="theme-color" content="#0A0D12">
 <link rel="apple-touch-icon" href="icons/icon-192.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Todo">
 <style>
@@ -2444,8 +2445,10 @@
 
   function updateBadge(){
     const open=activeTasks();
-    if(!open.length){ badge.classList.add('hidden'); } else { badge.classList.remove('hidden'); badge.textContent=open.length; badge.classList.toggle('overdue',open.some(t=>dueStatus(t.due)==='overdue')); }
-    headStats.textContent=open.length;
+    if(badge){
+      if(!open.length){ badge.classList.add('hidden'); } else { badge.classList.remove('hidden'); badge.textContent=open.length; badge.classList.toggle('overdue',open.some(t=>dueStatus(t.due)==='overdue')); }
+    }
+    if(headStats) headStats.textContent=open.length;
   }
 
   function nextRecurDate(dateStr,freq){
