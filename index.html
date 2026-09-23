@@ -643,6 +643,9 @@
         </div>
         <input type="text" id="ct-meeting" placeholder="Rencontré à… (ex: E-World 26)">
       </div>
+      <div class="crm-form-row">
+        <textarea id="ct-comment" placeholder="Commentaire (contexte, notes…)" style="width:100%;min-height:70px;background:var(--panel-2);border:1px solid var(--bd);border-radius:var(--radius);color:var(--tx1);font-family:var(--font-ui);font-size:12.5px;padding:9px 10px;box-sizing:border-box;resize:vertical;"></textarea>
+      </div>
       <div class="crm-form-actions">
         <button id="contact-save-btn" type="button">Enregistrer</button>
         <button id="contact-cancel-btn" type="button" class="ghost-btn">Annuler</button>
@@ -703,6 +706,10 @@
       <div class="crm-form-row"><input type="text" id="co-whatdo" placeholder="Ce qu'ils font (ex: Producteur solaire FR)"></div>
       <div class="crm-form-row"><input type="text" id="co-website" placeholder="Site web / lien"></div>
       <div class="crm-form-row"><input type="text" id="co-scope" placeholder="Périmètre marché, séparé par des virgules (ex: FR, EU)"></div>
+      <div class="crm-form-row">
+        <input type="text" id="co-type" placeholder="Type (Client, Consultant, Fournisseur…)" list="co-type-list" autocomplete="off">
+        <datalist id="co-type-list"></datalist>
+      </div>
       <div class="crm-form-actions">
         <button id="co-edit-save" type="button">Enregistrer</button>
         <button id="co-edit-cancel" type="button" class="ghost-btn">Annuler</button>
@@ -951,7 +958,7 @@
   const CONFLICT_ENTITY_LABELS={
     task:{ name:t=>t.title, fields:{title:'Titre',description:'Description',client:'Client',project:'Projet',urgency:'Urgence',status:'Statut',due:'Échéance'} },
     company:{ name:c=>c.name, fields:{whatTheyDo:'Activité',website:'Site web',marketScope:'Périmètre',type:'Type'} },
-    contact:{ name:c=>[c.firstName,c.lastName].filter(Boolean).join(' ')||'(sans nom)', fields:{firstName:'Prénom',lastName:'Nom',role:'Rôle',company:'Société',email:'Email',phone1:'Téléphone 1',phone2:'Téléphone 2',relevance:'Pertinence'} },
+    contact:{ name:c=>[c.firstName,c.lastName].filter(Boolean).join(' ')||'(sans nom)', fields:{firstName:'Prénom',lastName:'Nom',role:'Rôle',company:'Société',email:'Email',phone1:'Téléphone 1',phone2:'Téléphone 2',relevance:'Pertinence',comment:'Commentaire'} },
     meeting:{ name:m=>m.label, fields:{label:'Intitulé',date:'Date'} },
     opportunity:{ name:o=>o.title, fields:{title:'Intitulé',company:'Société',stage:'Étape'} }
   };
@@ -1346,6 +1353,42 @@
 
   let activeInlinePopover=null;
   function closeInlinePopover(){ if(activeInlinePopover){ activeInlinePopover.remove(); activeInlinePopover=null; } }
+
+  function openUrgencyPopover(e, taskId){
+    e.stopPropagation();
+    closeInlinePopover();
+    const t=tasks.find(x=>x.id===taskId);
+    if(!t) return;
+
+    const pop=document.createElement('div'); pop.className='combo-dropdown open';
+    pop.style.position='fixed';
+    const rect=e.currentTarget.getBoundingClientRect();
+    pop.style.top=Math.min(rect.bottom+4, window.innerHeight-180)+'px';
+    pop.style.left=Math.max(8, Math.min(rect.left, window.innerWidth-150))+'px';
+    pop.style.minWidth='130px'; pop.style.padding='5px'; pop.style.zIndex=10001;
+
+    ['critique','haute','moyenne','basse'].forEach(key=>{
+      const meta=URGENCY_META[key];
+      const row=document.createElement('div');
+      row.style.cssText='display:flex;align-items:center;gap:8px;padding:7px 8px;font-size:12.5px;color:var(--tx1);cursor:pointer;border-radius:5px;';
+      row.onmouseenter=()=>row.style.background='var(--panel-2)';
+      row.onmouseleave=()=>row.style.background='';
+      const dot=document.createElement('span'); dot.style.cssText='width:9px;height:9px;border-radius:50%;background:'+meta.color+';flex-shrink:0;';
+      row.appendChild(dot); row.appendChild(document.createTextNode(meta.label));
+      if(t.urgency===key){ row.style.fontWeight='700'; const check=document.createElement('span'); check.textContent='✓'; check.style.marginLeft='auto'; check.style.color=meta.color; row.appendChild(check); }
+      row.onclick=ev=>{
+        ev.stopPropagation();
+        t.urgency=key; touch(t); saveTasks(); render();
+        closeInlinePopover();
+      };
+      pop.appendChild(row);
+    });
+
+    document.body.appendChild(pop);
+    activeInlinePopover=pop;
+  }
+
+
   document.addEventListener('click', e=>{ if(activeInlinePopover && !activeInlinePopover.contains(e.target)) closeInlinePopover(); }, true);
 
   function openInlineFieldPopover(e, task, field, list, colorFn){
@@ -1474,7 +1517,7 @@
     grid.appendChild(sTag);
 
     const uMeta=URGENCY_META[t.urgency]||URGENCY_META.moyenne;
-    const uTag=makeSolidTag(uMeta.label, uMeta.color, e=>{ e.stopPropagation(); const order=['critique','haute','moyenne','basse']; const i=order.indexOf(t.urgency); t.urgency=order[(i+1)%order.length]; touch(t); saveTasks(); render(); });
+    const uTag=makeSolidTag(uMeta.label, uMeta.color, e=>openUrgencyPopover(e, t.id));
     uTag.title='Cliquer pour changer l\u2019urgence';
     grid.appendChild(uTag);
 
@@ -2148,6 +2191,8 @@
     $('co-whatdo').value=co.whatTheyDo||'';
     $('co-website').value=co.website||'';
     $('co-scope').value=(co.marketScope||[]).join(', ');
+    $('co-type').value=co.type||'';
+    $('co-type-list').innerHTML=companyTypesList.map(t=>'<option value="'+t.replace(/"/g,'&quot;')+'">').join('');
     $('company-edit-overlay').classList.remove('hidden');
     $('co-whatdo').focus();
   }
@@ -2158,6 +2203,9 @@
     co.whatTheyDo=$('co-whatdo').value.trim();
     co.website=$('co-website').value.trim();
     co.marketScope=$('co-scope').value.split(',').map(s=>s.trim()).filter(Boolean);
+    const typeVal=$('co-type').value.trim();
+    co.type=typeVal;
+    if(typeVal && !companyTypesList.includes(typeVal)){ companyTypesList.push(typeVal); saveCrmLocalOnly(); }
     touchCrm(co); saveCrm();
     closeCompanyEditForm();
     renderContacts();
@@ -2237,7 +2285,14 @@
     const main=document.createElement('div'); main.className='contact-main'; main.style.cursor='pointer';
     main.title='Cliquer pour éditer';
     main.onclick=()=>openContactForm(c);
-    const name=document.createElement('div'); name.className='contact-name'; name.textContent=[c.firstName,c.lastName].filter(Boolean).join(' ')||'(sans nom)';
+    const name=document.createElement('div'); name.className='contact-name'; name.style.display='flex'; name.style.alignItems='center'; name.style.gap='5px';
+    const nameText=document.createElement('span'); nameText.textContent=[c.firstName,c.lastName].filter(Boolean).join(' ')||'(sans nom)';
+    name.appendChild(nameText);
+    if(c.comment){
+      const noteIcon=document.createElement('span'); noteIcon.title=c.comment; noteIcon.style.cssText='display:inline-flex;flex-shrink:0;color:var(--tx3);';
+      noteIcon.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:11px;height:11px;"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>';
+      name.appendChild(noteIcon);
+    }
     const sub=document.createElement('div'); sub.className='contact-sub'; sub.textContent=c.role||'';
     main.appendChild(name); main.appendChild(sub);
     row.appendChild(main);
@@ -2286,6 +2341,7 @@
     $('ct-phone1').value=src?src.phone1||'':'';
     $('ct-phone2').value=src?src.phone2||'':'';
     $('ct-meeting').value='';
+    $('ct-comment').value=src?src.comment||'':'';
     setRelevancePicker(c?c.relevance||0:0);
     $('ct-first').focus();
   }
@@ -2350,6 +2406,7 @@
     }
     c.firstName=firstName; c.lastName=lastName; c.role=$('ct-role').value.trim();
     c.email=$('ct-email').value.trim(); c.phone1=$('ct-phone1').value.trim(); c.phone2=$('ct-phone2').value.trim();
+    c.comment=$('ct-comment').value.trim();
     c.relevance=parseInt($('ct-relevance-picker').dataset.value||'0',10);
     if(companyName){
       const existing=findExistingCI(clientsList, companyName);
@@ -2859,6 +2916,8 @@
     return '';
   }
 
+  function ciEq(a,b){ return (a||'').toString().trim().toLowerCase() === (b||'').toString().trim().toLowerCase(); }
+
   async function importContactsExcel(file){
     await loadXlsx();
     const buf=await file.arrayBuffer();
@@ -2866,8 +2925,16 @@
     const sheet=wb.Sheets[wb.SheetNames[0]];
     const rows=XLSX.utils.sheet_to_json(sheet, { defval:'' });
 
-    let added=0;
-    rows.forEach(row=>{
+    function fillOrConflict(entity, field, newVal, entityType){
+      if(!newVal) return false;
+      const cur=entity[field];
+      if(!cur){ entity[field]=newVal; return false; }
+      if(!ciEq(String(cur), String(newVal))){ logConflict(entityType, entity, field, cur, newVal, cur); return true; }
+      return false;
+    }
+
+    let added=0, updated=0, conflictCount=0;
+    rows.forEach((row, idx)=>{
       const firstName=pickHeader(row, ['first name','prénom','prenom']);
       const lastName=pickHeader(row, ['last name','nom']);
       if(!firstName && !lastName) return;
@@ -2882,31 +2949,59 @@
       const website=pickHeader(row, ['link','website','site web','lien']);
       const countryRaw=pickHeader(row, ['country','pays','périmètre','perimetre']);
       const meetingLabel=pickHeader(row, ['meetings & opportunities','meetings','rencontre']);
+      const comment=pickHeader(row, ['comment','commentaire','notes','note']);
 
       if(company){
-        const existing=findExistingCI(clientsList, company);
-        company=existing||company;
-        if(!existing){ clientsList.push(company); }
+        const existingName=findExistingCI(clientsList, company);
+        company=existingName||company;
+        if(!existingName){ clientsList.push(company); }
+      }
+
+      // Duplicate detection: match by email first (most reliable), else by
+      // first+last name and company together. A match means "complete this
+      // existing contact", not "create a new one".
+      let match=null;
+      if(email){ match=contacts.find(x=>!x.deleted && ciEq(x.email,email)); }
+      if(!match){ match=contacts.find(x=>!x.deleted && ciEq(x.firstName,firstName) && ciEq(x.lastName,lastName) && ciEq(x.company,company)); }
+
+      if(match){
+        if(fillOrConflict(match,'role',role,'contact')) conflictCount++;
+        if(fillOrConflict(match,'email',email,'contact')) conflictCount++;
+        if(fillOrConflict(match,'phone1',phone1,'contact')) conflictCount++;
+        if(fillOrConflict(match,'phone2',phone2,'contact')) conflictCount++;
+        if(fillOrConflict(match,'comment',comment,'contact')) conflictCount++;
+        if(relevance && !match.relevance) match.relevance=relevance;
+        touchCrm(match);
+        updated++;
+      } else {
+        const contactId='ct_'+Date.now()+'_'+Math.random().toString(36).slice(2,7)+idx;
+        contacts.push({ id:contactId, firstName, lastName, role, company, email, phone1, phone2, relevance, comment, createdAt:Date.now(), updatedAt:Date.now(), deleted:false });
+        if(meetingLabel){ meetings.push({ id:'mt_'+Date.now()+'_'+Math.random().toString(36).slice(2,7)+idx, contactId, label:meetingLabel, date:toISO(new Date()), createdAt:Date.now(), updatedAt:Date.now(), deleted:false }); }
+        added++;
+      }
+
+      if(company){
         let co=companies.find(x=>x.name===company);
         if(!co){
-          co={ id:'co_'+Date.now()+'_'+Math.random().toString(36).slice(2,7)+added, name:company, whatTheyDo:'', marketScope:[], website:'', type:'', createdAt:Date.now(), updatedAt:Date.now(), deleted:false };
+          co={ id:'co_'+Date.now()+'_'+Math.random().toString(36).slice(2,7)+idx, name:company, whatTheyDo:'', marketScope:[], website:'', type:'', createdAt:Date.now(), updatedAt:Date.now(), deleted:false };
           companies.push(co);
         }
-        if(!co.whatTheyDo && whatTheyDo) co.whatTheyDo=whatTheyDo;
-        if(!co.website && website) co.website=website;
+        if(fillOrConflict(co,'whatTheyDo',whatTheyDo,'company')) conflictCount++;
+        if(fillOrConflict(co,'website',website,'company')) conflictCount++;
         if(countryRaw && (!co.marketScope||!co.marketScope.length)){
           co.marketScope=countryRaw.split(/[,/]/).map(s=>s.trim()).filter(Boolean);
         }
       }
-
-      const contactId='ct_'+Date.now()+'_'+Math.random().toString(36).slice(2,7)+added;
-      contacts.push({ id:contactId, firstName, lastName, role, company, email, phone1, phone2, relevance, createdAt:Date.now(), updatedAt:Date.now(), deleted:false });
-      if(meetingLabel){ meetings.push({ id:'mt_'+Date.now()+'_'+Math.random().toString(36).slice(2,7)+added, contactId, label:meetingLabel, date:toISO(new Date()), createdAt:Date.now(), updatedAt:Date.now(), deleted:false }); }
-      added++;
     });
 
-    if(added>0){ saveClients(); saveCrm(); renderContacts(); }
-    alert(added+' contact(s) importé(s).');
+    if(added>0||updated>0){
+      saveClients(); saveCrm();
+      await saveConflicts(); updateConflictBadge();
+      renderContacts();
+    }
+    let msg=added+' contact(s) créé(s), '+updated+' complété(s) ou fusionné(s).';
+    if(conflictCount>0) msg+=' '+conflictCount+' conflit(s) à trancher dans Réf. & data → Conflits de synchro.';
+    alert(msg);
   }
 
   function exportContactsExcel(){
@@ -2922,6 +3017,8 @@
           'Téléphone 1': c.phone1||'',
           'Téléphone 2': c.phone2||'',
           'Pertinence (1-5)': c.relevance||'',
+          'Commentaire': c.comment||'',
+          'Type société': co?co.type||'':'',
           'What they do': co?co.whatTheyDo||'':'',
           'Link': co?co.website||'':'',
           'Country': co&&co.marketScope?co.marketScope.join(', '):''
