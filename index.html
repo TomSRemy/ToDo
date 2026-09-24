@@ -219,7 +219,7 @@
   .empty-state{ padding:36px 20px; text-align:center; color:var(--tx3); font-size:12px; font-family:var(--font-mono); }
 
   /* today dashboard */
-  #today-stats-row{ display:flex; gap:1px; padding:15px; border-bottom:1px solid var(--bd); flex-shrink:0; }
+  #today-stats-row{ display:flex; gap:12px; padding:15px; border-bottom:1px solid var(--bd); flex-shrink:0; }
   .stat-card{ flex:1; background:var(--panel-2); border:1px solid var(--bd); border-radius:6px; padding:12px 14px; }
   .stat-card-num{ font-family:var(--font-mono); font-size:22px; font-weight:700; color:var(--tx1); line-height:1; margin-bottom:4px; }
   .stat-card-num.crit{ color:var(--crit); }
@@ -243,8 +243,8 @@
   .kanban-col-body{ overflow-y:auto; flex:1; min-height:80px; }
   .kanban-col .task-title-compact{ font-size:12.5px; }
 
-  .table-header{ display:grid; grid-template-columns:22px 22px minmax(130px,1fr) minmax(38px,82px) minmax(38px,82px) minmax(48px,74px) minmax(44px,70px) minmax(38px,56px) 28px; gap:10px; align-items:center; padding:9px 14px; border-bottom:1px solid var(--bd); flex-shrink:0; position:sticky; top:0; background:var(--panel); z-index:5; }
-  .table-header.archive-table-header{ grid-template-columns:22px 22px minmax(130px,1fr) minmax(38px,82px) minmax(38px,82px) minmax(48px,74px) minmax(44px,70px) minmax(38px,56px) 28px 60px; }
+  .table-header{ display:grid; grid-template-columns:22px 22px minmax(50%,1fr) minmax(38px,82px) minmax(38px,82px) minmax(48px,74px) minmax(44px,70px) minmax(38px,56px) 28px; gap:10px; align-items:center; padding:9px 14px; border-bottom:1px solid var(--bd); flex-shrink:0; position:sticky; top:0; background:var(--panel); z-index:5; }
+  .table-header.archive-table-header{ grid-template-columns:22px 22px minmax(50%,1fr) minmax(38px,82px) minmax(38px,82px) minmax(48px,74px) minmax(44px,70px) minmax(38px,56px) 28px 60px; }
   .th-col{ font-family:var(--font-mono); font-size:9.5px; color:var(--tx3); text-transform:uppercase; letter-spacing:.4px; cursor:pointer; user-select:none; display:flex; align-items:center; justify-content:center; gap:3px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; min-width:0; }
   .th-col:hover{ color:var(--tx1); }
   .th-col.sorted{ color:var(--accent); }
@@ -256,10 +256,10 @@
 
   /* Wide layout: real aligned columns, like a spreadsheet row */
   .task-row-grid{
-    display:grid; grid-template-columns:22px 22px minmax(130px,1fr) minmax(38px,82px) minmax(38px,82px) minmax(48px,74px) minmax(44px,70px) minmax(38px,56px) 28px;
+    display:grid; grid-template-columns:22px 22px minmax(50%,1fr) minmax(38px,82px) minmax(38px,82px) minmax(48px,74px) minmax(44px,70px) minmax(38px,56px) 28px;
     gap:10px; align-items:center; padding:10px 14px;
   }
-  .task-row-grid.archive-row-grid{ grid-template-columns:22px 22px minmax(130px,1fr) minmax(38px,82px) minmax(38px,82px) minmax(48px,74px) minmax(44px,70px) minmax(38px,56px) 28px 60px; }
+  .task-row-grid.archive-row-grid{ grid-template-columns:22px 22px minmax(50%,1fr) minmax(38px,82px) minmax(38px,82px) minmax(48px,74px) minmax(44px,70px) minmax(38px,56px) 28px 60px; }
   .row-num{ font-family:var(--font-mono); font-size:10px; color:var(--tx3); text-align:right; }
   .task-date-tag{ justify-self:start; }
   .task-mail-icon{ flex-shrink:0; display:flex; color:var(--tx3); justify-self:start; }
@@ -278,15 +278,15 @@
      window — so it also kicks in if the sidebar stays expanded on a
      medium-width screen and squeezes the content area. */
   @container taskpanel (max-width: 680px){
-    .task-row-grid{
-      display:flex; flex-wrap:wrap; align-items:center; gap:8px 10px; padding:10px 14px; row-gap:6px;
+    .task-row-grid:not(.archive-row-grid),
+    .table-header:not(.archive-table-header){
+      grid-template-columns:22px minmax(50%,1fr) minmax(44px,70px) minmax(38px,56px) 28px;
     }
-    .row-num{ display:none; }
-    .task-date-tag{ margin-left:auto; }
-    .td-title{ flex:1 1 110px; }
+    .task-row-grid:not(.archive-row-grid) > *:nth-child(1),
+    .table-header:not(.archive-table-header) > *:nth-child(1),
     .task-row-grid:not(.archive-row-grid) > *:nth-child(4),
     .task-row-grid:not(.archive-row-grid) > *:nth-child(5),
-    .task-row-grid:not(.archive-row-grid) > *:nth-child(6){ display:none; }
+    .task-row-grid:not(.archive-row-grid) > *:nth-child(6),
     .table-header:not(.archive-table-header) > *:nth-child(4),
     .table-header:not(.archive-table-header) > *:nth-child(5),
     .table-header:not(.archive-table-header) > *:nth-child(6){ display:none; }
