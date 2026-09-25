@@ -88,14 +88,14 @@
   #quick-add-input:focus{ outline:none; border-color:var(--accent); }
   #quick-add-more{ flex-shrink:0; background:var(--panel-2); border:1px solid var(--bd); border-radius:var(--radius); color:var(--tx2); font-family:var(--font-ui); font-size:12px; font-weight:600; padding:8px 12px; cursor:pointer; white-space:nowrap; }
   #quick-add-more:hover{ color:var(--accent); border-color:var(--accent); }
-  .quick-add-bar .search-box{ position:relative; flex-shrink:0; width:220px; }
-  .quick-add-bar .search-box svg{ position:absolute; left:9px; top:50%; transform:translateY(-50%); width:13px; height:13px; color:var(--tx3); }
-  .quick-add-bar .search-box input{ width:100%; background:var(--panel-2); border:1px solid var(--bd); border-radius:var(--radius); color:var(--tx1); font-family:var(--font-ui); font-size:12.5px; padding:7px 10px 7px 28px; box-sizing:border-box; }
-  .quick-add-bar .search-box input::placeholder{ color:var(--tx3); }
-  .quick-add-bar .search-box input:focus{ outline:none; border-color:var(--accent); }
-  .quick-add-bar .search-box button{ position:absolute; right:6px; top:50%; transform:translateY(-50%); background:none; border:none; color:var(--tx3); cursor:pointer; padding:3px; display:none; }
-  .quick-add-bar .search-box button.show{ display:flex; }
-  .quick-add-bar .search-box button svg{ position:static; transform:none; width:12px; height:12px; }
+  .search-box{ position:relative; flex-shrink:0; width:220px; }
+  .search-box svg{ position:absolute; left:9px; top:50%; transform:translateY(-50%); width:13px; height:13px; color:var(--tx3); }
+  .search-box input{ width:100%; background:var(--panel-2); border:1px solid var(--bd); border-radius:var(--radius); color:var(--tx1); font-family:var(--font-ui); font-size:12.5px; padding:7px 10px 7px 28px; box-sizing:border-box; }
+  .search-box input::placeholder{ color:var(--tx3); }
+  .search-box input:focus{ outline:none; border-color:var(--accent); }
+  .search-box button{ position:absolute; right:6px; top:50%; transform:translateY(-50%); background:none; border:none; color:var(--tx3); cursor:pointer; padding:3px; display:none; }
+  .search-box button.show{ display:flex; }
+  .search-box button svg{ position:static; transform:none; width:12px; height:12px; }
 
   #add-section{ padding:14px 15px; border-bottom:1px solid var(--bd); flex-shrink:0; display:none; flex-direction:column; gap:10px; }
   #add-section.open{ display:flex; }
@@ -1238,7 +1238,12 @@
   function escapeHtml(s){ const d=document.createElement('div'); d.textContent=s; return d.innerHTML; }
   function toISO(d){ return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
   function hashColor(name,pal){ if(!name)return null; let h=0; for(let i=0;i<name.length;i++){h=(h*31+name.charCodeAt(i))>>>0;} return pal[h%pal.length]; }
-  const clientColor=n=>hashColor(n,CLIENT_PALETTE);
+  const clientColor=n=>{
+    if(!n) return null;
+    const co=companies.find(x=>x.name===n);
+    if(co && co.type) return hashColor(co.type, CLIENT_PALETTE);
+    return hashColor(n, CLIENT_PALETTE);
+  };
   const projectColor=n=>hashColor(n,PROJECT_PALETTE);
   function fmtDateShort(d){ if(!d)return null; const dt=new Date(d+'T00:00:00'); return dt.toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit'}); }
   function fmtDateTime(ts){ const dt=new Date(ts); return dt.toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit',year:'2-digit'})+' '+dt.toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'}); }
@@ -2324,6 +2329,7 @@
     touchCrm(co); saveCrm();
     closeCompanyEditForm();
     renderContacts();
+    refreshAllViews();
   }
 
   function openCompanyTypePopover(e, companyName){
@@ -2356,6 +2362,7 @@
       saveCrm();
       closeInlinePopover();
       renderContacts();
+      refreshAllViews();
     }
     function renderItems(){
       const q=input.value.trim().toLowerCase();
