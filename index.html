@@ -128,6 +128,7 @@
   .filter-chip.active{ color:#04070C; background:var(--accent); border-color:var(--accent); }
   .toolbar-divider{ width:1px; height:16px; background:var(--bd); flex-shrink:0; }
   .view-icons{ display:flex; gap:2px; flex-shrink:0; margin-left:auto; }
+  .type-filter-select{ background:var(--panel-2); border:1px solid var(--bd); border-radius:var(--radius); color:var(--tx2); font-family:var(--font-ui); font-size:12px; padding:6px 8px; cursor:pointer; flex-shrink:0; }
   .view-icon-btn{ width:28px; height:28px; display:flex; align-items:center; justify-content:center; background:none; border:none; border-radius:5px; color:var(--tx3); cursor:pointer; }
   .view-icon-btn:hover{ color:var(--tx1); background:var(--panel-2); }
   .view-icon-btn.active{ color:var(--accent); background:var(--accent-dim); }
@@ -307,6 +308,15 @@
   .list-manager .list-hint{ font-size:11px; color:var(--tx3); margin:0 0 10px; }
   .chip-row{ display:flex; flex-wrap:wrap; gap:7px; margin-bottom:10px; }
   .manage-chip{ display:inline-flex; align-items:center; gap:6px; border-radius:10px; padding:4px 6px 4px 10px; font-size:12px; font-family:var(--font-mono); }
+  .client-list-row{ display:flex; align-items:center; gap:10px; padding:8px 4px; border-bottom:1px solid var(--bd-soft); }
+  .client-list-row .dot{ width:9px; height:9px; border-radius:50%; flex-shrink:0; }
+  .client-list-row .name{ flex:1; min-width:0; font-size:13px; color:var(--tx1); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .client-list-row .count{ font-family:var(--font-mono); font-size:10.5px; color:var(--tx3); flex-shrink:0; }
+  .client-list-row .type-tag{ font-family:var(--font-mono); font-size:10px; color:var(--tx2); background:var(--panel-2); border:1px solid var(--bd); border-radius:8px; padding:3px 8px; cursor:pointer; flex-shrink:0; white-space:nowrap; }
+  .client-list-row .type-tag:hover{ border-color:var(--accent); color:var(--tx1); }
+  .client-list-row .row-actions{ display:flex; gap:2px; flex-shrink:0; }
+  .client-list-row .row-actions button{ background:none; border:none; color:var(--tx3); cursor:pointer; padding:5px; display:flex; }
+  .client-list-row .row-actions button:hover{ color:var(--accent); }
 
   /* CRM: contacts */
   .crm-form{ display:flex; flex-direction:column; gap:8px; padding:14px 15px; border-bottom:1px solid var(--bd); }
@@ -641,6 +651,9 @@
         <button class="view-icon-btn active" data-view="groupe" title="Par société"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></button>
         <button class="view-icon-btn" data-view="liste" title="Liste (sans regroupement)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg></button>
       </div>
+      <select id="contacts-type-filter" class="type-filter-select">
+        <option value="">Tous les types</option>
+      </select>
     </div>
     <div class="contacts-header-row">
       <span></span><span></span><span>Contact</span><span>Société</span><span>Email</span><span>Téléphone</span><span>Note</span><span></span>
@@ -787,7 +800,12 @@
     <div class="list-manager">
       <h2>Clients</h2>
       <p class="list-hint">Prélistés ici, disponibles en suggestion dans le formulaire.</p>
-      <div class="chip-row" id="client-chip-row"></div>
+      <div class="search-box" style="width:100%;margin-bottom:10px;">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+        <input type="text" id="client-list-search" placeholder="Rechercher un client">
+        <button id="client-list-search-clear"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
+      </div>
+      <div id="client-list-rows"></div>
       <div class="add-item-row"><input type="text" id="new-client-input" placeholder="Nouveau client"><button id="add-client-btn">Ajouter</button></div>
     </div>
     <div class="list-manager" style="margin-top:22px;">
@@ -2151,7 +2169,7 @@
     contacts.push(c);
     saveCrm();
     contactInboxSeenIds.add(it.id); saveContactSeenIds();
-    renderContactInbox(); renderContacts();
+    renderContactInbox(); renderContacts(); renderLists(); refreshDatalists();
     removeFromContactInboxOnGitHub(it.id);
   }
   function dismissContactInboxItem(id){
@@ -2201,18 +2219,23 @@
     list.innerHTML='';
     contactRowCounter=1;
     const q=$('contact-search').value.trim().toLowerCase();
+    const typeFilter=$('contacts-type-filter').value;
     let items=activeContacts().filter(c=>{
-      if(!q) return true;
-      return (c.firstName+' '+c.lastName+' '+(c.company||'')+' '+(c.role||'')).toLowerCase().includes(q);
+      if(q && !(c.firstName+' '+c.lastName+' '+(c.company||'')+' '+(c.role||'')).toLowerCase().includes(q)) return false;
+      if(typeFilter){
+        const co=c.company?companies.find(x=>x.name===c.company):null;
+        if(!co || co.type!==typeFilter) return false;
+      }
+      return true;
     });
     if(!items.length){
-      const e=document.createElement('div'); e.className='empty-state'; e.textContent=q?'Aucun résultat.':'Aucun contact pour le moment.';
+      const e=document.createElement('div'); e.className='empty-state'; e.textContent=(q||typeFilter)?'Aucun résultat.':'Aucun contact pour le moment.';
       list.appendChild(e);
       return;
     }
     if(contactsView==='liste'){
       items.sort((a,b)=>(b.relevance||0)-(a.relevance||0));
-      items.forEach(c=>list.appendChild(buildContactRow(c, contactRowCounter++)));
+      items.forEach(c=>{ list.appendChild(buildContactRow(c, contactRowCounter++)); if(expandedContacts.has(c.id)) list.appendChild(buildContactInfoCard(c)); });
       return;
     }
     const groups={};
@@ -2224,7 +2247,7 @@
         list.appendChild(buildCompanyGroupHeader(company, groups[company].length));
         if(expandedCompanies.has(company)) list.appendChild(buildCompanyInfoCard(company));
       }
-      groups[company].sort((a,b)=>(b.relevance||0)-(a.relevance||0)).forEach(c=>list.appendChild(buildContactRow(c, contactRowCounter++)));
+      groups[company].sort((a,b)=>(b.relevance||0)-(a.relevance||0)).forEach(c=>{ list.appendChild(buildContactRow(c, contactRowCounter++)); if(expandedContacts.has(c.id)) list.appendChild(buildContactInfoCard(c)); });
     });
   }
 
@@ -2362,16 +2385,19 @@
     input.focus();
   }
 
+  let expandedContacts=new Set();
   function buildContactRow(c, rowNum){
     const row=document.createElement('div'); row.className='contact-row';
 
     const numSpan=document.createElement('span'); numSpan.className='row-num'; numSpan.textContent=rowNum||'';
     row.appendChild(numSpan);
 
-    const av=document.createElement('div'); av.className='contact-avatar';
+    const av=document.createElement('div'); av.className='contact-avatar'; av.style.cursor='pointer';
+    av.title='Voir la fiche (copier email/téléphone)';
     const hex=c.company?clientColor(c.company):'#6B7480';
     av.style.background=hex+'2A'; av.style.color=hex;
     av.textContent=initials(c.firstName,c.lastName);
+    av.onclick=e=>{ e.stopPropagation(); if(expandedContacts.has(c.id)) expandedContacts.delete(c.id); else expandedContacts.add(c.id); renderContacts(); };
     row.appendChild(av);
 
     const main=document.createElement('div'); main.className='contact-main'; main.style.cursor='pointer';
@@ -2419,6 +2445,34 @@
     row.appendChild(actions);
 
     return row;
+  }
+
+  function buildContactInfoCard(c){
+    const card=document.createElement('div');
+    card.style.cssText='padding:8px 15px 12px 46px;font-size:12.5px;color:var(--tx2);line-height:1.7;border-bottom:1px solid var(--bd-soft);';
+    const rows=[
+      ['Email', c.email],
+      ['Téléphone 1', c.phone1],
+      ['Téléphone 2', c.phone2],
+      ['Commentaire', c.comment]
+    ].filter(([,v])=>v);
+    if(!rows.length){
+      const p=document.createElement('div'); p.style.cssText='color:var(--tx3);font-style:italic;'; p.textContent='Aucune info complémentaire.';
+      card.appendChild(p);
+    } else {
+      rows.forEach(([label,val])=>{
+        const line=document.createElement('div');
+        const lab=document.createElement('span'); lab.textContent=label+' : '; lab.style.color='var(--tx3)';
+        const valSpan=document.createElement('span'); valSpan.textContent=val; valSpan.style.cssText='user-select:text;color:var(--tx1);';
+        line.appendChild(lab); line.appendChild(valSpan);
+        card.appendChild(line);
+      });
+    }
+    const editBtn=document.createElement('button'); editBtn.className='ghost-btn'; editBtn.textContent='Modifier';
+    editBtn.style.cssText='font-size:11px;margin-top:8px;';
+    editBtn.onclick=()=>openContactForm(c);
+    card.appendChild(editBtn);
+    return card;
   }
 
   function openContactForm(c, prefill){
@@ -2652,13 +2706,52 @@
   function closeStageAdvance(){ $('stage-advance-overlay').classList.add('hidden'); pendingAdvanceOppId=null; }
 
   function renderLists(){
-    clientChipRow.innerHTML='';
-    if(!clientsList.length){ const p=document.createElement('p'); p.className='list-empty'; p.textContent='Aucun client.'; clientChipRow.appendChild(p); }
-    else clientsList.slice().sort().forEach(n=>clientChipRow.appendChild(makeManageChip(n,clientColor(n),countFor(n,'client'),()=>removeClient(n),()=>renameClient(n))));
+    renderClientList();
     projectChipRow.innerHTML='';
     if(!projectsList.length){ const p=document.createElement('p'); p.className='list-empty'; p.textContent='Aucun projet.'; projectChipRow.appendChild(p); }
     else projectsList.slice().sort().forEach(n=>projectChipRow.appendChild(makeManageChip(n,projectColor(n),countFor(n,'project'),()=>removeProject(n),()=>renameProject(n))));
   }
+
+  function renderClientList(){
+    const container=$('client-list-rows');
+    const q=($('client-list-search').value||'').trim().toLowerCase();
+    container.innerHTML='';
+    let list=clientsList.slice().sort((a,b)=>a.localeCompare(b));
+    if(q) list=list.filter(n=>n.toLowerCase().includes(q));
+    if(!list.length){ const p=document.createElement('p'); p.className='list-empty'; p.textContent=q?'Aucun résultat.':'Aucun client.'; container.appendChild(p); return; }
+    list.forEach(n=>container.appendChild(buildClientListRow(n)));
+  }
+
+  function buildClientListRow(name){
+    const row=document.createElement('div'); row.className='client-list-row';
+    const hex=clientColor(name);
+    const dot=document.createElement('span'); dot.className='dot'; dot.style.background=hex;
+    row.appendChild(dot);
+    const label=document.createElement('span'); label.className='name'; label.textContent=name;
+    row.appendChild(label);
+    const count=countFor(name,'client');
+    if(count){ const c=document.createElement('span'); c.className='count'; c.textContent=count; row.appendChild(c); }
+
+    const co=companies.find(x=>x.name===name);
+    const typeTag=document.createElement('span'); typeTag.className='type-tag';
+    typeTag.textContent = co&&co.type ? co.type : '+ Type';
+    typeTag.onclick=e=>openCompanyTypePopover(e, name);
+    row.appendChild(typeTag);
+
+    const actions=document.createElement('div'); actions.className='row-actions';
+    const editBtn=document.createElement('button'); editBtn.title='Renommer';
+    editBtn.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="width:13px;height:13px;"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4z"/></svg>';
+    editBtn.onclick=()=>renameClient(name);
+    actions.appendChild(editBtn);
+    const delBtn=document.createElement('button'); delBtn.title='Supprimer';
+    delBtn.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke-width="2.5" stroke-linecap="round" style="width:13px;height:13px;"><path d="M18 6L6 18M6 6l12 12"/></svg>';
+    delBtn.onclick=()=>removeClient(name);
+    actions.appendChild(delBtn);
+    row.appendChild(actions);
+
+    return row;
+  }
+
   function makeManageChip(name,hex,count,onDelete,onRename){
     const chip=document.createElement('span'); chip.className='manage-chip';
     chip.style.color=hex; chip.style.background=hex+'22'; chip.style.border='1px solid '+hex+'55';
@@ -2900,7 +2993,7 @@
   }
 
   const tabContacts=$('tab-contacts'), tabPipeline=$('tab-pipeline');
-  tabs.forEach(el=>{ el.onclick=()=>{ tabs.forEach(t=>t.classList.remove('active')); el.classList.add('active'); const tgt=el.dataset.tab; tabToday.classList.toggle('hidden',tgt!=='today'); tabTasks.classList.toggle('hidden',tgt!=='tasks'); tabInbox.classList.toggle('hidden',tgt!=='inbox'); tabArchive.classList.toggle('hidden',tgt!=='archive'); tabLists.classList.toggle('hidden',tgt!=='lists'); tabContacts.classList.toggle('hidden',tgt!=='contacts'); tabPipeline.classList.toggle('hidden',tgt!=='pipeline'); if(tgt==='today')renderToday(); if(tgt==='archive')renderArchive(); if(tgt==='contacts'){ renderContacts(); fetchContactInbox(); } if(tgt==='pipeline')renderPipeline(); if(tgt==='lists'){ renderLists(); renderStats(); renderConflicts(); $('sync-owner').value=syncConfig.owner||''; $('sync-repo').value=syncConfig.repo||''; if(syncConfig.enabled) setSyncStatus('Synchro active'); } if(tgt==='inbox')fetchInbox(); }; });
+  tabs.forEach(el=>{ el.onclick=()=>{ tabs.forEach(t=>t.classList.remove('active')); el.classList.add('active'); const tgt=el.dataset.tab; tabToday.classList.toggle('hidden',tgt!=='today'); tabTasks.classList.toggle('hidden',tgt!=='tasks'); tabInbox.classList.toggle('hidden',tgt!=='inbox'); tabArchive.classList.toggle('hidden',tgt!=='archive'); tabLists.classList.toggle('hidden',tgt!=='lists'); tabContacts.classList.toggle('hidden',tgt!=='contacts'); tabPipeline.classList.toggle('hidden',tgt!=='pipeline'); if(tgt==='today')renderToday(); if(tgt==='archive')renderArchive(); if(tgt==='contacts'){ refreshContactsTypeFilter(); renderContacts(); fetchContactInbox(); } if(tgt==='pipeline')renderPipeline(); if(tgt==='lists'){ renderLists(); renderStats(); renderConflicts(); $('sync-owner').value=syncConfig.owner||''; $('sync-repo').value=syncConfig.repo||''; if(syncConfig.enabled) setSyncStatus('Synchro active'); } if(tgt==='inbox')fetchInbox(); }; });
 
   $('submit-task').onclick=addTask;
   addSection.addEventListener('keydown', e=>{ if(e.key==='Enter' && e.target.tagName!=='TEXTAREA'){ e.preventDefault(); addTask(); } });
@@ -2957,6 +3050,8 @@
 
   $('add-client-btn').onclick=()=>{ const i=$('new-client-input'); addClientToList(i.value); i.value=''; i.focus(); };
   $('new-client-input').addEventListener('keydown',e=>{ if(e.key==='Enter')$('add-client-btn').click(); });
+  $('client-list-search').addEventListener('input', ()=>{ $('client-list-search-clear').classList.toggle('show', !!$('client-list-search').value); renderClientList(); });
+  $('client-list-search-clear').onclick=()=>{ $('client-list-search').value=''; $('client-list-search-clear').classList.remove('show'); renderClientList(); };
   $('add-project-btn').onclick=()=>{ const i=$('new-project-input'); addProjectToList(i.value); i.value=''; i.focus(); };
   $('new-project-input').addEventListener('keydown',e=>{ if(e.key==='Enter')$('add-project-btn').click(); });
 
@@ -3217,6 +3312,13 @@
       renderContacts();
     };
   });
+  function refreshContactsTypeFilter(){
+    const sel=$('contacts-type-filter');
+    const current=sel.value;
+    sel.innerHTML='<option value="">Tous les types</option>' + companyTypesList.slice().sort().map(t=>'<option value="'+t.replace(/"/g,'&quot;')+'">'+t+'</option>').join('');
+    if(companyTypesList.includes(current)) sel.value=current;
+  }
+  $('contacts-type-filter').addEventListener('change', renderContacts);
   $('ct-relevance-picker').querySelectorAll('span').forEach(s=>{ s.onclick=()=>setRelevancePicker(parseInt(s.dataset.v,10)); });
   {
     const ctCompanyInput=$('ct-company'), ctCompanyDropdown=$('ct-company-dropdown');
