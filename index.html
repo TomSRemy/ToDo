@@ -867,7 +867,7 @@
     </div>
     <div class="list-manager" style="margin-top:22px;">
       <h2>Synchronisation multi-appareils</h2>
-      <p class="list-hint">À configurer une fois par appareil. Une fois activée, toutes les tâches (pas seulement celles d'Outlook) se synchronisent via ton repo GitHub.</p>
+      <p class="list-hint">À configurer une fois par appareil. Une fois activée, toutes les tâches (pas seulement celles d'Outlook) se synchronisent via ton repo GitHub. ⚠️ Utilise un repo <strong>privé</strong> : les données (dont les contacts/CRM) y sont stockées en clair.</p>
       <div style="display:flex; flex-direction:column; gap:8px;">
         <input type="text" id="sync-owner" placeholder="Ton pseudo GitHub">
         <input type="text" id="sync-repo" placeholder="Nom du repo (ex: ToDo)">
@@ -1273,6 +1273,7 @@
   }
 
   function escapeHtml(s){ const d=document.createElement('div'); d.textContent=s; return d.innerHTML; }
+  function isSafeHref(url){ return /^https?:\/\//i.test(url||'') || /^mailto:/i.test(url||''); }
   function toISO(d){ return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
   function hashColor(name,pal){ if(!name)return null; let h=0; for(let i=0;i<name.length;i++){h=(h*31+name.charCodeAt(i))>>>0;} return pal[h%pal.length]; }
   const clientColor=n=>{
@@ -1328,7 +1329,7 @@
   // so browsers just navigate to a blank page. Fall back to a "copy subject"
   // button so the mail can be found via Outlook's own search instead.
   function makeLinkOrCopyBtn(t){
-    if(t.link.indexOf('outlook:') === 0){
+    if(t.link.indexOf('outlook:') === 0 || !isSafeHref(t.link)){
       const btn=document.createElement('button'); btn.type='button';
       btn.title="Copier l'objet (Ctrl+E dans Outlook pour chercher)";
       btn.innerHTML='<svg class="meta-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></svg>';
@@ -1857,7 +1858,7 @@
       const ignoreBtn = document.createElement('button'); ignoreBtn.className = 'inbox-ignore-btn'; ignoreBtn.textContent = 'Ignorer';
       ignoreBtn.onclick = ()=> dismissInboxItem(it.id);
       actions.appendChild(ignoreBtn);
-      if(it.link){ const a = document.createElement('a'); a.className = 'inbox-item-link'; a.href = it.link; a.target = '_blank'; a.rel = 'noopener noreferrer'; a.textContent = 'ouvrir le mail ↗'; actions.appendChild(a); }
+      if(it.link && isSafeHref(it.link)){ const a = document.createElement('a'); a.className = 'inbox-item-link'; a.href = it.link; a.target = '_blank'; a.rel = 'noopener noreferrer'; a.textContent = 'ouvrir le mail ↗'; actions.appendChild(a); }
       row.appendChild(actions);
       list.appendChild(row);
     });
@@ -2046,11 +2047,20 @@
       row.appendChild(head);
 
       const choices=document.createElement('div'); choices.className='conflict-choices';
-      const localBtn=document.createElement('button');
-      localBtn.innerHTML='<span class="conflict-choice-label">Version A</span><span class="conflict-choice-value">'+(String(cf.localValue||'—'))+'</span>'+(JSON.stringify(cf.localValue)===JSON.stringify(cf.resolvedValue)?' <span class="conflict-kept">(gardée)</span>':'');
+      function buildChoiceBtn(label, value){
+        const btn=document.createElement('button');
+        const lab=document.createElement('span'); lab.className='conflict-choice-label'; lab.textContent=label;
+        const val=document.createElement('span'); val.className='conflict-choice-value'; val.textContent=String(value||'—');
+        btn.appendChild(lab); btn.appendChild(val);
+        if(JSON.stringify(value)===JSON.stringify(cf.resolvedValue)){
+          const kept=document.createElement('span'); kept.className='conflict-kept'; kept.textContent=' (gardée)';
+          btn.appendChild(kept);
+        }
+        return btn;
+      }
+      const localBtn=buildChoiceBtn('Version A', cf.localValue);
       localBtn.onclick=()=>resolveConflict(cf.id, cf.localValue);
-      const remoteBtn=document.createElement('button');
-      remoteBtn.innerHTML='<span class="conflict-choice-label">Version B</span><span class="conflict-choice-value">'+(String(cf.remoteValue||'—'))+'</span>'+(JSON.stringify(cf.remoteValue)===JSON.stringify(cf.resolvedValue)?' <span class="conflict-kept">(gardée)</span>':'');
+      const remoteBtn=buildChoiceBtn('Version B', cf.remoteValue);
       remoteBtn.onclick=()=>resolveConflict(cf.id, cf.remoteValue);
       choices.appendChild(localBtn); choices.appendChild(remoteBtn);
       row.appendChild(choices);
@@ -3250,6 +3260,16 @@
     const tokenVal=$('sync-token').value.trim();
     if(tokenVal) syncConfig.token=tokenVal;
     if(!syncConfig.owner || !syncConfig.repo || !syncConfig.token){ setSyncStatus('Pseudo, repo et token requis.'); return; }
+    setSyncStatus('Vérification du repo…');
+    try{
+      const infoRes=await fetch('https://api.github.com/repos/'+syncConfig.owner+'/'+syncConfig.repo, { headers:{ 'Authorization':'Bearer '+syncConfig.token, 'Accept':'application/vnd.github+json' } });
+      if(!infoRes.ok){ setSyncStatus('Repo introuvable ou token invalide (vérifie pseudo/repo/token).'); return; }
+      const info=await infoRes.json();
+      if(info.private===false){
+        const proceed=confirm('⚠️ Ce repo GitHub est PUBLIC.\n\nActiver la synchro va y publier tes tâches et tes données CRM (contacts, emails, téléphones, opportunités) en clair — lisibles par n’importe qui sur Internet, même après suppression (historique git).\n\nPasse le repo en privé sur GitHub avant de continuer si ces données sont sensibles.\n\nActiver quand même la synchro sur ce repo public ?');
+        if(!proceed){ setSyncStatus('Synchro non activée (repo public).'); return; }
+      }
+    }catch(e){ setSyncStatus('Impossible de vérifier le repo (réseau). Réessaie.'); return; }
     syncConfig.enabled=true;
     await saveSyncConfig();
     setSyncStatus('Activation…');
