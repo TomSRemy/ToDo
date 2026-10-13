@@ -1159,8 +1159,7 @@
         await saveTasksLocalOnly();
         refreshAllViews();
       }
-      tasksBaseSnapshot=tasks.map(t=>({...t}));
-      await saveSnapshots(); await saveConflicts(); updateConflictBadge();
+      await saveConflicts(); updateConflictBadge();
       const body={ message:'Sync tasks', content:b64EncodeUtf8(JSON.stringify(tasks)), branch:'main' };
       if(sha) body.sha=sha;
       const putRes=await fetch(syncApiUrl(), {
@@ -1171,6 +1170,12 @@
       if(putRes.ok){
         const putData=await putRes.json();
         lastKnownSha=putData.content.sha;
+        // Only now does the base snapshot advance to "local == remote" — if the
+        // PUT above had failed, a stale base would make the next merge think a
+        // just-completed field (e.g. archived) was never really changed locally
+        // and silently revert it to the old remote value (tasks "reappearing").
+        tasksBaseSnapshot=tasks.map(t=>({...t}));
+        await saveSnapshots();
         setSyncStatus('Synchronisé '+new Date().toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'}));
       }else{
         setSyncStatus('Erreur de synchro (écriture)');
@@ -1223,8 +1228,7 @@
         await saveCrmLocalOnly();
         if(typeof renderCrm==='function') renderCrm();
       }
-      crmBaseSnapshot={ companies:companies.map(c=>({...c})), contacts:contacts.map(c=>({...c})), meetings:meetings.map(m=>({...m})), opportunities:opportunities.map(o=>({...o})) };
-      await saveSnapshots(); await saveConflicts(); updateConflictBadge();
+      await saveConflicts(); updateConflictBadge();
       const bundle=JSON.stringify({companies,contacts,meetings,opportunities});
       const body={ message:'Sync CRM data', content:b64EncodeUtf8(bundle), branch:'main' };
       if(sha) body.sha=sha;
@@ -1233,7 +1237,15 @@
         headers:{ 'Authorization':'Bearer '+syncConfig.token, 'Accept':'application/vnd.github+json', 'Content-Type':'application/json' },
         body:JSON.stringify(body)
       });
-      if(putRes.ok){ const putData=await putRes.json(); lastKnownCrmSha=putData.content.sha; }
+      if(putRes.ok){
+        const putData=await putRes.json();
+        lastKnownCrmSha=putData.content.sha;
+        // See syncPushNow: only advance the base once the write is confirmed,
+        // or a failed PUT leaves a stale base that reverts real local changes
+        // on the next merge.
+        crmBaseSnapshot={ companies:companies.map(c=>({...c})), contacts:contacts.map(c=>({...c})), meetings:meetings.map(m=>({...m})), opportunities:opportunities.map(o=>({...o})) };
+        await saveSnapshots();
+      }
     }catch(e){ console.error('crm sync push failed', e); }
   }
   async function saveClients(){ try{ await window.storage.set(CLIENTS_KEY,JSON.stringify(clientsList),false); }catch(e){ console.error(e); } }
