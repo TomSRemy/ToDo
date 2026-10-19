@@ -547,6 +547,52 @@
   .pq-step1.hidden, .pq-layout.hidden, .crm-form-actions button.hidden{ display:none; }
   .prequal-note{ width:100%; background:var(--panel-2); border:1px solid var(--bd); border-radius:var(--radius); color:var(--tx1); font-family:var(--font-ui); font-size:13px; padding:8px 10px; resize:vertical; }
   .hidden-row{ display:none !important; }
+  #tab-parc{ overflow-y:auto; }
+  .parc-load{ cursor:pointer; }
+  .parc-info{ font-size:11.5px; color:var(--tx3); }
+  #parc-body{ padding:12px 15px 30px; display:flex; flex-direction:column; gap:14px; max-width:1200px; }
+  .parc-empty{ color:var(--tx2); font-size:13px; line-height:1.6; padding:30px 10px; max-width:60ch; }
+  .parc-empty b{ color:var(--tx1); }
+  .parc-years, .parc-chips{ display:flex; gap:5px; flex-wrap:wrap; }
+  .parc-years button, .parc-chips button{ background:var(--panel-2); border:1px solid var(--bd); color:var(--tx2); border-radius:14px; font-family:var(--font-mono); font-size:11px; padding:4px 11px; cursor:pointer; }
+  .parc-years button.on, .parc-chips button.on{ color:var(--accent); border-color:var(--accent); background:var(--accent-dim); }
+  .parc-kpis{ display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:10px; }
+  .parc-kpi-sub{ font-size:11px; color:var(--tx2); margin-top:4px; }
+  .parc-block{ background:var(--panel-2); border:1px solid var(--bd); border-radius:8px; padding:12px 14px; min-width:0; }
+  .parc-h{ font-family:var(--font-mono); font-size:9.5px; color:var(--tx3); text-transform:uppercase; letter-spacing:.5px; margin-bottom:10px; }
+  .parc-muted{ font-size:11.5px; color:var(--tx3); margin:6px 0 0; }
+  .parc-chart-wrap{ overflow-x:auto; }
+  .parc-chart{ width:100%; max-width:860px; min-width:460px; height:auto; display:block; font-family:var(--font-mono); font-size:9.5px; }
+  .parc-chart text{ fill:var(--tx3); } .parc-chart text.on{ fill:var(--accent); font-weight:700; }
+  .parc-chart .grid{ stroke:var(--bd-soft); stroke-width:1; }
+  .parc-chart .obj{ fill:none; stroke:var(--tx1); stroke-width:1.5; stroke-dasharray:4 3; }
+  .parc-chart .obj-dot{ fill:var(--tx1); }
+  .parc-legend{ display:flex; gap:14px; flex-wrap:wrap; font-size:11px; color:var(--tx2); margin-top:6px; }
+  .parc-legend i{ display:inline-block; width:9px; height:9px; border-radius:2px; margin-right:5px; vertical-align:-1px; }
+  .parc-legend i.obj-i{ height:0; border-top:2px dashed var(--tx1); border-radius:0; width:14px; vertical-align:3px; }
+  .parc-two{ display:grid; grid-template-columns:repeat(auto-fit,minmax(300px,1fr)); gap:14px; }
+  .parc-bar{ display:grid; grid-template-columns:minmax(90px,1.2fr) 2fr auto; gap:10px; align-items:center; font-size:12px; padding:3px 0; }
+  .parc-bar-k{ color:var(--tx1); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .parc-bar-track{ height:7px; background:var(--panel); border-radius:4px; overflow:hidden; }
+  .parc-bar-track span{ display:block; height:100%; background:var(--accent); border-radius:4px; }
+  .parc-bar-v{ font-family:var(--font-mono); font-size:10.5px; color:var(--tx2); white-space:nowrap; font-variant-numeric:tabular-nums; }
+  .parc-due{ display:grid; grid-template-columns:84px 1fr; gap:2px 10px; font-size:12px; padding:6px 0; border-top:1px solid var(--bd-soft); }
+  .parc-due-date{ font-family:var(--font-mono); color:#D9A441; grid-row:1 / span 2; }
+  .parc-due-name{ color:var(--tx1); }
+  .parc-due-meta{ color:var(--tx3); font-size:11px; }
+  .parc-table-head{ display:flex; flex-wrap:wrap; align-items:center; gap:8px 12px; margin-bottom:8px; }
+  .parc-table-head .parc-h{ margin:0; }
+  .parc-search{ flex:1; min-width:180px; background:var(--panel); border:1px solid var(--bd); border-radius:6px; color:var(--tx1); font-size:12.5px; padding:6px 9px; }
+  .parc-table-wrap{ overflow-x:auto; max-height:520px; overflow-y:auto; }
+  .parc-table{ width:100%; border-collapse:collapse; font-size:12px; min-width:760px; }
+  .parc-table th{ position:sticky; top:0; background:var(--panel-2); text-align:left; font-family:var(--font-mono); font-size:9.5px; font-weight:500; color:var(--tx3); text-transform:uppercase; letter-spacing:.3px; padding:6px 8px; border-bottom:1px solid var(--bd); }
+  .parc-table td{ padding:6px 8px; border-bottom:1px solid var(--bd-soft); color:var(--tx1); }
+  .parc-table .n{ text-align:right; font-variant-numeric:tabular-nums; white-space:nowrap; }
+  .parc-flag{ font-family:var(--font-mono); font-size:9px; color:#D9A441; border:1px solid currentColor; border-radius:3px; padding:0 4px; margin-left:4px; white-space:nowrap; }
+  .vcf-counts{ display:flex; gap:10px; margin:4px 0 8px; }
+  .vcf-counts div{ flex:1; background:var(--panel-2); border:1px solid var(--bd); border-radius:7px; padding:9px 11px; display:flex; flex-direction:column; gap:2px; }
+  .vcf-counts b{ font-family:var(--font-mono); font-size:20px; color:var(--accent); }
+  .vcf-counts span{ font-size:11px; color:var(--tx3); }
   .opp-task-link{ display:inline-flex; align-items:center; gap:3px; font-size:9.5px; color:var(--tx3); font-family:var(--font-mono); cursor:pointer; }
   .opp-task-link:hover{ color:var(--accent); }
   .manage-chip .chip-count{ opacity:.6; font-size:10px; }
@@ -681,6 +727,7 @@
     <button type="button" data-go="today"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/></svg>Aujourd’hui<span class="lite-badge" id="lite-today-badge"></span></button>
     <button type="button" data-go="tasks"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>Tâches</button>
     <button type="button" data-go="contacts"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>Contacts</button>
+    <button type="button" data-go="parc"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="12" width="4" height="9"/><rect x="10" y="7" width="4" height="14"/><rect x="17" y="3" width="4" height="18"/></svg>Parc</button>
     <button type="button" data-go="pipeline"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="22" x2="4" y2="15"/><line x1="4" y1="11" x2="4" y2="2"/><line x1="12" y1="22" x2="12" y2="13"/><line x1="12" y1="9" x2="12" y2="2"/><line x1="20" y1="22" x2="20" y2="17"/><line x1="20" y1="13" x2="20" y2="2"/><circle cx="4" cy="13" r="2"/><circle cx="12" cy="11" r="2"/><circle cx="20" cy="15" r="2"/></svg>Pipeline</button>
   </nav>
   <nav class="app-sidebar">
@@ -696,6 +743,7 @@
       <span class="tab" data-tab="archive" title="Archive"><svg class="tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="21 8 21 21 3 21 3 8"/><rect x="1" y="3" width="22" height="5"/><line x1="10" y1="12" x2="14" y2="12"/></svg><span class="sidebar-label-text">Archive</span></span>
       <span class="tab" data-tab="contacts" title="Contacts"><svg class="tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg><span class="sidebar-label-text">Contacts</span><span class="tab-badge" id="contacts-badge"></span></span>
       <span class="tab" data-tab="pipeline" title="Pipeline"><svg class="tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="22" x2="4" y2="15"/><line x1="4" y1="11" x2="4" y2="2"/><line x1="12" y1="22" x2="12" y2="13"/><line x1="12" y1="9" x2="12" y2="2"/><line x1="20" y1="22" x2="20" y2="17"/><line x1="20" y1="13" x2="20" y2="2"/><circle cx="4" cy="13" r="2"/><circle cx="12" cy="11" r="2"/><circle cx="20" cy="15" r="2"/></svg><span class="sidebar-label-text">Pipeline</span></span>
+      <span class="tab" data-tab="parc" title="Parc"><svg class="tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="12" width="4" height="9"/><rect x="10" y="7" width="4" height="14"/><rect x="17" y="3" width="4" height="18"/></svg><span class="sidebar-label-text">Parc</span></span>
       <span class="tab" data-tab="lists" title="Réf. & data"><svg class="tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg><span class="sidebar-label-text">Réf. &amp; data</span><span class="tab-badge" id="conflicts-badge"></span></span>
     </div>
 
@@ -878,6 +926,7 @@
         <button id="contact-search-clear"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
       </div>
       <button id="contact-add-btn" type="button" class="primary-btn">Nouveau contact</button>
+      <button id="vcf-btn" type="button" class="pipe-bar-btn">Vers le téléphone</button>
       <button id="sig-paste-btn" type="button">Coller une signature</button>
       <button id="contact-import-btn" type="button">Importer Excel</button>
       <button id="contact-export-btn" type="button">Exporter Excel</button>
@@ -948,6 +997,30 @@
       <button id="pipe-exited-toggle" type="button" class="pipe-bar-link">Sorties</button>
     </div>
     <div id="pipeline-board"></div>
+  </div>
+
+  <div class="tab-panel hidden" id="tab-parc">
+    <div class="quick-add-bar">
+      <label class="pipe-bar-btn parc-load">Charger le Suivi Agrégation (.xlsx)<input type="file" id="parc-file" accept=".xlsx,.xlsm,.xls" hidden></label>
+      <span class="parc-info" id="parc-info"></span>
+    </div>
+    <div id="parc-body"></div>
+  </div>
+
+  <div id="vcf-overlay" class="modal-overlay hidden">
+    <div class="modal-box" role="dialog" aria-labelledby="vcf-title">
+      <h3 id="vcf-title">Contacts vers le téléphone</h3>
+      <p class="modal-hint">Crée un fichier de contacts (.vcf) à ouvrir sur le téléphone. Seuls les contacts jamais exportés sont envoyés, pour ne pas créer de doublons.</p>
+      <div class="vcf-counts"><div><b id="vcf-new">0</b><span>nouveaux</span></div><div><b id="vcf-changed">0</b><span>modifiés depuis l’export</span></div></div>
+      <p class="modal-hint" id="vcf-dupes"></p>
+      <div class="crm-form-row opp-task-toggle-row"><label><input type="checkbox" id="vcf-mode-changed"> Inclure les modifiés (le téléphone les ajoutera en double, à fusionner)</label></div>
+      <div class="crm-form-row opp-task-toggle-row"><label><input type="checkbox" id="vcf-mode-all"> Tout réexporter (premier export sur un nouveau téléphone)</label></div>
+      <p class="modal-hint" id="vcf-status" role="status"></p>
+      <div class="crm-form-actions">
+        <button id="vcf-go" type="button">Exporter</button>
+        <button id="vcf-close" type="button" class="ghost-btn">Fermer</button>
+      </div>
+    </div>
   </div>
 
   <div id="pq-overlay" class="modal-overlay hidden">
@@ -4711,8 +4784,8 @@
     reader.readAsText(file);
   }
 
-  const tabContacts=$('tab-contacts'), tabPipeline=$('tab-pipeline');
-  tabs.forEach(el=>{ el.onclick=()=>{ tabs.forEach(t=>t.classList.remove('active')); el.classList.add('active'); const tgt=el.dataset.tab; tabToday.classList.toggle('hidden',tgt!=='today'); tabTasks.classList.toggle('hidden',tgt!=='tasks'); tabInbox.classList.toggle('hidden',tgt!=='inbox'); tabArchive.classList.toggle('hidden',tgt!=='archive'); tabLists.classList.toggle('hidden',tgt!=='lists'); tabContacts.classList.toggle('hidden',tgt!=='contacts'); tabPipeline.classList.toggle('hidden',tgt!=='pipeline'); if(tgt==='today')renderToday(); if(tgt==='archive')renderArchive(); if(tgt==='contacts'){ refreshContactsTypeFilter(); renderContacts(); fetchContactInbox(); } if(tgt==='pipeline')renderPipeline(); if(tgt==='lists'){ renderLists(); renderStats(); renderConflicts(); $('sync-owner').value=syncConfig.owner||''; $('sync-repo').value=syncConfig.repo||''; if(syncConfig.enabled) setSyncStatus('Synchro active'); } if(tgt==='inbox')fetchInbox(); }; });
+  const tabContacts=$('tab-contacts'), tabPipeline=$('tab-pipeline'), tabParc=$('tab-parc');
+  tabs.forEach(el=>{ el.onclick=()=>{ tabs.forEach(t=>t.classList.remove('active')); el.classList.add('active'); const tgt=el.dataset.tab; tabToday.classList.toggle('hidden',tgt!=='today'); tabTasks.classList.toggle('hidden',tgt!=='tasks'); tabInbox.classList.toggle('hidden',tgt!=='inbox'); tabArchive.classList.toggle('hidden',tgt!=='archive'); tabLists.classList.toggle('hidden',tgt!=='lists'); tabContacts.classList.toggle('hidden',tgt!=='contacts'); tabPipeline.classList.toggle('hidden',tgt!=='pipeline'); tabParc.classList.toggle('hidden',tgt!=='parc'); if(tgt==='parc')renderParc(); if(tgt==='today')renderToday(); if(tgt==='archive')renderArchive(); if(tgt==='contacts'){ refreshContactsTypeFilter(); renderContacts(); fetchContactInbox(); } if(tgt==='pipeline')renderPipeline(); if(tgt==='lists'){ renderLists(); renderStats(); renderConflicts(); $('sync-owner').value=syncConfig.owner||''; $('sync-repo').value=syncConfig.repo||''; if(syncConfig.enabled) setSyncStatus('Synchro active'); } if(tgt==='inbox')fetchInbox(); }; });
 
   $('submit-task').onclick=addTask;
   addSection.addEventListener('keydown', e=>{ if(e.key==='Enter' && e.target.tagName!=='TEXTAREA'){ e.preventDefault(); addTask(); } });
@@ -5166,6 +5239,265 @@
     saveTasks(); render(); renderArchive();
     console.log(found.length + ' tâche(s) restaurée(s) :', found.map(t => t.title));
   };
+
+  // ---------- Parc (read from the "Suivi Agrégation" workbook, kept in this browser only) ----------
+  const PARC_KEY='parc-data';
+  const PARC_YEARS=Array.from({length:16},(_,i)=>2026+i);
+  const PARC_CADRES=['CR','OA','ACC','Marché','Autre'];
+  const PARC_COLORS={ CR:'#14D3A9', OA:'#7DD3FC', ACC:'#FFFD82', 'Marché':'#CA6702', Autre:'#6B7480' };
+  let parcData=null, parcYear=new Date().getFullYear(), parcFilter='Gagné', parcSearch='';
+  function loadParc(){ try{ const r=localStorage.getItem('todo_'+PARC_KEY); parcData=r?JSON.parse(r):null; }catch(e){ parcData=null; } }
+  function saveParc(){ try{ localStorage.setItem('todo_'+PARC_KEY, JSON.stringify(parcData)); }catch(e){ console.error(e); } }
+  const parcNorm=s=>pqFold(String(s==null?'':s)).replace(/[^a-z0-9%]/g,'');
+  function parcIso(v){
+    if(v instanceof Date && !isNaN(v)) return toISO(v);
+    if(typeof v==='number' && v>20000 && v<80000){ const d=new Date(Math.round((v-25569)*86400000)); return d.toISOString().slice(0,10); }
+    const s=String(v||'').trim(); const m=/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(s); if(m) return m[3]+'-'+pqPad(m[2])+'-'+pqPad(m[1]);
+    return /^\d{4}-\d{2}-\d{2}/.test(s)?s.slice(0,10):'';
+  }
+  const parcNum=v=>{ if(typeof v==='number') return v; const n=parseFloat(String(v||'').replace(/\s|€/g,'').replace(',','.')); return isNaN(n)?0:n; };
+  function parseParcWorkbook(wb){
+    const sheetName=wb.SheetNames.find(n=>/bdd/i.test(n))||wb.SheetNames.find(n=>XLSX.utils.sheet_to_json(wb.Sheets[n],{header:1,defval:''}).slice(0,10).some(r=>r.map(parcNorm).includes('nomprod')));
+    if(!sheetName) throw new Error('Onglet « BDD Agrégation » introuvable dans ce fichier.');
+    const rows=XLSX.utils.sheet_to_json(wb.Sheets[sheetName],{header:1,raw:true,defval:''});
+    const hi=rows.findIndex(r=>r.map(parcNorm).includes('nomprod'));
+    if(hi<0) throw new Error('Ligne d\u2019en-têtes (Nom_prod…) introuvable.');
+    const head=rows[hi].map(parcNorm);
+    const col=(...names)=>{ for(const n of names){ const i=head.indexOf(parcNorm(n)); if(i>=0) return i; } return -1; };
+    const C={ annee:col('Année'), charge:col('Chargé'), source:col('Source'), ca:col('Crédit Agricole'), dev:col('Développeur'), cadre:col('Cadre juridique'), ao:col('Type AO CRE'), valo:col('Type_valorisation'), secteur:col('Secteur'),
+      region:col('Région'), dept:col('Département'), dateOffre:col('Date_offre'), typeOffre:col('Type_offre'), statut:col('Statut'), sign:col('Date_sign'), debut:col('Date_début'), mes:col('Mise en service'), fin:col('Date_fin'),
+      renouv:col('Renouvellement'), comment:col('Commentaire'), prod:col('Nom_prod'), inst:col('Nom_Installation_prod'), enr:col('Type_EnR'), typeInst:col('Type_installation'), kwc:col('P_installée (KWc)','P_installée'), p50:col('P50(MWh)','P50'), grd:col('GRD') };
+    const volCols={}; PARC_YEARS.forEach(y=>{ const i=col('Agrégation '+y); if(i>=0) volCols[y]=i; });
+    const get=(r,k)=>C[k]>=0?r[C[k]]:'';
+    const items=[];
+    rows.slice(hi+1).forEach((r,ix)=>{
+      const prod=String(get(r,'prod')||'').trim(), inst=String(get(r,'inst')||'').trim(), dev=String(get(r,'dev')||'').trim();
+      if(!prod && !inst && !dev) return;
+      const vols={}; Object.keys(volCols).forEach(y=>{ const v=parcNum(r[volCols[y]]); if(v) vols[y]=v; });
+      const cadre=String(get(r,'cadre')||'').trim();
+      items.push({ id:'p'+ix, prod:prod||dev, inst, dev:dev||prod, statut:String(get(r,'statut')||'').trim(), renouv:String(get(r,'renouv')||'').trim(),
+        cadre:PARC_CADRES.includes(cadre)?cadre:(cadre?'Autre':''), ao:String(get(r,'ao')||''), valo:String(get(r,'valo')||''), secteur:String(get(r,'secteur')||''),
+        region:String(get(r,'region')||''), dept:String(get(r,'dept')||''), enr:String(get(r,'enr')||''), typeInst:String(get(r,'typeInst')||''),
+        kwc:parcNum(get(r,'kwc')), p50:parcNum(get(r,'p50')), charge:String(get(r,'charge')||''), source:String(get(r,'source')||''), ca:String(get(r,'ca')||''),
+        dateOffre:parcIso(get(r,'dateOffre')), typeOffre:String(get(r,'typeOffre')||''), sign:parcIso(get(r,'sign')), debut:parcIso(get(r,'debut')), mes:parcIso(get(r,'mes')), fin:parcIso(get(r,'fin')),
+        comment:String(get(r,'comment')||''), vols });
+    });
+    // supply / aggregation objectives (GWh) from the Dashboard sheet, when present
+    const objectives={};
+    const dash=wb.SheetNames.find(n=>/dashboard/i.test(n));
+    if(dash){
+      const d=XLSX.utils.sheet_to_json(wb.Sheets[dash],{header:1,raw:true,defval:''});
+      const yr=d.find(r=>r.map(parcNorm).includes('designation'));
+      const ob=d.find(r=>r.map(parcNorm).some(c=>c==='objectagregationvol'||c==='objectifagregationvol'));
+      if(yr && ob) yr.forEach((y,i)=>{ const n=parseInt(y,10); if(n>=2020 && n<2100 && parcNum(ob[i])) objectives[n]=parcNum(ob[i]); });
+    }
+    return { items, objectives, sheet:sheetName, importedAt:Date.now() };
+  }
+  async function importParcFile(file){
+    $('parc-info').textContent='Lecture…';
+    try{
+      await loadXlsxLib();
+      const wb=XLSX.read(await file.arrayBuffer(),{type:'array',cellDates:true});
+      parcData=parseParcWorkbook(wb); parcData.fileName=file.name;
+      saveParc(); renderParc();
+    }catch(e){ console.error(e); $('parc-info').textContent='Fichier illisible : '+(e.message||e); }
+  }
+
+  const fmtGwh=mwh=>(Math.round(mwh/100)/10).toLocaleString('fr-FR')+' GWh';
+  const fmtMwc=kwc=>(Math.round(kwc/100)/10).toLocaleString('fr-FR')+' MWc';
+  function renderParc(){
+    const body=$('parc-body'); if(!body) return;
+    if(parcData===null) loadParc();
+    body.innerHTML='';
+    if(!parcData || !parcData.items.length){
+      $('parc-info').textContent='';
+      body.innerHTML='<div class="parc-empty"><b>Aucun parc chargé.</b><br>Charge le fichier « Suivi Agrégation » (.xlsx) : l\u2019app lit l\u2019onglet « BDD Agrégation » et les objectifs du « Dashboard ». Le fichier reste sur cet appareil.</div>';
+      return;
+    }
+    $('parc-info').textContent=(parcData.fileName||'Fichier')+' · chargé le '+new Date(parcData.importedAt).toLocaleDateString('fr-FR')+' · '+parcData.items.length+' lignes';
+    const won=parcData.items.filter(p=>p.statut==='Gagné');
+    const y=parcYear, today=toISO(new Date());
+    const active=won.filter(p=>(p.vols[y]||0)>0);
+    const volY=active.reduce((s,p)=>s+(p.vols[y]||0),0);
+    const obj=parcData.objectives[y];
+    const soon=won.filter(p=>p.fin && p.fin>=today && p.fin<=toISO(new Date(Date.now()+365*86400000)));
+    const pending=parcData.items.filter(p=>p.statut==='En attente');
+
+    // year chips
+    const years=document.createElement('div'); years.className='parc-years';
+    PARC_YEARS.slice(0,6).forEach(yy=>{ const b=document.createElement('button'); b.type='button'; b.textContent=yy; b.className=yy===y?'on':''; b.onclick=()=>{ parcYear=yy; renderParc(); }; years.appendChild(b); });
+    body.appendChild(years);
+
+    const kpis=document.createElement('div'); kpis.className='parc-kpis';
+    const kpi=(num,label,sub,cls)=>{ const k=document.createElement('div'); k.className='stat-card'; k.innerHTML='<div class="stat-card-num'+(cls?' '+cls:'')+'">'+escapeHtml(num)+'</div><div class="stat-card-label">'+escapeHtml(label)+'</div>'+(sub?'<div class="parc-kpi-sub">'+escapeHtml(sub)+'</div>':''); kpis.appendChild(k); };
+    kpi(fmtGwh(volY), 'Volume agrégé '+y, obj?Math.round(volY/1000/obj*100)+' % de l\u2019objectif ('+obj.toLocaleString('fr-FR')+' GWh)':'', 'accent');
+    kpi(String(active.length), 'Contrats actifs '+y, fmtMwc(active.reduce((s,p)=>s+p.kwc,0)));
+    kpi(String(soon.length), 'Fins de contrat < 12 mois', won.filter(p=>p.renouv==='A renouveler').length+' marqués « A renouveler »', soon.length?'crit':'');
+    kpi(String(pending.length), 'Offres en attente', fmtMwc(pending.reduce((s,p)=>s+p.kwc,0)));
+    body.appendChild(kpis);
+
+    body.appendChild(parcChart(won));
+
+    const two=document.createElement('div'); two.className='parc-two';
+    const byDev={}; active.forEach(p=>{ byDev[p.dev]=(byDev[p.dev]||0)+(p.vols[y]||0); });
+    two.appendChild(parcBars('Par développeur · '+y, Object.entries(byDev).sort((a,b)=>b[1]-a[1]).slice(0,12), v=>fmtGwh(v)+' · '+Math.round(v/volY*100)+' %'));
+    const byReg={}; won.filter(p=>!p.fin || p.fin>=today).forEach(p=>{ const k=p.region||'Non renseignée'; byReg[k]=(byReg[k]||0)+p.kwc; });
+    two.appendChild(parcBars('Par région · puissance en portefeuille', Object.entries(byReg).sort((a,b)=>b[1]-a[1]), v=>fmtMwc(v)));
+    body.appendChild(two);
+
+    if(soon.length){
+      const s=document.createElement('div'); s.className='parc-block';
+      s.innerHTML='<div class="parc-h">Échéances dans les 12 mois</div>';
+      soon.sort((a,b)=>a.fin.localeCompare(b.fin)).forEach(p=>{
+        const r=document.createElement('div'); r.className='parc-due';
+        r.innerHTML='<span class="parc-due-date">'+escapeHtml(pqIsoToFr(p.fin))+'</span><span class="parc-due-name">'+escapeHtml(p.prod)+(p.inst?' · '+escapeHtml(p.inst):'')+'</span><span class="parc-due-meta">'+escapeHtml([p.cadre, p.kwc?fmtKwc(p.kwc):'', p.renouv].filter(Boolean).join(' · '))+'</span>';
+        s.appendChild(r);
+      });
+      body.appendChild(s);
+    }
+    body.appendChild(parcTable());
+  }
+  function parcChart(won){
+    const wrap=document.createElement('div'); wrap.className='parc-block';
+    wrap.innerHTML='<div class="parc-h">Volume agrégé par année (GWh), contrats gagnés</div>';
+    const years=PARC_YEARS.filter(y=>won.some(p=>p.vols[y]) || parcData.objectives[y]).slice(0,12);
+    if(!years.length){ wrap.innerHTML+='<p class="parc-muted">Pas de volume renseigné.</p>'; return wrap; }
+    const totals=years.map(y=>{ const t={}; PARC_CADRES.forEach(c=>{ t[c]=won.filter(p=>(p.cadre||'Autre')===c).reduce((s,p)=>s+(p.vols[y]||0),0)/1000; }); return t; });
+    const max=Math.max(1,...years.map((y,i)=>Math.max(PARC_CADRES.reduce((s,c)=>s+totals[i][c],0), parcData.objectives[y]||0)));
+    const step=max>500?200:max>200?100:max>100?50:max>40?20:10, top=Math.ceil(max/step)*step;
+    const W=640, H=220, L=40, B=24, T=10, bw=(W-L-10)/years.length;
+    let svg='<svg viewBox="0 0 '+W+' '+(H+B+T)+'" class="parc-chart" role="img" aria-label="Volume agrégé par année">';
+    for(let v=0; v<=top; v+=step){ const yy=T+H-v/top*H; svg+='<line x1="'+L+'" x2="'+W+'" y1="'+yy+'" y2="'+yy+'" class="grid"/><text x="'+(L-6)+'" y="'+(yy+3)+'" text-anchor="end">'+v+'</text>'; }
+    years.forEach((y,i)=>{
+      let acc=0; const x=L+i*bw+bw*0.18, w=bw*0.64;
+      PARC_CADRES.forEach(c=>{ const v=totals[i][c]; if(!v) return; const h=v/top*H; svg+='<rect x="'+x+'" y="'+(T+H-(acc+h))+'" width="'+w+'" height="'+h+'" fill="'+PARC_COLORS[c]+'"><title>'+y+' · '+c+' : '+(Math.round(v*10)/10)+' GWh</title></rect>'; acc+=h; });
+      svg+='<text x="'+(x+w/2)+'" y="'+(T+H+15)+'" text-anchor="middle" class="'+(y===parcYear?'on':'')+'">'+y+'</text>';
+    });
+    const objPts=years.map((y,i)=>parcData.objectives[y]?[L+i*bw+bw/2, T+H-parcData.objectives[y]/top*H]:null).filter(Boolean);
+    if(objPts.length>1) svg+='<polyline points="'+objPts.map(p=>p.join(',')).join(' ')+'" class="obj"/>';
+    objPts.forEach(p=>{ svg+='<circle cx="'+p[0]+'" cy="'+p[1]+'" r="2.5" class="obj-dot"/>'; });
+    svg+='</svg>';
+    wrap.innerHTML+='<div class="parc-chart-wrap">'+svg+'</div><div class="parc-legend">'+PARC_CADRES.filter(c=>totals.some(t=>t[c])).map(c=>'<span><i style="background:'+PARC_COLORS[c]+'"></i>'+c+'</span>').join('')+(objPts.length?'<span><i class="obj-i"></i>Objectif agrégation</span>':'')+'</div>';
+    return wrap;
+  }
+  function parcBars(title, entries, fmt){
+    const b=document.createElement('div'); b.className='parc-block';
+    b.innerHTML='<div class="parc-h">'+escapeHtml(title)+'</div>';
+    const max=Math.max(1,...entries.map(e=>e[1]));
+    entries.forEach(([k,v])=>{
+      const r=document.createElement('div'); r.className='parc-bar';
+      r.innerHTML='<span class="parc-bar-k">'+escapeHtml(k)+'</span><span class="parc-bar-track"><span style="width:'+Math.max(2,v/max*100)+'%"></span></span><span class="parc-bar-v">'+escapeHtml(fmt(v))+'</span>';
+      b.appendChild(r);
+    });
+    if(!entries.length) b.innerHTML+='<p class="parc-muted">—</p>';
+    return b;
+  }
+  function parcTable(){
+    const b=document.createElement('div'); b.className='parc-block';
+    const statuts=['Gagné','En attente','En préparation','Tous'];
+    const head=document.createElement('div'); head.className='parc-table-head';
+    head.innerHTML='<div class="parc-h">Installations</div>';
+    const chips=document.createElement('div'); chips.className='parc-chips';
+    statuts.forEach(s=>{ const c=document.createElement('button'); c.type='button'; c.className=s===parcFilter?'on':''; c.textContent=s; c.onclick=()=>{ parcFilter=s; renderParc(); }; chips.appendChild(c); });
+    head.appendChild(chips);
+    const search=document.createElement('input'); search.type='search'; search.placeholder='Producteur, installation, département…'; search.value=parcSearch; search.className='parc-search'; search.id='parc-search';
+    search.oninput=()=>{ parcSearch=search.value; const pos=search.selectionStart; renderParc(); const s=$('parc-search'); s.focus({preventScroll:true}); try{ s.setSelectionRange(pos,pos); }catch(e){} };
+    head.appendChild(search);
+    b.appendChild(head);
+    const q=pqFold(parcSearch);
+    const list=parcData.items.filter(p=>parcFilter==='Tous'||p.statut===parcFilter).filter(p=>!q||pqFold([p.prod,p.inst,p.dev,p.dept,p.region,p.cadre].join(' ')).includes(q))
+      .sort((a,c)=>(a.prod||'').localeCompare(c.prod||'','fr'));
+    const wrap=document.createElement('div'); wrap.className='parc-table-wrap';
+    let t='<table class="parc-table"><thead><tr><th>Producteur</th><th>Installation</th><th>Dépt</th><th>EnR</th><th class="n">Puissance</th><th class="n">P50</th><th>Cadre</th><th>Statut</th><th>Fin</th></tr></thead><tbody>';
+    list.forEach(p=>{ t+='<tr><td>'+escapeHtml(p.prod)+'</td><td>'+escapeHtml(p.inst)+'</td><td>'+escapeHtml(p.dept.replace(/\s-\s.*/,''))+'</td><td>'+escapeHtml(p.enr)+'</td><td class="n">'+(p.kwc?escapeHtml(fmtKwc(p.kwc)):'')+'</td><td class="n">'+(p.p50?Math.round(p.p50).toLocaleString('fr-FR'):'')+'</td><td>'+escapeHtml(p.cadre)+'</td><td>'+escapeHtml(p.statut)+(p.renouv==='A renouveler'?' <span class="parc-flag">à renouveler</span>':'')+'</td><td>'+escapeHtml(pqIsoToFr(p.fin))+'</td></tr>'; });
+    t+='</tbody></table>';
+    wrap.innerHTML=t+(list.length?'':'<p class="parc-muted">Aucune installation.</p>');
+    b.appendChild(wrap);
+    const n=document.createElement('div'); n.className='parc-muted'; n.textContent=list.length+' installation'+(list.length>1?'s':'')+' · '+fmtMwc(list.reduce((s,p)=>s+p.kwc,0));
+    b.appendChild(n);
+    return b;
+  }
+
+  // ---------- Contacts → phone (vCard), without duplicates ----------
+  // Each contact remembers when it was last exported (vcfAt, synced), so a second export only sends new ones.
+  // Contacts sharing an email or a phone number inside the app are exported once.
+  function vcfEscape(s){ return String(s||'').replace(/\\/g,'\\\\').replace(/\n/g,'\\n').replace(/([,;])/g,'\\$1'); }
+  function contactToVcf(c){
+    const lines=['BEGIN:VCARD','VERSION:3.0','UID:todo-'+c.id,
+      'N:'+vcfEscape(c.lastName)+';'+vcfEscape(c.firstName)+';;;',
+      'FN:'+vcfEscape([c.firstName,c.lastName].filter(Boolean).join(' ')||c.email||c.company)];
+    if(c.company) lines.push('ORG:'+vcfEscape(c.company));
+    if(c.role) lines.push('TITLE:'+vcfEscape(c.role));
+    [c.phone1,c.phone2].filter(Boolean).forEach((p,i)=>lines.push('TEL;TYPE='+(i===0?'CELL':'WORK')+':'+p.replace(/[^\d+]/g,'')));
+    if(c.email) lines.push('EMAIL;TYPE=INTERNET:'+c.email.trim().toLowerCase());
+    if(c.comment) lines.push('NOTE:'+vcfEscape(c.comment));
+    lines.push('CATEGORIES:Todo','END:VCARD');
+    return lines.join('\r\n');
+  }
+  function vcfKey(c){
+    const keys=[];
+    if(c.email) keys.push('m:'+c.email.trim().toLowerCase());
+    [c.phone1,c.phone2].filter(Boolean).forEach(p=>{ const d=p.replace(/\D/g,'').replace(/^33/,'0'); if(d.length>=9) keys.push('t:'+d.slice(-9)); });
+    if(!keys.length) keys.push('n:'+pqFold((c.firstName||'')+' '+(c.lastName||'')+' '+(c.company||'')).trim());
+    return keys;
+  }
+  function vcfCandidates(mode){
+    const live=contacts.filter(c=>!c.deleted && (c.firstName||c.lastName) && (c.phone1||c.phone2||c.email));
+    // inside the app: contacts sharing an email or a phone become one card (most recent first, gaps filled from the others)
+    const groups=[], byKey=new Map(); let dupes=0;
+    live.slice().sort((a,b)=>(b.updatedAt||0)-(a.updatedAt||0)).forEach(c=>{
+      const ks=vcfKey(c), g=ks.map(k=>byKey.get(k)).find(Boolean);
+      if(g){ g.members.push(c); dupes++; } else { const ng={ members:[c] }; groups.push(ng); ks.forEach(k=>byKey.set(k,ng)); return; }
+      ks.forEach(k=>byKey.set(k,g));
+    });
+    const unique=groups.map(g=>{
+      const m=Object.assign({}, g.members[0]); m.members=g.members;
+      g.members.slice(1).forEach(o=>['firstName','lastName','role','company','email','phone1','phone2','comment'].forEach(k=>{ if(!m[k] && o[k]) m[k]=o[k]; }));
+      if(m.phone2 && m.phone1 && m.phone2.replace(/\D/g,'').slice(-9)===m.phone1.replace(/\D/g,'').slice(-9)) m.phone2='';
+      m.vcfAt=Math.min(...g.members.map(x=>x.vcfAt||0))||0;
+      m.updatedAt=Math.max(...g.members.map(x=>x.updatedAt||0));
+      if(g.members.some(x=>x.vcfAt)) m.vcfAt=Math.max(...g.members.map(x=>x.vcfAt||0));
+      return m;
+    });
+    const fresh=unique.filter(c=>!c.vcfAt), changed=unique.filter(c=>c.vcfAt && (c.updatedAt||0)>c.vcfAt);
+    const list=mode==='all'?unique:mode==='changed'?fresh.concat(changed):fresh;
+    return { list, fresh, changed, dupes, total:unique.length };
+  }
+  function openVcfExport(){
+    const r=vcfCandidates('new');
+    $('vcf-new').textContent=r.fresh.length;
+    $('vcf-changed').textContent=r.changed.length;
+    $('vcf-dupes').textContent=r.dupes?r.dupes+' contact'+(r.dupes>1?'s':'')+' en double dans l\u2019app (même mail ou téléphone) ne seront exportés qu\u2019une fois.':'';
+    $('vcf-mode-changed').checked=false; $('vcf-mode-all').checked=false;
+    $('vcf-status').textContent='';
+    $('vcf-overlay').classList.remove('hidden');
+  }
+  async function doVcfExport(){
+    const mode=$('vcf-mode-all').checked?'all':$('vcf-mode-changed').checked?'changed':'new';
+    const { list }=vcfCandidates(mode);
+    if(!list.length){ $('vcf-status').textContent='Rien de nouveau à exporter.'; return; }
+    const text=list.map(contactToVcf).join('\r\n')+'\r\n';
+    const name='contacts-todo-'+toISO(new Date())+'.vcf';
+    const file=new File([text], name, { type:'text/vcard' });
+    let sent=false;
+    try{
+      if(navigator.canShare && navigator.canShare({ files:[file] })){ await navigator.share({ files:[file], title:'Contacts Todo' }); sent=true; }
+    }catch(e){ if(e && e.name==='AbortError'){ $('vcf-status').textContent='Partage annulé : rien n\u2019a été marqué comme exporté.'; return; } }
+    if(!sent){ const a=document.createElement('a'); a.href=URL.createObjectURL(file); a.download=name; document.body.appendChild(a); a.click(); setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); },1000); }
+    const now=Date.now();
+    list.forEach(m=>(m.members||[m]).forEach(c=>{ c.vcfAt=now; c.updatedAt=now; }));
+    saveCrm();
+    $('vcf-status').textContent=list.length+' contact'+(list.length>1?'s':'')+' exporté'+(list.length>1?'s':'')+'. Ouvre le fichier sur le téléphone pour les ajouter.';
+    $('vcf-new').textContent='0';
+  }
+
+  $('parc-file').addEventListener('change', e=>{ if(e.target.files[0]) importParcFile(e.target.files[0]); e.target.value=''; });
+  $('vcf-btn').onclick=openVcfExport;
+  $('vcf-go').onclick=doVcfExport;
+  $('vcf-close').onclick=()=>$('vcf-overlay').classList.add('hidden');
+  $('vcf-mode-all').onchange=()=>{ if($('vcf-mode-all').checked) $('vcf-mode-changed').checked=false; };
+  $('vcf-mode-changed').onchange=()=>{ if($('vcf-mode-changed').checked) $('vcf-mode-all').checked=false; };
+  $('vcf-overlay').addEventListener('click', e=>{ if(e.target.id==='vcf-overlay') $('vcf-overlay').classList.add('hidden'); });
 
   // Phone version: bottom bar drives the sidebar tabs (which stay the single source of truth).
   if(window.TODO_LITE){

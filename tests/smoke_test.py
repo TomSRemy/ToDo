@@ -7,6 +7,9 @@ GitHub is mocked (no network, no real token); Google Fonts is blocked so the
 tests don't depend on the network either.
 """
 import base64
+import tempfile
+
+import openpyxl
 import datetime
 import json
 import pathlib
@@ -300,7 +303,6 @@ with sync_playwright() as p:
     page.close()
 
     # --- Pipeline: producer Excel, one column per plant (SheetJS from cdnjs)
-    import openpyxl, tempfile
     wb = openpyxl.Workbook(); ws = wb.active
     for r in [["", "Centrale 1", "Centrale 2"], ["Nom Installation", "Les Vignes", "Le Moulin"], ["Département", "Lot (46)", "Gers (32)"],
               ["Puissance installée (MWc)", 2.4, 1.85], ["P50 (MWh/an)", 3100, 2300], ["Date de mise en service", "Juin 2027", "Mars 2028"]]:
@@ -311,6 +313,40 @@ with sync_playwright() as p:
     page.set_input_files("#pq-file", str(xlsx)); page.wait_for_function("document.getElementById('pq-files-info').textContent.includes('installation')", timeout=20000)
     check(page.input_value("#pq-0-centrale") == "Les Vignes" and page.input_value("#pq-1-kwc") == "1850" and page.input_value("#pq-1-dept") == "32 - Gers",
           "producer Excel creates one installation per column")
+    check(not errors, f"no page errors ({errors})")
+    page.close()
+
+    # --- Parc: Suivi Agrégation workbook → dashboard; contacts → phone (.vcf) without duplicates
+    wb = openpyxl.Workbook(); ws = wb.active; ws.title = "BDD Agrégation"
+    hdr = ["Vérification", "Année", "Chargé", "Date entrée BDD", "Source", "Crédit Agricole", "Développeur", "Ref", "Cadre juridique", "Type AO CRE",
+           "Région", "Département", "Statut", "Date_fin", "Renouvellement", "Nom_prod", "Nom_Installation_prod", "Type_EnR", "P_installée (KWc)", "P50\n(MWh)",
+           "Agrégation 2026", "Agrégation 2027"]
+    ws.append(["Date renouvellement"]); ws.append([]); ws.append(hdr)
+    soon = (TODAY + datetime.timedelta(days=90))
+    ws.append(["", 2021, "PGU", None, "Contact direct", "N/A", "SOLARIS", "", "CR", "AO CRE", "Occitanie", "34 - Hérault", "Gagné", soon, "A renouveler", "SOLA", "CS DU MOULIN", "PV", 2990, 4500, 4500, 0])
+    ws.append(["", 2022, "SMA", None, "Contact direct", "N/A", "VENTUS", "", "Marché", "", "Bretagne", "29 - Finistère", "Gagné", datetime.date(2028, 12, 31), "En cours", "VENTUS", "Parc B", "PV", 10000, 23000, 23000, 23000])
+    ws.append(["", 2026, "PGU", None, "BOAMP", "N/A", "X", "", "CR", "", "Grand Est", "", "En attente", None, "", "X", "Toit", "PV", 500, 600, "", ""])
+    d = wb.create_sheet("Dashboard"); d.append(["", "Désignation", "2026", "2027"]); d.append(["", "Object. Agrégation Vol.", 150, 300])
+    parc = pathlib.Path(tempfile.mkdtemp()) / "suivi.xlsx"; wb.save(parc)
+    dupes = [{"id": "c1", "firstName": "Anne", "lastName": "Roux", "role": "Asset", "company": "Solaris", "email": "anne@urba.fr", "phone1": "0611223344", "phone2": "",
+              "relevance": 0, "comment": "", "createdAt": 1, "updatedAt": 1, "deleted": False},
+             {"id": "c2", "firstName": "Anne", "lastName": "Roux", "role": "", "company": "Solaris", "email": "ANNE@urba.fr", "phone1": "", "phone2": "",
+              "relevance": 0, "comment": "", "createdAt": 1, "updatedAt": 2, "deleted": False}]
+    page, errors = new_page(browser, {"todo_todo-widget-contacts": json.dumps(dupes)}, accept_downloads=True)
+    page.goto(URL); page.click('[data-tab="parc"]')
+    page.set_input_files("#parc-file", str(parc)); page.wait_for_function("document.getElementById('parc-info').textContent.includes('lignes')", timeout=20000)
+    page.click(".parc-years button:text-is('2026')")
+    k = page.inner_text(".parc-kpis")
+    check("27,5 GWh" in k and "18 %" in k, f"parc: volume of won contracts vs objective ({k[:60]!r})")
+    check("CS DU MOULIN" in page.inner_text("#parc-body") and page.locator(".parc-due").count() == 1, "parc: contract ending soon is listed")
+    page.click('[data-tab="contacts"]'); page.click("#vcf-btn")
+    check(page.inner_text("#vcf-new") == "1", "vcf: duplicates inside the app count once")
+    with page.expect_download() as dl:
+        page.click("#vcf-go")
+    card = pathlib.Path(dl.value.path()).read_text()
+    check(card.count("BEGIN:VCARD") == 1 and "TEL;TYPE=CELL:0611223344" in card and "anne@urba.fr" in card, "vcf: merged card keeps phone and email")
+    page.click("#vcf-close"); page.click("#vcf-btn")
+    check(page.inner_text("#vcf-new") == "0", "vcf: a second export only sends new contacts")
     check(not errors, f"no page errors ({errors})")
     page.close()
 
