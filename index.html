@@ -5,6 +5,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Todo</title>
 <link rel="manifest" href="manifest.json">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Caveat:wght@500;700&display=swap" rel="stylesheet">
 <meta name="theme-color" content="#0A0D12">
 <link rel="apple-touch-icon" href="icons/icon-192.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -23,6 +26,8 @@
     --radius:4px;
     --font-ui: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
     --font-mono: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+    --font-hand: 'Caveat', 'Segoe Print', 'Bradley Hand', 'Comic Sans MS', cursive;
+    --postit-idee:#F3E28A; --postit-demain:#F4AE9A; --postit-ink:#2A2418;
   }
   *{box-sizing:border-box;}
   body{ margin:0; min-height:100vh; font-family:var(--font-ui); background:var(--bg); color:var(--tx1); }
@@ -454,6 +459,40 @@
   .inbox-item-link{ margin-left:auto; color:var(--accent); font-size:11px; text-decoration:none; }
   .inbox-item-link:hover{ text-decoration:underline; }
 
+  /* Calepin (post-it) */
+  #tab-notes{ overflow-y:auto; }
+  .notes-capture{ padding:14px 15px 12px; border-bottom:1px solid var(--bd); display:flex; flex-direction:column; gap:8px; flex-shrink:0; }
+  .notes-kind-switch{ display:flex; gap:6px; align-items:center; }
+  .notes-kind-switch button{ font-family:var(--font-mono); font-size:10px; text-transform:uppercase; letter-spacing:.3px; padding:4px 10px; border-radius:12px; border:1px solid var(--bd); background:var(--panel-2); color:var(--tx2); cursor:pointer; white-space:nowrap; }
+  @media (max-width: 760px){ .notes-hint{ display:none; } }
+  .notes-kind-switch button.active[data-kind="demain"]{ background:var(--postit-demain); border-color:var(--postit-demain); color:var(--postit-ink); }
+  .notes-kind-switch button.active[data-kind="idee"]{ background:var(--postit-idee); border-color:var(--postit-idee); color:var(--postit-ink); }
+  .notes-hint{ font-family:var(--font-mono); font-size:9.5px; color:var(--tx3); margin-left:auto; }
+  #notes-input{ width:100%; resize:none; overflow:hidden; background:var(--panel-2); border:1px solid var(--bd); border-radius:var(--radius); color:var(--tx1); font-family:var(--font-hand); font-size:21px; line-height:1.25; padding:8px 11px; box-sizing:border-box; min-height:46px; }
+  #notes-input::placeholder{ color:var(--tx3); }
+  #notes-input:focus{ outline:none; border-color:var(--accent); }
+  #notes-board{ padding:18px 15px 28px; display:flex; flex-direction:column; gap:22px; }
+  .notes-section-label{ font-family:var(--font-mono); font-size:9.5px; color:var(--tx3); text-transform:uppercase; letter-spacing:.5px; margin-bottom:12px; }
+  .notes-grid{ display:grid; grid-template-columns:repeat(auto-fill,minmax(165px,1fr)); gap:16px; }
+  .postit{ position:relative; min-height:118px; padding:12px 12px 8px; border-radius:2px 2px 12px 2px; color:var(--postit-ink); box-shadow:0 7px 14px rgba(0,0,0,.35); display:flex; flex-direction:column; transition:transform .12s ease; }
+  .postit.idee{ background:var(--postit-idee); }
+  .postit.demain{ background:var(--postit-demain); }
+  .postit:nth-child(3n+1){ transform:rotate(-1.2deg); }
+  .postit:nth-child(3n+2){ transform:rotate(.9deg); }
+  .postit:hover, .postit.editing{ transform:rotate(0) scale(1.02); }
+  .postit-text{ flex:1; font-family:var(--font-hand); font-size:21px; line-height:1.15; white-space:pre-wrap; word-break:break-word; cursor:text; }
+  .postit-text-edit{ flex:1; width:100%; min-height:70px; background:transparent; border:none; resize:none; font-family:var(--font-hand); font-size:21px; line-height:1.15; color:inherit; padding:0; }
+  .postit-text-edit:focus{ outline:none; }
+  .postit-foot{ display:flex; align-items:center; gap:4px; margin-top:8px; font-family:var(--font-mono); font-size:9px; color:rgba(42,36,24,.62); }
+  .postit-foot .grow{ flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .postit-btn{ background:rgba(42,36,24,.09); border:none; border-radius:4px; color:var(--postit-ink); font-family:var(--font-mono); font-size:9.5px; padding:3px 6px; cursor:pointer; white-space:nowrap; }
+  .postit-btn:hover{ background:rgba(42,36,24,.2); }
+  .postit.overdue .postit-date{ color:#8E1B12; font-weight:700; }
+  .today-note-row{ display:flex; align-items:center; gap:10px; padding:9px 14px; border-bottom:1px solid var(--bd-soft); cursor:pointer; }
+  .today-note-row:hover{ background:var(--panel-2); }
+  .today-note-chip{ width:12px; height:12px; border-radius:2px; background:var(--postit-demain); flex-shrink:0; }
+  .today-note-text{ flex:1; min-width:0; font-family:var(--font-hand); font-size:19px; color:var(--tx1); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+
   #snooze-popover{ position:fixed; display:none; flex-direction:column; gap:6px; background:var(--panel-3); border:1px solid var(--bd); border-radius:8px; box-shadow:0 12px 32px rgba(0,0,0,.6); padding:10px; z-index:10000; width:208px; }
   .snooze-current{ font-family:var(--font-mono); font-size:10px; color:var(--tx3); padding:0 2px 2px; border-bottom:1px solid var(--bd); padding-bottom:7px; }
   .snooze-quick-grid{ display:grid; grid-template-columns:1fr 1fr; gap:5px; }
@@ -484,6 +523,7 @@
 
     <div class="tabs">
       <span class="tab active" data-tab="today" title="Aujourd'hui"><svg class="tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg><span class="sidebar-label-text">Aujourd'hui</span><span class="tab-badge" id="today-badge"></span></span>
+      <span class="tab" data-tab="notes" title="Calepin"><svg class="tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15.5 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V8.5L15.5 3z"/><path d="M15 3v6h6"/></svg><span class="sidebar-label-text">Calepin</span><span class="tab-badge" id="notes-badge"></span></span>
       <span class="tab" data-tab="tasks" title="Tâches"><svg class="tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg><span class="sidebar-label-text">Tâches</span></span>
       <span class="tab" data-tab="inbox" title="Boîte mail"><svg class="tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg><span class="sidebar-label-text">Boîte mail</span><span class="tab-badge" id="inbox-badge"></span></span>
       <span class="tab" data-tab="archive" title="Archive"><svg class="tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="21 8 21 21 3 21 3 8"/><rect x="1" y="3" width="22" height="5"/><line x1="10" y1="12" x2="14" y2="12"/></svg><span class="sidebar-label-text">Archive</span></span>
@@ -504,6 +544,18 @@
       <span></span>
     </div>
     <div id="today-list"></div>
+  </div>
+
+  <div class="tab-panel hidden" id="tab-notes">
+    <div class="notes-capture">
+      <div class="notes-kind-switch" id="notes-kind-switch">
+        <button type="button" data-kind="demain">Pour demain</button>
+        <button type="button" data-kind="idee">Idée</button>
+        <span class="notes-hint">Entrée = coller · Maj+Entrée = à la ligne</span>
+      </div>
+      <textarea id="notes-input" rows="1" placeholder="Griffonne ici…"></textarea>
+    </div>
+    <div id="notes-board"></div>
   </div>
 
   <div class="tab-panel hidden" id="tab-tasks">
@@ -955,6 +1007,8 @@
   const SYNC_CONFIG_KEY='sync-config';
   const SYNC_TASKS_PATH='data/tasks.json';
   const SYNC_CRM_PATH='data/crm.json';
+  const NOTES_KEY='todo-widget-notes', SYNC_NOTES_PATH='data/notes.json';
+  let notes=[], notesBaseSnapshot=null, lastKnownNotesSha=null, notesSyncPushTimer=null, notesKind='demain';
 
   async function loadAll(){
     try{ const r=await window.storage.get(TASKS_KEY,false); tasks=r&&r.value?JSON.parse(r.value):[]; }catch(e){ tasks=[]; }
@@ -968,6 +1022,9 @@
     try{ const r=await window.storage.get('sync-conflicts',false); conflicts=r&&r.value?JSON.parse(r.value):[]; }catch(e){ conflicts=[]; }
     try{ const r=await window.storage.get('sync-tasks-base',false); tasksBaseSnapshot=r&&r.value?JSON.parse(r.value):null; }catch(e){ tasksBaseSnapshot=null; }
     try{ const r=await window.storage.get('sync-crm-base',false); crmBaseSnapshot=r&&r.value?JSON.parse(r.value):null; }catch(e){ crmBaseSnapshot=null; }
+    try{ const r=await window.storage.get(NOTES_KEY,false); notes=r&&r.value?JSON.parse(r.value):[]; }catch(e){ notes=[]; }
+    try{ const r=await window.storage.get('sync-notes-base',false); notesBaseSnapshot=r&&r.value?JSON.parse(r.value):null; }catch(e){ notesBaseSnapshot=null; }
+    try{ const r=await window.storage.get('notes-kind',false); if(r&&r.value) notesKind=r.value; }catch(e){}
     try{ const r=await window.storage.get('visible-columns',false); if(r&&r.value) visibleColumns=Object.assign(visibleColumns, JSON.parse(r.value)); }catch(e){}
     let seeded=false, crmSeeded=false;
     if(companyTypesList.length===0){
@@ -991,14 +1048,14 @@
     if(seeded){ saveTasks(); saveClients(); saveProjects(); }
     if(crmSeeded){ saveCrm(); }
     await loadSyncConfig();
-    render(); renderArchive(); renderLists(); renderToday(); updateConflictBadge(); applyColumnVisibility();
+    render(); renderArchive(); renderLists(); renderToday(); renderNotes(); updateConflictBadge(); applyColumnVisibility();
     await loadSeenIds();
     fetchInbox();
     setInterval(fetchInbox, 5 * 60 * 1000);
     fetchContactInbox();
     setInterval(fetchContactInbox, 5 * 60 * 1000);
     checkDailyDigestNotification();
-    if(syncConfig.enabled){ syncPull(); syncPullCrm(); setInterval(syncPull, 5 * 60 * 1000); setInterval(syncPullCrm, 5 * 60 * 1000); }
+    if(syncConfig.enabled){ syncPull(); syncPullCrm(); syncPullNotes(); setInterval(syncPull, 5 * 60 * 1000); setInterval(syncPullCrm, 5 * 60 * 1000); setInterval(syncPullNotes, 5 * 60 * 1000); }
   }
   async function saveTasksLocalOnly(){ try{ await window.storage.set(TASKS_KEY,JSON.stringify(tasks),false); }catch(e){ console.error(e); } }
   async function saveTasks(){ await saveTasksLocalOnly(); scheduleSyncPush(); }
@@ -1038,7 +1095,8 @@
     company:{ name:c=>c.name, fields:{whatTheyDo:'Activité',website:'Site web',marketScope:'Périmètre',type:'Type'} },
     contact:{ name:c=>[c.firstName,c.lastName].filter(Boolean).join(' ')||'(sans nom)', fields:{firstName:'Prénom',lastName:'Nom',role:'Rôle',company:'Société',email:'Email',phone1:'Téléphone 1',phone2:'Téléphone 2',relevance:'Pertinence',comment:'Commentaire'} },
     meeting:{ name:m=>m.label, fields:{label:'Intitulé',date:'Date'} },
-    opportunity:{ name:o=>o.title, fields:{title:'Intitulé',company:'Société',stage:'Étape'} }
+    opportunity:{ name:o=>o.title, fields:{title:'Intitulé',company:'Société',stage:'Étape'} },
+    note:{ name:n=>'Post-it « '+(n.text||'').slice(0,30)+' »', fields:{text:'Texte',kind:'Type',forDate:'Pour le'} }
   };
 
   function logConflict(entityType, entity, field, localValue, remoteValue, resolvedValue){
@@ -1100,6 +1158,17 @@
     return merged;
   }
 
+  function stableStringify(o){
+    if(o===null || typeof o!=='object') return JSON.stringify(o);
+    if(Array.isArray(o)) return '['+o.map(stableStringify).join(',')+']';
+    return '{'+Object.keys(o).sort().filter(k=>o[k]!==undefined).map(k=>JSON.stringify(k)+':'+stableStringify(o[k])).join(',')+'}';
+  }
+  function sameRecords(a, b){
+    if(a.length!==b.length) return false;
+    const byId={}; b.forEach(r=>{ byId[r.id]=stableStringify(r); });
+    return a.every(r=>byId[r.id]===stableStringify(r));
+  }
+
   async function saveConflicts(){ try{ await window.storage.set('sync-conflicts', JSON.stringify(conflicts), false); }catch(e){} }
   async function saveSnapshots(){
     try{ await window.storage.set('sync-tasks-base', JSON.stringify(tasksBaseSnapshot), false); }catch(e){}
@@ -1132,10 +1201,15 @@
       const data=await res.json();
       const remoteTasks=JSON.parse(b64DecodeUtf8(data.content));
       tasks=threeWayMerge('task', tasks, remoteTasks, tasksBaseSnapshot);
-      tasksBaseSnapshot=tasks.map(t=>({...t}));
+      // The base is what is actually on the server — not the merged result,
+      // which may still hold local edits that were never pushed (e.g. app
+      // closed within the 3s push debounce). Those get pushed now instead of
+      // being silently reverted by the next pull.
+      tasksBaseSnapshot=remoteTasks.map(t=>({...t}));
       lastKnownSha=data.sha;
       await saveTasksLocalOnly(); await saveSnapshots(); await saveConflicts(); updateConflictBadge();
       refreshAllViews();
+      if(!sameRecords(tasks, remoteTasks)) scheduleSyncPush();
       setSyncStatus('Synchronisé '+new Date().toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'}));
     }catch(e){ console.error('sync pull failed', e); setSyncStatus('Erreur de synchro'); }
   }
@@ -1204,9 +1278,11 @@
       const merged=mergeCrmBundle({companies,contacts,meetings,opportunities}, remote);
       companies=merged.companies; contacts=merged.contacts; meetings=merged.meetings; opportunities=merged.opportunities;
       lastKnownCrmSha=data.sha;
-      crmBaseSnapshot={ companies:companies.map(c=>({...c})), contacts:contacts.map(c=>({...c})), meetings:meetings.map(m=>({...m})), opportunities:opportunities.map(o=>({...o})) };
+      // Base = server state, not merged state (see syncPull).
+      crmBaseSnapshot={ companies:(remote.companies||[]).map(c=>({...c})), contacts:(remote.contacts||[]).map(c=>({...c})), meetings:(remote.meetings||[]).map(m=>({...m})), opportunities:(remote.opportunities||[]).map(o=>({...o})) };
       await saveCrmLocalOnly(); await saveSnapshots(); await saveConflicts(); updateConflictBadge();
       if(typeof renderCrm==='function') renderCrm();
+      if(!sameRecords(companies, remote.companies||[]) || !sameRecords(contacts, remote.contacts||[]) || !sameRecords(meetings, remote.meetings||[]) || !sameRecords(opportunities, remote.opportunities||[])) scheduleCrmSyncPush();
     }catch(e){ console.error('crm sync pull failed', e); }
   }
   function scheduleCrmSyncPush(){
@@ -1248,6 +1324,60 @@
       }
     }catch(e){ console.error('crm sync push failed', e); }
   }
+  async function saveNotesLocalOnly(){ try{ await window.storage.set(NOTES_KEY,JSON.stringify(notes),false); }catch(e){ console.error(e); } }
+  async function saveNotes(){ await saveNotesLocalOnly(); scheduleNotesSyncPush(); }
+  async function saveNotesBase(){ try{ await window.storage.set('sync-notes-base', JSON.stringify(notesBaseSnapshot), false); }catch(e){} }
+  async function syncPullNotes(){
+    if(!syncConfig.enabled) return;
+    try{
+      const res=await fetch(syncApiUrl(SYNC_NOTES_PATH), { headers:{ 'Authorization':'Bearer '+syncConfig.token, 'Accept':'application/vnd.github+json' } });
+      if(res.status===404){ await syncPushNotesNow(); return; }
+      if(!res.ok) return;
+      const data=await res.json();
+      const remote=JSON.parse(b64DecodeUtf8(data.content));
+      notes=threeWayMerge('note', notes, remote, notesBaseSnapshot);
+      notesBaseSnapshot=remote.map(n=>({...n}));
+      lastKnownNotesSha=data.sha;
+      await saveNotesLocalOnly(); await saveNotesBase(); await saveConflicts(); updateConflictBadge();
+      renderNotes(); renderToday();
+      if(!sameRecords(notes, remote)) scheduleNotesSyncPush();
+    }catch(e){ console.error('notes sync pull failed', e); }
+  }
+  function scheduleNotesSyncPush(){
+    if(!syncConfig.enabled) return;
+    clearTimeout(notesSyncPushTimer);
+    notesSyncPushTimer=setTimeout(syncPushNotesNow, 3000);
+  }
+  async function syncPushNotesNow(){
+    if(!syncConfig.enabled) return;
+    try{
+      let sha=lastKnownNotesSha;
+      const getRes=await fetch(syncApiUrl(SYNC_NOTES_PATH), { headers:{ 'Authorization':'Bearer '+syncConfig.token, 'Accept':'application/vnd.github+json' } });
+      if(getRes.ok){
+        const getData=await getRes.json();
+        sha=getData.sha;
+        const remote=JSON.parse(b64DecodeUtf8(getData.content));
+        notes=threeWayMerge('note', notes, remote, notesBaseSnapshot);
+        await saveNotesLocalOnly();
+        renderNotes(); renderToday();
+      }
+      await saveConflicts(); updateConflictBadge();
+      const body={ message:'Sync notes', content:b64EncodeUtf8(JSON.stringify(notes)), branch:'main' };
+      if(sha) body.sha=sha;
+      const putRes=await fetch(syncApiUrl(SYNC_NOTES_PATH), {
+        method:'PUT',
+        headers:{ 'Authorization':'Bearer '+syncConfig.token, 'Accept':'application/vnd.github+json', 'Content-Type':'application/json' },
+        body:JSON.stringify(body)
+      });
+      if(putRes.ok){
+        const putData=await putRes.json();
+        lastKnownNotesSha=putData.content.sha;
+        notesBaseSnapshot=notes.map(n=>({...n}));
+        await saveNotesBase();
+      }
+    }catch(e){ console.error('notes sync push failed', e); }
+  }
+
   async function saveClients(){ try{ await window.storage.set(CLIENTS_KEY,JSON.stringify(clientsList),false); }catch(e){ console.error(e); } }
   async function saveProjects(){ try{ await window.storage.set(PROJECTS_KEY,JSON.stringify(projectsList),false); }catch(e){ console.error(e); } }
 
@@ -1936,15 +2066,31 @@
       statsRow.appendChild(card);
     });
 
+    const todayIso=toISO(new Date());
+    const dueNotes=notes.filter(n=>!n.deleted && n.kind==='demain' && n.forDate && n.forDate<=todayIso).sort((a,b)=>(a.createdAt||0)-(b.createdAt||0));
+
     const todayBadge=$('today-badge');
-    const urgentCount=overdueTasks.length+todayTasks.length;
+    const urgentCount=overdueTasks.length+todayTasks.length+dueNotes.length;
     todayBadge.textContent=urgentCount>0?urgentCount:'';
 
     list.innerHTML='';
-    if(overdueTasks.length===0 && todayTasks.length===0){
+    if(overdueTasks.length===0 && todayTasks.length===0 && dueNotes.length===0){
       const e=document.createElement('div'); e.className='today-empty'; e.textContent="Rien d'urgent aujourd'hui.";
       list.appendChild(e);
       return;
+    }
+    if(dueNotes.length){
+      list.appendChild(makeGroupHeader('Griffonné pour aujourd’hui · '+dueNotes.length, 'var(--postit-demain)'));
+      dueNotes.forEach(n=>{
+        const row=document.createElement('div'); row.className='today-note-row'; row.title='Ouvrir le calepin';
+        const chip=document.createElement('span'); chip.className='today-note-chip';
+        const txt=document.createElement('span'); txt.className='today-note-text'; txt.textContent=(n.text||'').replace(/\s*\n\s*/g,' · ');
+        const btn=document.createElement('button'); btn.type='button'; btn.className='postit-btn'; btn.style.cssText='background:var(--panel-3);color:var(--tx2);'; btn.textContent='→ Tâche';
+        btn.onclick=e=>{ e.stopPropagation(); noteToTask(n.id); };
+        row.appendChild(chip); row.appendChild(txt); row.appendChild(btn);
+        row.onclick=()=>document.querySelector('[data-tab="notes"]').click();
+        list.appendChild(row);
+      });
     }
     if(overdueTasks.length){
       list.appendChild(makeGroupHeader('En retard · '+overdueTasks.length, URGENCY_META.critique.color));
@@ -1955,6 +2101,129 @@
       sortedTasks(todayTasks).forEach(t=>list.appendChild(buildTableRow(t)));
     }
   }
+
+  // ===== Calepin (post-it) =====
+  function tomorrowISO(){ const d=new Date(); d.setDate(d.getDate()+1); return toISO(d); }
+  function activeNotes(){ return notes.filter(n=>!n.deleted); }
+  function updateNotesBadge(){
+    const n=activeNotes().filter(x=>x.kind==='demain').length;
+    $('notes-badge').textContent=n>0?n:'';
+  }
+  function addNote(text){
+    text=(text||'').trim(); if(!text) return;
+    notes.push({ id:'note_'+Date.now()+'_'+Math.random().toString(36).slice(2,7), text, kind:notesKind, forDate:notesKind==='demain'?tomorrowISO():'', createdAt:Date.now(), updatedAt:Date.now(), deleted:false });
+    saveNotes(); renderNotes(); renderToday();
+  }
+  function setNoteKind(id, kind){
+    const n=notes.find(x=>x.id===id); if(!n) return;
+    n.kind=kind; if(kind==='demain' && !n.forDate) n.forDate=tomorrowISO();
+    touch(n); saveNotes(); renderNotes(); renderToday();
+  }
+  function trashNote(id){
+    const n=notes.find(x=>x.id===id); if(!n) return;
+    n.deleted=true; touch(n); saveNotes(); renderNotes(); renderToday();
+  }
+  function noteToTask(id){
+    const n=notes.find(x=>x.id===id); if(!n) return;
+    const lines=(n.text||'').split('\n').map(l=>l.trim()).filter(Boolean);
+    const title=(lines[0]||'Post-it').slice(0,140);
+    const description=lines.slice(1).join('\n');
+    const todayIso=toISO(new Date());
+    const due=n.kind==='demain' ? (n.forDate && n.forDate>=todayIso ? n.forDate : todayIso) : '';
+    createTask({ title, description, urgency:n.kind==='demain'?'haute':'moyenne', status:'a_faire', due });
+    n.deleted=true; touch(n); saveNotes();
+    render(); renderLists(); renderNotes(); renderToday();
+  }
+  function buildPostit(n){
+    const todayIso=toISO(new Date());
+    const card=document.createElement('div');
+    card.className='postit '+(n.kind==='demain'?'demain':'idee')+(n.kind==='demain'&&n.forDate&&n.forDate<todayIso?' overdue':'');
+
+    const text=document.createElement('div'); text.className='postit-text'; text.textContent=n.text; text.title='Cliquer pour modifier';
+    text.onclick=()=>{
+      card.classList.add('editing');
+      const ta=document.createElement('textarea'); ta.className='postit-text-edit'; ta.value=n.text;
+      let done=false;
+      const commit=()=>{
+        if(done) return; done=true;
+        const v=ta.value.trim();
+        if(!v){ trashNote(n.id); return; }
+        if(v!==n.text){ n.text=v; touch(n); saveNotes(); renderToday(); }
+        renderNotes();
+      };
+      ta.onblur=commit;
+      ta.onkeydown=e=>{ if(e.key==='Enter'&&!e.shiftKey){ e.preventDefault(); ta.blur(); } else if(e.key==='Escape'){ done=true; renderNotes(); } };
+      card.replaceChild(ta, text);
+      ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length);
+    };
+    card.appendChild(text);
+
+    const foot=document.createElement('div'); foot.className='postit-foot';
+    const date=document.createElement('span'); date.className='grow postit-date';
+    if(n.kind==='demain' && n.forDate){
+      date.textContent=n.forDate===todayIso?'auj.':(n.forDate<todayIso?'retard ':'')+fmtDateShort(n.forDate);
+      date.title=n.forDate<todayIso?'Prévu pour le '+fmtDateShort(n.forDate)+' (en retard)':n.forDate===todayIso?'Prévu pour aujourd’hui':'Prévu pour le '+fmtDateShort(n.forDate);
+    } else {
+      date.textContent=new Date(n.createdAt).toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit'});
+      date.title='Griffonné le '+date.textContent;
+    }
+    foot.appendChild(date);
+
+    const kindBtn=document.createElement('button'); kindBtn.type='button'; kindBtn.className='postit-btn';
+    kindBtn.textContent=n.kind==='demain'?'→ Idée':'→ Demain';
+    kindBtn.title=n.kind==='demain'?'Classer en idée':'À faire demain';
+    kindBtn.onclick=()=>setNoteKind(n.id, n.kind==='demain'?'idee':'demain');
+    foot.appendChild(kindBtn);
+
+    const taskBtn=document.createElement('button'); taskBtn.type='button'; taskBtn.className='postit-btn';
+    taskBtn.textContent='→ Tâche'; taskBtn.title=n.kind==='demain'?'Créer une tâche urgente pour '+(n.forDate?fmtDateShort(n.forDate):'demain'):'Créer une tâche';
+    taskBtn.onclick=()=>noteToTask(n.id);
+    foot.appendChild(taskBtn);
+
+    const del=document.createElement('button'); del.type='button'; del.className='postit-btn'; del.textContent='×'; del.title='Jeter';
+    del.onclick=()=>trashNote(n.id);
+    foot.appendChild(del);
+
+    card.appendChild(foot);
+    return card;
+  }
+  function renderNotes(){
+    const board=$('notes-board'); if(!board) return;
+    board.innerHTML='';
+    $('notes-kind-switch').querySelectorAll('button[data-kind]').forEach(b=>b.classList.toggle('active', b.dataset.kind===notesKind));
+    $('notes-input').placeholder=notesKind==='demain'?'Griffonne ce qui doit être fait demain…':'Griffonne une idée…';
+    const active=activeNotes().sort((a,b)=>(b.createdAt||0)-(a.createdAt||0));
+    const groups=[['demain','Pour demain'],['idee','Idées']];
+    let shown=0;
+    groups.forEach(([kind,label])=>{
+      const items=active.filter(n=>(n.kind==='demain'?'demain':'idee')===kind);
+      if(!items.length) return;
+      shown+=items.length;
+      const sec=document.createElement('div');
+      const l=document.createElement('div'); l.className='notes-section-label'; l.textContent=label+' · '+items.length;
+      const grid=document.createElement('div'); grid.className='notes-grid';
+      items.forEach(n=>grid.appendChild(buildPostit(n)));
+      sec.appendChild(l); sec.appendChild(grid);
+      board.appendChild(sec);
+    });
+    if(!shown){
+      const e=document.createElement('div'); e.className='empty-state';
+      e.textContent='Calepin vide. Griffonne une idée ou un truc à faire demain, Entrée pour le coller.';
+      board.appendChild(e);
+    }
+    updateNotesBadge();
+  }
+  function autoGrowNotesInput(){ const ta=$('notes-input'); ta.style.height='auto'; ta.style.height=ta.scrollHeight+'px'; }
+  $('notes-input').addEventListener('keydown', e=>{
+    if(e.key==='Enter' && !e.shiftKey && !e.isComposing){ e.preventDefault(); addNote(e.target.value); e.target.value=''; autoGrowNotesInput(); }
+  });
+  $('notes-input').addEventListener('input', autoGrowNotesInput);
+  $('notes-kind-switch').addEventListener('click', e=>{
+    const b=e.target.closest('button[data-kind]'); if(!b) return;
+    notesKind=b.dataset.kind;
+    window.storage.set('notes-kind', notesKind, false).catch(()=>{});
+    renderNotes(); $('notes-input').focus();
+  });
 
   let archiveFilter='toutes';
   function renderArchive(){
@@ -2030,11 +2299,12 @@
   }
 
   function findEntity(entityType, id){
-    const list = entityType==='task'?tasks : entityType==='company'?companies : entityType==='contact'?contacts : entityType==='meeting'?meetings : opportunities;
+    const list = entityType==='task'?tasks : entityType==='note'?notes : entityType==='company'?companies : entityType==='contact'?contacts : entityType==='meeting'?meetings : opportunities;
     return list.find(x=>x.id===id);
   }
   function saveEntityChange(entityType){
     if(entityType==='task'){ saveTasks(); render(); renderToday(); renderArchive(); }
+    else if(entityType==='note'){ saveNotes(); renderNotes(); renderToday(); }
     else { saveCrm(); if(typeof renderContacts==='function') renderContacts(); if(typeof renderPipeline==='function') renderPipeline(); }
   }
 
@@ -3172,7 +3442,7 @@
 
   // export / import
   function exportData(){
-    const payload={ version:1, exportedAt:new Date().toISOString(), tasks, clients:clientsList, projects:projectsList };
+    const payload={ version:2, exportedAt:new Date().toISOString(), tasks, clients:clientsList, projects:projectsList, notes, crm:{ companies, contacts, meetings, opportunities, companyTypes:companyTypesList } };
     const blob=new Blob([JSON.stringify(payload,null,2)],{type:'application/json'});
     const url=URL.createObjectURL(blob);
     const a=document.createElement('a'); a.href=url; a.download='todo-backup-'+toISO(new Date())+'.json'; a.click();
@@ -3184,17 +3454,24 @@
       try{
         const data=JSON.parse(e.target.result);
         if(!data||!Array.isArray(data.tasks)) throw new Error('format');
-        if(!confirm('Remplacer les '+tasks.length+' tâche(s) actuelles par les '+data.tasks.length+' du fichier ?')) return;
+        const extra=[data.crm?'les contacts/CRM':null, Array.isArray(data.notes)?'le calepin':null].filter(Boolean);
+        if(!confirm('Remplacer les '+tasks.length+' tâche(s) actuelles par les '+data.tasks.length+' du fichier'+(extra.length?(' (ainsi que '+extra.join(' et ')+')'):'')+' ?')) return;
         tasks=data.tasks; clientsList=data.clients||[]; projectsList=data.projects||[];
         tasks.forEach(t=>{ if(t.subtasks===undefined)t.subtasks=[]; if(t.recur===undefined)t.recur=null; if(t.archived===undefined)t.archived=false; });
         saveTasks(); saveClients(); saveProjects(); render(); renderArchive(); renderLists();
+        if(Array.isArray(data.notes)){ notes=data.notes; saveNotes(); renderNotes(); }
+        if(data.crm){
+          companies=data.crm.companies||[]; contacts=data.crm.contacts||[]; meetings=data.crm.meetings||[]; opportunities=data.crm.opportunities||[];
+          if(Array.isArray(data.crm.companyTypes)&&data.crm.companyTypes.length) companyTypesList=data.crm.companyTypes;
+          saveCrm(); if(typeof renderContacts==='function') renderContacts(); if(typeof renderPipeline==='function') renderPipeline();
+        }
       }catch(err){ alert('Fichier invalide.'); }
     };
     reader.readAsText(file);
   }
 
-  const tabContacts=$('tab-contacts'), tabPipeline=$('tab-pipeline');
-  tabs.forEach(el=>{ el.onclick=()=>{ tabs.forEach(t=>t.classList.remove('active')); el.classList.add('active'); const tgt=el.dataset.tab; tabToday.classList.toggle('hidden',tgt!=='today'); tabTasks.classList.toggle('hidden',tgt!=='tasks'); tabInbox.classList.toggle('hidden',tgt!=='inbox'); tabArchive.classList.toggle('hidden',tgt!=='archive'); tabLists.classList.toggle('hidden',tgt!=='lists'); tabContacts.classList.toggle('hidden',tgt!=='contacts'); tabPipeline.classList.toggle('hidden',tgt!=='pipeline'); if(tgt==='today')renderToday(); if(tgt==='archive')renderArchive(); if(tgt==='contacts'){ refreshContactsTypeFilter(); renderContacts(); fetchContactInbox(); } if(tgt==='pipeline')renderPipeline(); if(tgt==='lists'){ renderLists(); renderStats(); renderConflicts(); $('sync-owner').value=syncConfig.owner||''; $('sync-repo').value=syncConfig.repo||''; if(syncConfig.enabled) setSyncStatus('Synchro active'); } if(tgt==='inbox')fetchInbox(); }; });
+  const tabContacts=$('tab-contacts'), tabPipeline=$('tab-pipeline'), tabNotes=$('tab-notes');
+  tabs.forEach(el=>{ el.onclick=()=>{ tabs.forEach(t=>t.classList.remove('active')); el.classList.add('active'); const tgt=el.dataset.tab; tabToday.classList.toggle('hidden',tgt!=='today'); tabTasks.classList.toggle('hidden',tgt!=='tasks'); tabInbox.classList.toggle('hidden',tgt!=='inbox'); tabArchive.classList.toggle('hidden',tgt!=='archive'); tabLists.classList.toggle('hidden',tgt!=='lists'); tabContacts.classList.toggle('hidden',tgt!=='contacts'); tabPipeline.classList.toggle('hidden',tgt!=='pipeline'); tabNotes.classList.toggle('hidden',tgt!=='notes'); if(tgt==='notes'){ renderNotes(); setTimeout(()=>$('notes-input').focus(),0); } if(tgt==='today')renderToday(); if(tgt==='archive')renderArchive(); if(tgt==='contacts'){ refreshContactsTypeFilter(); renderContacts(); fetchContactInbox(); } if(tgt==='pipeline')renderPipeline(); if(tgt==='lists'){ renderLists(); renderStats(); renderConflicts(); $('sync-owner').value=syncConfig.owner||''; $('sync-repo').value=syncConfig.repo||''; if(syncConfig.enabled) setSyncStatus('Synchro active'); } if(tgt==='inbox')fetchInbox(); }; });
 
   $('submit-task').onclick=addTask;
   addSection.addEventListener('keydown', e=>{ if(e.key==='Enter' && e.target.tagName!=='TEXTAREA'){ e.preventDefault(); addTask(); } });
@@ -3277,7 +3554,7 @@
     setSyncStatus('Activation…');
     syncPull();
   };
-  $('sync-now-btn').onclick=()=>{ if(!syncConfig.enabled){ setSyncStatus('Active la synchro d\u2019abord.'); return; } setSyncStatus('Synchronisation…'); syncPushNow(); };
+  $('sync-now-btn').onclick=()=>{ if(!syncConfig.enabled){ setSyncStatus('Active la synchro d\u2019abord.'); return; } setSyncStatus('Synchronisation…'); syncPushNow(); syncPushCrmNow(); syncPushNotesNow(); };
   $('contact-add-btn').onclick=()=>openContactForm(null);
   let sigImageFile=null;
   let tesseractLoaded=false;
@@ -3595,6 +3872,7 @@
     if(e.key==='Escape'){ if(snoozePopover.style.display==='flex'){ closeSnoozePopover(); return; } if(editingId){ editingId=null; render(); return; } if(document.activeElement&&document.activeElement.id==='f-title'){ closeAddForm(); return; } if(document.activeElement===quickAddInput){ quickAddInput.blur(); return; } if(document.activeElement===searchInput&&searchQuery){ searchInput.value=''; searchQuery=''; searchClear.classList.remove('show'); render(); return; } return; }
     const tag=document.activeElement.tagName; if(tag==='INPUT'||tag==='TEXTAREA'||tag==='SELECT')return;
     if(e.key==='n'){ e.preventDefault(); quickAddInput.focus(); }
+    else if(e.key==='p'){ e.preventDefault(); document.querySelector('[data-tab="notes"]').click(); }
     else if(e.key==='j'||e.key==='k'){ e.preventDefault(); moveSelection(e.key==='j'?1:-1); }
     else if(e.key==='Enter'){ if(selectedTaskId)validateTask(selectedTaskId); }
     else if(e.key==='e'){ if(selectedTaskId){ e.preventDefault(); openEdit(selectedTaskId); } }
