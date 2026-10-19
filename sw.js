@@ -1,7 +1,10 @@
-const CACHE = 'todo-pwa-v7';
+const CACHE = 'todo-pwa-v8';
 const ASSETS = [
   './',
   './index.html',
+  './index.html?lite',
+  './mobile.html',
+  './manifest-lite.json',
   './widget.html',
   './manifest.json',
   './share-target.html',

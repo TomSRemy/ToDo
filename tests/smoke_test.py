@@ -281,6 +281,24 @@ with sync_playwright() as p:
     check(not errors, f"no page errors ({errors})")
     page.close()
 
+    # --- Phone version (index.html?lite): bottom bar, fewer features, pipeline read-only
+    page, errors = new_page(browser, {"todo_todo-widget-opportunities": json.dumps([{"id": "i3", "kind": "installation", "company": "Solaris",
+        "centrale": "Le Moulin", "title": "Le Moulin", "stage": "negociation", "createdAt": 1, "updatedAt": 1, "deleted": False}])},
+        viewport={"width": 390, "height": 800}, is_mobile=True, has_touch=True)
+    page.goto(URL + "?lite")
+    check(page.is_visible("#lite-nav") and not page.is_visible(".app-sidebar"), "phone version: bottom bar instead of the sidebar")
+    check(page.get_attribute("#app-manifest", "href") == "manifest-lite.json", "phone version installs with its own manifest")
+    page.click("#lite-nav [data-go=tasks]"); page.fill("#quick-add-input", "Depuis le téléphone"); page.press("#quick-add-input", "Enter")
+    check(any(t["title"] == "Depuis le téléphone" for t in stored(page, "todo-widget-tasks")), "phone version: quick add works")
+    page.click("#lite-nav [data-go=pipeline]")
+    check(not page.is_visible("#opp-add-btn"), "phone version: no opportunity form")
+    page.click(".pipe-card:has-text('Le Moulin')")
+    visible = page.eval_on_selector_all("#opp-detail-actions button", "els=>els.filter(e=>e.offsetParent).map(e=>e.textContent)")
+    check(visible == ["Fermer"], f"phone version: installation sheet is read-only ({visible})")
+    check(page.evaluate("document.documentElement.scrollWidth") <= 390, "phone version fits the screen")
+    check(not errors, f"no page errors ({errors})")
+    page.close()
+
     # --- Pipeline: producer Excel, one column per plant (SheetJS from cdnjs)
     import openpyxl, tempfile
     wb = openpyxl.Workbook(); ws = wb.active
