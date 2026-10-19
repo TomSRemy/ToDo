@@ -15,10 +15,7 @@ from playwright.sync_api import sync_playwright
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 from signature_corpus import SIGNATURES, SIGNATURES_HELDOUT  # noqa: E402
 
-try:
-    from excel_corpus import EXCELS  # noqa: E402
-except ImportError:
-    EXCELS = []
+from excel_corpus import EXCELS, EXCELS_HELDOUT  # noqa: E402
 
 URL = (pathlib.Path(__file__).resolve().parent.parent / "index.html").as_uri()
 
@@ -41,12 +38,12 @@ def score(title, cases, results, misses, per_field):
 
 
 def main():
-    global SIGNATURES
+    global SIGNATURES, EXCELS
     minimum = float(sys.argv[sys.argv.index("--min") + 1]) if "--min" in sys.argv else None
     if "--heldout" in sys.argv:
-        SIGNATURES = SIGNATURES_HELDOUT
+        SIGNATURES, EXCELS = SIGNATURES_HELDOUT, EXCELS_HELDOUT
     elif "--all" in sys.argv:
-        SIGNATURES = SIGNATURES + SIGNATURES_HELDOUT
+        SIGNATURES, EXCELS = SIGNATURES + SIGNATURES_HELDOUT, EXCELS + EXCELS_HELDOUT
     with sync_playwright() as p:
         browser = p.chromium.launch()
         page = browser.new_page()

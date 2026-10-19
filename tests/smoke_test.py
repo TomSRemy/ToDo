@@ -403,6 +403,16 @@ with sync_playwright() as p:
     page.set_input_files("#pq-file", str(xlsx)); page.wait_for_function("document.getElementById('pq-files-info').textContent.includes('installation')", timeout=20000)
     check(page.input_value("#pq-0-centrale") == "Les Vignes" and page.input_value("#pq-1-kwc") == "1850" and page.input_value("#pq-1-dept") == "32 - Gers",
           "producer Excel creates one installation per column")
+    # the Selfee « Caractéristiques Centrales » template: SPV, SIRET, P90 reach the form, kVA/productible rows are not taken as power
+    wb = openpyxl.Workbook(); ws = wb.active; ws.title = "Données"
+    for r in [["", "Centrale 1"], ["Nom Installation", "CS Bram"], ["Nom SPV", "BRAM SOLAIRE SAS"], ["SIRET SPV", "123 456 789 00012"], ["Département", "Aude (11)"],
+              ["Puissance raccordement (kVA)", 4200], ["Puissance installée (kWc)", 4986.93], ["P50 (MWh/an)", 6650], ["P90 (MWh/an)", 6100], ["Productible P50 (kWh/kWc/an)", 1333]]:
+        ws.append(r)
+    tpl = pathlib.Path(tempfile.mkdtemp()) / "carac_selfee.xlsx"; wb.save(tpl)
+    page.click("#pq-cancel-btn"); page.click("#opp-add-btn"); page.fill("#pq1-company", "SCEA Y"); page.click("#pq-next-btn")
+    page.set_input_files("#pq-file", str(tpl)); page.wait_for_function("document.getElementById('pq-files-info').textContent.includes('installation')", timeout=20000)
+    got = [page.input_value(s_) for s_ in ("#pq-0-centrale", "#pq-0-kwc", "#pq-0-spv", "#pq-0-siret", "#pq-0-p90", "#pq-0-dept")]
+    check(got == ["CS Bram", "4986.93", "BRAM SOLAIRE SAS", "123 456 789 00012", "6100", "11 - Aude"], f"Selfee template read into the form ({got})")
     check(not errors, f"no page errors ({errors})")
     page.close()
 
