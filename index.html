@@ -3648,6 +3648,8 @@
     m=/(\d{4})-(\d{2})-(\d{2})/.exec(s); if(m) return m[3]+'/'+m[2]+'/'+m[1];
     m=/(\d{1,2})(?:er)?\s+(janvier|fevrier|mars|avril|mai|juin|juillet|aout|septembre|octobre|novembre|decembre)\s+(\d{4})/.exec(s); if(m) return pqPad(m[1])+'/'+pqPad(PQ_MONTHS[m[2]])+'/'+m[3];
     m=/(janvier|fevrier|mars|avril|mai|juin|juillet|aout|septembre|octobre|novembre|decembre)\s+(\d{4})/.exec(s); if(m) return PQ_MONTH_LABEL[m[1]]+' '+m[2];
+    m=/\b(january|february|march|april|may|june|july|august|september|october|november|december)\s+(\d{4})/.exec(s); if(m) return Object.values(PQ_MONTH_LABEL)[['january','february','march','april','may','june','july','august','september','october','november','december'].indexOf(m[1])]+' '+m[2];
+    m=/\bq([1-4])\s+(\d{4})/.exec(s); if(m) return 'T'+m[1]+' '+m[2];
     m=/\b(0?[1-9]|1[0-2])\/(20\d{2})\b/.exec(s); if(m) return PQ_MONTH_LABEL[Object.keys(PQ_MONTHS)[parseInt(m[1],10)-1]]+' '+m[2];
     m=/\b(t[1-4]|[1-4](?:er|e|eme|ème)\s+trimestre)\s+(\d{4})/.exec(s); if(m){ const q=parseInt(m[1].replace(/\D/g,''),10); return 'T'+q+' '+m[2]; }
     m=/(ete|printemps|automne|hiver|debut|fin|courant)\s+(\d{4})/.exec(s); if(m) return m[0].replace(/^ete/,'été').replace(/^debut/,'début');
@@ -3830,16 +3832,28 @@
   }
 
   function parsePipeMail(raw){
-    const out={}, text=String(raw||'').replace(/\r/g,'').replace(/ /g,' '), lines=text.split('\n').map(l=>l.trim());
+    const out={};
+    // clean-up: "<mailto:…>" / "<tel:…>" copies left by Outlook, "> " quote marks of plain-text replies
+    let text=String(raw||'').replace(/\r/g,'').replace(/\u00a0/g,' ').replace(/<(mailto|tel):[^>]*>/gi,'').replace(/^[ \t]*(>[ \t]?)+/gm,'');
+    // English mail: "12,400 MWh" is twelve thousand four hundred
+    const english=(text.match(/\b(the|our|and|is|with|we|hi|best regards|please|plant)\b/gi)||[]).length>=4;
+    if(english) text=text.replace(/(\d),(\d{3})(?![\d,])/g,'$1$2');
+    const lines=text.split('\n').map(l=>l.trim());
     if(!text.trim()) return out;
     const all=[...new Set((text.match(PQ_EMAIL_RE)||[]).map(e=>e.toLowerCase()))];
     const caEmails=all.filter(pqIsCa);
     // Split a forward chain at each "De :"/"From:" header; the prospect is the latest block whose sender is not a relay.
     const blocks=[]; let cur={ from:null, lines:[] };
-    lines.forEach(l=>{ const m=/^(de|from)\s*:\s*(.*)$/i.exec(l); if(m){ if(cur.lines.length||cur.from) blocks.push(cur); cur={ from:m[2], lines:[] }; } else cur.lines.push(l); });
+    // a new quoted message starts at "De : …" / "From: …" or at "Le jeu. 9 oct. 2026 à 11:02, X <x@y> a écrit :"
+    lines.forEach(l=>{
+      const m=/^(de|from)\s*:\s*(.*)$/i.exec(l)||/^(le|on)\s.{6,120}?(<?[\w.+-]+@[\w.-]+>?).{0,40}(a [ée]crit|wrote)\s*:?\s*$/i.exec(l);
+      if(m){ if(cur.lines.length||cur.from) blocks.push(cur); cur={ from:/^(de|from)$/i.test(m[1])?m[2]:l, lines:[] }; } else cur.lines.push(l);
+    });
     blocks.push(cur);
     blocks.forEach(b=>{ b.email=((b.from||'').match(PQ_EMAIL_RE)||[])[0]||null; b.relay=b.email?pqIsRelay(b.email):false; });
     let prospect=blocks.slice().reverse().find(b=>b.from && b.email && !b.relay)||null;
+    // a reply to us (or to the bank) pasted without its own header: the top message is the prospect's
+    if(!prospect && blocks.length>1 && !blocks[0].from && blocks.slice(1).every(b=>b.relay)) prospect=blocks[0];
     if(!prospect){ const b=blocks[blocks.length-1]; prospect=(b.relay||(!b.from && blocks.some(x=>x.relay)))?null:b; }
     const body=prospect?prospect.lines.filter(l=>!PQ_HEADER.test(l)):lines.filter(l=>!PQ_HEADER.test(l));
     const bodyText=body.join('\n');
@@ -3957,7 +3971,7 @@
     const multi=parseMailInstallations(scope);
     const cre=/\bPR\/\d{4}\/\d{4,6}\b/.exec(text);
     const named=/\b(parc|centrale|ferme)\s+(?:éolien(?:ne)?|solaire|photovoltaïque|PV|hydro\p{L}*)?\s*(de la|de l'|de l’|du|des|de)\s+([A-ZÉÈ][\p{L}'’-]+(?:[ -][A-ZÉÈ][\p{L}'’-]+)*)/u.exec(scope);
-    if(multi.length){ out.centrale=multi[0].centrale; if(multi[0].kwc) out.kwc=multi[0].kwc; }
+    if(multi.length){ out.centrale=multi[0].centrale; if(multi[0].kwc) out.kwc=multi[0].kwc; if(!out.dept && multi[0].dept){ out.dept=multi[0].dept; out.region=multi[0].region; } }
     else if(cre) out.centrale=cre[0];
     else if(named) out.centrale=(named[0].charAt(0).toUpperCase()+named[0].slice(1)).trim();
     else if(city) out.centrale='Centrale de '+city;
@@ -3981,7 +3995,19 @@
   }
 
   // A list of plants in the mail ("- Centrale de Cholet (49) : 1,2 MWc, MES 03/2027"): one installation per line
+  // a table pasted in the mail (tab-separated from Excel/Outlook, or "| a | b |" from a PDF): read like an Excel sheet
+  function parseMailTable(raw){
+    const lines=String(raw||'').replace(/\r/g,'').replace(/\u00a0/g,' ').split('\n');
+    const cells=l=>{ if((l.match(/\t/g)||[]).length>=1) return l.split('\t').map(c=>c.trim()); if((l.match(/\|/g)||[]).length>=2) return l.replace(/^\s*\|/,'').replace(/\|\s*$/,'').split('|').map(c=>c.trim()); return null; };
+    let best=[], block=[];
+    const flush=()=>{ if(block.length>=2){ const found=pqRowsToInstallations(['mail'], ()=>block.map(r=>r.map(c=>/^-?\d+([.,]\d+)?$/.test(c)?parseFloat(c.replace(',','.')):c))); if(found.length>best.length) best=found; } block=[]; };
+    lines.forEach(l=>{ const c=cells(l); if(c && c.filter(Boolean).length>=2) block.push(c); else flush(); });
+    flush();
+    return best;
+  }
   function parseMailInstallations(raw){
+    const table=parseMailTable(raw);
+    if(table.length) return table;
     const found=[];
     String(raw||'').replace(/\r/g,'').replace(/ /g,' ').split('\n').forEach(l=>{
       const m=/^\s*(?:[-•*·–]|\d+[.)])\s*(.+)$/.exec(l); if(!m) return;

@@ -540,3 +540,106 @@ Agnès Perrin, Gérante, PERRIN ENERGIE EURL, 05 63 00 00 11""",
                    "kwc": "1250", "mwh": "1600", "mesPrev": "15/03/2027", "producteur": "PERRIN ENERGIE EURL"},
     },
 ]
+
+# Harder formats (replies, quotes, tables pasted in the body), written before any change to the reader.
+HARD = [
+    {
+        "name": "Réponse Gmail « a écrit : » avec citation >",
+        "mail": """Bonjour Paul,
+Oui, je vous confirme la date : mise en service en mai 2027. La centrale fait 3,6 MWc, à Lectoure (32700).
+Bien à vous,
+Arnaud Morel
+Fondateur - AGRISOLAIRE
+06 12 45 78 90
+
+Le jeu. 9 oct. 2026 à 11:02, Paul Guérin <paul.guerin@selfee.fr> a écrit :
+> Bonjour Monsieur Morel,
+> Pouvez-vous me confirmer la date de mise en service ?
+> Paul Guérin
+> Selfee - 01 00 00 00 00""",
+        "expect": {"prenom": "Arnaud", "nom": "MOREL", "qualite": "Fondateur", "producteur": "AGRISOLAIRE", "tel": "06 12 45 78 90", "dept": "32 - Gers",
+                   "kwc": "3600", "mesPrev": "Mai 2027", "origine": "Contact direct"},
+    },
+    {
+        "name": "Tableau collé depuis Excel (tabulations)",
+        "mail": """De : Romain Chevalier <r.chevalier@helio-ouest.fr>
+Objet : Liste des centrales
+
+Bonjour, voici nos centrales :
+Centrale\tDépartement\tPuissance (kWc)\tP50 (MWh)\tMES
+Cholet\t49\t1200\t1450\t03/2027
+Saumur\t49\t800\t950\t06/2027
+Cordialement,
+Romain Chevalier
+HELIO OUEST SAS
+02 41 00 00 01""",
+        "expect": {"prenom": "Romain", "nom": "CHEVALIER", "producteur": "HELIO OUEST SAS", "tel": "02 41 00 00 01", "dept": "49 - Maine-et-Loire", "kwc": "1200"},
+        "installs": [{"centrale": "Cholet", "kwc": "1200"}, {"centrale": "Saumur", "kwc": "800"}],
+    },
+    {
+        "name": "Outlook anglais avec avertissement et images",
+        "mail": """From: Mark Thompson <m.thompson@greenyield-capital.com>
+Sent: Thursday, October 9, 2026 4:12 PM
+To: Paul Guérin <paul.guerin@selfee.fr>
+Subject: RE: Aggregation offer
+
+Hi Paul,
+Our plant near Albi (81000) is 9.5 MWp, COD March 2027, P50 12,400 MWh.
+Best regards,
+Mark Thompson
+Asset Manager | GreenYield Capital
++44 20 7946 0000
+[cid:image001.png@01DB2F3A.5E8C2D10]
+This e-mail and any attachments are confidential and intended solely for the addressee. If you have received it in error, please notify the sender.""",
+        "expect": {"prenom": "Mark", "nom": "THOMPSON", "qualite": "Asset Manager", "producteur": "GREENYIELD CAPITAL", "mail": "m.thompson@greenyield-capital.com",
+                   "dept": "81 - Tarn", "kwc": "9500", "mwh": "12400", "mesPrev": "Mars 2027"},
+    },
+    {
+        "name": "Signature au-dessus de l'historique, relais CA en dessous",
+        "mail": """De : Laurent Bastide <earl.bastide@orange.fr>
+Objet : RE: Mise en relation
+
+Bonjour,
+Suite au message de Mme Marty, voici les infos : ombrière de 1 200 kWc, mise en service au T3 2027.
+Cordialement
+Laurent Bastide
+EARL Bastide
+06 78 90 12 34
+
+De : Claire Marty <claire.marty@ca-toulouse31.fr>
+Objet : Mise en relation
+
+Bonjour M. Bastide, je vous présente Selfee, agrégateur partenaire.
+Claire Marty
+Crédit Agricole Toulouse 31""",
+        "expect": {"prenom": "Laurent", "nom": "BASTIDE", "producteur": "EARL BASTIDE", "tel": "06 78 90 12 34", "mail": "earl.bastide@orange.fr",
+                   "origine": "Crédit Agricole", "ca": "CR Toulouse 31", "kwc": "1200", "mesPrev": "T3 2027"},
+    },
+    {
+        "name": "Adresses en mailto et numéro en lien",
+        "mail": """De : Claire Fontaine <c.fontaine@metha-vendee.fr<mailto:c.fontaine@metha-vendee.fr>>
+Objet : Méthanisation
+
+Bonjour, notre cogénération de 1,5 MW à Luçon (85400) produit 11 500 MWh/an.
+Claire Fontaine
+Responsable d'exploitation
+METHA VENDEE
+Tél : 02 51 33 44 55<tel:0251334455>""",
+        "expect": {"prenom": "Claire", "nom": "FONTAINE", "mail": "c.fontaine@metha-vendee.fr", "tel": "02 51 33 44 55", "dept": "85 - Vendée",
+                   "install": "BIOGAZ", "kwc": "1500", "mwh": "11500", "producteur": "METHA VENDEE"},
+    },
+    {
+        "name": "Tableau avec barres verticales (copié d'un PDF)",
+        "mail": """De : Hélène Roussel <h.roussel@sem-energies-loire.fr>
+Objet : Centrales SEM
+
+Bonjour,
+| Site | Puissance | Production |
+| Gymnase Jean Moulin | 250 kWc | 280 MWh |
+| École des Tilleuls | 100 kWc | 110 MWh |
+| Centre technique | 450 kWc | 500 MWh |
+Hélène Roussel, Directrice, SEM ENERGIES LOIRE, 04 77 12 34 56""",
+        "expect": {"prenom": "Hélène", "nom": "ROUSSEL", "qualite": "Directrice", "producteur": "SEM ENERGIES LOIRE", "tel": "04 77 12 34 56", "kwc": "250"},
+        "installs": [{"centrale": "Gymnase Jean Moulin", "kwc": "250"}, {"centrale": "École des Tilleuls", "kwc": "100"}, {"centrale": "Centre technique", "kwc": "450"}],
+    },
+]
