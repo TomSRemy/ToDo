@@ -587,6 +587,12 @@
   .parc-due-date{ font-family:var(--font-mono); color:#D9A441; grid-row:1 / span 2; }
   .parc-due-name{ color:var(--tx1); }
   .parc-due-meta{ color:var(--tx3); font-size:11px; }
+  .parc-due{ grid-template-columns:84px 1fr auto; }
+  .parc-due-act{ grid-column:3; grid-row:1 / span 2; align-self:center; }
+  .parc-renew-setting{ margin-left:auto; font-size:11.5px; color:var(--tx2); display:flex; align-items:center; gap:6px; }
+  .parc-renew-setting select{ background:var(--panel-2); border:1px solid var(--bd); color:var(--tx1); border-radius:6px; font-size:11.5px; padding:3px 6px; }
+  .co-parc-h{ color:var(--tx1); font-weight:500; }
+  .co-parc-row{ font-size:11.5px; color:var(--tx3); }
   .parc-table-head{ display:flex; flex-wrap:wrap; align-items:center; gap:8px 12px; margin-bottom:8px; }
   .parc-table-head .parc-h{ margin:0; }
   .parc-search{ flex:1; min-width:180px; background:var(--panel); border:1px solid var(--bd); border-radius:6px; color:var(--tx1); font-size:12.5px; padding:6px 9px; }
@@ -1342,6 +1348,7 @@
     if(crmSeeded){ saveCrm(); }
     await loadSyncConfig();
     consolidateNotes();
+    loadParc(); ensureRenewalTasks();
     render(); renderArchive(); renderLists(); renderToday(); initPostit(); updateConflictBadge(); applyColumnVisibility();
     await loadSeenIds();
     fetchInbox();
@@ -2970,7 +2977,7 @@
       if(on){ const a=document.createElement('span'); a.className='ar'; a.textContent=(contactsSort.key==='rel' ? (contactsSort.dir>0?'▼':'▲') : (contactsSort.dir>0?'▲':'▼')); el.appendChild(a); }
     });
   }
-  function companyHasInfo(co){ return !!(co && (co.whatTheyDo || co.website || (co.marketScope&&co.marketScope.length))); }
+  function companyHasInfo(co){ return !!(co && (co.whatTheyDo || co.website || (co.marketScope&&co.marketScope.length) || parcForCompany(co.name).length)); }
   function buildCompanyGroupHeader(companyName, count){
     const accent=clientColor(companyName);
     const header=document.createElement('div'); header.className='group-header company-group-header';
@@ -3020,7 +3027,20 @@
     const co=companies.find(x=>x.name===companyName);
     const card=document.createElement('div');
     card.style.cssText='padding:8px 15px 12px 39px;font-size:12px;color:var(--tx2);line-height:1.6;';
+    const parc=parcForCompany(companyName);
+    if(parc.length){
+      const won=parc.filter(p=>p.statut==='Gagné');
+      const h=document.createElement('div'); h.className='co-parc-h';
+      h.textContent='Parc : '+won.length+' contrat'+(won.length>1?'s':'')+' gagné'+(won.length>1?'s':'')+(won.length?' · '+fmtMwc(won.reduce((s,p)=>s+p.kwc,0)):'')+(parc.length>won.length?' · '+(parc.length-won.length)+' autre'+(parc.length-won.length>1?'s':''):'');
+      card.appendChild(h);
+      parc.slice().sort((a,b)=>(a.fin||'9').localeCompare(b.fin||'9')).slice(0,6).forEach(p=>{
+        const r=document.createElement('div'); r.className='co-parc-row';
+        r.textContent=[p.inst||p.prod, p.kwc?fmtKwc(p.kwc):'', p.statut, p.fin?'fin '+pqIsoToFr(p.fin):''].filter(Boolean).join(' · ');
+        card.appendChild(r);
+      });
+    }
     if(!co || (!co.whatTheyDo && !co.website && (!co.marketScope||!co.marketScope.length) && !co.type)){
+      if(parc.length) return card;
       card.style.color='var(--tx3)'; card.style.fontStyle='italic';
       card.textContent='Aucune info renseignée pour cette société.';
       return card;
@@ -5532,7 +5552,7 @@
       await loadXlsxLib();
       const wb=XLSX.read(await file.arrayBuffer(),{type:'array',cellDates:true});
       parcData=parseParcWorkbook(wb); parcData.fileName=file.name;
-      saveParc(); renderParc();
+      saveParc(); ensureRenewalTasks(); renderParc();
     }catch(e){ console.error(e); $('parc-info').textContent='Fichier illisible : '+(e.message||e); }
   }
 
@@ -5542,8 +5562,60 @@
       const res=await bridgeCall('GET','/bdd/read',null,60000);
       const names=Object.keys(res.sheets||{});
       parcData=parseParcSheets(names, n=>res.sheets[n]||[]); parcData.fileName='Excel (pont local)';
-      saveParc(); renderParc();
+      saveParc(); ensureRenewalTasks(); renderParc();
     }catch(e){ if(!silent) $('parc-info').textContent=e.message; }
+  }
+  // A Parc contract (statut Gagné) of a company: matched on Nom_prod or Développeur
+  function parcForCompany(name){
+    if(parcData===null) loadParc();
+    const k=parcNorm(name);
+    if(!parcData || k.length<4) return [];
+    return parcData.items.filter(p=>[p.prod,p.dev].some(v=>{ const a=parcNorm(v); return a && (a===k || (a.length>=4 && (a.includes(k) || k.includes(a)))); }));
+  }
+
+  // ---------- Renewals: a task per won contract ending within N months (once, on every device) ----------
+  const RENEW_KEY='renew-months';
+  const renewMonths=()=>{ try{ return parseInt(localStorage.getItem('todo_'+RENEW_KEY),10)||6; }catch(e){ return 6; } };
+  function parcKey(p){ const s=[p.prod,p.inst,p.fin].map(parcNorm).join('|'); let h=5381; for(let i=0;i<s.length;i++) h=((h*33)^s.charCodeAt(i))>>>0; return h.toString(36); }
+  function renewalCandidates(){
+    if(!parcData) return [];
+    const today=toISO(new Date()), lim=new Date(); lim.setMonth(lim.getMonth()+renewMonths());
+    const limIso=toISO(lim);
+    return parcData.items.filter(p=>p.statut==='Gagné' && p.fin && p.fin>=today && p.fin<=limIso);
+  }
+  // One task per developer and end date (8 Solaris contracts ending on 31/12 = one task). Deterministic id:
+  // the same group gives the same task on the phone and the computer, and a deleted or completed renewal
+  // task is never created again.
+  const renewGroupId=p=>{ const s=parcNorm(p.dev||p.prod)+'|'+p.fin; let h=5381; for(let i=0;i<s.length;i++) h=((h*33)^s.charCodeAt(i))>>>0; return 'renew_'+h.toString(36); };
+  function ensureRenewalTasks(){
+    const groups=new Map();
+    renewalCandidates().forEach(p=>{ const id=renewGroupId(p); if(!groups.has(id)) groups.set(id,[]); groups.get(id).push(p); });
+    let n=0;
+    groups.forEach((list,id)=>{
+      if(tasks.some(t=>t.id===id)) return;
+      const p=list[0], who=p.dev||p.prod;
+      const fin=new Date(p.fin+'T00:00:00'), due=new Date(fin); due.setDate(due.getDate()-120);
+      const today=new Date(); today.setHours(0,0,0,0);
+      const kwc=list.reduce((s,x)=>s+(x.kwc||0),0);
+      const t=createTask({ title:list.length>1?'Renouveler '+list.length+' contrats — '+who:'Renouveler le contrat — '+(p.inst||p.prod), client:who,
+        due:toISO(due<today?today:due), urgency:'haute', status:'a_faire',
+        description:'Fin de contrat le '+pqIsoToFr(p.fin)+' · '+(kwc?fmtMwc(kwc):'')+'\n'+list.map(x=>'- '+(x.inst||x.prod)+(x.kwc?' ('+fmtKwc(x.kwc)+(x.cadre?', '+x.cadre:'')+')':'')).join('\n')+'\nIssu du Parc (Suivi Agrégation).' });
+      t.id=id; n++;
+    });
+    if(n){ saveTasks(); render(); }
+    return n;
+  }
+  // Puts a contract back into the pipeline (stage: pricing request), prefilled from the Parc
+  function renewalToPipeline(p){
+    const company=ensureCompany(p.dev||p.prod);
+    const o={ id:newOppId('opp'), kind:'installation', company, title:p.inst||p.prod, centrale:p.inst||p.prod, producteur:p.prod, stage:'demande_prix', requestId:null, taskId:null,
+      kwc:p.kwc?String(p.kwc):'', mwh:p.p50?String(Math.round(p.p50)):'', dept:p.dept, region:p.region, install:p.enr==='PV'||p.enr==='Eolien'||p.enr==='Hydro'?p.enr:'',
+      contrat:p.cadre==='CR'?(p.ao==='AOS CRE'?'AOS CRE':'AO CRE CR'):p.cadre==='OA'?"Sortie d'OA / CR":p.cadre==='ACC'?'Surplus ACC':'',
+      charge:p.charge, origine:'Contact direct', ca:p.ca||'N/A', dateEntree:toISO(new Date()), annee:String(new Date().getFullYear()), goDate:toISO(new Date()),
+      commentaires:pqIsoToFr(toISO(new Date()))+' : renouvellement du contrat qui se termine le '+pqIsoToFr(p.fin)+'.', renewalOf:parcKey(p),
+      createdAt:Date.now(), updatedAt:Date.now(), deleted:false };
+    opportunities.push(o); saveCrm();
+    return o;
   }
   const fmtGwh=mwh=>(Math.round(mwh/100)/10).toLocaleString('fr-FR')+' GWh';
   const fmtMwc=kwc=>(Math.round(kwc/100)/10).toLocaleString('fr-FR')+' MWc';
@@ -5562,19 +5634,22 @@
     const active=won.filter(p=>(p.vols[y]||0)>0);
     const volY=active.reduce((s,p)=>s+(p.vols[y]||0),0);
     const obj=parcData.objectives[y];
-    const soon=won.filter(p=>p.fin && p.fin>=today && p.fin<=toISO(new Date(Date.now()+365*86400000)));
+    const soon=renewalCandidates();
     const pending=parcData.items.filter(p=>p.statut==='En attente');
 
     // year chips
     const years=document.createElement('div'); years.className='parc-years';
     PARC_YEARS.slice(0,6).forEach(yy=>{ const b=document.createElement('button'); b.type='button'; b.textContent=yy; b.className=yy===y?'on':''; b.onclick=()=>{ parcYear=yy; renderParc(); }; years.appendChild(b); });
+    const rm=document.createElement('label'); rm.className='parc-renew-setting'; rm.innerHTML='Renouvellement : alerte à <select id="parc-renew-months">'+[3,4,6,9,12].map(m=>'<option value="'+m+'"'+(m===renewMonths()?' selected':'')+'>'+m+' mois</option>').join('')+'</select>';
+    rm.querySelector('select').onchange=e=>{ try{ localStorage.setItem('todo_'+RENEW_KEY, e.target.value); }catch(err){} ensureRenewalTasks(); renderParc(); };
+    years.appendChild(rm);
     body.appendChild(years);
 
     const kpis=document.createElement('div'); kpis.className='parc-kpis';
     const kpi=(num,label,sub,cls)=>{ const k=document.createElement('div'); k.className='stat-card'; k.innerHTML='<div class="stat-card-num'+(cls?' '+cls:'')+'">'+escapeHtml(num)+'</div><div class="stat-card-label">'+escapeHtml(label)+'</div>'+(sub?'<div class="parc-kpi-sub">'+escapeHtml(sub)+'</div>':''); kpis.appendChild(k); };
     kpi(fmtGwh(volY), 'Volume agrégé '+y, obj?Math.round(volY/1000/obj*100)+' % de l\u2019objectif ('+obj.toLocaleString('fr-FR')+' GWh)':'', 'accent');
     kpi(String(active.length), 'Contrats actifs '+y, fmtMwc(active.reduce((s,p)=>s+p.kwc,0)));
-    kpi(String(soon.length), 'Fins de contrat < 12 mois', won.filter(p=>p.renouv==='A renouveler').length+' marqués « A renouveler »', soon.length?'crit':'');
+    kpi(String(soon.length), 'Fins de contrat < '+renewMonths()+' mois', won.filter(p=>p.renouv==='A renouveler').length+' marqués « A renouveler »', soon.length?'crit':'');
     kpi(String(pending.length), 'Offres en attente', fmtMwc(pending.reduce((s,p)=>s+p.kwc,0)));
     body.appendChild(kpis);
 
@@ -5589,10 +5664,15 @@
 
     if(soon.length){
       const s=document.createElement('div'); s.className='parc-block';
-      s.innerHTML='<div class="parc-h">Échéances dans les 12 mois</div>';
+      s.innerHTML='<div class="parc-h">Échéances dans les '+renewMonths()+' mois · une tâche de renouvellement est créée pour chacune</div>';
       soon.sort((a,b)=>a.fin.localeCompare(b.fin)).forEach(p=>{
         const r=document.createElement('div'); r.className='parc-due';
-        r.innerHTML='<span class="parc-due-date">'+escapeHtml(pqIsoToFr(p.fin))+'</span><span class="parc-due-name">'+escapeHtml(p.prod)+(p.inst?' · '+escapeHtml(p.inst):'')+'</span><span class="parc-due-meta">'+escapeHtml([p.cadre, p.kwc?fmtKwc(p.kwc):'', p.renouv].filter(Boolean).join(' · '))+'</span>';
+        const key=parcKey(p), task=tasks.find(t=>t.id===renewGroupId(p)), opp=opportunities.find(o=>!o.deleted && o.renewalOf===key);
+        r.innerHTML='<span class="parc-due-date">'+escapeHtml(pqIsoToFr(p.fin))+'</span><span class="parc-due-name">'+escapeHtml(p.prod)+(p.inst?' · '+escapeHtml(p.inst):'')+'</span><span class="parc-due-meta">'+escapeHtml([p.cadre, p.kwc?fmtKwc(p.kwc):'', p.renouv, task?(task.archived?'tâche faite':task.deleted?'tâche supprimée':'tâche de renouvellement créée'):''].filter(Boolean).join(' · '))+'</span>';
+        const act=document.createElement('span'); act.className='parc-due-act';
+        if(opp){ const b=document.createElement('button'); b.type='button'; b.className='pq-link'; b.textContent='Voir dans le pipeline'; b.onclick=()=>{ document.querySelector('.tab[data-tab="pipeline"]').click(); setTimeout(()=>openOppDetail(opp.id),50); }; act.appendChild(b); }
+        else { const b=document.createElement('button'); b.type='button'; b.className='pq-link'; b.textContent='Remettre dans le pipeline'; b.onclick=()=>{ const o=renewalToPipeline(p); document.querySelector('.tab[data-tab="pipeline"]').click(); setTimeout(()=>openOppDetail(o.id),50); }; act.appendChild(b); }
+        r.appendChild(act);
         s.appendChild(r);
       });
       body.appendChild(s);

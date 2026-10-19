@@ -395,6 +395,13 @@ with sync_playwright() as p:
     k = page.inner_text(".parc-kpis")
     check("27,5 GWh" in k and "18 %" in k, f"parc: volume of won contracts vs objective ({k[:60]!r})")
     check("CS DU MOULIN" in page.inner_text("#parc-body") and page.locator(".parc-due").count() == 1, "parc: contract ending soon is listed")
+    renew = [t for t in stored(page, "todo-widget-tasks") if t["id"].startswith("renew_")]
+    check(len(renew) == 1 and "CS DU MOULIN" in renew[0]["title"] and renew[0]["urgency"] == "haute", "parc: renewal task created for the contract ending soon")
+    page.set_input_files("#parc-file", str(parc)); page.wait_for_timeout(1500)
+    check(len([t for t in stored(page, "todo-widget-tasks") if t["id"].startswith("renew_")]) == 1, "parc: reloading the file doesn't duplicate the renewal task")
+    page.click(".parc-due .pq-link:has-text('Remettre dans le pipeline')"); page.wait_for_timeout(300)
+    check(page.is_visible("#opp-detail-overlay") and "CS DU MOULIN" in page.inner_text("#opp-detail-title"), "parc: contract put back into the pipeline")
+    page.click("#opp-detail-actions >> text=Fermer")
     page.click('[data-tab="contacts"]'); page.click("#vcf-btn")
     check(page.inner_text("#vcf-new") == "1", "vcf: duplicates inside the app count once")
     with page.expect_download() as dl:
