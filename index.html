@@ -1349,6 +1349,7 @@
     await loadSyncConfig();
     consolidateNotes();
     loadParc(); ensureRenewalTasks();
+    checkReminders();
     render(); renderArchive(); renderLists(); renderToday(); initPostit(); updateConflictBadge(); applyColumnVisibility();
     await loadSeenIds();
     fetchInbox();
@@ -3959,14 +3960,7 @@
       if(ch) touchCrm(c);
     }
   }
-  function createStageTask(o, stageKey, due, urgency){
-    const s=oppStage(stageKey); if(!s) return null;
-    const other=s.who && s.who!=='Com';
-    const task=createTask({ title:s.task+' — '+oppName(o), client:o.company, due:due||'', urgency:urgency||'moyenne', status:other?'en_attente':'a_faire', description:other?('À suivre : étape portée par '+s.who+'.'):'' });
-    task.opportunityId=o.id; task.stageLabel=s.label; touch(task); saveTasks();
-    o.taskId=task.id;
-    return task;
-  }
+
 
   // ----- Board -----
   let pipeShowExited=false;
@@ -4462,37 +4456,49 @@
     if(isExited(o)) return;
     offerStageAdvance([o]);
   }
+  // Each installation moves to ITS next stage (a grouped request can hold installations at different stages);
+  // forcedKey (Go → pricing request) applies to every installation that is still before it.
+  const nextStageKey=(o, forcedKey)=>{
+    if(forcedKey) return stageIndex(o.stage)<stageIndex(forcedKey)?forcedKey:null;
+    const n=OPP_STAGES[stageIndex(o.stage)+1]; return n?n.key:null;
+  };
   function offerStageAdvance(list, forcedKey){
-    const o=list[0];
-    const cur=stageIndex(o.stage);
-    const next=forcedKey?oppStage(forcedKey):OPP_STAGES[cur+1];
-    if(!next) return;
-    pendingAdvance={ ids:list.map(x=>x.id), key:next.key };
-    const label=list.length>1?list.length+' installations ('+o.company+')':'« '+o.company+' — '+oppName(o)+' »';
-    $('stage-advance-text').textContent=label+' : passer de « '+stageLabel(o.stage)+' » à « '+next.label+' »'+(next.who!=='Com'?' (porté par '+next.who+', la tâche sera « en attente »)':'')+' ?';
-    $('stage-advance-nogo').classList.toggle('hidden', o.stage!=='qualif_en_cours');
+    const moves=list.map(o=>({ o, key:nextStageKey(o, forcedKey) })).filter(m=>m.key);
+    if(!moves.length) return;
+    pendingAdvance={ moves:moves.map(m=>({ id:m.o.id, key:m.key })) };
+    const o=moves[0].o, next=oppStage(moves[0].key);
+    const same=moves.every(m=>m.key===moves[0].key && m.o.stage===o.stage);
+    const label=moves.length>1?moves.length+' installations ('+o.company+')':'« '+o.company+' — '+oppName(o)+' »';
+    $('stage-advance-text').textContent=same
+      ? label+' : passer de « '+stageLabel(o.stage)+' » à « '+next.label+' »'+(next.who!=='Com'?' (porté par '+next.who+', la tâche sera « en attente »)':'')+' ?'
+      : label+' : chaque installation passe à son étape suivante ('+moves.map(m=>oppName(m.o)+' → '+oppStage(m.key).label).join(', ')+') ?';
+    $('stage-advance-nogo').classList.toggle('hidden', !moves.every(m=>m.o.stage==='qualif_en_cours'));
     $('stage-create-task').checked=true; $('stage-due').value=next.who!=='Com'?pqAddDays(7):''; $('stage-urgency').value='moyenne'; $('stage-due-row').style.display='flex';
     $('stage-advance-overlay').classList.remove('hidden');
   }
   function confirmStageAdvance(){
     if(!pendingAdvance){ closeStageAdvance(); return; }
-    const list=pendingAdvance.ids.map(id=>opportunities.find(x=>x.id===id)).filter(Boolean);
-    const key=pendingAdvance.key;
-    list.forEach(o=>setOppStage(o, key));
-    if($('stage-create-task').checked && list.length){
-      const req=list.length>1 && list[0].requestId ? opportunities.find(x=>x.id===list[0].requestId) : null;
-      const target=req||list[0];
-      const s=oppStage(key), other=s.who!=='Com';
-      const task=createTask({ title:s.task+' — '+(req?list.length+' installations':oppName(list[0])), client:list[0].company, due:$('stage-due').value, urgency:$('stage-urgency').value, status:other?'en_attente':'a_faire', description:other?'À suivre : étape portée par '+s.who+'.':'' });
-      task.opportunityId=target.id; task.stageLabel=s.label; touch(task); saveTasks();
-      target.taskId=task.id; touchCrm(target);
+    const moves=pendingAdvance.moves.map(m=>({ o:opportunities.find(x=>x.id===m.id), key:m.key })).filter(m=>m.o);
+    moves.forEach(m=>setOppStage(m.o, m.key));
+    const list=moves.map(m=>m.o);
+    if($('stage-create-task').checked && moves.length){
+      // one task per target stage; grouped installations of a request share it
+      const byKey=new Map(); moves.forEach(m=>{ if(!byKey.has(m.key)) byKey.set(m.key,[]); byKey.get(m.key).push(m.o); });
+      byKey.forEach((group,key)=>{
+        const req=group.length>1 && group[0].requestId ? opportunities.find(x=>x.id===group[0].requestId) : null;
+        const target=req||group[0];
+        const s=oppStage(key), other=s.who!=='Com';
+        const task=createTask({ title:s.task+' — '+(req?group.length+' installations':oppName(group[0])), client:group[0].company, due:$('stage-due').value, urgency:$('stage-urgency').value, status:other?'en_attente':'a_faire', description:other?'À suivre : étape portée par '+s.who+'.':'' });
+        task.opportunityId=target.id; task.stageLabel=s.label; touch(task); saveTasks();
+        target.taskId=task.id; touchCrm(target);
+      });
     }
     saveCrm(); closeStageAdvance(); render(); renderPipeline();
-    if(key==='demande_prix'){ const reqId=list[0].requestId; if(reqId) openRequestDetail(reqId); else openOppDetail(list[0].id); }
+    if(moves.some(m=>m.key==='demande_prix')){ const reqId=list[0].requestId; if(reqId) openRequestDetail(reqId); else openOppDetail(list[0].id); }
   }
   function noGoFromAdvance(){
     if(!pendingAdvance) return;
-    pendingAdvance.ids.map(id=>opportunities.find(x=>x.id===id)).filter(Boolean).forEach(o=>{ o.stageBeforeExit=o.stage; o.stage='no_go'; o.lostAt=Date.now(); touchCrm(o); });
+    pendingAdvance.moves.map(m=>opportunities.find(x=>x.id===m.id)).filter(Boolean).forEach(o=>{ o.stageBeforeExit=o.stage; o.stage='no_go'; o.lostAt=Date.now(); touchCrm(o); });
     saveCrm(); closeStageAdvance(); renderPipeline();
   }
   function closeStageAdvance(){ $('stage-advance-overlay').classList.add('hidden'); pendingAdvance=null; }
@@ -4535,7 +4541,7 @@
     const live=list.filter(o=>!isExited(o));
     if(live.length){
       const same=live.every(o=>o.stage===live[0].stage);
-      actions.appendChild(oppActionBtn(same?'Tout passer à l\u2019étape suivante':'Avancer les installations', ()=>{ closeOppDetail(); offerStageAdvance(live, live[0].stage==='qualif_en_cours'?'demande_prix':null); }));
+      actions.appendChild(oppActionBtn(same?'Tout passer à l\u2019étape suivante':'Avancer chaque installation', ()=>{ closeOppDetail(); offerStageAdvance(live, live.every(o=>o.stage==='qualif_en_cours')?'demande_prix':null); }));
     }
     actions.appendChild(oppActionBtn('Copier l\u2019objet', e=>copyToClipboard(ml.subject, e.target), 'ghost-btn'));
     actions.appendChild(oppActionBtn('Copier le mail', e=>copyToClipboard(ml.body, e.target), 'ghost-btn'));
@@ -4954,9 +4960,20 @@
     reminderRow.style.display='none'; recurRow.style.display='none';
   }
 
+  // Reminders already shown are remembered on this device (id + reminder time), so reopening the app
+  // doesn't fire every past reminder again; a reminder more than a day late is skipped.
+  try{ JSON.parse(localStorage.getItem('todo_reminders-notified')||'[]').forEach(k=>notifiedIds.add(k)); }catch(e){}
   function checkReminders(){
-    const now=Date.now();
-    tasks.forEach(t=>{ if(t.reminder&&!t.archived&&!notifiedIds.has(t.id)){ if(new Date(t.reminder).getTime()<=now){ notifiedIds.add(t.id); if('Notification'in window&&Notification.permission==='granted'){ new Notification('Rappel : '+t.title,{body:[t.client,t.project].filter(Boolean).join(' · ')||'Échéance à venir'}); } } } });
+    const now=Date.now(); let changed=false;
+    tasks.forEach(t=>{
+      if(!t.reminder || t.archived || t.deleted) return;
+      const key=t.id+'@'+t.reminder, at=new Date(t.reminder).getTime();
+      if(notifiedIds.has(key) || isNaN(at) || at>now) return;
+      notifiedIds.add(key); changed=true;
+      if(now-at>86400000) return;
+      if('Notification'in window&&Notification.permission==='granted'){ new Notification('Rappel : '+t.title,{body:[t.client,t.project].filter(Boolean).join(' · ')||'Échéance à venir'}); }
+    });
+    if(changed){ try{ localStorage.setItem('todo_reminders-notified', JSON.stringify([...notifiedIds].slice(-500))); }catch(e){} }
   }
 
   function openSnoozePopover(e,id){

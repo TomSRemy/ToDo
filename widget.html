@@ -740,16 +740,19 @@
     reminderRow.style.display='none'; recurRow.style.display='none';
   }
 
+  // Same rule as index.html: reminders already shown are remembered on this device (shared key), late ones (> 1 day) skipped
+  try{ JSON.parse(localStorage.getItem('todo_reminders-notified')||'[]').forEach(k=>notifiedIds.add(k)); }catch(e){}
   function checkReminders(){
-    const now=Date.now();
+    const now=Date.now(); let changed=false;
     tasks.forEach(t=>{
-      if(t.reminder&&!t.archived&&!notifiedIds.has(t.id)){
-        if(new Date(t.reminder).getTime()<=now){
-          notifiedIds.add(t.id);
-          if('Notification' in window&&Notification.permission==='granted'){ new Notification('Rappel : '+t.title,{body:[t.client,t.project].filter(Boolean).join(' · ')||'Échéance à venir'}); }
-        }
-      }
+      if(!t.reminder || t.archived || t.deleted) return;
+      const key=t.id+'@'+t.reminder, at=new Date(t.reminder).getTime();
+      if(notifiedIds.has(key) || isNaN(at) || at>now) return;
+      notifiedIds.add(key); changed=true;
+      if(now-at>86400000) return;
+      if('Notification' in window&&Notification.permission==='granted'){ new Notification('Rappel : '+t.title,{body:[t.client,t.project].filter(Boolean).join(' · ')||'Échéance à venir'}); }
     });
+    if(changed){ try{ localStorage.setItem('todo_reminders-notified', JSON.stringify([...notifiedIds].slice(-500))); }catch(e){} }
   }
 
   function openSnoozePopover(e,id){

@@ -152,6 +152,16 @@ with sync_playwright() as p:
     check(titles == ["Encore A", "Onglet A", "Onglet B"], f"two open tabs don't overwrite each other ({titles})")
     ctx.close()
 
+    # --- Reminders: a reminder already shown doesn't fire again after reopening the app
+    past = (datetime.datetime.now() - datetime.timedelta(minutes=5)).strftime("%Y-%m-%dT%H:%M")
+    page, errors = new_page(browser, {"todo_todo-widget-tasks": json.dumps([task("r1", "Rappel test", reminder=past)])})
+    page.add_init_script("window.__notifs=[]; window.Notification=function(t){ window.__notifs.push(t); }; Notification.permission='granted';")
+    page.goto(URL); page.wait_for_timeout(500)
+    first = page.evaluate("window.__notifs.length")
+    page.reload(); page.wait_for_timeout(500)
+    check(first == 1 and page.evaluate("window.__notifs.length") == 0, "reminder shown once, not again after reload")
+    page.close()
+
     # --- Sync: a failed push must not make the next merge revert the change
     files = {"tasks.json": [task("t1", "X")]}
     seed = dict(SYNC_ON, **{"todo_todo-widget-tasks": json.dumps([task("t1", "X")]), "todo_sync-tasks-base": json.dumps([task("t1", "X")])})
@@ -343,6 +353,20 @@ with sync_playwright() as p:
     visible = page.eval_on_selector_all("#opp-detail-actions button", "els=>els.filter(e=>e.offsetParent).map(e=>e.textContent)")
     check(visible == ["Fermer"], f"phone version: installation sheet is read-only ({visible})")
     check(page.evaluate("document.documentElement.scrollWidth") <= 390, "phone version fits the screen")
+    check(not errors, f"no page errors ({errors})")
+    page.close()
+
+    # --- Pipeline: a request whose installations are at different stages moves each one forward (never back)
+    mixed = [{"id": "r9", "kind": "request", "company": "SEM", "title": "Demande de pricing", "createdAt": 1, "updatedAt": 1, "deleted": False},
+             {"id": "a", "kind": "installation", "company": "SEM", "centrale": "A", "title": "A", "stage": "negociation", "requestId": "r9", "createdAt": 1, "updatedAt": 1, "deleted": False},
+             {"id": "b", "kind": "installation", "company": "SEM", "centrale": "B", "title": "B", "stage": "collecte", "requestId": "r9", "createdAt": 1, "updatedAt": 1, "deleted": False}]
+    page, errors = new_page(browser, {"todo_todo-widget-opportunities": json.dumps(mixed)})
+    page.goto(URL); page.click('[data-tab="pipeline"]')
+    page.locator('[data-phase="contrat"] .pipe-card', has_text="A").first.click()
+    page.click("#opp-detail-body >> text=Fait partie de")
+    page.click("#opp-detail-actions >> text=Avancer chaque installation"); page.click("#stage-advance-confirm")
+    st = {o["id"]: o.get("stage") for o in stored(page, "todo-widget-opportunities")}
+    check(st["a"] == "pricing_ferme" and st["b"] == "qualif_en_cours", f"mixed request: each installation to its own next stage ({st})")
     check(not errors, f"no page errors ({errors})")
     page.close()
 
