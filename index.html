@@ -5,9 +5,6 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Todo</title>
 <link rel="manifest" href="manifest.json">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Caveat:wght@500;700&display=swap" rel="stylesheet">
 <meta name="theme-color" content="#0A0D12">
 <link rel="apple-touch-icon" href="icons/icon-192.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -26,8 +23,7 @@
     --radius:4px;
     --font-ui: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
     --font-mono: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, monospace;
-    --font-hand: 'Caveat', 'Segoe Print', 'Bradley Hand', 'Comic Sans MS', cursive;
-    --postit-idee:#F3E28A; --postit-demain:#F4AE9A; --postit-ink:#2A2418;
+    --note-accent:#C9A55A;
   }
   *{box-sizing:border-box;}
   body{ margin:0; min-height:100vh; font-family:var(--font-ui); background:var(--bg); color:var(--tx1); }
@@ -466,25 +462,27 @@
   .inbox-item-link{ margin-left:auto; color:var(--accent); font-size:11px; text-decoration:none; }
   .inbox-item-link:hover{ text-decoration:underline; }
 
-  /* Post-it flottant (un seul, au premier plan, réductible) */
-  .postit-float{ position:fixed; right:18px; bottom:18px; width:300px; height:280px; min-width:220px; min-height:150px; max-width:calc(100vw - 20px); max-height:calc(100vh - 20px); z-index:19000; background:var(--postit-idee); color:var(--postit-ink); border-radius:2px 2px 14px 2px; box-shadow:0 14px 34px rgba(0,0,0,.55), 0 2px 6px rgba(0,0,0,.3); display:flex; flex-direction:column; resize:both; overflow:hidden; }
+  /* Note flottante (une seule, au premier plan, réductible) */
+  .postit-float{ position:fixed; right:18px; bottom:18px; width:300px; height:260px; min-width:220px; min-height:140px; max-width:calc(100vw - 20px); max-height:calc(100vh - 20px); z-index:19000; background:var(--panel-3); color:var(--tx1); border:1px solid var(--bd); border-top:2px solid var(--note-accent); border-radius:8px; box-shadow:0 18px 44px rgba(0,0,0,.55); display:flex; flex-direction:column; resize:both; overflow:hidden; }
   .postit-float.hidden, .postit-tab.hidden{ display:none; }
-  .postit-bar{ display:flex; align-items:center; gap:6px; padding:6px 6px 5px 12px; cursor:grab; user-select:none; touch-action:none; background:rgba(42,36,24,.06); flex-shrink:0; }
+  .postit-bar{ display:flex; align-items:center; gap:4px; padding:7px 6px 3px 14px; cursor:grab; user-select:none; touch-action:none; flex-shrink:0; }
   .postit-bar.dragging{ cursor:grabbing; }
-  .postit-title{ font-family:var(--font-mono); font-size:9.5px; text-transform:uppercase; letter-spacing:.5px; opacity:.6; }
-  .postit-saved{ flex:1; min-width:0; font-family:var(--font-mono); font-size:9px; opacity:0; text-align:right; transition:opacity .3s; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-  .postit-bar button{ background:rgba(42,36,24,.09); border:none; border-radius:4px; color:var(--postit-ink); font-family:var(--font-mono); font-size:10px; padding:3px 7px; cursor:pointer; white-space:nowrap; }
-  .postit-bar button:hover{ background:rgba(42,36,24,.2); }
-  #postit-min{ font-size:13px; line-height:1; padding:2px 8px; }
-  #postit-text{ flex:1; width:100%; border:none; resize:none; color:var(--postit-ink); font-family:var(--font-hand); font-size:21px; line-height:26px; padding:6px 14px 14px; box-sizing:border-box;
-    background:transparent repeating-linear-gradient(transparent 0 25px, rgba(42,36,24,.11) 25px 26px) 0 6px / 100% 26px local; }
+  .postit-title{ display:flex; align-items:center; gap:7px; font-family:var(--font-mono); font-size:9.5px; text-transform:uppercase; letter-spacing:.6px; color:var(--tx3); }
+  .postit-title::before, .postit-tab::before{ content:''; width:6px; height:6px; border-radius:50%; background:var(--note-accent); flex-shrink:0; }
+  .postit-saved{ flex:1; min-width:0; font-family:var(--font-mono); font-size:9px; color:var(--tx3); opacity:0; text-align:right; padding-right:4px; transition:opacity .3s; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .postit-bar button{ display:flex; align-items:center; background:none; border:none; border-radius:5px; color:var(--tx3); font-family:var(--font-mono); font-size:9.5px; padding:4px 6px; cursor:pointer; white-space:nowrap; }
+  .postit-bar button:hover{ color:var(--tx1); background:var(--panel-2); }
+  #postit-to-task:hover{ color:var(--note-accent); }
+  #postit-min svg{ width:13px; height:13px; }
+  #postit-text{ flex:1; width:100%; border:none; resize:none; background:transparent; color:var(--tx1); font-family:var(--font-ui); font-size:13.5px; line-height:1.6; padding:4px 14px 14px; box-sizing:border-box; }
   #postit-text:focus{ outline:none; }
-  #postit-text::placeholder{ color:rgba(42,36,24,.45); }
-  .postit-tab{ position:fixed; right:18px; bottom:18px; z-index:19000; display:flex; align-items:center; gap:8px; max-width:240px; padding:7px 12px; border:none; border-radius:2px 2px 10px 2px; background:var(--postit-idee); color:var(--postit-ink); box-shadow:0 8px 20px rgba(0,0,0,.45); cursor:pointer; font-family:var(--font-hand); font-size:18px; }
-  .postit-tab svg{ width:15px; height:15px; flex-shrink:0; }
+  #postit-text::placeholder{ color:var(--tx3); }
+  .postit-tab{ position:fixed; right:18px; bottom:18px; z-index:19000; display:flex; align-items:center; gap:8px; max-width:240px; padding:7px 14px 7px 12px; background:var(--panel-3); border:1px solid var(--bd); border-radius:16px; color:var(--tx2); box-shadow:0 8px 22px rgba(0,0,0,.45); cursor:pointer; font-family:var(--font-ui); font-size:12px; }
+  .postit-tab:hover{ color:var(--tx1); border-color:var(--note-accent); }
   .postit-tab span{ overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   @media (max-width: 760px){
     .postit-float{ left:10px !important; right:10px !important; top:auto !important; bottom:10px !important; width:auto !important; height:46vh !important; resize:none; }
+    #postit-text{ font-size:15px; }
     .postit-tab{ right:12px; bottom:12px; max-width:60vw; }
   }
 
@@ -931,16 +929,16 @@
   <button id="snooze-clear-date" class="snooze-clear-btn">✕ Retirer la date</button>
 </div>
 
-<div id="postit" class="postit-float hidden" role="dialog" aria-label="Post-it">
+<div id="postit" class="postit-float hidden" role="dialog" aria-label="Note">
   <div class="postit-bar" id="postit-bar" title="Glisser pour déplacer">
-    <span class="postit-title">Post-it</span>
+    <span class="postit-title">Note</span>
     <span class="postit-saved" id="postit-saved"></span>
     <button type="button" id="postit-to-task" title="Transformer la ligne où est le curseur (ou les lignes sélectionnées) en tâche urgente pour demain">→ tâche demain</button>
-    <button type="button" id="postit-min" title="Réduire (Échap)" aria-label="Réduire">–</button>
+    <button type="button" id="postit-min" title="Réduire (Échap)" aria-label="Réduire"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></button>
   </div>
-  <textarea id="postit-text" placeholder="Griffonne ici…" spellcheck="false"></textarea>
+  <textarea id="postit-text" placeholder="Une idée, un truc à faire demain…" spellcheck="false"></textarea>
 </div>
-<button type="button" id="postit-tab" class="postit-tab hidden" title="Ouvrir le post-it (p)" aria-label="Ouvrir le post-it"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15.5 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V8.5L15.5 3z"/><path d="M15 3v6h6"/></svg><span id="postit-tab-preview">Post-it</span></button>
+<button type="button" id="postit-tab" class="postit-tab hidden" title="Ouvrir la note (p)" aria-label="Ouvrir la note"><span id="postit-tab-preview">Post-it</span></button>
 
 <script>
   // Storage polyfill: uses window.storage if running inside a Claude artifact preview,
@@ -2132,7 +2130,7 @@
   function updatePostitTab(){
     const n=notes.find(x=>x.id===POSTIT_ID && !x.deleted);
     const first=n ? ((n.text||'').split('\n').map(l=>l.trim()).find(Boolean)||'') : '';
-    $('postit-tab-preview').textContent=first||'Post-it';
+    $('postit-tab-preview').textContent=first||'Note';
   }
   function renderNotes(){
     if(!postitTextEl) return;
