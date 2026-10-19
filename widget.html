@@ -364,7 +364,7 @@
       if(t.project&&!projectsList.includes(t.project)){ projectsList.push(t.project); seeded=true; }
     });
     if(seeded){ saveTasks(); saveClients(); saveProjects(); }
-    await loadSyncConfig();
+    await loadSyncConfig(); await loadTasksBase();
     render();
     checkDailyDigestNotification();
     if(syncConfig.enabled){ syncPull(); setInterval(syncPull, 5 * 60 * 1000); }
@@ -383,47 +383,91 @@
   function b64EncodeUtf8(str){ return btoa(unescape(encodeURIComponent(str))); }
   function b64DecodeUtf8(b64){ return decodeURIComponent(escape(atob(b64.replace(/\n/g,'')))); }
 
-  function mergeTasks(localList, remoteList){
-    const byId={};
-    localList.forEach(t=>{ byId[t.id]=t; });
-    remoteList.forEach(rt=>{
-      const lt=byId[rt.id];
-      if(!lt || (rt.updatedAt||0) > (lt.updatedAt||0)) byId[rt.id]=rt;
+  // Same sync rules as index.html (kept in step on purpose):
+  //  - three-way merge against the last server state ("base", shared key sync-tasks-base) so a field changed
+  //    on one side only is never reverted by an older copy from the other side;
+  //  - the base becomes the server state after a pull, and the local state only after a confirmed push.
+  let tasksBaseSnapshot=null;
+  async function loadTasksBase(){ try{ const r=await window.storage.get('sync-tasks-base',false); tasksBaseSnapshot=r&&r.value?JSON.parse(r.value):null; }catch(e){ tasksBaseSnapshot=null; } }
+  async function saveTasksBase(){ try{ await window.storage.set('sync-tasks-base', JSON.stringify(tasksBaseSnapshot), false); }catch(e){} }
+  function threeWayMerge(localList, remoteList, baseList){
+    const baseById={}; (baseList||[]).forEach(x=>{ baseById[x.id]=x; });
+    const localById={}; localList.forEach(x=>{ localById[x.id]=x; });
+    const remoteById={}; remoteList.forEach(x=>{ remoteById[x.id]=x; });
+    const merged=[];
+    new Set([...Object.keys(localById), ...Object.keys(remoteById)]).forEach(id=>{
+      const local=localById[id], remote=remoteById[id], base=baseById[id];
+      if(local && !remote){ merged.push(local); return; }
+      if(remote && !local){ merged.push(remote); return; }
+      if(JSON.stringify(local)===JSON.stringify(remote)){ merged.push(local); return; }
+      if(!base){ merged.push((remote.updatedAt||0)>(local.updatedAt||0)?remote:local); return; }
+      const result={...local};
+      new Set([...Object.keys(local), ...Object.keys(remote)]).forEach(f=>{
+        if(f==='updatedAt') return;
+        const lv=JSON.stringify(local[f]), rv=JSON.stringify(remote[f]), bv=JSON.stringify(base[f]);
+        if(lv===rv) return;
+        const lc=lv!==bv, rc=rv!==bv;
+        if(rc && !lc){ result[f]=remote[f]; return; }
+        if(lc && rc && (remote.updatedAt||0)>(local.updatedAt||0)) result[f]=remote[f];
+      });
+      result.updatedAt=Math.max(local.updatedAt||0, remote.updatedAt||0);
+      merged.push(result);
     });
-    return Object.values(byId);
+    return merged;
+  }
+  // "object" media type works up to 100 MB; above 1 MB the content is fetched again as raw text
+  async function ghGetJson(){
+    const auth={ 'Authorization':'Bearer '+syncConfig.token };
+    const res=await fetch(syncApiUrl(), { headers:Object.assign({ 'Accept':'application/vnd.github.object+json' }, auth), cache:'no-store' });
+    if(!res.ok) return { ok:false, status:res.status };
+    const data=await res.json();
+    let text;
+    if(data.content && data.encoding!=='none') text=b64DecodeUtf8(data.content);
+    else { const raw=await fetch(syncApiUrl(), { headers:Object.assign({ 'Accept':'application/vnd.github.raw+json' }, auth), cache:'no-store' }); if(!raw.ok) return { ok:false, status:raw.status }; text=await raw.text(); }
+    return { ok:true, status:200, sha:data.sha, json:JSON.parse(text) };
   }
 
   async function syncPull(){
     if(!syncConfig.enabled) return;
     try{
-      const res=await fetch(syncApiUrl(), { headers:{ 'Authorization':'Bearer '+syncConfig.token, 'Accept':'application/vnd.github+json' } });
-      if(res.status===404){ await syncPushNow(); return; }
-      if(!res.ok) return;
-      const data=await res.json();
-      const remoteTasks=JSON.parse(b64DecodeUtf8(data.content));
-      tasks=mergeTasks(tasks, remoteTasks);
+      const data=await ghGetJson();
+      if(data.status===404){ await syncPushNow(); return; }
+      if(!data.ok) return;
+      const remoteTasks=data.json;
+      tasks=threeWayMerge(tasks, remoteTasks, tasksBaseSnapshot);
+      tasksBaseSnapshot=remoteTasks.map(t=>({...t}));
       lastKnownSha=data.sha;
-      await saveTasksLocalOnly();
+      await saveTasksLocalOnly(); await saveTasksBase();
       render();
+      if(JSON.stringify(tasks)!==JSON.stringify(remoteTasks)) scheduleSyncPush();
     }catch(e){ console.error('sync pull failed', e); }
   }
 
   function scheduleSyncPush(){
     if(!syncConfig.enabled) return;
     clearTimeout(syncPushTimer);
-    syncPushTimer=setTimeout(syncPushNow, 3000);
+    syncPushTimer=setTimeout(()=>{ syncPushTimer=null; syncPushNow(); }, 3000);
   }
+  function flushPendingSync(){ if(syncPushTimer){ clearTimeout(syncPushTimer); syncPushTimer=null; syncPushNow(); } }
+  document.addEventListener('visibilitychange', ()=>{ if(document.visibilityState==='hidden') flushPendingSync(); });
+  window.addEventListener('pagehide', flushPendingSync);
+  // index.html open in another tab saved: take its version instead of writing an older copy back
+  window.addEventListener('storage', e=>{
+    if(e.newValue==null) return;
+    try{
+      if(e.key==='todo_'+TASKS_KEY){ tasks=JSON.parse(e.newValue); render(); }
+      else if(e.key==='todo_sync-tasks-base'){ tasksBaseSnapshot=JSON.parse(e.newValue); }
+    }catch(err){}
+  });
 
   async function syncPushNow(){
     if(!syncConfig.enabled) return;
     try{
       let sha=lastKnownSha;
-      const getRes=await fetch(syncApiUrl(), { headers:{ 'Authorization':'Bearer '+syncConfig.token, 'Accept':'application/vnd.github+json' } });
-      if(getRes.ok){
-        const getData=await getRes.json();
+      const getData=await ghGetJson();
+      if(getData.ok){
         sha=getData.sha;
-        const remoteTasks=JSON.parse(b64DecodeUtf8(getData.content));
-        tasks=mergeTasks(tasks, remoteTasks);
+        tasks=threeWayMerge(tasks, getData.json, tasksBaseSnapshot);
         await saveTasksLocalOnly();
         render();
       }
@@ -434,7 +478,7 @@
         headers:{ 'Authorization':'Bearer '+syncConfig.token, 'Accept':'application/vnd.github+json', 'Content-Type':'application/json' },
         body:JSON.stringify(body)
       });
-      if(putRes.ok){ const putData=await putRes.json(); lastKnownSha=putData.content.sha; }
+      if(putRes.ok){ const putData=await putRes.json(); lastKnownSha=putData.content.sha; tasksBaseSnapshot=tasks.map(t=>({...t})); await saveTasksBase(); }
     }catch(e){ console.error('sync push failed', e); }
   }
   async function saveClients(){ try{ await window.storage.set(CLIENTS_KEY, JSON.stringify(clientsList), false); }catch(e){ console.error(e); } }

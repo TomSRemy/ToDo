@@ -125,6 +125,33 @@ with sync_playwright() as p:
         check(not errors, f"no page errors ({errors})")
         page.close()
 
+    # --- widget.html uses the same three-way sync (an older copy elsewhere must not bring a task back)
+    files = {"tasks.json": [task("t1", "X", archived=False, updated=3000, title2="ignored")]}
+    files["tasks.json"][0]["description"] = "edited on the phone"
+    seed = dict(SYNC_ON, **{"todo_todo-widget-tasks": json.dumps([task("t1", "X", archived=True, updated=2000)]),
+                            "todo_sync-tasks-base": json.dumps([task("t1", "X", archived=False)])})
+    page, errors = new_page(browser, seed)
+    mock_github(page, files)
+    page.goto(URL.replace("index.html", "widget.html")); page.wait_for_timeout(4500)
+    t1 = stored(page, "todo-widget-tasks")[0]
+    check(t1["archived"] is True and t1["description"] == "edited on the phone", "widget: validation kept and remote edit merged")
+    check(files["tasks.json"][0]["archived"] is True, "widget: merged result pushed")
+    check(not errors, f"no page errors ({errors})")
+    page.close()
+
+    # --- Two tabs (app + widget): a change in one is picked up by the other, never overwritten
+    ctx = browser.new_context()
+    a = ctx.new_page(); b = ctx.new_page()
+    for pg_ in (a, b):
+        pg_.route("**/fonts.g*/**", lambda r: r.abort())
+    a.goto(URL); a.click('[data-tab="tasks"]'); a.fill("#quick-add-input", "Onglet A"); a.press("#quick-add-input", "Enter")
+    b.goto(URL); b.click('[data-tab="tasks"]'); b.fill("#quick-add-input", "Onglet B"); b.press("#quick-add-input", "Enter")
+    a.wait_for_timeout(200)
+    a.fill("#quick-add-input", "Encore A"); a.press("#quick-add-input", "Enter"); a.wait_for_timeout(200)
+    titles = sorted(t["title"] for t in b.evaluate("JSON.parse(localStorage.getItem('todo_todo-widget-tasks'))"))
+    check(titles == ["Encore A", "Onglet A", "Onglet B"], f"two open tabs don't overwrite each other ({titles})")
+    ctx.close()
+
     # --- Sync: a failed push must not make the next merge revert the change
     files = {"tasks.json": [task("t1", "X")]}
     seed = dict(SYNC_ON, **{"todo_todo-widget-tasks": json.dumps([task("t1", "X")]), "todo_sync-tasks-base": json.dumps([task("t1", "X")])})

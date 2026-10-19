@@ -1485,16 +1485,6 @@
     try{ await window.storage.set('sync-crm-base', JSON.stringify(crmBaseSnapshot), false); }catch(e){}
   }
 
-  function mergeTasks(localList, remoteList){
-    const byId={};
-    localList.forEach(t=>{ byId[t.id]=t; });
-    remoteList.forEach(rt=>{
-      const lt=byId[rt.id];
-      if(!lt || (rt.updatedAt||0) > (lt.updatedAt||0)) byId[rt.id]=rt;
-    });
-    return Object.values(byId);
-  }
-
   function refreshAllViews(){
     render();
     if(typeof renderToday==='function') renderToday();
@@ -1663,6 +1653,23 @@
     if(notesSyncPushTimer){ clearTimeout(notesSyncPushTimer); notesSyncPushTimer=null; syncPushNotesNow(); }
   }
   document.addEventListener('visibilitychange', ()=>{ if(document.visibilityState==='hidden') flushPendingSync(); });
+  // Another tab of the app (or widget.html) saved: take its version, so this tab never writes an older copy back.
+  window.addEventListener('storage', e=>{
+    if(!e.key || e.newValue==null || e.key.indexOf('todo_')!==0) return;
+    const k=e.key.slice(5);
+    try{
+      const v=JSON.parse(e.newValue);
+      if(k===TASKS_KEY){ tasks=v; refreshAllViews(); }
+      else if(k===COMPANIES_KEY){ companies=v; renderCrm(); }
+      else if(k===CONTACTS_KEY){ contacts=v; renderCrm(); }
+      else if(k===MEETINGS_KEY){ meetings=v; }
+      else if(k===OPPS_KEY){ opportunities=v; renderCrm(); }
+      else if(k===NOTES_KEY){ if(!postitDirty){ notes=v; renderNotes(); } }
+      else if(k==='sync-tasks-base') tasksBaseSnapshot=v;
+      else if(k==='sync-crm-base') crmBaseSnapshot=v;
+      else if(k==='sync-notes-base') notesBaseSnapshot=v;
+    }catch(err){}
+  });
   window.addEventListener('pagehide', flushPendingSync);
   async function syncPushNotesNow(){
     if(!syncConfig.enabled) return;
