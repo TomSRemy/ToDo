@@ -50,6 +50,22 @@
     white-space:nowrap; overflow:hidden;
   }
   .app-sidebar-back:hover{ color:var(--accent); }
+  .app-sidebar-help{ background:none; border:none; border-top:1px solid var(--bd); width:100%; cursor:pointer; text-align:left; }
+  .app-sidebar-widget{ margin-top:0; border-top:none; padding-top:8px; }
+  .guide-box{ max-width:760px; }
+  .guide-box h3{ display:flex; align-items:center; justify-content:space-between; }
+  .guide-nav{ display:flex; flex-wrap:wrap; gap:5px; margin:0 0 12px; }
+  .guide-nav button{ background:var(--panel-2); border:1px solid var(--bd); color:var(--tx2); border-radius:14px; font-size:11.5px; padding:4px 10px; cursor:pointer; }
+  .guide-nav button.on{ color:var(--accent); border-color:var(--accent); background:var(--accent-dim); }
+  .guide-body{ font-size:13px; color:var(--tx2); line-height:1.6; }
+  .guide-body h4{ font-size:13px; color:var(--tx1); margin:14px 0 4px; }
+  .guide-body h4:first-child{ margin-top:0; }
+  .guide-body ol, .guide-body ul{ margin:4px 0 8px; padding-left:20px; }
+  .guide-body b{ color:var(--tx1); font-weight:600; }
+  .guide-body kbd{ font-family:var(--font-mono); font-size:11px; background:var(--panel-2); border:1px solid var(--bd); border-radius:4px; padding:0 5px; color:var(--tx1); }
+  .guide-body .guide-flow{ display:flex; flex-wrap:wrap; gap:4px 6px; align-items:center; font-family:var(--font-mono); font-size:10.5px; margin:6px 0 10px; }
+  .guide-body .guide-flow span{ border:1px solid var(--bd); border-radius:4px; padding:2px 6px; color:var(--tx1); }
+  .guide-body .guide-flow i{ color:var(--tx3); font-style:normal; }
   .back-arrow{ flex-shrink:0; }
 
   #todo-panel{ display:flex; flex-direction:column; flex:1; min-width:0; max-height:100vh; container-type:inline-size; container-name:taskpanel; }
@@ -760,7 +776,8 @@
       <span class="tab" data-tab="lists" title="Réf. & data"><svg class="tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg><span class="sidebar-label-text">Réf. &amp; data</span><span class="tab-badge" id="conflicts-badge"></span></span>
     </div>
 
-    <a href="widget.html" class="app-sidebar-back" title="Widget"><span class="back-arrow">←</span><span class="sidebar-label-text">Widget</span></a>
+    <button type="button" class="app-sidebar-back app-sidebar-help" id="help-btn" title="Mode d'emploi"><span class="back-arrow">?</span><span class="sidebar-label-text">Mode d'emploi</span></button>
+    <a href="widget.html" class="app-sidebar-back app-sidebar-widget" title="Widget"><span class="back-arrow">←</span><span class="sidebar-label-text">Widget</span></a>
   </nav>
 
 <div id="todo-panel">
@@ -1019,6 +1036,85 @@
       <span class="parc-info" id="parc-info"></span>
     </div>
     <div id="parc-body"></div>
+  </div>
+
+  <div id="guide-overlay" class="modal-overlay hidden">
+    <div class="modal-box wide guide-box" role="dialog" aria-labelledby="guide-title">
+      <h3 id="guide-title">Mode d'emploi <button type="button" class="ghost-btn" id="guide-close" style="font-size:12px;padding:4px 10px;border:1px solid var(--bd);border-radius:6px;background:none;color:var(--tx2);cursor:pointer;">Fermer</button></h3>
+      <div class="guide-nav" id="guide-nav">
+        <button type="button" data-g="taches" class="on">Tâches</button><button type="button" data-g="pipeline">Pipeline</button><button type="button" data-g="excel">Excel</button><button type="button" data-g="parc">Parc</button><button type="button" data-g="contacts">Contacts</button><button type="button" data-g="tel">Téléphone</button><button type="button" data-g="synchro">Synchro</button>
+      </div>
+      <div class="guide-body">
+        <section data-g="taches">
+          <h4>Au quotidien</h4>
+          <ul>
+            <li><b>Aujourd'hui</b> : ce qui est en retard ou dû aujourd'hui. Clic sur le cercle = valider, clic sur la date = reporter.</li>
+            <li><b>Tâches</b> : ajout rapide en haut (Entrée), « Tâche complète » pour client, projet, rappel, récurrence.</li>
+            <li><b>Note</b> (en bas à droite) : le calepin pour griffonner. « → tâche demain » transforme la ligne où se trouve le curseur en tâche urgente pour demain.</li>
+            <li><b>Archive</b> : tâches validées et corbeille (rien n'est perdu).</li>
+          </ul>
+          <h4>Raccourcis</h4>
+          <ul>
+            <li><kbd>n</kbd> ou <kbd>Ctrl</kbd>+<kbd>K</kbd> ajouter une tâche · <kbd>Ctrl</kbd>+<kbd>F</kbd> rechercher · <kbd>p</kbd> ouvrir la note</li>
+            <li><kbd>j</kbd>/<kbd>k</kbd> se déplacer · <kbd>Entrée</kbd> valider la tâche sélectionnée · <kbd>e</kbd> la modifier · <kbd>Échap</kbd> fermer</li>
+          </ul>
+        </section>
+        <section data-g="pipeline" hidden>
+          <h4>Le chemin d'une opportunité</h4>
+          <div class="guide-flow"><span>Pré-qualif</span><i>→</i><span>Qualification</span><i>→ Go →</i><span>Offre</span><i>→</i><span>Contrat</span><i>→</i><span>Onboarding</span><i>→</i><span>En service</span></div>
+          <ol>
+            <li><b>Pré-qualif</b> : un client rencontré, pas encore de projet. « Projet identifié » crée l'installation.</li>
+            <li><b>Nouvelle opportunité</b> : choisis le client puis le contact (existant ou nouveau), puis colle le mail ou dépose un .msg, un .eml ou l'Excel du producteur. Les champs se remplissent ; ceux à compléter sont signalés en jaune.</li>
+            <li><b>Une fiche par installation</b>. Plusieurs centrales dans le même mail ou le même Excel = plusieurs installations, regroupées dans une <b>demande de pricing</b>.</li>
+            <li>Quand tu valides la tâche liée, l'app propose l'étape suivante et crée la tâche. Les étapes des autres équipes (Ops, SC, Jur, Dir, d'après le RACI) deviennent des tâches « en attente » pour relancer.</li>
+            <li><b>Go</b> : la demande de pricing s'ouvre avec l'objet, les codes affaire et le texte du mail. La fiche « Caractéristiques Centrales » et le brouillon Outlook se font avec Claude (skill demande de pricing).</li>
+            <li>Sorties possibles à tout moment : No Go, Perdu, Abandonné (bouton « Sorties » pour les revoir, « Réactiver » pour revenir).</li>
+          </ol>
+        </section>
+        <section data-g="excel" hidden>
+          <h4>Mettre à jour les Excel partagés</h4>
+          <ul>
+            <li><b>Copier-coller</b> (partout) : « Copier ligne Pipe » (37 colonnes) ou « Copier ligne BDD » (91 colonnes), puis clic en colonne A d'une ligne vide et <kbd>Ctrl</kbd>+<kbd>V</kbd>.</li>
+            <li><b>Pont Excel</b> (sur l'ordinateur) : « Envoyer au Pipe / à la BDD Excel » écrit directement dans les fichiers synchronisés avec SharePoint. Une ligne existante (même producteur + centrale) est mise à jour, sinon elle est ajoutée ; les formules ne sont jamais écrasées.</li>
+            <li>Installation du pont : <b>Réf. &amp; data → Pont Excel</b>. Télécharge les deux fichiers dans un même dossier, double-clique sur le .bat, choisis les deux Excel, recopie la clé. Laisse la fenêtre ouverte (réduite).</li>
+          </ul>
+        </section>
+        <section data-g="parc" hidden>
+          <h4>Parc</h4>
+          <ul>
+            <li>Charge le fichier « Suivi Agrégation » (ou « Lire depuis l'Excel » avec le pont). Il reste sur l'appareil, il n'est pas envoyé sur GitHub.</li>
+            <li>Volumes par année et par cadre face à l'objectif, développeurs, régions, échéances, table filtrable.</li>
+            <li><b>Renouvellements</b> : une tâche par développeur et date de fin pour les contrats qui se terminent dans les 6 mois (réglable). « Remettre dans le pipeline » recrée l'installation à l'étape Demande de prix.</li>
+            <li>Les contrats d'un producteur apparaissent aussi sur sa fiche dans Contacts (bouton ⓘ).</li>
+          </ul>
+        </section>
+        <section data-g="contacts" hidden>
+          <h4>Contacts</h4>
+          <ul>
+            <li>Tri en cliquant sur les en-têtes Contact, Société, Note. Clic sur un nom = la fiche ; l'icône copie le mail ou le téléphone.</li>
+            <li>« Coller une signature » crée un contact depuis une signature (texte ou image).</li>
+            <li><b>Vers le téléphone</b> : fichier .vcf des contacts jamais exportés (les doublons de l'app sont fusionnés). Après le tout premier import sur un téléphone qui avait déjà des contacts, lance « Fusionner les doublons » du téléphone.</li>
+          </ul>
+        </section>
+        <section data-g="tel" hidden>
+          <h4>Sur le téléphone</h4>
+          <ul>
+            <li>Ouvre <b>tomsremy.github.io/ToDo/mobile.html</b> puis « Sur l'écran d'accueil ». Version allégée : Aujourd'hui, Tâches, Contacts, Parc, Pipeline (lecture) et la note.</li>
+            <li>Mêmes données que l'ordinateur dès que la synchro est activée sur le téléphone (une fois, dans la version complète, onglet Réf. &amp; data).</li>
+            <li>Pour changer l'icône après une mise à jour : retirer l'app de l'écran d'accueil puis la rajouter.</li>
+          </ul>
+        </section>
+        <section data-g="synchro" hidden>
+          <h4>Synchro et sécurité</h4>
+          <ul>
+            <li>Les données passent par ton repo GitHub <b>privé</b> (TomSRemy/todo-data) avec un token stocké seulement dans le navigateur. Le code de l'app est public, tes données non.</li>
+            <li>Chaque appareil garde une copie locale : l'app marche sans réseau, puis se resynchronise (toutes les 5 minutes, et en quittant l'app).</li>
+            <li>Si le même champ a été modifié sur deux appareils, la version la plus récente gagne et le cas est listé dans Réf. &amp; data → Conflits.</li>
+            <li>Sauvegarde : Réf. &amp; data → Exporter (fichier JSON complet).</li>
+          </ul>
+        </section>
+      </div>
+    </div>
   </div>
 
   <div id="vcf-overlay" class="modal-overlay hidden">
@@ -5453,7 +5549,8 @@
   $('stage-advance-overlay').addEventListener('click', e=>{ if(e.target.id==='stage-advance-overlay') closeStageAdvance(); });
   document.addEventListener('keydown', e=>{
     if(e.key!=='Escape') return;
-    if(!$('opp-detail-overlay').classList.contains('hidden')) closeOppDetail();
+    if(!$('guide-overlay').classList.contains('hidden')) $('guide-overlay').classList.add('hidden');
+    else if(!$('opp-detail-overlay').classList.contains('hidden')) closeOppDetail();
     else if(!$('prequal-overlay').classList.contains('hidden')) closePrequalForm();
   });
   $('export-btn').onclick=exportData;
@@ -5836,6 +5933,14 @@
   $('parc-bridge-btn').onclick=()=>importParcFromBridge(false);
   $('parc-file').addEventListener('change', e=>{ if(e.target.files[0]) importParcFile(e.target.files[0]); e.target.value=''; });
   $('vcf-btn').onclick=openVcfExport;
+  $('help-btn').onclick=()=>$('guide-overlay').classList.remove('hidden');
+  $('guide-close').onclick=()=>$('guide-overlay').classList.add('hidden');
+  $('guide-overlay').addEventListener('click', e=>{ if(e.target.id==='guide-overlay') $('guide-overlay').classList.add('hidden'); });
+  $('guide-nav').addEventListener('click', e=>{
+    const b=e.target.closest('[data-g]'); if(!b) return;
+    $('guide-nav').querySelectorAll('button').forEach(x=>x.classList.toggle('on', x===b));
+    $('guide-overlay').querySelectorAll('.guide-body section').forEach(s=>{ s.hidden=s.dataset.g!==b.dataset.g; });
+  });
   $('vcf-go').onclick=doVcfExport;
   $('vcf-close').onclick=()=>$('vcf-overlay').classList.add('hidden');
   $('vcf-mode-all').onchange=()=>{ if($('vcf-mode-all').checked) $('vcf-mode-changed').checked=false; };
