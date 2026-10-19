@@ -183,7 +183,8 @@ with sync_playwright() as p:
     check(page.input_value("#postit-text") == "Demain : Rappeler Sophie", "old multi-post-it notes folded into the post-it")
     page.click("#postit-text"); page.keyboard.press("End")
     page.keyboard.type("\nEnvoyer offre PPA\nidée : webinar ACC")
-    page.wait_for_timeout(800)
+    # the note is saved after a short pause in typing: wait for the save itself, not a fixed delay
+    page.wait_for_function("(localStorage.getItem('todo_todo-widget-notes')||'').includes('webinar ACC')", timeout=10000)
     page.reload()
     check(page.input_value("#postit-text") == "Demain : Rappeler Sophie\nEnvoyer offre PPA\nidée : webinar ACC", "post-it text persists after reload")
     page.click("#postit-text")
@@ -251,7 +252,13 @@ with sync_playwright() as p:
     page.locator(".company-group-header", has_text="Alpha").locator(".co-info-btn").click()
     check("Producteur hors France" in page.inner_text("#contacts-list"), "company info shown with the (i) button")
     page.click('.contacts-header-row .sort[data-sort="rel"]')
-    check(names()[1:3] == ["Adam Durand", "Zoé Martin"], "sort by Note puts most stars first within a company")
+    # stars are the client's: Beta starts at 5 (best of its contacts), Alpha at 3, Gamma at 1
+    check(names()[:3] == ["Adam Durand", "Zoé Martin", "Léa Bernard"], f"sort by Note puts the best-rated clients first ({names()[:3]})")
+    rel = {c["name"]: c.get("relevance") for c in stored(page, "todo-widget-companies")}
+    check(rel.get("Alpha") == 3 and not page.is_visible("#ct-relevance-picker"), f"client note starts from its best contact, none on the contact form ({rel})")
+    page.locator(".company-group-header", has_text="Alpha").locator(".co-stars .co-star").nth(4).click()
+    rel = {c["name"]: c.get("relevance") for c in stored(page, "todo-widget-companies")}
+    check(rel.get("Alpha") == 5, "clicking the stars on the client line rates the client")
     page.click('#contacts-view-switch [data-view="liste"]')
     page.click('.contacts-header-row .sort[data-sort="name"]'); page.click('.contacts-header-row .sort[data-sort="name"]')
     check(names()[0] == "Hugo Petit", f"clicking Contact twice sorts Z→A {names()[:2]}")
