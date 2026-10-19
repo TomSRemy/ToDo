@@ -356,6 +356,16 @@ with sync_playwright() as p:
     check(not errors, f"no page errors ({errors})")
     page.close()
 
+    # --- Contacts: « Coller une signature » pre-fills the contact form
+    page, errors = new_page(browser)
+    page.goto(URL); page.click('[data-tab="contacts"]'); page.click("#sig-paste-btn")
+    page.fill("#sig-paste-text", "M. Jean DUPONT\nPrésident\nSAS SOLAIRE DU MIDI\nTél : 04 67 11 22 33 - Mob. : 06 12 34 56 78\njean.dupont@solairedumidi.fr")
+    page.click("#sig-paste-analyze")
+    got = [page.input_value(s_) for s_ in ("#ct-first", "#ct-last", "#ct-role", "#ct-company", "#ct-email", "#ct-phone1", "#ct-phone2")]
+    check(got == ["Jean", "Dupont", "Président", "SAS SOLAIRE DU MIDI", "jean.dupont@solairedumidi.fr", "06 12 34 56 78", "04 67 11 22 33"], f"signature fills the contact form ({got})")
+    check(not errors, f"no page errors ({errors})")
+    page.close()
+
     # --- Pipeline: a request whose installations are at different stages moves each one forward (never back)
     mixed = [{"id": "r9", "kind": "request", "company": "SEM", "title": "Demande de pricing", "createdAt": 1, "updatedAt": 1, "deleted": False},
              {"id": "a", "kind": "installation", "company": "SEM", "centrale": "A", "title": "A", "stage": "negociation", "requestId": "r9", "createdAt": 1, "updatedAt": 1, "deleted": False},

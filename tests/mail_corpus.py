@@ -57,7 +57,7 @@ SAS SOLAIRE DU MIDI
 12 route de Pézenas, 34500 Béziers
 Tél : 04 67 11 22 33 - Mob. : 06 12 34 56 78
 www.solairedumidi.fr""",
-        "expect": {"producteur": "SAS SOLAIRE DU MIDI", "prenom": "Jean", "nom": "DUPONT", "qualite": "Président", "tel": "04 67 11 22 33",
+        "expect": {"producteur": "SAS SOLAIRE DU MIDI", "prenom": "Jean", "nom": "DUPONT", "qualite": "Président", "tel": "06 12 34 56 78",
                    "mail": "jean.dupont@solairedumidi.fr", "origine": "Contact direct", "dept": "34 - Hérault", "region": "Occitanie",
                    "install": "PV", "contrat": "AO CRE CR", "kwc": "4980", "mwh": "6900", "mesPrev": "15/09/2026", "duree": "5"},
     },
@@ -471,7 +471,7 @@ Responsable financement de projets
 RHÔNE ÉNERGIES SAS
 T. 04 75 00 00 06
 M. 06 77 00 00 06""",
-        "expect": {"prenom": "Camille", "nom": "DUBOIS", "tel": "04 75 00 00 06", "dept": "26 - Drôme", "region": "Auvergne-Rhône-Alpes", "install": "PV",
+        "expect": {"prenom": "Camille", "nom": "DUBOIS", "tel": "06 77 00 00 06", "dept": "26 - Drôme", "region": "Auvergne-Rhône-Alpes", "install": "PV",
                    "kwc": "7500", "mwh": "9800", "mesPrev": "01/06/2027", "contrat": "AO CRE CR", "producteur": "RHÔNE ÉNERGIES SAS",
                    "qualite": "Responsable financement de projets"},
     },

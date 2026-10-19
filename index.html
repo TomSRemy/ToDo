@@ -3448,44 +3448,16 @@
   // Best-effort signature parser: never silently creates a contact, only
   // pre-fills the normal contact form for review — signatures vary too much
   // in layout for this to be treated as reliable on its own.
+  // Never silently creates a contact: pre-fills the normal contact form for review.
   function parseSignatureText(text){
-    const result={ firstName:'', lastName:'', role:'', company:'', email:'', phone1:'' };
-    const emailMatch=text.match(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/);
-    if(emailMatch) result.email=emailMatch[0];
-
-    const phoneMatch=text.match(/(\+?\d[\d\s.\-()]{7,}\d)/);
-    if(phoneMatch) result.phone1=phoneMatch[0].trim();
-
-    const lines=text.split(/\r?\n/).map(l=>l.trim()).filter(Boolean);
-    const skipStart=/^(cordialement|best regards|sincerely|regards|merci|thanks|kind regards|bien à vous)/i;
-    let nameLineIdx=-1;
-    for(let i=0;i<lines.length;i++){
-      const line=lines[i];
-      if(line.includes('@') || /^\+?\d/.test(line) || skipStart.test(line)) continue;
-      const words=line.split(/\s+/).filter(Boolean);
-      if(words.length>=2 && words.length<=4){
-        result.firstName=words[0];
-        result.lastName=words.slice(1).join(' ');
-        nameLineIdx=i;
-        break;
-      }
+    const s=parseSignatureBlock(text);
+    let company=s.societe;
+    if(!company && s.mail){
+      const domain=(s.mail.split('@')[1]||'');
+      if(!PQ_GENERIC_DOMAINS.test(domain)){ const main=domain.split('.').slice(-2,-1)[0]||''; company=main?(findExistingCI(clientsList, main)||main.charAt(0).toUpperCase()+main.slice(1)):''; }
     }
-
-    if(nameLineIdx>=0 && lines[nameLineIdx+1]){
-      const nextLine=lines[nameLineIdx+1];
-      if(!nextLine.includes('@') && !/^\+?\d/.test(nextLine)) result.role=nextLine;
-    }
-
-    if(result.email){
-      const domain=result.email.split('@')[1]||'';
-      const parts=domain.split('.');
-      const mainPart=parts.length>=3 ? parts[parts.length-2] : parts[0];
-      if(mainPart){
-        const existing=findExistingCI(clientsList, mainPart);
-        result.company=existing || (mainPart.charAt(0).toUpperCase()+mainPart.slice(1));
-      }
-    }
-    return result;
+    if(company){ const existing=findExistingCI(clientsList, company); if(existing) company=existing; }
+    return { firstName:s.prenom, lastName:s.nom?pqTitleCase(s.nom):'', role:s.qualite, company:company||'', email:s.mail, phone1:s.tel, phone2:s.tel2, comment:[s.adresse, s.site].filter(Boolean).join(' · ') };
   }
 
   function setRelevancePicker(v){
@@ -3715,6 +3687,139 @@
     return null;
   }
 
+  // ---------- Signature reader, shared by Contacts (« Coller une signature ») and the mail reader ----------
+  // Works line by line, each line cut into parts on " | ", " – ", ", "; every part is classified as phone, mail,
+  // web, address, name, role or company. The mail address helps: its local part names the person
+  // (jean.dupont@ → Jean DUPONT) and its domain names the company (solairedumidi.fr → Solaire du Midi).
+  const SIG_JUNK=/^\[cid:|^<image|^\[image|^image\d|envoy[ée] (de|depuis) mon|sent from my|get outlook|obtenir outlook|t[ée]l[ée]charger outlook|^[-—–_=*•·~]+$/i;
+  const SIG_DISCLAIMER=/confidentiel|destinataires?\b|pi[eè]ces? jointes?|pensez [àa] l.environnement|avant d.imprimer|this (e-?mail|message)|intended (solely|only)|disclaimer|n.imprimez/i;
+  const SIG_PHONE_LABEL=/^(t[ée]l[ée]?(?:phone)?|tel|t|fixe|ligne directe|direct|standard|bureau|office|mob(?:ile)?|port(?:able)?|gsm|m|cell(?:ular)?|fax|f)\s*\.?\s*:?\s*/i;
+  const SIG_MAIL_LABEL=/^(e-?mail|courriel|mail|e)\s*\.?\s*:?\s*/i;
+  const SIG_ROLE=/\b(directeur|directrice|director|g[ée]rante?|pr[ée]sidente?|president|responsable|charg[ée]e?|ing[ée]nieure?|engineer|associ[ée]e?|partner|dirigeante?|fondat(?:eur|rice)|founder|co-?fondat\p{L}*|ceo|cfo|coo|cto|dg|daf|dsi|vp|maire|adjointe?|manager|asset|chef|head|d[ée]l[ée]gu[ée]e?|exploitante?|agricult(?:eur|rice)|technicien(?:ne)?|acheteu(?:r|se)|secr[ée]taire|assistante?|comptable|conseill[eè]re?|consultante?|coordinat(?:eur|rice)|analyste?|analyst|officer|commerciale?|attach[ée]e?|juriste|avocate?|administrat(?:eur|rice)|gestionnaire|business developer|account)\b/iu;
+  const SIG_PUBLIC=/\b(mairie|commune|communaut[eé]|syndicat|r[ée]gie|d[ée]partement|conseil (r[ée]gional|d[ée]partemental)|m[ée]tropole|agglom[ée]ration|ville de|sem\b|spl\b)/i;
+  const SIG_ADDRESS=/\b\d{5}\b|\b(rue|avenue|av\.|bd|boulevard|chemin|route|place|all[ée]e|impasse|quai|cours|za|zi|zac|bp|cs|lieu-dit|lieudit|parc d.activit[ée]s)\b/i;
+  const SIG_WEB=/https?:\/\/|www\.|linkedin|\b[a-z0-9-]+\.(fr|com|eu|net|org|bzh|re|io)\b(?!@)/i;
+  const SIG_PARTICLES=/^(de|du|des|la|le|les|d'|van|von|da|di|del)$/i;
+
+  function sigNameWords(s){
+    const t=s.replace(/^(m\.|mr\.?|mme|mlle|monsieur|madame)\s+/i,'').trim();
+    const w=t.split(/\s+/);
+    if(w.length<2 || w.length>5) return null;
+    // each word: a capitalised or all-caps word, or a particle (de, La, Le…) inside the name
+    const capsWord=x=>x.length>1 && x===x.toUpperCase() && /\p{L}/u.test(x);
+    // "BERTRAND julien": a lowercase first name is accepted next to an all-caps surname
+    const lowerOk=w.length===2 && w.some(capsWord) && w.some(x=>/^[a-zéèàâîôûç][\p{L}'’-]+$/u.test(x));
+    if(!lowerOk && !w.every((x,i)=>/^[A-ZÉÈÀÂÎÔÛÇ][\p{L}'’-]*$/u.test(x) || (i>0 && SIG_PARTICLES.test(x)))) return null;
+    if(w.filter(x=>!SIG_PARTICLES.test(x)).length<2 && !SIG_PARTICLES.test(w[1])) return null;
+    return w;
+  }
+  function sigLocalTokens(mail){
+    if(!mail) return [];
+    const whole=pqFold(mail.split('@')[0]).split(/[._]+/).filter(Boolean);
+    return whole.concat(...whole.filter(t=>t.includes('-')).map(t=>t.split('-')));
+  }
+  function sigDomainStem(mail){ if(!mail) return ''; const d=(mail.split('@')[1]||'').toLowerCase(); if(PQ_GENERIC_DOMAINS.test(d)) return ''; return pqFold(d.replace(/\.[a-z]{2,4}$/,'')).replace(/[^a-z0-9]/g,''); }
+  // How much a part looks like the person's name (0 = not a name)
+  function sigNameScore(part, tokens, stem){
+    const w=sigNameWords(part); if(!w) return 0;
+    const f=pqFold(part);
+    if(stem && f.replace(/[^a-z0-9]/g,'')===stem) return 0;
+    if(SIG_ROLE.test(part) || SIG_PUBLIC.test(part) || new RegExp('\\b('+PQ_FORM+')\\b').test(part) || /\b(energie|energies|solaire|solar|capital|groupe|group|eolien|hydro|metha|soleil|vents?|centrale|parc|sas|sarl)\b/.test(f)) return 0;
+    let score=1;
+    const words=w.map(x=>pqFold(x).replace(/[^a-z]/g,'')).filter(Boolean);
+    const joined=tokens.join('');
+    if(tokens.length && words.some(x=>x.length>2 && (tokens.includes(x) || joined.includes(x)))) score+=3;
+    if(/[a-zé]/.test(part)) score+=1;   // mixed case looks more like a person than an all-caps company
+    return score;
+  }
+  function sigSplitName(part, tokens){
+    const w=sigNameWords(part);
+    const caps=w.map(x=>x.length>1 && x===x.toUpperCase());
+    let first=[], last=[];
+    if(caps.some(Boolean) && !caps.every(Boolean)){
+      // "Jean DUPONT" / "DURAND Pierre": the all-caps words are the surname
+      w.forEach((x,i)=>{ (caps[i] || (SIG_PARTICLES.test(x) && i>0 && caps[i+1]))?last.push(x):first.push(x); });
+    } else {
+      // all caps or all capitalised: the mail says which word is the surname, else the first word is the first name
+      // surname = the word matching the last block of the address (anne-sophie.leclerc → leclerc)
+      const lastTok=tokens.length?tokens.filter(t=>!t.includes('-'))[tokens.filter(t=>!t.includes('-')).length-1]:'';
+      const blocks=tokens.filter(t=>!tokens.some(u=>u!==t && u.includes('-') && u.split('-').includes(t)));
+      const surname=blocks.length>1?blocks[blocks.length-1]:lastTok;
+      const li=surname?w.findIndex((x,i)=>i>0 && pqFold(x).replace(/[^a-z]/g,'')===surname):-1;
+      const fi=tokens.length?w.findIndex(x=>{ const fx=pqFold(x).replace(/[^a-z-]/g,''); return tokens[0]===fx || (tokens[0]===fx[0] && tokens.length>1) || tokens[0]===fx.split('-').map(y=>y[0]).join(''); }):-1;
+      if(li>0){ first=w.slice(0,li); last=w.slice(li); }
+      else if(fi>0){ first=w.slice(fi); last=w.slice(0,fi); }
+      else { first=[w[0]]; last=w.slice(1); }
+    }
+    return { prenom:first.map(x=>x.split('-').map(y=>y.charAt(0).toUpperCase()+y.slice(1).toLowerCase()).join('-')).join(' '), nom:last.join(' ').toUpperCase() };
+  }
+  function sigPhones(line){
+    const out=[]; const re=new RegExp(PQ_PHONE_RE.source,'g'); let m;
+    while((m=re.exec(line))){ out.push({ num:pqFmtPhone(m[0]), at:m.index }); }
+    return out;
+  }
+  function parseSignatureBlock(text, hint){
+    hint=hint||{};
+    const res={ prenom:'', nom:'', qualite:'', societe:'', mail:'', tel:'', tel2:'', adresse:'', site:'' };
+    let lines=String(text||'').replace(/\r/g,'').replace(/ /g,' ').split('\n').map(l=>l.replace(/\s+/g,' ').trim()).filter(Boolean);
+    lines=lines.filter(l=>!SIG_JUNK.test(l) && !(SIG_DISCLAIMER.test(l) && l.split(' ').length>8) && !PQ_CLOSINGS.test(l));
+    const mails=[...new Set(lines.join('\n').match(PQ_EMAIL_RE)||[])].map(e=>e.toLowerCase());
+    res.mail=hint.mail || mails.find(e=>!pqIsRelay(e)) || mails[0] || '';
+    const tokens=sigLocalTokens(res.mail), stem=sigDomainStem(res.mail);
+    // phones, ranked: mobile (06/07 or labelled mobile) > direct line > other > switchboard
+    const phones=[];
+    lines.forEach(l=>{
+      const segs=l.split(/\s+[-–|·]\s+|\s{2,}|;\s*/);
+      segs.forEach(seg=>{
+        sigPhones(seg).forEach(p=>{
+          const lab=pqFold(seg.slice(0,p.at));
+          let rank=/^0[67]/.test(p.num)?0:2;
+          if(/mob|port|gsm|cell|\bm\b/.test(lab)) rank=0; else if(/direct/.test(lab)) rank=1; else if(/standard|fax|\bf\b/.test(lab)) rank=/fax|\bf\b/.test(lab)?9:3;
+          if(rank<9 && !phones.some(x=>x.num===p.num)) phones.push({ num:p.num, rank, order:phones.length });
+        });
+      });
+    });
+    phones.sort((a,b)=>a.rank-b.rank || a.order-b.order);
+    if(phones[0]) res.tel=phones[0].num;
+    if(phones[1]) res.tel2=phones[1].num;
+    // classify the remaining parts
+    const parts=[];
+    lines.forEach((l,li)=>{
+      l.split(/\s+[-–|·•]\s+|,\s+|\s\|\s?|\|/).map(p=>p.trim()).filter(Boolean).forEach(p=>parts.push({ p, li }));
+    });
+    const names=[], roles=[], companies=[];
+    parts.forEach(({p,li})=>{
+      if(new RegExp(PQ_EMAIL_RE.source).test(p) || SIG_MAIL_LABEL.test(p) && new RegExp(PQ_EMAIL_RE.source).test(p)) return;
+      if(sigPhones(p).length || (SIG_PHONE_LABEL.test(p) && /\d{2}/.test(p) && !/[a-z]{4,}/i.test(p.replace(SIG_PHONE_LABEL,'')))) return;
+      if(SIG_WEB.test(p)){ if(!res.site && !/linkedin/i.test(p)) res.site=p.replace(/^(web|site(?: web)?|w)\s*:?\s*/i,''); return; }
+      if(SIG_ADDRESS.test(p) && !SIG_ROLE.test(p)){ res.adresse=(res.adresse?res.adresse+', ':'')+p; return; }
+      if(p.split(' ').length>9) return;
+      const ns=sigNameScore(p, tokens, stem);
+      if(ns){ names.push({ p, li, score:ns }); return; }
+      // "Gérant BREIZH SOLAR": a role followed by an all-caps company
+      const rc=new RegExp('^(.{3,40}?)\\s+((?:[A-Z0-9ÉÈÀÂÎÔÛÇ][A-Z0-9ÉÈÀÂÎÔÛÇ\'’&.-]+\\s*){1,5})$','u').exec(p);
+      if(rc && SIG_ROLE.test(rc[1]) && !SIG_ROLE.test(rc[2]) && !/^(g[ée]n[ée]ral|technique|commercial|financier|adjoint|d[ée]l[ée]gu[ée]|administratif|op[ée]rationnel|marketing|juridique|rh)$/i.test(rc[2].trim())){ roles.push({ p:rc[1], li }); companies.push({ p:rc[2].trim(), li, score:3 }); return; }
+      const f=pqFold(p).replace(/[^a-z0-9]/g,'');
+      const isLegal=new RegExp('\\b('+PQ_FORM+')\\b').test(p)||/cr[ée]dit agricole|caisse r[ée]gionale|caisse d.[ée]pargne|banque populaire|soci[ée]t[ée] g[ée]n[ée]rale|bnp/i.test(p), isPublic=SIG_PUBLIC.test(p);
+      const letters=p.replace(/[^\p{L}]/gu,''), allCaps=letters.length>=4 && letters===letters.toUpperCase();
+      const domainHit=stem && f.length>=4 && (f===stem || stem.includes(f) || f.includes(stem));
+      const isRole=SIG_ROLE.test(p) && !isLegal && !(isPublic && /^(mairie|commune|syndicat|communaut)/i.test(p));
+      if(isRole && !domainHit){ roles.push({ p, li }); return; }
+      if(isLegal || isPublic || domainHit || allCaps){
+        let score=(isLegal?4:0)+(domainHit?4:0)+(isPublic?3:0)+(allCaps?1:0);
+        if(/^groupe?\b/i.test(p)) score-=3;
+        companies.push({ p, li, score });
+      }
+    });
+    if(names.length){
+      names.sort((a,b)=>b.score-a.score || a.li-b.li);
+      const n=sigSplitName(names[0].p, tokens); res.prenom=n.prenom; res.nom=n.nom;
+    }
+    if(roles.length) res.qualite=roles[0].p.replace(/\s*[-–|,:]\s*$/,'');
+    if(companies.length){ companies.sort((a,b)=>b.score-a.score || a.li-b.li); res.societe=companies[0].p; }
+    return res;
+  }
+
   function parsePipeMail(raw){
     const out={}, text=String(raw||'').replace(/\r/g,'').replace(/ /g,' '), lines=text.split('\n').map(l=>l.trim());
     if(!text.trim()) return out;
@@ -3769,16 +3874,13 @@
       // Signature: lines after the last closing formula; each line may hold "Name – Role, COMPANY, phone"
       let sigStart=-1;
       body.forEach((l,i)=>{ if(PQ_CLOSINGS.test(l)) sigStart=i; });
-      const sigLines=(sigStart>=0?body.slice(sigStart+1):body.slice(-8)).filter(l=>l && !/^(-{2,}|_{2,})$/.test(l) && !/message d.origine|original message|forwarded message/i.test(l)).slice(0,8);
-      sigLines.forEach(l=>{
-        l.split(/\s+[-–|·]\s+|,\s+/).map(p=>p.trim()).filter(Boolean).forEach(p=>{
-          if(new RegExp(PQ_EMAIL_RE.source).test(p) || new RegExp(PQ_PHONE_RE.source).test(p) || /https?:|www\./i.test(p) || /^(t[ée]l|mob|port)/i.test(p)) return;
-          if(/\d{5}/.test(p) || p.split(/\s+/).length>8) return;
-          if(!name && pqLooksLikeName(p)){ name=p; return; }
-          if(!company && pqLooksLikeCompany(p)){ company=p; return; }
-          if(!role && PQ_ROLE.test(p) && p.split(/\s+/).length<=6){ role=p; return; }
-        });
-      });
+      const sigLines=(sigStart>=0?body.slice(sigStart+1):body.slice(-8)).filter(l=>l && !/message d.origine|original message|forwarded message/i.test(l)).slice(0,10);
+      const sig=parseSignatureBlock(sigLines.join('\n'), { mail:out.mail });
+      if(sig.prenom||sig.nom) name=[sig.prenom, sig.nom].filter(Boolean).join(' ');
+      if(sig.qualite) role=sig.qualite;
+      if(sig.societe) company=sig.societe;
+      // the signature's phones, mobile first, win over numbers quoted elsewhere in the mail
+      if(sig.tel) out.tel=[sig.tel, sig.tel2].filter(Boolean).join(' / ');
       if(!name && prospect.from){ const dn=prospect.from.replace(/<.*?>/,'').replace(PQ_EMAIL_RE,'').replace(/["'\[\]]/g,'').trim(); if(dn && dn.split(/\s+/).length>=2 && dn.split(/\s+/).length<=4 && !PQ_NOT_NAME.test(dn)) name=dn; }
     } else if(inlineLine){
       // relay mail: "M. Hugo Lefebvre, hugo@…, 06…" — the name closest before the address
@@ -5948,7 +6050,7 @@
   $('vcf-overlay').addEventListener('click', e=>{ if(e.target.id==='vcf-overlay') $('vcf-overlay').classList.add('hidden'); });
 
   // Test hooks (tests/smoke_test.py and the mail corpus set window.TODO_TEST_HOOKS before loading)
-  if(window.TODO_TEST_HOOKS) window.__todo={ parsePipeMail, parsePipeMailInstallations:(typeof parseMailInstallations==='function'?parseMailInstallations:null) };
+  if(window.TODO_TEST_HOOKS) window.__todo={ parsePipeMail, parsePipeMailInstallations:parseMailInstallations, parseSignatureBlock, parseSignatureText, xlsxToInstallations:(rowsBySheet)=>pqXlsxToInstallations({ SheetNames:Object.keys(rowsBySheet), Sheets:rowsBySheet, __rows:true }) };
 
   // Phone version: bottom bar drives the sidebar tabs (which stay the single source of truth).
   if(window.TODO_LITE){
