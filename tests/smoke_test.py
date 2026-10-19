@@ -492,6 +492,26 @@ with sync_playwright() as p:
     check(page.evaluate("window.__xss") is None, "conflict panel doesn't execute HTML")
     page.close()
 
+    # --- Service worker (needs http): GitHub reads are never served from the cache
+    import functools, http.server, threading
+    root = pathlib.Path(__file__).resolve().parent.parent
+    srv = http.server.ThreadingHTTPServer(("127.0.0.1", 0), functools.partial(http.server.SimpleHTTPRequestHandler, directory=str(root)))
+    srv.RequestHandlerClass.log_message = lambda *a: None
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    ctx = browser.new_context(service_workers="allow")
+    reads = {"n": 0}
+    def gh(route, req):
+        reads["n"] += 1
+        route.fulfill(status=200, content_type="application/json", headers={"Access-Control-Allow-Origin": "*"},
+                      body=json.dumps({"sha": "s%d" % reads["n"], "encoding": "base64", "content": base64.b64encode(b"[]").decode()}))
+    ctx.route("**/api.github.com/**", gh)
+    ctx.route("**/fonts.g*/**", lambda r: r.abort())
+    page = ctx.new_page(); page.goto("http://127.0.0.1:%d/index.html" % srv.server_address[1])
+    page.wait_for_function("navigator.serviceWorker && navigator.serviceWorker.controller", timeout=15000)
+    shas = [page.evaluate("fetch('https://api.github.com/repos/o/r/contents/data/tasks.json').then(r=>r.json()).then(d=>d.sha)") for _ in range(3)]
+    check(shas == ["s1", "s2", "s3"], f"service worker never serves sync data from its cache ({shas})")
+    ctx.close(); srv.shutdown()
+
     browser.close()
 
 print(f"\n{len(failures)} failure(s)")

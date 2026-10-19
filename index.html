@@ -1419,6 +1419,7 @@
 
   function logConflict(entityType, entity, field, localValue, remoteValue, resolvedValue){
     const meta=CONFLICT_ENTITY_LABELS[entityType];
+    if(conflicts.length>=200) conflicts.splice(0, conflicts.length-199);   // keep the log readable
     conflicts.push({
       id:'cf_'+Date.now()+'_'+Math.random().toString(36).slice(2,6),
       entityType, entityId:entity.id,
