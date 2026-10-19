@@ -331,7 +331,7 @@ with sync_playwright() as p:
     page.click("#opp-detail-actions >> text=Fermer")
     # pré-qualif → installation
     page.click("#prequal-add-btn"); page.fill("#prequal-company", "Ferme Dupont"); page.fill("#prequal-note", "Salon"); page.click("#prequal-save-btn")
-    page.click('[data-phase="prequal"] .pipe-card'); page.click("text=Projet identifié")
+    page.click('[data-phase="prequal"] .pipe-card'); page.click("#opp-detail-actions >> text=Projet identifié")
     check(page.input_value("#pq1-company") == "Ferme Dupont", "pré-qualif opens the form on its client")
     page.click("#pq-next-btn"); page.fill("#pq-0-centrale", "Toiture A"); page.click("#pq-save-btn")
     check(page.locator('[data-phase="prequal"] .pipe-card').count() == 0 and "Toiture A" in page.inner_text('[data-phase="qualif"]'), "pré-qualif becomes an installation")
