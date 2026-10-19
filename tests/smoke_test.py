@@ -178,6 +178,41 @@ with sync_playwright() as p:
     check(not errors, f"no page errors ({errors})")
     page.close()
 
+    # --- Contacts: alphabetical by default, sortable columns, company info on demand, edit keeps scroll
+    people = [("Zoé", "Martin", "Beta", 2), ("Adam", "Durand", "Beta", 5), ("Léa", "Bernard", "Alpha", 3), ("Hugo", "Petit", "", 1)]
+    people += [(f"P{i}", f"Nom{i:02d}", "Gamma", 1) for i in range(40)]
+    cts = [{"id": f"c{i}", "firstName": f, "lastName": l, "role": "", "company": co, "email": "", "phone1": "", "phone2": "",
+            "relevance": r, "comment": "", "createdAt": 1, "updatedAt": 1, "deleted": False} for i, (f, l, co, r) in enumerate(people)]
+    cos = [{"id": "co1", "name": "Alpha", "type": "Client", "whatTheyDo": "Producteur hors France", "marketScope": ["EU"], "website": "",
+            "createdAt": 1, "updatedAt": 1, "deleted": False}]
+    page, errors = new_page(browser, {"todo_todo-widget-contacts": json.dumps(cts), "todo_todo-widget-companies": json.dumps(cos)},
+                            viewport={"width": 1300, "height": 700})
+    page.goto(URL); page.click('[data-tab="contacts"]')
+    names = lambda: page.eval_on_selector_all("#contacts-list .contact-name > span:first-child", "els=>els.map(e=>e.textContent)")
+    check(names()[:3] == ["Léa Bernard", "Adam Durand", "Zoé Martin"], f"contacts alphabetical by default {names()[:3]}")
+    check("Producteur hors France" not in page.inner_text("#contacts-list"), "company info hidden by default")
+    page.locator(".company-group-header", has_text="Alpha").locator(".co-info-btn").click()
+    check("Producteur hors France" in page.inner_text("#contacts-list"), "company info shown with the (i) button")
+    page.click('.contacts-header-row .sort[data-sort="rel"]')
+    check(names()[1:3] == ["Adam Durand", "Zoé Martin"], "sort by Note puts most stars first within a company")
+    page.click('#contacts-view-switch [data-view="liste"]')
+    page.click('.contacts-header-row .sort[data-sort="name"]'); page.click('.contacts-header-row .sort[data-sort="name"]')
+    check(names()[0] == "Hugo Petit", f"clicking Contact twice sorts Z→A {names()[:2]}")
+    page.click('.contacts-header-row .sort[data-sort="name"]')
+    page.evaluate("document.getElementById('tab-contacts').scrollTop=600")
+    before = page.evaluate("document.getElementById('tab-contacts').scrollTop")
+    row = page.locator("#contacts-list .contact-row", has_text="Nom20")
+    row.locator(".contact-main").click()
+    page.locator(".contact-detail-links button", has_text="Modifier la fiche").click()
+    check(page.is_visible("#contact-form") and page.evaluate("document.getElementById('tab-contacts').scrollTop") == before, "opening the edit form keeps the list position")
+    page.fill("#ct-role", "Acheteur"); page.click("#contact-save-btn")
+    check(page.evaluate("document.getElementById('tab-contacts').scrollTop") == before, "saving a contact keeps the list position")
+    check(page.evaluate("document.querySelector('.app-sidebar').getBoundingClientRect().top") == 0, "sidebar stays in place")
+    page.evaluate("window.scrollTo(0, 2000)")
+    check(page.evaluate("document.querySelector('.app-sidebar').getBoundingClientRect().top") == 0, "sidebar stays in place when the page scrolls")
+    check(not errors, f"no page errors ({errors})")
+    page.close()
+
     # --- Réf. & data: clients grouped by company type, collapsed by default, search opens them
     cos = [{"id": f"co{i}", "name": n, "type": t, "whatTheyDo": "", "marketScope": [], "website": "", "createdAt": 1, "updatedAt": 1, "deleted": False}
            for i, (n, t) in enumerate([("Alpha", "Fournisseur"), ("Beta", "Client"), ("Gamma", "Client"), ("Delta", "")])]
