@@ -548,6 +548,12 @@
   .pq-step1.hidden, .pq-layout.hidden, .crm-form-actions button.hidden{ display:none; }
   .prequal-note{ width:100%; background:var(--panel-2); border:1px solid var(--bd); border-radius:var(--radius); color:var(--tx1); font-family:var(--font-ui); font-size:13px; padding:8px 10px; resize:vertical; }
   .hidden-row{ display:none !important; }
+  .pipe-bar-btn.hidden{ display:none; }
+  .bridge-status{ font-size:11px; color:var(--tx3); font-family:var(--font-mono); }
+  .bridge-status.on{ color:var(--accent); } .bridge-status.off{ color:#D9A441; }
+  a.data-btn{ text-decoration:none; }
+  .bridge-msg{ position:fixed; left:50%; bottom:24px; transform:translateX(-50%); z-index:30000; background:var(--panel-3); border:1px solid var(--accent); color:var(--tx1); font-size:12.5px; padding:9px 14px; border-radius:7px; box-shadow:0 10px 24px rgba(0,0,0,.45); opacity:0; pointer-events:none; transition:opacity .15s; max-width:92vw; }
+  .bridge-msg.show{ opacity:1; } .bridge-msg.err{ border-color:#D9A441; }
   #tab-parc{ overflow-y:auto; }
   .parc-load{ cursor:pointer; }
   .parc-info{ font-size:11.5px; color:var(--tx3); }
@@ -1003,6 +1009,7 @@
   <div class="tab-panel hidden" id="tab-parc">
     <div class="quick-add-bar">
       <label class="pipe-bar-btn parc-load">Charger le Suivi Agrégation (.xlsx)<input type="file" id="parc-file" accept=".xlsx,.xlsm,.xls" hidden></label>
+      <button type="button" class="pipe-bar-btn hidden" id="parc-bridge-btn">Lire depuis l’Excel</button>
       <span class="parc-info" id="parc-info"></span>
     </div>
     <div id="parc-body"></div>
@@ -1172,6 +1179,19 @@
         <button class="data-btn" id="sync-save-btn" style="width:100%;">Activer la synchro sur cet appareil</button>
         <button class="data-btn" id="sync-now-btn" style="width:100%;">Synchroniser maintenant</button>
         <span id="sync-status" style="font-size:11px; color:var(--tx3); font-family:var(--font-mono);"></span>
+      </div>
+    </div>
+    <div class="list-manager" style="margin-top:22px;">
+      <h2>Pont Excel (ordinateur)</h2>
+      <p class="list-hint">Pour écrire directement dans tes fichiers Excel synchronisés avec SharePoint. Télécharge les deux fichiers dans un même dossier de l’ordinateur, double-clique sur le .bat, choisis le fichier Pipe puis le Suivi Agrégation, et recopie ici la clé affichée. Laisse la fenêtre ouverte pendant que tu travailles.</p>
+      <div class="data-actions" style="margin-bottom:8px;">
+        <a class="data-btn" href="bridge/Lancer-pont-excel.bat" download="Lancer-pont-excel.bat">Télécharger Lancer-pont-excel.bat</a>
+        <a class="data-btn" href="bridge/pont-excel.ps1" download="pont-excel.ps1">Télécharger pont-excel.ps1</a>
+      </div>
+      <div style="display:flex; flex-direction:column; gap:8px;">
+        <input type="password" id="bridge-token" placeholder="Clé affichée dans la fenêtre du pont" autocomplete="off">
+        <button class="data-btn" id="bridge-save-btn" style="width:100%;">Enregistrer et tester</button>
+        <span id="bridge-status" class="bridge-status"></span>
       </div>
     </div>
     <div class="list-manager" style="margin-top:22px;">
@@ -4225,6 +4245,7 @@
           actions.appendChild(oppActionBtn('Étape suivante', ()=>{ closeOppDetail(); offerStageAdvance([o]); }));
         }
       }
+      excelButtons(actions, [o]);
       actions.appendChild(oppActionBtn('Copier ligne Pipe', e=>copyToClipboard(pipeRow(o), e.target), 'ghost-btn'));
       if(o.goDate || stageIndex(o.stage)>=stageIndex('demande_prix')) actions.appendChild(oppActionBtn('Copier ligne BDD', e=>copyToClipboard(bddRow(o), e.target), 'ghost-btn'));
       if(!o.requestId && !isExited(o)) actions.appendChild(oppActionBtn('Demande de pricing', ()=>{
@@ -4371,6 +4392,7 @@
     }
     actions.appendChild(oppActionBtn('Copier l\u2019objet', e=>copyToClipboard(ml.subject, e.target), 'ghost-btn'));
     actions.appendChild(oppActionBtn('Copier le mail', e=>copyToClipboard(ml.body, e.target), 'ghost-btn'));
+    excelButtons(actions, list);
     actions.appendChild(oppActionBtn('Copier lignes Pipe', e=>copyToClipboard(list.map(pipeRow).join('\n'), e.target), 'ghost-btn'));
     actions.appendChild(oppActionBtn('Copier lignes BDD', e=>copyToClipboard(list.map(bddRow).join('\n'), e.target), 'ghost-btn'));
     actions.appendChild(oppActionBtn('Fermer', closeOppDetail, 'ghost-btn lite-keep'));
@@ -4426,45 +4448,126 @@
   }
 
   // ----- Excel rows (tab-separated, pasted from column A) -----
+  // Rows are built as typed cells — {d:'YYYY-MM-DD'} for dates, numbers, booleans, strings — then either
+  // sent to the local Excel bridge as is, or turned into tab-separated text for a paste from column A.
   function tsvCell(v){ if(v==null) return ''; let s=String(v); if(/[\t\n"]/.test(s)) s='"'+s.replace(/"/g,'""')+'"'; return s; }
-  function pipeRow(o){
-    return PQ_FIELDS.map(f=>{
-      if(f.k==='stade') return tsvCell(pipeStade(o));
-      const v=o[f.k];
-      if(f.type==='check') return v?'VRAI':'FAUX';
-      if(v==null||v==='') return '';
-      if(f.type==='date') return tsvCell(pqIsoToFr(v));
-      if(f.type==='number') return tsvCell(String(v).replace('.',','));
-      return tsvCell(v);
-    }).join('\t');
+  function cellToText(v){
+    if(v==null||v==='') return '';
+    if(typeof v==='boolean') return v?'VRAI':'FAUX';
+    if(typeof v==='number') return String(v).replace('.',',');
+    if(typeof v==='object' && v.d) return pqIsoToFr(v.d);
+    return tsvCell(v);
   }
+  const cellsToTsv=cells=>cells.map(cellToText).join('\t');
+  const dateCell=v=>/^\d{4}-\d{2}-\d{2}$/.test(v||'')?{d:v}:null;
+  // "dd/mm/yyyy" typed by hand becomes a real date; "Juin 2027" stays text
+  const looseDateCell=v=>{ const m=/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(String(v||'').trim()); return m?{d:m[3]+'-'+pqPad(m[2])+'-'+pqPad(m[1])}:(v||null); };
+  const numCell=v=>{ if(v==null||v==='') return null; const n=pqNum(v); return isNaN(n)?String(v):n; };
+  function pipeCells(o){
+    return PQ_FIELDS.map(f=>{
+      if(f.k==='stade') return pipeStade(o);
+      const v=o[f.k];
+      if(f.type==='check') return !!v;
+      if(v==null||v==='') return null;
+      if(f.type==='date') return dateCell(v);
+      if(f.type==='number') return numCell(v);
+      if(f.k==='mesPrev'||f.k==='mesEff'||f.k==='debut'||f.k==='fin') return looseDateCell(v);
+      return v;
+    });
+  }
+  function pipeRow(o){ return cellsToTsv(pipeCells(o)); }
   function pqToDate(s){ const p=pqMonthYear(s); return p&&p.m?new Date(p.y,p.m-1,p.d||1):null; }
-  function bddRow(o){
-    const row=new Array(91).fill('');
+  function bddCells(o){
+    const row=new Array(91).fill(null);
     const c=o.contrat||'';
     const deptName=(o.dept||'').replace(/^\S+\s+-\s+/,'');
     const kwc=pqNum(o.kwc||''), mwh=pqNum(o.mwh||'');
     const ty=/ombri/i.test(o.particularites||'')?'Ombrière':/toiture/i.test(o.particularites||'')?'Toiture':/sol/i.test(o.particularites||'')?'Sol':'';
     const offre=o.dateOffre?new Date(o.dateOffre+'T00:00:00'):null;
+    const or=v=>v===''||v==null?null:v;
     Object.assign(row, {
-      1:o.annee||'', 2:o.charge||'', 3:pqIsoToFr(o.goDate||''), 4:o.origine||'', 5:o.ca||'', 6:o.producteur||o.company||'',
-      8:/OA/.test(c)&&!/CR/.test(c)?'OA':/ACC/.test(c)?'ACC':/PPA/.test(c)?'Marché':c?'CR':'',
-      9:/AOS/.test(c)?'AOS CRE':/AO/.test(c)?'AO CRE':'', 10:/PPA/.test(c)?'':(c?'Marché de gros':''),
-      17:'France', 18:o.region||'', 19:o.dept||'', 20:deptName,
-      21:offre?PQ_MONTH_NAMES[offre.getMonth()]:'', 22:pqIsoToFr(o.dateOffre||''), 23:o.nature||'', 24:bddStatut(o),
-      25:pqIsoToFr(o.signDate||''), 26:o.debut||'', 27:o.mesEff||o.mesPrev||'', 28:o.fin||'', 30:o.particularites||'',
-      31:o.producteur||o.company||'', 33:oppName(o), 34:o.dept||'', 36:/PV et/.test(o.install||'')?'':(o.install||''), 37:ty,
-      38:kwc?String(kwc).replace('.',','):'', 39:kwc&&mwh?String(Math.round(mwh*1000/kwc)):'', 40:mwh?String(mwh).replace('.',','):''
+      1:numCell(o.annee), 2:or(o.charge), 3:dateCell(o.goDate), 4:or(o.origine), 5:or(o.ca), 6:or(o.producteur||o.company),
+      8:/OA/.test(c)&&!/CR/.test(c)?'OA':/ACC/.test(c)?'ACC':/PPA/.test(c)?'Marché':c?'CR':null,
+      9:/AOS/.test(c)?'AOS CRE':/AO/.test(c)?'AO CRE':null, 10:/PPA/.test(c)?null:(c?'Marché de gros':null),
+      17:'France', 18:or(o.region), 19:or(o.dept), 20:or(deptName),
+      21:offre?PQ_MONTH_NAMES[offre.getMonth()]:null, 22:dateCell(o.dateOffre), 23:or(o.nature), 24:or(bddStatut(o)),
+      25:dateCell(o.signDate), 26:looseDateCell(o.debut), 27:looseDateCell(o.mesEff||o.mesPrev), 28:looseDateCell(o.fin), 30:or(o.particularites),
+      31:or(o.producteur||o.company), 33:oppName(o), 34:or(o.dept), 36:/PV et/.test(o.install||'')?null:or(o.install), 37:or(ty),
+      38:kwc||null, 39:kwc&&mwh?Math.round(mwh*1000/kwc):null, 40:mwh||null
     });
     // Aggregated volume per year 2026 → 2041, prorated on the contract dates when both are known
     const from=pqToDate(o.debut)||pqToDate(o.mesEff)||pqToDate(o.mesPrev), to=pqToDate(o.fin);
     if(mwh && from && to){
       for(let y=2026;y<=2041;y++){
         const a=Math.max(from, new Date(y,0,1)), b=Math.min(to, new Date(y,11,31));
-        if(b>=a){ const frac=((b-a)/86400000+1)/(((y%4===0)?366:365)); row[48+(y-2026)]=String(Math.round(mwh*frac*10)/10).replace('.',','); }
+        if(b>=a){ const frac=((b-a)/86400000+1)/(((y%4===0)?366:365)); row[48+(y-2026)]=Math.round(mwh*frac*10)/10; }
       }
     }
-    return row.map(tsvCell).join('\t');
+    return row;
+  }
+  function bddRow(o){ return cellsToTsv(bddCells(o)); }
+
+  // ---------- Local Excel bridge (bridge/pont-excel.ps1 running on the computer) ----------
+  // The page calls http://127.0.0.1:<port>; the bridge writes into the synced Excel files through Excel itself.
+  let bridgeCfg={ port:8765, token:'' }, bridgeState={ ok:false, authorized:false, checkedAt:0, info:null };
+  try{ const r=localStorage.getItem('todo_bridge-config'); if(r) bridgeCfg=Object.assign(bridgeCfg, JSON.parse(r)); }catch(e){}
+  function saveBridgeCfg(){ try{ localStorage.setItem('todo_bridge-config', JSON.stringify(bridgeCfg)); }catch(e){} }
+  const bridgeConfigured=()=>!!bridgeCfg.token;
+  async function bridgeCall(method, path, body, timeoutMs){
+    const ctl=new AbortController(); const t=setTimeout(()=>ctl.abort(), timeoutMs||8000);
+    try{
+      const res=await fetch('http://127.0.0.1:'+(bridgeCfg.port||8765)+path, { method, signal:ctl.signal, headers:Object.assign({ 'X-Bridge-Token':bridgeCfg.token||'' }, body?{ 'Content-Type':'application/json' }:{}), body:body?JSON.stringify(body):undefined });
+      const data=await res.json().catch(()=>({}));
+      if(!res.ok) throw new Error(data.message||('Erreur '+res.status));
+      return data;
+    }catch(e){
+      if(e.name==='AbortError') throw new Error('Le pont Excel ne répond pas (délai dépassé).');
+      if(e instanceof TypeError) throw new Error('Pont Excel introuvable : lance « Lancer-pont-excel.bat » sur l\u2019ordinateur.');
+      throw e;
+    }finally{ clearTimeout(t); }
+  }
+  async function bridgeCheck(){
+    try{ const s=await bridgeCall('GET','/status',null,2500); bridgeState={ ok:true, authorized:!!s.authorized, checkedAt:Date.now(), info:s }; }
+    catch(e){ bridgeState={ ok:false, authorized:false, checkedAt:Date.now(), info:null, error:e.message }; }
+    renderBridgeStatus();
+    return bridgeState;
+  }
+  function renderBridgeStatus(){
+    const el=$('bridge-status'); if(!el) return;
+    const s=bridgeState;
+    if(!bridgeConfigured()){ el.textContent='Pas encore configuré sur ce navigateur.'; el.className='bridge-status'; return; }
+    if(!s.ok){ el.textContent=s.error||'Pont non détecté.'; el.className='bridge-status off'; return; }
+    if(!s.authorized){ el.textContent='Pont détecté, mais la clé ne correspond pas.'; el.className='bridge-status off'; return; }
+    el.textContent='Connecté · Pipe : '+(s.info.pipe.found?s.info.pipe.name:'fichier introuvable')+' · BDD : '+(s.info.bdd.found?s.info.bdd.name:'fichier introuvable');
+    el.className='bridge-status on';
+  }
+  async function sendToExcel(kind, list, btn){
+    const label=btn?btn.textContent:'';
+    if(btn){ btn.disabled=true; btn.textContent='Envoi…'; }
+    try{
+      const res=await bridgeCall('POST','/'+kind+'/upsert',{ rows:list.map(kind==='pipe'?pipeCells:bddCells) }, 30000);
+      const done=(res.results||[]).filter(r=>r.ok), skipped=(res.results||[]).filter(r=>!r.ok);
+      const added=done.filter(r=>r.action==='ajoutée').length, updated=done.length-added;
+      const msg=(kind==='pipe'?'Pipe':'BDD')+' : '+[added?added+' ligne'+(added>1?'s':'')+' ajoutée'+(added>1?'s':''):'', updated?updated+' mise'+(updated>1?'s':'')+' à jour':''].filter(Boolean).join(', ')+(skipped.length?' · '+skipped.length+' ignorée(s) : '+skipped[0].message:'');
+      list.forEach(o=>{ o[kind==='pipe'?'pipeSentAt':'bddSentAt']=Date.now(); touchCrm(o); }); saveCrm();
+      if(btn){ btn.textContent='✓ Envoyé'; btn.title=msg; setTimeout(()=>{ btn.textContent=label; btn.disabled=false; },2500); }
+      showBridgeMsg(msg, true);
+    }catch(e){
+      if(btn){ btn.textContent=label; btn.disabled=false; }
+      showBridgeMsg(e.message, false);
+    }
+  }
+  function showBridgeMsg(msg, ok){
+    let el=$('bridge-msg');
+    if(!el){ el=document.createElement('div'); el.id='bridge-msg'; el.setAttribute('role','status'); document.body.appendChild(el); }
+    el.textContent=msg; el.className='bridge-msg show'+(ok?'':' err');
+    clearTimeout(el._t); el._t=setTimeout(()=>{ el.className='bridge-msg'; }, ok?3500:7000);
+  }
+  // Buttons added to the installation sheet / pricing request when the bridge is set up on this browser
+  function excelButtons(actions, list){
+    if(!bridgeConfigured()) return;
+    actions.appendChild(oppActionBtn(list.length>1?'Envoyer au Pipe Excel ('+list.length+')':'Envoyer au Pipe Excel', e=>sendToExcel('pipe', list, e.target)));
+    if(list.some(o=>o.goDate || stageIndex(o.stage)>=stageIndex('demande_prix'))) actions.appendChild(oppActionBtn(list.length>1?'Envoyer à la BDD Excel ('+list.length+')':'Envoyer à la BDD Excel', e=>sendToExcel('bdd', list.filter(o=>o.goDate || stageIndex(o.stage)>=stageIndex('demande_prix')), e.target)));
   }
 
   function renderLists(){
@@ -4786,7 +4889,7 @@
   }
 
   const tabContacts=$('tab-contacts'), tabPipeline=$('tab-pipeline'), tabParc=$('tab-parc');
-  tabs.forEach(el=>{ el.onclick=()=>{ tabs.forEach(t=>t.classList.remove('active')); el.classList.add('active'); const tgt=el.dataset.tab; tabToday.classList.toggle('hidden',tgt!=='today'); tabTasks.classList.toggle('hidden',tgt!=='tasks'); tabInbox.classList.toggle('hidden',tgt!=='inbox'); tabArchive.classList.toggle('hidden',tgt!=='archive'); tabLists.classList.toggle('hidden',tgt!=='lists'); tabContacts.classList.toggle('hidden',tgt!=='contacts'); tabPipeline.classList.toggle('hidden',tgt!=='pipeline'); tabParc.classList.toggle('hidden',tgt!=='parc'); if(tgt==='parc')renderParc(); if(tgt==='today')renderToday(); if(tgt==='archive')renderArchive(); if(tgt==='contacts'){ refreshContactsTypeFilter(); renderContacts(); fetchContactInbox(); } if(tgt==='pipeline')renderPipeline(); if(tgt==='lists'){ renderLists(); renderStats(); renderConflicts(); $('sync-owner').value=syncConfig.owner||''; $('sync-repo').value=syncConfig.repo||''; if(syncConfig.enabled) setSyncStatus('Synchro active'); } if(tgt==='inbox')fetchInbox(); }; });
+  tabs.forEach(el=>{ el.onclick=()=>{ tabs.forEach(t=>t.classList.remove('active')); el.classList.add('active'); const tgt=el.dataset.tab; tabToday.classList.toggle('hidden',tgt!=='today'); tabTasks.classList.toggle('hidden',tgt!=='tasks'); tabInbox.classList.toggle('hidden',tgt!=='inbox'); tabArchive.classList.toggle('hidden',tgt!=='archive'); tabLists.classList.toggle('hidden',tgt!=='lists'); tabContacts.classList.toggle('hidden',tgt!=='contacts'); tabPipeline.classList.toggle('hidden',tgt!=='pipeline'); tabParc.classList.toggle('hidden',tgt!=='parc'); if(tgt==='parc'){ renderParc(); $('parc-bridge-btn').classList.toggle('hidden', !bridgeConfigured()); if(bridgeConfigured() && (!parcData || Date.now()-(parcData.importedAt||0)>600000)) importParcFromBridge(true); } if(tgt==='today')renderToday(); if(tgt==='archive')renderArchive(); if(tgt==='contacts'){ refreshContactsTypeFilter(); renderContacts(); fetchContactInbox(); } if(tgt==='pipeline')renderPipeline(); if(tgt==='lists'){ if(bridgeConfigured()) bridgeCheck(); else renderBridgeStatus(); renderLists(); renderStats(); renderConflicts(); $('sync-owner').value=syncConfig.owner||''; $('sync-repo').value=syncConfig.repo||''; if(syncConfig.enabled) setSyncStatus('Synchro active'); } if(tgt==='inbox')fetchInbox(); }; });
 
   $('submit-task').onclick=addTask;
   addSection.addEventListener('keydown', e=>{ if(e.key==='Enter' && e.target.tagName!=='TEXTAREA'){ e.preventDefault(); addTask(); } });
@@ -5257,10 +5360,12 @@
     return /^\d{4}-\d{2}-\d{2}/.test(s)?s.slice(0,10):'';
   }
   const parcNum=v=>{ if(typeof v==='number') return v; const n=parseFloat(String(v||'').replace(/\s|€/g,'').replace(',','.')); return isNaN(n)?0:n; };
-  function parseParcWorkbook(wb){
-    const sheetName=wb.SheetNames.find(n=>/bdd/i.test(n))||wb.SheetNames.find(n=>XLSX.utils.sheet_to_json(wb.Sheets[n],{header:1,defval:''}).slice(0,10).some(r=>r.map(parcNorm).includes('nomprod')));
+  function parseParcWorkbook(wb){ return parseParcSheets(wb.SheetNames, n=>XLSX.utils.sheet_to_json(wb.Sheets[n],{header:1,raw:true,defval:''})); }
+  // sheetNames + getRows(name) → array of rows (arrays); works for a file read here or rows sent by the Excel bridge
+  function parseParcSheets(sheetNames, getRows){
+    const sheetName=sheetNames.find(n=>/bdd/i.test(n))||sheetNames.find(n=>getRows(n).slice(0,10).some(r=>r.map(parcNorm).includes('nomprod')));
     if(!sheetName) throw new Error('Onglet « BDD Agrégation » introuvable dans ce fichier.');
-    const rows=XLSX.utils.sheet_to_json(wb.Sheets[sheetName],{header:1,raw:true,defval:''});
+    const rows=getRows(sheetName).map(r=>r.map(v=>v==null?'':v));
     const hi=rows.findIndex(r=>r.map(parcNorm).includes('nomprod'));
     if(hi<0) throw new Error('Ligne d\u2019en-têtes (Nom_prod…) introuvable.');
     const head=rows[hi].map(parcNorm);
@@ -5285,9 +5390,9 @@
     });
     // supply / aggregation objectives (GWh) from the Dashboard sheet, when present
     const objectives={};
-    const dash=wb.SheetNames.find(n=>/dashboard/i.test(n));
+    const dash=sheetNames.find(n=>/dashboard/i.test(n));
     if(dash){
-      const d=XLSX.utils.sheet_to_json(wb.Sheets[dash],{header:1,raw:true,defval:''});
+      const d=getRows(dash).map(r=>r.map(v=>v==null?'':v));
       const yr=d.find(r=>r.map(parcNorm).includes('designation'));
       const ob=d.find(r=>r.map(parcNorm).some(c=>c==='objectagregationvol'||c==='objectifagregationvol'));
       if(yr && ob) yr.forEach((y,i)=>{ const n=parseInt(y,10); if(n>=2020 && n<2100 && parcNum(ob[i])) objectives[n]=parcNum(ob[i]); });
@@ -5304,6 +5409,15 @@
     }catch(e){ console.error(e); $('parc-info').textContent='Fichier illisible : '+(e.message||e); }
   }
 
+  async function importParcFromBridge(silent){
+    if(!silent) $('parc-info').textContent='Lecture de l’Excel…';
+    try{
+      const res=await bridgeCall('GET','/bdd/read',null,60000);
+      const names=Object.keys(res.sheets||{});
+      parcData=parseParcSheets(names, n=>res.sheets[n]||[]); parcData.fileName='Excel (pont local)';
+      saveParc(); renderParc();
+    }catch(e){ if(!silent) $('parc-info').textContent=e.message; }
+  }
   const fmtGwh=mwh=>(Math.round(mwh/100)/10).toLocaleString('fr-FR')+' GWh';
   const fmtMwc=kwc=>(Math.round(kwc/100)/10).toLocaleString('fr-FR')+' MWc';
   function renderParc(){
@@ -5315,7 +5429,7 @@
       body.innerHTML='<div class="parc-empty"><b>Aucun parc chargé.</b><br>Charge le fichier « Suivi Agrégation » (.xlsx) : l\u2019app lit l\u2019onglet « BDD Agrégation » et les objectifs du « Dashboard ». Le fichier reste sur cet appareil.</div>';
       return;
     }
-    $('parc-info').textContent=(parcData.fileName||'Fichier')+' · chargé le '+new Date(parcData.importedAt).toLocaleDateString('fr-FR')+' · '+parcData.items.length+' lignes';
+    $('parc-info').textContent=(parcData.fileName||'Fichier')+' · chargé le '+new Date(parcData.importedAt).toLocaleDateString('fr-FR')+' · '+parcData.items.length+' ligne'+(parcData.items.length>1?'s':'');
     const won=parcData.items.filter(p=>p.statut==='Gagné');
     const y=parcYear, today=toISO(new Date());
     const active=won.filter(p=>(p.vols[y]||0)>0);
@@ -5492,6 +5606,9 @@
     $('vcf-new').textContent='0';
   }
 
+  $('bridge-token').value=bridgeCfg.token||'';
+  $('bridge-save-btn').onclick=()=>{ bridgeCfg.token=$('bridge-token').value.trim(); saveBridgeCfg(); $('bridge-status').textContent='Test…'; bridgeCheck(); };
+  $('parc-bridge-btn').onclick=()=>importParcFromBridge(false);
   $('parc-file').addEventListener('change', e=>{ if(e.target.files[0]) importParcFile(e.target.files[0]); e.target.value=''; });
   $('vcf-btn').onclick=openVcfExport;
   $('vcf-go').onclick=doVcfExport;

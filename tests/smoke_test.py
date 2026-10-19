@@ -350,6 +350,35 @@ with sync_playwright() as p:
     check(not errors, f"no page errors ({errors})")
     page.close()
 
+    # --- Excel bridge (local PowerShell server, mocked here): typed rows sent, status shown
+    sent = []
+    def bridge(route, request):
+        if request.method == "OPTIONS":
+            return route.fulfill(status=204, headers={"Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "*", "Access-Control-Allow-Methods": "*"})
+        h = {"Access-Control-Allow-Origin": "*", "Content-Type": "application/json"}
+        if request.url.endswith("/status"):
+            ok = request.headers.get("x-bridge-token") == "k1"
+            return route.fulfill(status=200, headers=h, body=json.dumps({"ok": True, "authorized": ok, "pipe": {"name": "Pipe.xlsx", "found": True}, "bdd": {"name": "Suivi.xlsx", "found": True}}))
+        sent.append((request.url.rsplit("/", 2)[-2], json.loads(request.post_data)))
+        return route.fulfill(status=200, headers=h, body=json.dumps({"ok": True, "results": [{"ok": True, "action": "ajoutée", "row": 12}]}))
+    inst = [{"id": "i1", "kind": "installation", "company": "SCEA", "producteur": "SCEA", "centrale": "Les Vignes", "title": "Les Vignes", "stage": "demande_prix",
+             "goDate": "2026-10-19", "dateEntree": "2026-10-12", "kwc": "2400", "new": True, "createdAt": 1, "updatedAt": 1, "deleted": False}]
+    page, errors = new_page(browser, {"todo_todo-widget-opportunities": json.dumps(inst)})
+    page.route("http://127.0.0.1:8765/**", bridge)
+    page.goto(URL); page.click('[data-tab="lists"]'); page.fill("#bridge-token", "k1"); page.click("#bridge-save-btn")
+    page.wait_for_function("document.getElementById('bridge-status').textContent.includes('Connecté')", timeout=5000)
+    check(True, "bridge: status shows the connected files")
+    page.click('[data-tab="pipeline"]'); page.click(".pipe-card:has-text('Les Vignes')")
+    page.click("#opp-detail-actions >> text=Envoyer au Pipe Excel"); page.wait_for_timeout(300)
+    page.click("#opp-detail-actions >> text=Envoyer à la BDD Excel"); page.wait_for_timeout(300)
+    pipe_row = next(b["rows"][0] for k, b in sent if k == "pipe"); bdd_row = next(b["rows"][0] for k, b in sent if k == "bdd")
+    check(len(pipe_row) == 37 and pipe_row[3] == {"d": "2026-10-12"} and pipe_row[22] == 2400 and pipe_row[1] is True and pipe_row[30] == "Transféré BDD",
+          "bridge: Pipe row sent with real dates, numbers and booleans")
+    check(len(bdd_row) == 91 and bdd_row[3] == {"d": "2026-10-19"} and bdd_row[33] == "Les Vignes" and bdd_row[24] == "En préparation", "bridge: BDD row sent")
+    check("ajoutée" in page.inner_text("#bridge-msg"), "bridge: result shown")
+    check(not errors, f"no page errors ({errors})")
+    page.close()
+
     # --- Réf. & data: clients grouped by company type, collapsed by default, search opens them
     cos = [{"id": f"co{i}", "name": n, "type": t, "whatTheyDo": "", "marketScope": [], "website": "", "createdAt": 1, "updatedAt": 1, "deleted": False}
            for i, (n, t) in enumerate([("Alpha", "Fournisseur"), ("Beta", "Client"), ("Gamma", "Client"), ("Delta", "")])]
