@@ -1,4 +1,6 @@
-const CACHE = 'todo-pwa-v9';
+const CACHE = 'todo-pwa-v10';
+// Excel / Outlook reader, loaded on demand by the app: kept for offline use
+const XLSX_URL = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
 const ASSETS = [
   './',
   './index.html',
@@ -15,7 +17,11 @@ const ASSETS = [
 ];
 
 self.addEventListener('install', e => {
-  e.waitUntil(caches.open(CACHE).then(c => c.addAll(ASSETS)));
+  e.waitUntil(caches.open(CACHE).then(async c => {
+    await c.addAll(ASSETS);
+    // best effort: the app works without it, only .msg / .xlsx reading needs it
+    try { const r = await fetch(new Request(XLSX_URL, { mode: 'no-cors' })); await c.put(XLSX_URL, r); } catch (err) {}
+  }));
   self.skipWaiting();
 });
 
@@ -30,17 +36,17 @@ self.addEventListener('fetch', e => {
   if (e.request.method !== 'GET') return;
   if (!e.request.url.startsWith('http')) return; // skip chrome-extension:// and similar, Cache API can't store them
 
-  // Always go to the network for the inbox queue — it changes independently
-  // of app deploys and must never be served stale from cache.
-  if (e.request.url.includes('tasks-inbox.json')) {
-    e.respondWith(fetch(e.request).catch(() => new Response('[]', { headers: { 'Content-Type': 'application/json' } })));
-    return;
-  }
+  // Only the app's own files (and the Excel library) are cached. Everything else — GitHub API (sync, inbox),
+  // the local Excel bridge, fonts — goes straight to the network: serving a cached copy of data/tasks.json
+  // made a sync merge against an old server state and undo recent changes.
+  const sameOrigin = new URL(e.request.url).origin === self.location.origin;
+  if (!sameOrigin && e.request.url !== XLSX_URL) return;
 
   e.respondWith(
     caches.match(e.request).then(cached => {
       const fetchPromise = fetch(e.request).then(res => {
-        if (res && res.ok) {
+        // cross-origin scripts (the CDN library) come back "opaque": cache them too
+        if (res && (res.ok || (res.type === 'opaque' && e.request.url === XLSX_URL))) {
           const clone = res.clone();
           caches.open(CACHE).then(c => c.put(e.request, clone));
         }

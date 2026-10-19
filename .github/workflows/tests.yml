@@ -16,3 +16,5 @@ jobs:
       - run: pip install playwright==1.63.0 openpyxl
       - run: python -m playwright install --with-deps chromium
       - run: python tests/smoke_test.py
+      - run: python tests/mail_accuracy.py --all --min 0.95
+      - run: python tests/extraction_accuracy.py --all --min 0.95

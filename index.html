@@ -50,6 +50,22 @@
     white-space:nowrap; overflow:hidden;
   }
   .app-sidebar-back:hover{ color:var(--accent); }
+  .app-sidebar-help{ background:none; border:none; border-top:1px solid var(--bd); width:100%; cursor:pointer; text-align:left; }
+  .app-sidebar-widget{ margin-top:0; border-top:none; padding-top:8px; }
+  .guide-box{ max-width:760px; }
+  .guide-box h3{ display:flex; align-items:center; justify-content:space-between; }
+  .guide-nav{ display:flex; flex-wrap:wrap; gap:5px; margin:0 0 12px; }
+  .guide-nav button{ background:var(--panel-2); border:1px solid var(--bd); color:var(--tx2); border-radius:14px; font-size:11.5px; padding:4px 10px; cursor:pointer; }
+  .guide-nav button.on{ color:var(--accent); border-color:var(--accent); background:var(--accent-dim); }
+  .guide-body{ font-size:13px; color:var(--tx2); line-height:1.6; }
+  .guide-body h4{ font-size:13px; color:var(--tx1); margin:14px 0 4px; }
+  .guide-body h4:first-child{ margin-top:0; }
+  .guide-body ol, .guide-body ul{ margin:4px 0 8px; padding-left:20px; }
+  .guide-body b{ color:var(--tx1); font-weight:600; }
+  .guide-body kbd{ font-family:var(--font-mono); font-size:11px; background:var(--panel-2); border:1px solid var(--bd); border-radius:4px; padding:0 5px; color:var(--tx1); }
+  .guide-body .guide-flow{ display:flex; flex-wrap:wrap; gap:4px 6px; align-items:center; font-family:var(--font-mono); font-size:10.5px; margin:6px 0 10px; }
+  .guide-body .guide-flow span{ border:1px solid var(--bd); border-radius:4px; padding:2px 6px; color:var(--tx1); }
+  .guide-body .guide-flow i{ color:var(--tx3); font-style:normal; }
   .back-arrow{ flex-shrink:0; }
 
   #todo-panel{ display:flex; flex-direction:column; flex:1; min-width:0; max-height:100vh; container-type:inline-size; container-name:taskpanel; }
@@ -587,6 +603,12 @@
   .parc-due-date{ font-family:var(--font-mono); color:#D9A441; grid-row:1 / span 2; }
   .parc-due-name{ color:var(--tx1); }
   .parc-due-meta{ color:var(--tx3); font-size:11px; }
+  .parc-due{ grid-template-columns:84px 1fr auto; }
+  .parc-due-act{ grid-column:3; grid-row:1 / span 2; align-self:center; }
+  .parc-renew-setting{ margin-left:auto; font-size:11.5px; color:var(--tx2); display:flex; align-items:center; gap:6px; }
+  .parc-renew-setting select{ background:var(--panel-2); border:1px solid var(--bd); color:var(--tx1); border-radius:6px; font-size:11.5px; padding:3px 6px; }
+  .co-parc-h{ color:var(--tx1); font-weight:500; }
+  .co-parc-row{ font-size:11.5px; color:var(--tx3); }
   .parc-table-head{ display:flex; flex-wrap:wrap; align-items:center; gap:8px 12px; margin-bottom:8px; }
   .parc-table-head .parc-h{ margin:0; }
   .parc-search{ flex:1; min-width:180px; background:var(--panel); border:1px solid var(--bd); border-radius:6px; color:var(--tx1); font-size:12.5px; padding:6px 9px; }
@@ -754,7 +776,8 @@
       <span class="tab" data-tab="lists" title="Réf. & data"><svg class="tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg><span class="sidebar-label-text">Réf. &amp; data</span><span class="tab-badge" id="conflicts-badge"></span></span>
     </div>
 
-    <a href="widget.html" class="app-sidebar-back" title="Widget"><span class="back-arrow">←</span><span class="sidebar-label-text">Widget</span></a>
+    <button type="button" class="app-sidebar-back app-sidebar-help" id="help-btn" title="Mode d'emploi"><span class="back-arrow">?</span><span class="sidebar-label-text">Mode d'emploi</span></button>
+    <a href="widget.html" class="app-sidebar-back app-sidebar-widget" title="Widget"><span class="back-arrow">←</span><span class="sidebar-label-text">Widget</span></a>
   </nav>
 
 <div id="todo-panel">
@@ -1013,6 +1036,85 @@
       <span class="parc-info" id="parc-info"></span>
     </div>
     <div id="parc-body"></div>
+  </div>
+
+  <div id="guide-overlay" class="modal-overlay hidden">
+    <div class="modal-box wide guide-box" role="dialog" aria-labelledby="guide-title">
+      <h3 id="guide-title">Mode d'emploi <button type="button" class="ghost-btn" id="guide-close" style="font-size:12px;padding:4px 10px;border:1px solid var(--bd);border-radius:6px;background:none;color:var(--tx2);cursor:pointer;">Fermer</button></h3>
+      <div class="guide-nav" id="guide-nav">
+        <button type="button" data-g="taches" class="on">Tâches</button><button type="button" data-g="pipeline">Pipeline</button><button type="button" data-g="excel">Excel</button><button type="button" data-g="parc">Parc</button><button type="button" data-g="contacts">Contacts</button><button type="button" data-g="tel">Téléphone</button><button type="button" data-g="synchro">Synchro</button>
+      </div>
+      <div class="guide-body">
+        <section data-g="taches">
+          <h4>Au quotidien</h4>
+          <ul>
+            <li><b>Aujourd'hui</b> : ce qui est en retard ou dû aujourd'hui. Clic sur le cercle = valider, clic sur la date = reporter.</li>
+            <li><b>Tâches</b> : ajout rapide en haut (Entrée), « Tâche complète » pour client, projet, rappel, récurrence.</li>
+            <li><b>Note</b> (en bas à droite) : le calepin pour griffonner. « → tâche demain » transforme la ligne où se trouve le curseur en tâche urgente pour demain.</li>
+            <li><b>Archive</b> : tâches validées et corbeille (rien n'est perdu).</li>
+          </ul>
+          <h4>Raccourcis</h4>
+          <ul>
+            <li><kbd>n</kbd> ou <kbd>Ctrl</kbd>+<kbd>K</kbd> ajouter une tâche · <kbd>Ctrl</kbd>+<kbd>F</kbd> rechercher · <kbd>p</kbd> ouvrir la note</li>
+            <li><kbd>j</kbd>/<kbd>k</kbd> se déplacer · <kbd>Entrée</kbd> valider la tâche sélectionnée · <kbd>e</kbd> la modifier · <kbd>Échap</kbd> fermer</li>
+          </ul>
+        </section>
+        <section data-g="pipeline" hidden>
+          <h4>Le chemin d'une opportunité</h4>
+          <div class="guide-flow"><span>Pré-qualif</span><i>→</i><span>Qualification</span><i>→ Go →</i><span>Offre</span><i>→</i><span>Contrat</span><i>→</i><span>Onboarding</span><i>→</i><span>En service</span></div>
+          <ol>
+            <li><b>Pré-qualif</b> : un client rencontré, pas encore de projet. « Projet identifié » crée l'installation.</li>
+            <li><b>Nouvelle opportunité</b> : choisis le client puis le contact (existant ou nouveau), puis colle le mail ou dépose un .msg, un .eml ou l'Excel du producteur. Les champs se remplissent ; ceux à compléter sont signalés en jaune.</li>
+            <li><b>Une fiche par installation</b>. Plusieurs centrales dans le même mail ou le même Excel = plusieurs installations, regroupées dans une <b>demande de pricing</b>.</li>
+            <li>Quand tu valides la tâche liée, l'app propose l'étape suivante et crée la tâche. Les étapes des autres équipes (Ops, SC, Jur, Dir, d'après le RACI) deviennent des tâches « en attente » pour relancer.</li>
+            <li><b>Go</b> : la demande de pricing s'ouvre avec l'objet, les codes affaire et le texte du mail. La fiche « Caractéristiques Centrales » et le brouillon Outlook se font avec Claude (skill demande de pricing).</li>
+            <li>Sorties possibles à tout moment : No Go, Perdu, Abandonné (bouton « Sorties » pour les revoir, « Réactiver » pour revenir).</li>
+          </ol>
+        </section>
+        <section data-g="excel" hidden>
+          <h4>Mettre à jour les Excel partagés</h4>
+          <ul>
+            <li><b>Copier-coller</b> (partout) : « Copier ligne Pipe » (37 colonnes) ou « Copier ligne BDD » (91 colonnes), puis clic en colonne A d'une ligne vide et <kbd>Ctrl</kbd>+<kbd>V</kbd>.</li>
+            <li><b>Pont Excel</b> (sur l'ordinateur) : « Envoyer au Pipe / à la BDD Excel » écrit directement dans les fichiers synchronisés avec SharePoint. Une ligne existante (même producteur + centrale) est mise à jour, sinon elle est ajoutée ; les formules ne sont jamais écrasées.</li>
+            <li>Installation du pont : <b>Réf. &amp; data → Pont Excel</b>. Télécharge les deux fichiers dans un même dossier, double-clique sur le .bat, choisis les deux Excel, recopie la clé. Laisse la fenêtre ouverte (réduite).</li>
+          </ul>
+        </section>
+        <section data-g="parc" hidden>
+          <h4>Parc</h4>
+          <ul>
+            <li>Charge le fichier « Suivi Agrégation » (ou « Lire depuis l'Excel » avec le pont). Il reste sur l'appareil, il n'est pas envoyé sur GitHub.</li>
+            <li>Volumes par année et par cadre face à l'objectif, développeurs, régions, échéances, table filtrable.</li>
+            <li><b>Renouvellements</b> : une tâche par développeur et date de fin pour les contrats qui se terminent dans les 6 mois (réglable). « Remettre dans le pipeline » recrée l'installation à l'étape Demande de prix.</li>
+            <li>Les contrats d'un producteur apparaissent aussi sur sa fiche dans Contacts (bouton ⓘ).</li>
+          </ul>
+        </section>
+        <section data-g="contacts" hidden>
+          <h4>Contacts</h4>
+          <ul>
+            <li>Tri en cliquant sur les en-têtes Contact, Société, Note. Clic sur un nom = la fiche ; l'icône copie le mail ou le téléphone.</li>
+            <li>« Coller une signature » crée un contact depuis une signature (texte ou image).</li>
+            <li><b>Vers le téléphone</b> : fichier .vcf des contacts jamais exportés (les doublons de l'app sont fusionnés). Après le tout premier import sur un téléphone qui avait déjà des contacts, lance « Fusionner les doublons » du téléphone.</li>
+          </ul>
+        </section>
+        <section data-g="tel" hidden>
+          <h4>Sur le téléphone</h4>
+          <ul>
+            <li>Ouvre <b>tomsremy.github.io/ToDo/mobile.html</b> puis « Sur l'écran d'accueil ». Version allégée : Aujourd'hui, Tâches, Contacts, Parc, Pipeline (lecture) et la note.</li>
+            <li>Mêmes données que l'ordinateur dès que la synchro est activée sur le téléphone (une fois, dans la version complète, onglet Réf. &amp; data).</li>
+            <li>Pour changer l'icône après une mise à jour : retirer l'app de l'écran d'accueil puis la rajouter.</li>
+          </ul>
+        </section>
+        <section data-g="synchro" hidden>
+          <h4>Synchro et sécurité</h4>
+          <ul>
+            <li>Les données passent par ton repo GitHub <b>privé</b> (TomSRemy/todo-data) avec un token stocké seulement dans le navigateur. Le code de l'app est public, tes données non.</li>
+            <li>Chaque appareil garde une copie locale : l'app marche sans réseau, puis se resynchronise (toutes les 5 minutes, et en quittant l'app).</li>
+            <li>Si le même champ a été modifié sur deux appareils, la version la plus récente gagne et le cas est listé dans Réf. &amp; data → Conflits.</li>
+            <li>Sauvegarde : Réf. &amp; data → Exporter (fichier JSON complet).</li>
+          </ul>
+        </section>
+      </div>
+    </div>
   </div>
 
   <div id="vcf-overlay" class="modal-overlay hidden">
@@ -1342,6 +1444,8 @@
     if(crmSeeded){ saveCrm(); }
     await loadSyncConfig();
     consolidateNotes();
+    loadParc(); ensureRenewalTasks();
+    checkReminders();
     render(); renderArchive(); renderLists(); renderToday(); initPostit(); updateConflictBadge(); applyColumnVisibility();
     await loadSeenIds();
     fetchInbox();
@@ -1378,6 +1482,22 @@
   function b64EncodeUtf8(str){ return btoa(unescape(encodeURIComponent(str))); }
   function b64DecodeUtf8(b64){ return decodeURIComponent(escape(atob(b64.replace(/\n/g,'')))); }
 
+  // Reads a JSON file of the data repo. The "object" media type works up to 100 MB (the default one stops
+  // at 1 MB); above 1 MB the content comes empty and is fetched again as raw text.
+  async function ghGetJson(path){
+    const auth={ 'Authorization':'Bearer '+syncConfig.token };
+    const res=await fetch(syncApiUrl(path), { headers:Object.assign({ 'Accept':'application/vnd.github.object+json' }, auth), cache:'no-store' });
+    if(!res.ok) return { ok:false, status:res.status };
+    const data=await res.json();
+    let text;
+    if(data.content && data.encoding!=='none') text=b64DecodeUtf8(data.content);
+    else {
+      const raw=await fetch(syncApiUrl(path), { headers:Object.assign({ 'Accept':'application/vnd.github.raw+json' }, auth), cache:'no-store' });
+      if(!raw.ok) return { ok:false, status:raw.status };
+      text=await raw.text();
+    }
+    return { ok:true, status:200, sha:data.sha, json:JSON.parse(text) };
+  }
   function setSyncStatus(msg){ const el=$('sync-status'); if(el) el.textContent=msg; }
 
   // Merge by id: for tasks present on both sides, keep whichever has the
@@ -1395,6 +1515,7 @@
 
   function logConflict(entityType, entity, field, localValue, remoteValue, resolvedValue){
     const meta=CONFLICT_ENTITY_LABELS[entityType];
+    if(conflicts.length>=200) conflicts.splice(0, conflicts.length-199);   // keep the log readable
     conflicts.push({
       id:'cf_'+Date.now()+'_'+Math.random().toString(36).slice(2,6),
       entityType, entityId:entity.id,
@@ -1469,16 +1590,6 @@
     try{ await window.storage.set('sync-crm-base', JSON.stringify(crmBaseSnapshot), false); }catch(e){}
   }
 
-  function mergeTasks(localList, remoteList){
-    const byId={};
-    localList.forEach(t=>{ byId[t.id]=t; });
-    remoteList.forEach(rt=>{
-      const lt=byId[rt.id];
-      if(!lt || (rt.updatedAt||0) > (lt.updatedAt||0)) byId[rt.id]=rt;
-    });
-    return Object.values(byId);
-  }
-
   function refreshAllViews(){
     render();
     if(typeof renderToday==='function') renderToday();
@@ -1489,11 +1600,10 @@
   async function syncPull(){
     if(!syncConfig.enabled) return;
     try{
-      const res=await fetch(syncApiUrl(), { headers:{ 'Authorization':'Bearer '+syncConfig.token, 'Accept':'application/vnd.github+json' } });
-      if(res.status===404){ await syncPushNow(); return; }
-      if(!res.ok){ setSyncStatus('Erreur de synchro (lecture)'); return; }
-      const data=await res.json();
-      const remoteTasks=JSON.parse(b64DecodeUtf8(data.content));
+      const data=await ghGetJson(SYNC_TASKS_PATH);
+      if(data.status===404){ await syncPushNow(); return; }
+      if(!data.ok){ setSyncStatus('Erreur de synchro (lecture)'); return; }
+      const remoteTasks=data.json;
       tasks=threeWayMerge('task', tasks, remoteTasks, tasksBaseSnapshot);
       // The base is what is actually on the server — not the merged result,
       // which may still hold local edits that were never pushed (e.g. app
@@ -1518,11 +1628,10 @@
     if(!syncConfig.enabled) return;
     try{
       let sha=lastKnownSha;
-      const getRes=await fetch(syncApiUrl(), { headers:{ 'Authorization':'Bearer '+syncConfig.token, 'Accept':'application/vnd.github+json' } });
-      if(getRes.ok){
-        const getData=await getRes.json();
+      const getData=await ghGetJson(SYNC_TASKS_PATH);
+      if(getData.ok){
         sha=getData.sha;
-        const remoteTasks=JSON.parse(b64DecodeUtf8(getData.content));
+        const remoteTasks=getData.json;
         tasks=threeWayMerge('task', tasks, remoteTasks, tasksBaseSnapshot);
         await saveTasksLocalOnly();
         refreshAllViews();
@@ -1564,11 +1673,10 @@
   async function syncPullCrm(){
     if(!syncConfig.enabled) return;
     try{
-      const res=await fetch(syncApiUrl(SYNC_CRM_PATH), { headers:{ 'Authorization':'Bearer '+syncConfig.token, 'Accept':'application/vnd.github+json' } });
-      if(res.status===404){ await syncPushCrmNow(); return; }
-      if(!res.ok) return;
-      const data=await res.json();
-      const remote=JSON.parse(b64DecodeUtf8(data.content));
+      const data=await ghGetJson(SYNC_CRM_PATH);
+      if(data.status===404){ await syncPushCrmNow(); return; }
+      if(!data.ok) return;
+      const remote=data.json;
       const merged=mergeCrmBundle({companies,contacts,meetings,opportunities}, remote);
       companies=merged.companies; contacts=merged.contacts; meetings=merged.meetings; opportunities=merged.opportunities;
       lastKnownCrmSha=data.sha;
@@ -1588,11 +1696,10 @@
     if(!syncConfig.enabled) return;
     try{
       let sha=lastKnownCrmSha;
-      const getRes=await fetch(syncApiUrl(SYNC_CRM_PATH), { headers:{ 'Authorization':'Bearer '+syncConfig.token, 'Accept':'application/vnd.github+json' } });
-      if(getRes.ok){
-        const getData=await getRes.json();
+      const getData=await ghGetJson(SYNC_CRM_PATH);
+      if(getData.ok){
         sha=getData.sha;
-        const remote=JSON.parse(b64DecodeUtf8(getData.content));
+        const remote=getData.json;
         const merged=mergeCrmBundle({companies,contacts,meetings,opportunities}, remote);
         companies=merged.companies; contacts=merged.contacts; meetings=merged.meetings; opportunities=merged.opportunities;
         await saveCrmLocalOnly();
@@ -1625,11 +1732,10 @@
     if(!syncConfig.enabled) return;
     flushPostit();
     try{
-      const res=await fetch(syncApiUrl(SYNC_NOTES_PATH), { headers:{ 'Authorization':'Bearer '+syncConfig.token, 'Accept':'application/vnd.github+json' } });
-      if(res.status===404){ await syncPushNotesNow(); return; }
-      if(!res.ok) return;
-      const data=await res.json();
-      const remote=JSON.parse(b64DecodeUtf8(data.content));
+      const data=await ghGetJson(SYNC_NOTES_PATH);
+      if(data.status===404){ await syncPushNotesNow(); return; }
+      if(!data.ok) return;
+      const remote=data.json;
       notes=threeWayMerge('note', notes, remote, notesBaseSnapshot);
       consolidateNotes();
       notesBaseSnapshot=remote.map(n=>({...n}));
@@ -1652,17 +1758,33 @@
     if(notesSyncPushTimer){ clearTimeout(notesSyncPushTimer); notesSyncPushTimer=null; syncPushNotesNow(); }
   }
   document.addEventListener('visibilitychange', ()=>{ if(document.visibilityState==='hidden') flushPendingSync(); });
+  // Another tab of the app (or widget.html) saved: take its version, so this tab never writes an older copy back.
+  window.addEventListener('storage', e=>{
+    if(!e.key || e.newValue==null || e.key.indexOf('todo_')!==0) return;
+    const k=e.key.slice(5);
+    try{
+      const v=JSON.parse(e.newValue);
+      if(k===TASKS_KEY){ tasks=v; refreshAllViews(); }
+      else if(k===COMPANIES_KEY){ companies=v; renderCrm(); }
+      else if(k===CONTACTS_KEY){ contacts=v; renderCrm(); }
+      else if(k===MEETINGS_KEY){ meetings=v; }
+      else if(k===OPPS_KEY){ opportunities=v; renderCrm(); }
+      else if(k===NOTES_KEY){ if(!postitDirty){ notes=v; renderNotes(); } }
+      else if(k==='sync-tasks-base') tasksBaseSnapshot=v;
+      else if(k==='sync-crm-base') crmBaseSnapshot=v;
+      else if(k==='sync-notes-base') notesBaseSnapshot=v;
+    }catch(err){}
+  });
   window.addEventListener('pagehide', flushPendingSync);
   async function syncPushNotesNow(){
     if(!syncConfig.enabled) return;
     flushPostit();
     try{
       let sha=lastKnownNotesSha;
-      const getRes=await fetch(syncApiUrl(SYNC_NOTES_PATH), { headers:{ 'Authorization':'Bearer '+syncConfig.token, 'Accept':'application/vnd.github+json' } });
-      if(getRes.ok){
-        const getData=await getRes.json();
+      const getData=await ghGetJson(SYNC_NOTES_PATH);
+      if(getData.ok){
         sha=getData.sha;
-        const remote=JSON.parse(b64DecodeUtf8(getData.content));
+        const remote=getData.json;
         notes=threeWayMerge('note', notes, remote, notesBaseSnapshot);
         consolidateNotes();
         await saveNotesLocalOnly();
@@ -1712,7 +1834,8 @@
     try{ await window.storage.set('last-daily-notif', todayStr, false); }catch(e){}
   }
 
-  function escapeHtml(s){ const d=document.createElement('div'); d.textContent=s; return d.innerHTML; }
+  // Also escapes quotes: the result is used inside attribute values (value="…"), fed by pasted mails and synced data.
+  function escapeHtml(s){ return String(s==null?'':s).replace(/[&<>"']/g, ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch])); }
   function isSafeHref(url){ return /^https?:\/\//i.test(url||'') || /^mailto:/i.test(url||''); }
   function toISO(d){ return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
   function hashColor(name,pal){ if(!name)return null; let h=0; for(let i=0;i<name.length;i++){h=(h*31+name.charCodeAt(i))>>>0;} return pal[h%pal.length]; }
@@ -2952,7 +3075,7 @@
       if(on){ const a=document.createElement('span'); a.className='ar'; a.textContent=(contactsSort.key==='rel' ? (contactsSort.dir>0?'▼':'▲') : (contactsSort.dir>0?'▲':'▼')); el.appendChild(a); }
     });
   }
-  function companyHasInfo(co){ return !!(co && (co.whatTheyDo || co.website || (co.marketScope&&co.marketScope.length))); }
+  function companyHasInfo(co){ return !!(co && (co.whatTheyDo || co.website || (co.marketScope&&co.marketScope.length) || parcForCompany(co.name).length)); }
   function buildCompanyGroupHeader(companyName, count){
     const accent=clientColor(companyName);
     const header=document.createElement('div'); header.className='group-header company-group-header';
@@ -3002,7 +3125,20 @@
     const co=companies.find(x=>x.name===companyName);
     const card=document.createElement('div');
     card.style.cssText='padding:8px 15px 12px 39px;font-size:12px;color:var(--tx2);line-height:1.6;';
+    const parc=parcForCompany(companyName);
+    if(parc.length){
+      const won=parc.filter(p=>p.statut==='Gagné');
+      const h=document.createElement('div'); h.className='co-parc-h';
+      h.textContent='Parc : '+won.length+' contrat'+(won.length>1?'s':'')+' gagné'+(won.length>1?'s':'')+(won.length?' · '+fmtMwc(won.reduce((s,p)=>s+p.kwc,0)):'')+(parc.length>won.length?' · '+(parc.length-won.length)+' autre'+(parc.length-won.length>1?'s':''):'');
+      card.appendChild(h);
+      parc.slice().sort((a,b)=>(a.fin||'9').localeCompare(b.fin||'9')).slice(0,6).forEach(p=>{
+        const r=document.createElement('div'); r.className='co-parc-row';
+        r.textContent=[p.inst||p.prod, p.kwc?fmtKwc(p.kwc):'', p.statut, p.fin?'fin '+pqIsoToFr(p.fin):''].filter(Boolean).join(' · ');
+        card.appendChild(r);
+      });
+    }
     if(!co || (!co.whatTheyDo && !co.website && (!co.marketScope||!co.marketScope.length) && !co.type)){
+      if(parc.length) return card;
       card.style.color='var(--tx3)'; card.style.fontStyle='italic';
       card.textContent='Aucune info renseignée pour cette société.';
       return card;
@@ -3312,44 +3448,16 @@
   // Best-effort signature parser: never silently creates a contact, only
   // pre-fills the normal contact form for review — signatures vary too much
   // in layout for this to be treated as reliable on its own.
+  // Never silently creates a contact: pre-fills the normal contact form for review.
   function parseSignatureText(text){
-    const result={ firstName:'', lastName:'', role:'', company:'', email:'', phone1:'' };
-    const emailMatch=text.match(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/);
-    if(emailMatch) result.email=emailMatch[0];
-
-    const phoneMatch=text.match(/(\+?\d[\d\s.\-()]{7,}\d)/);
-    if(phoneMatch) result.phone1=phoneMatch[0].trim();
-
-    const lines=text.split(/\r?\n/).map(l=>l.trim()).filter(Boolean);
-    const skipStart=/^(cordialement|best regards|sincerely|regards|merci|thanks|kind regards|bien à vous)/i;
-    let nameLineIdx=-1;
-    for(let i=0;i<lines.length;i++){
-      const line=lines[i];
-      if(line.includes('@') || /^\+?\d/.test(line) || skipStart.test(line)) continue;
-      const words=line.split(/\s+/).filter(Boolean);
-      if(words.length>=2 && words.length<=4){
-        result.firstName=words[0];
-        result.lastName=words.slice(1).join(' ');
-        nameLineIdx=i;
-        break;
-      }
+    const s=parseSignatureBlock(text);
+    let company=s.societe;
+    if(!company && s.mail){
+      const domain=(s.mail.split('@')[1]||'');
+      if(!PQ_GENERIC_DOMAINS.test(domain)){ const main=domain.split('.').slice(-2,-1)[0]||''; company=main?(findExistingCI(clientsList, main)||main.charAt(0).toUpperCase()+main.slice(1)):''; }
     }
-
-    if(nameLineIdx>=0 && lines[nameLineIdx+1]){
-      const nextLine=lines[nameLineIdx+1];
-      if(!nextLine.includes('@') && !/^\+?\d/.test(nextLine)) result.role=nextLine;
-    }
-
-    if(result.email){
-      const domain=result.email.split('@')[1]||'';
-      const parts=domain.split('.');
-      const mainPart=parts.length>=3 ? parts[parts.length-2] : parts[0];
-      if(mainPart){
-        const existing=findExistingCI(clientsList, mainPart);
-        result.company=existing || (mainPart.charAt(0).toUpperCase()+mainPart.slice(1));
-      }
-    }
-    return result;
+    if(company){ const existing=findExistingCI(clientsList, company); if(existing) company=existing; }
+    return { firstName:s.prenom, lastName:s.nom?pqTitleCase(s.nom):'', role:s.qualite, company:company||'', email:s.mail, phone1:s.tel, phone2:s.tel2, comment:[s.adresse, s.site].filter(Boolean).join(' · ') };
   }
 
   function setRelevancePicker(v){
@@ -3467,7 +3575,15 @@
     { k:'qualification', col:'AK', label:'Qualification', type:'check', sec:'suite' }
   ];
   const PQ_SHARED_KEYS=PQ_FIELDS.filter(f=>f.sec!=='centrale' && f.sec!=='none').map(f=>f.k);
-  const PQ_CENTRALE_KEYS=PQ_FIELDS.filter(f=>f.sec==='centrale').map(f=>f.k);
+  // Plant details that are not Pipe columns but feed the BDD (Nom_prod, SIRET_prod, CP, P90) and the sheet
+  const PQ_EXTRA_FIELDS=[
+    { k:'spv', col:'BDD', label:'Société de projet (SPV)', type:'text', sec:'centrale' },
+    { k:'siret', col:'BDD', label:'SIRET', type:'text', sec:'centrale' },
+    { k:'commune', col:'BDD', label:'Commune', type:'text', sec:'centrale' },
+    { k:'cp', col:'BDD', label:'Code postal', type:'text', sec:'centrale' },
+    { k:'p90', col:'BDD', label:'P90 (MWh)', type:'number', sec:'centrale' }
+  ];
+  const PQ_CENTRALE_KEYS=PQ_FIELDS.filter(f=>f.sec==='centrale').map(f=>f.k).concat(PQ_EXTRA_FIELDS.map(f=>f.k));
 
   const pqPad=n=>String(n).padStart(2,'0');
   const pqFold=s=>String(s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
@@ -3475,17 +3591,26 @@
   const pqIsoToFr=s=>{ const m=/^(\d{4})-(\d{2})-(\d{2})$/.exec(s||''); return m?m[3]+'/'+m[2]+'/'+m[1]:(s||''); };
   const pqAddDays=(n)=>{ const d=new Date(); d.setHours(0,0,0,0); d.setDate(d.getDate()+n); return toISO(d); };
   const PQ_MONTHS={ janvier:1, fevrier:2, mars:3, avril:4, mai:5, juin:6, juillet:7, aout:8, septembre:9, octobre:10, novembre:11, decembre:12 };
+  const PQ_MONTH_LABEL={ janvier:'Janvier', fevrier:'Février', mars:'Mars', avril:'Avril', mai:'Mai', juin:'Juin', juillet:'Juillet', aout:'Août', septembre:'Septembre', octobre:'Octobre', novembre:'Novembre', decembre:'Décembre' };
   const PQ_MONTH_NAMES=['JANVIER','FÉVRIER','MARS','AVRIL','MAI','JUIN','JUILLET','AOÛT','SEPTEMBRE','OCTOBRE','NOVEMBRE','DÉCEMBRE'];
 
   // ----- Mail parser (rules, runs locally: nothing leaves the browser) -----
   const PQ_EMAIL_RE=/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g;
   const PQ_PHONE_RE=/(?:\+33\s?\(?0?\)?\s?|\b0)[1-9](?:[\s.\-]?\d{2}){4}\b/g;
   const pqIsCa=e=>{ const d=(e.split('@')[1]||'').toLowerCase(); return /^ca-|credit-?agricole|^ca\.|creditagricole/.test(d); };
-  const PQ_CLOSINGS=/^(bien\s+)?(cordialement|à bientôt|a bientot|bien à vous|bien a vous|salutations|merci( d'avance| par avance)?|bonne (journée|journee|soirée|fin de journée)|best regards|regards|sincères salutations)\b/i;
+  const PQ_CLOSINGS=/^(bien\s+)?(cordialement|à bientôt|a bientot|bien à vous|bien a vous|salutations|merci( d'avance| par avance| beaucoup)?|bonne (journée|journee|soirée|fin de journée)|best regards|regards|sincères salutations|je vous prie d.agr[ée]er|veuillez agr[ée]er|dans l.attente|--\s*$)/i;
   const PQ_LEGAL=/\b(SAS|SASU|SARL|EURL|SA|SCEA|EARL|GAEC|SCI|SNC|SEM|SPL|SCIC|SEML|GIE|SICA|CUMA|SELARL|S\.A\.S\.?|S\.A\.R\.L\.?)\b|\b(commune|mairie|communauté|syndicat|régie|regie|département|conseil)\b/i;
   const PQ_ROLE=/\b(directeur|directrice|gérant|gerant|gérante|président|presidente|responsable|chargé|chargée|ingénieur|ingenieure|ingénieure|associé|associée|dirigeant|dirigeante|fondateur|fondatrice|ceo|cfo|coo|cto|dg|daf|maire|adjoint|adjointe|manager|asset|chef|head|délégué|déléguée|exploitant|exploitante|agriculteur|agricultrice|technicien|technicienne|acheteur|acheteuse|secrétaire|assistant|assistante|comptable|conseiller|conseillère)\b/i;
   const PQ_HEADER=/^(de|from|à|a|to|cc|cci|envoyé|envoye|sent|date|objet|subject)\s*:/i;
   function pqFmtPhone(p){ let d=p.replace(/\D/g,''); if(d.startsWith('33')) d='0'+d.slice(2).replace(/^0/,''); return d.length===10?d.replace(/(\d{2})(?=\d)/g,'$1 ').trim():p.trim(); }
+  // "9 800", "1.250 kWc" (thousands), "4,98 MWc", "2.5 MW" (decimal); "1.250 MWc" stays 1,25 MW
+  const PQ_QTY='(?<![\\p{L}\\d.,])(\\d{1,3}(?:[ .]\\d{3})+(?:,\\d+)?|\\d+(?:[.,]\\d+)?)';
+  function pqQty(s, unit){
+    let t=String(s).replace(/\s/g,'');
+    const big=/^(mw|mwc|gwh)$/i.test(unit||'');
+    if(/^\d{1,3}(\.\d{3})+(,\d+)?$/.test(t) && !(big && /^\d{1,3}\.\d{3}$/.test(t))) t=t.replace(/\./g,'');
+    return parseFloat(t.replace(',','.'));
+  }
   function pqNum(s){ return parseFloat(String(s).replace(/\s/g,'').replace(',','.')); }
   function pqCaisseFromText(s){
     const f=pqFold(s);
@@ -3511,17 +3636,19 @@
   }
   function pqDeptFromText(s){
     const t=String(s||''); if(!t.trim()) return null;
-    const cp=/\b((?:0[1-9]|[1-8]\d|9[0-5]|97[1-6])\d{3})\b/.exec(t); if(cp){ const d=pqDeptFromPostal(cp[1]); if(d) return d; }
+    const cp=/\b((?:0[1-9]|[1-8]\d|9[0-5])\d{3}|97[1-6]\d{2})\b/.exec(t); if(cp){ const d=pqDeptFromPostal(cp[1]); if(d) return d; }
     const code=/(?:^|\(|\s)(\d{2}|2A|2B|97\d)(?:\)|$)/.exec(t.trim()); if(code){ const d=PQ_DEPTS.find(x=>x[0]===code[1].padStart(2,'0')); if(d) return d; }
     const ft=pqFold(t);
-    return PQ_DEPTS.slice().sort((a,b)=>b[1].length-a[1].length).find(d=>new RegExp('\\b'+pqFold(d[1]).replace(/[-']/g,'[ -\']')+'\\b').test(ft))||null;
+    // hyphen last in the class: "[ '-]" (in "[ -']" it would be a range and "Seine-Maritime" would never match)
+    return PQ_DEPTS.slice().sort((a,b)=>b[1].length-a[1].length).find(d=>new RegExp('(^|[^a-z])'+pqFold(d[1]).replace(/[-' ]/g,"[ '-]")+'([^a-z]|$)').test(ft))||null;
   }
   function pqParseDateLoose(s){
     s=pqFold(s);
     let m=/(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{4})/.exec(s); if(m) return pqPad(m[1])+'/'+pqPad(m[2])+'/'+m[3];
     m=/(\d{4})-(\d{2})-(\d{2})/.exec(s); if(m) return m[3]+'/'+m[2]+'/'+m[1];
     m=/(\d{1,2})(?:er)?\s+(janvier|fevrier|mars|avril|mai|juin|juillet|aout|septembre|octobre|novembre|decembre)\s+(\d{4})/.exec(s); if(m) return pqPad(m[1])+'/'+pqPad(PQ_MONTHS[m[2]])+'/'+m[3];
-    m=/(janvier|fevrier|mars|avril|mai|juin|juillet|aout|septembre|octobre|novembre|decembre)\s+(\d{4})/.exec(s); if(m) return m[1].charAt(0).toUpperCase()+m[1].slice(1)+' '+m[2];
+    m=/(janvier|fevrier|mars|avril|mai|juin|juillet|aout|septembre|octobre|novembre|decembre)\s+(\d{4})/.exec(s); if(m) return PQ_MONTH_LABEL[m[1]]+' '+m[2];
+    m=/\b(0?[1-9]|1[0-2])\/(20\d{2})\b/.exec(s); if(m) return PQ_MONTH_LABEL[Object.keys(PQ_MONTHS)[parseInt(m[1],10)-1]]+' '+m[2];
     m=/\b(t[1-4]|[1-4](?:er|e|eme|ème)\s+trimestre)\s+(\d{4})/.exec(s); if(m){ const q=parseInt(m[1].replace(/\D/g,''),10); return 'T'+q+' '+m[2]; }
     m=/(ete|printemps|automne|hiver|debut|fin|courant)\s+(\d{4})/.exec(s); if(m) return m[0].replace(/^ete/,'été').replace(/^debut/,'début');
     m=/\b(20\d{2})\b/.exec(s); if(m) return m[1];
@@ -3534,28 +3661,198 @@
     return pqParseDateLoose(String(v));
   }
 
+  // Relays forward a lead without being the prospect: Crédit Agricole and colleagues (own domain).
+  const PQ_INTERNAL_DOMAINS=['selfee.fr'];
+  const pqIsInternal=e=>PQ_INTERNAL_DOMAINS.includes((e.split('@')[1]||'').toLowerCase());
+  const pqIsRelay=e=>pqIsCa(e)||pqIsInternal(e);
+  const PQ_GENERIC_DOMAINS=/^(gmail|googlemail|hotmail|outlook|live|msn|yahoo|orange|wanadoo|free|sfr|laposte|neuf|icloud|me|aol|bbox|numericable|proton|protonmail)\./;
+  // words that make a capitalised pair look like a name but are not people
+  const PQ_NOT_NAME=/\b(cr[eé]dit|agricole|[eé]nergies?|solaire|syndicat|centrale|soci[eé]t[eé]|commune|mairie|parc|ville|groupe|service|transitions?|madame|monsieur|bonjour|cordialement|objet|projet|sas|sarl|earl|gaec|scea)\b/i;
+  const PQ_NAME_RE=/^(?:(?:M\.|Mme|Mlle|Monsieur|Madame)\s+)?[A-ZÉÈÀÂÎÔ][\p{L}'’-]+(?:\s+(?:de\s+|de\s+la\s+|du\s+)?[A-ZÉÈÀÂÎÔ][\p{L}'’-]+){1,2}$/u;
+  const PQ_FORM='SAS|SASU|SARL|EURL|EARL|GAEC|SCEA|SCI|SEM|SEML|SCIC|SPL|SA|SNC|GIE|SICA|CUMA';
+
+  function pqSplitName(raw){
+    let n=raw.trim().replace(/^(m\.|mme|mlle|monsieur|madame)\s+/i,'');
+    const parts=n.split(/\s+/);
+    // "DURAND Pierre": the all-caps word is the surname; otherwise the first word is the first name
+    let fi=0; if(parts.length>1 && parts[0]===parts[0].toUpperCase() && parts[0].length>1 && parts[1]!==parts[1].toUpperCase()) fi=parts.length-1;
+    return { prenom:pqTitleCase(fi===0?parts[0]:parts[parts.length-1]), nom:(fi===0?parts.slice(1).join(' '):parts.slice(0,-1).join(' ')).toUpperCase() };
+  }
+  const pqLooksLikeName=s=>PQ_NAME_RE.test(s.trim()) && !PQ_NOT_NAME.test(s) && /[a-zé]/.test(s);
+  const pqLooksLikeCompany=s=>{
+    const t=s.trim(); if(!t || t.split(/\s+/).length>7) return false;
+    if(new RegExp('\\b('+PQ_FORM+')\\b').test(t) || /\b(commune|mairie|communaut[eé]|syndicat|r[eé]gie|d[eé]partement|conseil)\b/i.test(t)) return true;
+    const letters=t.replace(/[^\p{L}]/gu,'');
+    return letters.length>=4 && letters===letters.toUpperCase() && !pqLooksLikeName(t);
+  };
+  // "l'EARL Bastide", "la société VENTS DU NORD SAS", "SARL SOLEIL D'OC" inside a sentence
+  function pqCompanyInText(s){
+    // names never run onto the next line (spaces/tabs only between words)
+    const W="[A-Z0-9ÉÈÀÂÎÔÛÇ][\\p{L}0-9'’&.-]*";
+    let m=new RegExp('\\b('+PQ_FORM+')[ \\t]+('+W+'(?:[ \\t]+(?:(?:des|du|de|les|la|le)(?=[ \\t])|'+W+')){0,4})','u').exec(s);
+    if(m){ const name=(m[1]+' '+m[2]).replace(/\s+(du|de|des|la|le|les)$/i,'').replace(/[.,;:]+$/,''); return name.toUpperCase(); }
+    m=new RegExp("((?:[A-Z0-9ÉÈÀÂÎÔÛÇ][A-Z0-9ÉÈÀÂÎÔÛÇ'’&.-]+[ \\t]+){1,4})("+PQ_FORM+')\\b','u').exec(s);
+    if(m) return (m[1]+m[2]).trim().toUpperCase();
+    return null;
+  }
+
+  // ---------- Signature reader, shared by Contacts (« Coller une signature ») and the mail reader ----------
+  // Works line by line, each line cut into parts on " | ", " – ", ", "; every part is classified as phone, mail,
+  // web, address, name, role or company. The mail address helps: its local part names the person
+  // (jean.dupont@ → Jean DUPONT) and its domain names the company (solairedumidi.fr → Solaire du Midi).
+  const SIG_JUNK=/^\[cid:|^<image|^\[image|^image\d|envoy[ée] (de|depuis) mon|sent from my|get outlook|obtenir outlook|t[ée]l[ée]charger outlook|^[-—–_=*•·~]+$/i;
+  const SIG_DISCLAIMER=/confidentiel|destinataires?\b|pi[eè]ces? jointes?|pensez [àa] l.environnement|avant d.imprimer|this (e-?mail|message)|intended (solely|only)|disclaimer|n.imprimez/i;
+  const SIG_PHONE_LABEL=/^(t[ée]l[ée]?(?:phone)?|tel|t|fixe|ligne directe|direct|standard|bureau|office|mob(?:ile)?|port(?:able)?|gsm|m|cell(?:ular)?|fax|f)\s*\.?\s*:?\s*/i;
+  const SIG_MAIL_LABEL=/^(e-?mail|courriel|mail|e)\s*\.?\s*:?\s*/i;
+  const SIG_ROLE=/\b(directeur|directrice|director|g[ée]rante?|pr[ée]sidente?|president|responsable|charg[ée]e?|ing[ée]nieure?|engineer|associ[ée]e?|partner|dirigeante?|fondat(?:eur|rice)|founder|co-?fondat\p{L}*|ceo|cfo|coo|cto|dg|daf|dsi|vp|maire|adjointe?|manager|asset|chef|head|d[ée]l[ée]gu[ée]e?|exploitante?|agricult(?:eur|rice)|technicien(?:ne)?|acheteu(?:r|se)|secr[ée]taire|assistante?|comptable|conseill[eè]re?|consultante?|coordinat(?:eur|rice)|analyste?|analyst|officer|commerciale?|attach[ée]e?|juriste|avocate?|administrat(?:eur|rice)|gestionnaire|business developer|account)\b/iu;
+  const SIG_PUBLIC=/\b(mairie|commune|communaut[eé]|syndicat|r[ée]gie|d[ée]partement|conseil (r[ée]gional|d[ée]partemental)|m[ée]tropole|agglom[ée]ration|ville de|sem\b|spl\b)/i;
+  const SIG_ADDRESS=/\b\d{5}\b|\b(rue|avenue|av\.|bd|boulevard|chemin|route|place|all[ée]e|impasse|quai|cours|za|zi|zac|bp|cs|lieu-dit|lieudit|parc d.activit[ée]s)\b/i;
+  const SIG_WEB=/https?:\/\/|www\.|linkedin|\b[a-z0-9-]+\.(fr|com|eu|net|org|bzh|re|io)\b(?!@)/i;
+  const SIG_PARTICLES=/^(de|du|des|la|le|les|d'|van|von|da|di|del)$/i;
+
+  function sigNameWords(s){
+    const t=s.replace(/^(m\.|mr\.?|mme|mlle|monsieur|madame)\s+/i,'').trim();
+    const w=t.split(/\s+/);
+    if(w.length<2 || w.length>5) return null;
+    // each word: a capitalised or all-caps word, or a particle (de, La, Le…) inside the name
+    const capsWord=x=>x.length>1 && x===x.toUpperCase() && /\p{L}/u.test(x);
+    // "BERTRAND julien": a lowercase first name is accepted next to an all-caps surname
+    const lowerOk=w.length===2 && w.some(capsWord) && w.some(x=>/^[a-zéèàâîôûç][\p{L}'’-]+$/u.test(x));
+    if(!lowerOk && !w.every((x,i)=>/^[A-ZÉÈÀÂÎÔÛÇ][\p{L}'’-]*$/u.test(x) || (i>0 && SIG_PARTICLES.test(x)))) return null;
+    if(w.filter(x=>!SIG_PARTICLES.test(x)).length<2 && !SIG_PARTICLES.test(w[1])) return null;
+    return w;
+  }
+  function sigLocalTokens(mail){
+    if(!mail) return [];
+    const whole=pqFold(mail.split('@')[0]).split(/[._]+/).filter(Boolean);
+    return whole.concat(...whole.filter(t=>t.includes('-')).map(t=>t.split('-')));
+  }
+  function sigDomainStem(mail){ if(!mail) return ''; const d=(mail.split('@')[1]||'').toLowerCase(); if(PQ_GENERIC_DOMAINS.test(d)) return ''; return pqFold(d.replace(/\.[a-z]{2,4}$/,'')).replace(/[^a-z0-9]/g,''); }
+  // How much a part looks like the person's name (0 = not a name)
+  function sigNameScore(part, tokens, stem){
+    const w=sigNameWords(part); if(!w) return 0;
+    const f=pqFold(part);
+    if(stem && f.replace(/[^a-z0-9]/g,'')===stem) return 0;
+    if(SIG_ROLE.test(part) || SIG_PUBLIC.test(part) || new RegExp('\\b('+PQ_FORM+')\\b').test(part) || /\b(energie|energies|solaire|solar|capital|groupe|group|eolien|hydro|metha|soleil|vents?|centrale|parc|sas|sarl)\b/.test(f)) return 0;
+    let score=1;
+    const words=w.map(x=>pqFold(x).replace(/[^a-z]/g,'')).filter(Boolean);
+    const joined=tokens.join('');
+    if(tokens.length && words.some(x=>x.length>2 && (tokens.includes(x) || joined.includes(x)))) score+=3;
+    if(/[a-zé]/.test(part)) score+=1;   // mixed case looks more like a person than an all-caps company
+    return score;
+  }
+  function sigSplitName(part, tokens){
+    const w=sigNameWords(part);
+    const caps=w.map(x=>x.length>1 && x===x.toUpperCase());
+    let first=[], last=[];
+    if(caps.some(Boolean) && !caps.every(Boolean)){
+      // "Jean DUPONT" / "DURAND Pierre": the all-caps words are the surname
+      w.forEach((x,i)=>{ (caps[i] || (SIG_PARTICLES.test(x) && i>0 && caps[i+1]))?last.push(x):first.push(x); });
+    } else {
+      // all caps or all capitalised: the mail says which word is the surname, else the first word is the first name
+      // surname = the word matching the last block of the address (anne-sophie.leclerc → leclerc)
+      const lastTok=tokens.length?tokens.filter(t=>!t.includes('-'))[tokens.filter(t=>!t.includes('-')).length-1]:'';
+      const blocks=tokens.filter(t=>!tokens.some(u=>u!==t && u.includes('-') && u.split('-').includes(t)));
+      const surname=blocks.length>1?blocks[blocks.length-1]:lastTok;
+      const li=surname?w.findIndex((x,i)=>i>0 && pqFold(x).replace(/[^a-z]/g,'')===surname):-1;
+      const fi=tokens.length?w.findIndex(x=>{ const fx=pqFold(x).replace(/[^a-z-]/g,''); return tokens[0]===fx || (tokens[0]===fx[0] && tokens.length>1) || tokens[0]===fx.split('-').map(y=>y[0]).join(''); }):-1;
+      if(li>0){ first=w.slice(0,li); last=w.slice(li); }
+      else if(fi>0){ first=w.slice(fi); last=w.slice(0,fi); }
+      else { first=[w[0]]; last=w.slice(1); }
+    }
+    return { prenom:first.map(x=>x.split('-').map(y=>y.charAt(0).toUpperCase()+y.slice(1).toLowerCase()).join('-')).join(' '), nom:last.join(' ').toUpperCase() };
+  }
+  function sigPhones(line){
+    const out=[]; const re=new RegExp(PQ_PHONE_RE.source,'g'); let m;
+    while((m=re.exec(line))){ out.push({ num:pqFmtPhone(m[0]), at:m.index }); }
+    return out;
+  }
+  function parseSignatureBlock(text, hint){
+    hint=hint||{};
+    const res={ prenom:'', nom:'', qualite:'', societe:'', mail:'', tel:'', tel2:'', adresse:'', site:'' };
+    let lines=String(text||'').replace(/\r/g,'').replace(/ /g,' ').split('\n').map(l=>l.replace(/\s+/g,' ').trim()).filter(Boolean);
+    lines=lines.filter(l=>!SIG_JUNK.test(l) && !(SIG_DISCLAIMER.test(l) && l.split(' ').length>8) && !PQ_CLOSINGS.test(l));
+    const mails=[...new Set(lines.join('\n').match(PQ_EMAIL_RE)||[])].map(e=>e.toLowerCase());
+    res.mail=hint.mail || mails.find(e=>!pqIsRelay(e)) || mails[0] || '';
+    const tokens=sigLocalTokens(res.mail), stem=sigDomainStem(res.mail);
+    // phones, ranked: mobile (06/07 or labelled mobile) > direct line > other > switchboard
+    const phones=[];
+    lines.forEach(l=>{
+      const segs=l.split(/\s+[-–|·]\s+|\s{2,}|;\s*/);
+      segs.forEach(seg=>{
+        sigPhones(seg).forEach(p=>{
+          const lab=pqFold(seg.slice(0,p.at));
+          let rank=/^0[67]/.test(p.num)?0:2;
+          if(/mob|port|gsm|cell|\bm\b/.test(lab)) rank=0; else if(/direct/.test(lab)) rank=1; else if(/standard|fax|\bf\b/.test(lab)) rank=/fax|\bf\b/.test(lab)?9:3;
+          if(rank<9 && !phones.some(x=>x.num===p.num)) phones.push({ num:p.num, rank, order:phones.length });
+        });
+      });
+    });
+    phones.sort((a,b)=>a.rank-b.rank || a.order-b.order);
+    if(phones[0]) res.tel=phones[0].num;
+    if(phones[1]) res.tel2=phones[1].num;
+    // classify the remaining parts
+    const parts=[];
+    lines.forEach((l,li)=>{
+      l.split(/\s+[-–|·•]\s+|,\s+|\s\|\s?|\|/).map(p=>p.trim()).filter(Boolean).forEach(p=>parts.push({ p, li }));
+    });
+    const names=[], roles=[], companies=[];
+    parts.forEach(({p,li})=>{
+      if(new RegExp(PQ_EMAIL_RE.source).test(p) || SIG_MAIL_LABEL.test(p) && new RegExp(PQ_EMAIL_RE.source).test(p)) return;
+      if(sigPhones(p).length || (SIG_PHONE_LABEL.test(p) && /\d{2}/.test(p) && !/[a-z]{4,}/i.test(p.replace(SIG_PHONE_LABEL,'')))) return;
+      if(SIG_WEB.test(p)){ if(!res.site && !/linkedin/i.test(p)) res.site=p.replace(/^(web|site(?: web)?|w)\s*:?\s*/i,''); return; }
+      if(SIG_ADDRESS.test(p) && !SIG_ROLE.test(p)){ res.adresse=(res.adresse?res.adresse+', ':'')+p; return; }
+      if(p.split(' ').length>9) return;
+      const ns=sigNameScore(p, tokens, stem);
+      if(ns){ names.push({ p, li, score:ns }); return; }
+      // "Gérant BREIZH SOLAR": a role followed by an all-caps company
+      const rc=new RegExp('^(.{3,40}?)\\s+((?:[A-Z0-9ÉÈÀÂÎÔÛÇ][A-Z0-9ÉÈÀÂÎÔÛÇ\'’&.-]+\\s*){1,5})$','u').exec(p);
+      if(rc && SIG_ROLE.test(rc[1]) && !SIG_ROLE.test(rc[2]) && !/^(g[ée]n[ée]ral|technique|commercial|financier|adjoint|d[ée]l[ée]gu[ée]|administratif|op[ée]rationnel|marketing|juridique|rh)$/i.test(rc[2].trim())){ roles.push({ p:rc[1], li }); companies.push({ p:rc[2].trim(), li, score:3 }); return; }
+      const f=pqFold(p).replace(/[^a-z0-9]/g,'');
+      const isLegal=new RegExp('\\b('+PQ_FORM+')\\b').test(p)||/cr[ée]dit agricole|caisse r[ée]gionale|caisse d.[ée]pargne|banque populaire|soci[ée]t[ée] g[ée]n[ée]rale|bnp/i.test(p), isPublic=SIG_PUBLIC.test(p);
+      const letters=p.replace(/[^\p{L}]/gu,''), allCaps=letters.length>=4 && letters===letters.toUpperCase();
+      const domainHit=stem && f.length>=4 && (f===stem || stem.includes(f) || f.includes(stem));
+      const isRole=SIG_ROLE.test(p) && !isLegal && !(isPublic && /^(mairie|commune|syndicat|communaut)/i.test(p));
+      if(isRole && !domainHit){ roles.push({ p, li }); return; }
+      if(isLegal || isPublic || domainHit || allCaps){
+        let score=(isLegal?4:0)+(domainHit?4:0)+(isPublic?3:0)+(allCaps?1:0);
+        if(/^groupe?\b/i.test(p)) score-=3;
+        companies.push({ p, li, score });
+      }
+    });
+    if(names.length){
+      names.sort((a,b)=>b.score-a.score || a.li-b.li);
+      const n=sigSplitName(names[0].p, tokens); res.prenom=n.prenom; res.nom=n.nom;
+    }
+    if(roles.length) res.qualite=roles[0].p.replace(/\s*[-–|,:]\s*$/,'');
+    if(companies.length){ companies.sort((a,b)=>b.score-a.score || a.li-b.li); res.societe=companies[0].p; }
+    return res;
+  }
+
   function parsePipeMail(raw){
-    const out={}, text=String(raw||'').replace(/\r/g,''), lines=text.split('\n').map(l=>l.replace(/\u00a0/g,' ').trim());
+    const out={}, text=String(raw||'').replace(/\r/g,'').replace(/ /g,' '), lines=text.split('\n').map(l=>l.trim());
     if(!text.trim()) return out;
     const all=[...new Set((text.match(PQ_EMAIL_RE)||[]).map(e=>e.toLowerCase()))];
     const caEmails=all.filter(pqIsCa);
-    // Split a forward chain at each "De :"/"From:" header; the prospect is the latest block whose sender is not Crédit Agricole.
+    // Split a forward chain at each "De :"/"From:" header; the prospect is the latest block whose sender is not a relay.
     const blocks=[]; let cur={ from:null, lines:[] };
     lines.forEach(l=>{ const m=/^(de|from)\s*:\s*(.*)$/i.exec(l); if(m){ if(cur.lines.length||cur.from) blocks.push(cur); cur={ from:m[2], lines:[] }; } else cur.lines.push(l); });
     blocks.push(cur);
-    blocks.forEach(b=>{ b.email=((b.from||'').match(PQ_EMAIL_RE)||[])[0]||null; b.isCa=b.email?pqIsCa(b.email):false; });
-    let prospect=blocks.slice().reverse().find(b=>b.from && b.email && !b.isCa)||null;
-    if(!prospect){ const b=blocks[blocks.length-1]; prospect=b.isCa?null:b; }
+    blocks.forEach(b=>{ b.email=((b.from||'').match(PQ_EMAIL_RE)||[])[0]||null; b.relay=b.email?pqIsRelay(b.email):false; });
+    let prospect=blocks.slice().reverse().find(b=>b.from && b.email && !b.relay)||null;
+    if(!prospect){ const b=blocks[blocks.length-1]; prospect=(b.relay||(!b.from && blocks.some(x=>x.relay)))?null:b; }
     const body=prospect?prospect.lines.filter(l=>!PQ_HEADER.test(l)):lines.filter(l=>!PQ_HEADER.test(l));
     const bodyText=body.join('\n');
     const subj=lines.map(l=>/^(objet|subject)\s*:\s*(.*)$/i.exec(l)).filter(Boolean).map(m=>m[2].replace(/^((tr|fw|fwd|re)\s*:\s*)+/i,'').trim()).filter(Boolean);
     const subject=subj[subj.length-1]||subj[0]||'';
 
+    // Origin & Crédit Agricole caisse (a caisse name alone, e.g. "Morbihan", is not enough)
     let caisse=null;
     caEmails.forEach(e=>{ caisse=caisse||pqCaisseFromDomain(e); });
-    const caText=pqCaisseFromText(text);
+    const mentionsCa=/cr[eé]dit\s+agricole|\bca\s+(transitions|t&e)|cat\s*&\s*e/i.test(text);
+    const caText=(caEmails.length||mentionsCa)?pqCaisseFromText(text):null;
     if(caText==='CAT&E' || (!caisse && caText)) caisse=caText;
-    if(caEmails.length || caisse){ out.origine='Crédit Agricole'; out.ca=caisse||'N/A'; }
+    if(caEmails.length || caisse || (mentionsCa && !prospect)){ out.origine='Crédit Agricole'; out.ca=caisse||'N/A'; }
     else if(/boamp/i.test(text)){ out.origine='BOAMP'; out.ca='N/A'; }
     else { out.origine='Contact direct'; out.ca='N/A'; }
 
@@ -3563,75 +3860,114 @@
     if(caEmails.length){
       const idx=lines.findIndex(l=>l.toLowerCase().includes(caEmails[0]));
       for(let i=idx-1;i>=Math.max(0,idx-5);i--){ const l=lines[i]; if(/^[A-ZÉÈ][a-zéèëêïîôç-]+(\s+[A-ZÉÈ][\wéèëêïîôç'-]+){1,2}$/.test(l)){ caPerson=l; break; } }
-      if(!caPerson){ const hb=blocks.find(b=>b.isCa); if(hb) caPerson=(hb.from||'').replace(/<.*?>/,'').replace(/["']/g,'').trim()||null; }
+      if(!caPerson){ const hb=blocks.find(b=>b.relay && pqIsCa(b.email||'')); if(hb) caPerson=(hb.from||'').replace(/<.*?>/,'').replace(/["']/g,'').trim()||null; }
     }
-    const bodyEmails=(bodyText.match(PQ_EMAIL_RE)||[]).map(e=>e.toLowerCase()).filter(e=>!pqIsCa(e));
-    out.mail=(prospect && prospect.email && !pqIsCa(prospect.email))?prospect.email.toLowerCase():(bodyEmails[0]||all.find(e=>!pqIsCa(e))||'');
+
+    // The prospect's own address: sender of its block, else an address quoted in the body by the relay
+    const nonRelay=all.filter(e=>!pqIsRelay(e));
+    let inlineLine=null;
+    if(prospect && prospect.email && !pqIsRelay(prospect.email)) out.mail=prospect.email.toLowerCase();
+    else if(nonRelay.length){
+      out.mail=nonRelay[0];
+      inlineLine=lines.find(l=>l.toLowerCase().includes(nonRelay[0]))||null;
+    }
     if(!out.mail) delete out.mail;
-    const phones=[...new Set((bodyText.match(PQ_PHONE_RE)||[]).map(pqFmtPhone))];
+
+    // Phones: on the line that quotes the prospect first, then in the prospect's part
+    const phoneSrc=(inlineLine&&new RegExp(PQ_PHONE_RE.source).test(inlineLine)?inlineLine+'\n':'')+bodyText;
+    const phones=[...new Set((phoneSrc.match(PQ_PHONE_RE)||[]).map(pqFmtPhone))];
     if(phones.length) out.tel=phones.slice(0,2).join(' / ');
 
-    let sigStart=-1;
-    body.forEach((l,i)=>{ if(PQ_CLOSINGS.test(l)) sigStart=i; });
-    const sig=(sigStart>=0?body.slice(sigStart+1):body.slice(-8)).filter(l=>l && !/^(-{2,}|_{2,})/.test(l) && !/message d.origine|original message/i.test(l)).slice(0,8);
-    let nameLine=null, roleLine=null, companyLine=null;
-    sig.forEach(l=>{
-      if(new RegExp(PQ_EMAIL_RE.source).test(l)) return;
-      if(new RegExp(PQ_PHONE_RE.source).test(l)) return;
-      if(/https?:|www\./i.test(l)) return;
-      if(!companyLine && PQ_LEGAL.test(l)){ companyLine=l; return; }
-      if(!roleLine && PQ_ROLE.test(l) && l.split(/\s+/).length<=8){ roleLine=l; return; }
-      if(!nameLine && /^(?:[Mm]\.|[Mm]me|Mlle|Monsieur|Madame)?\s*[A-ZÉÈÀ][\p{L}'-]+(\s+[A-ZÉÈÀ][\p{L}'-]+){1,2}$/u.test(l)){ nameLine=l; return; }
-    });
-    if(!nameLine && prospect && prospect.from){ const dn=prospect.from.replace(/<.*?>/,'').replace(PQ_EMAIL_RE,'').replace(/["'\[\]]/g,'').trim(); if(dn && dn.split(/\s+/).length>=2 && dn.split(/\s+/).length<=4) nameLine=dn; }
-    if(nameLine){
-      let n=nameLine.trim();
-      const cm=/^(m\.|mme|mlle|monsieur|madame)\s+/i.exec(n); if(cm) n=n.slice(cm[0].length);
-      const parts=n.split(/\s+/);
-      let fi=0; if(parts.length>1 && parts[0]===parts[0].toUpperCase() && parts[0].length>1 && parts[1]!==parts[1].toUpperCase()) fi=parts.length-1;
-      out.prenom=pqTitleCase(fi===0?parts[0]:parts[parts.length-1]);
-      out.nom=(fi===0?parts.slice(1).join(' '):parts.slice(0,-1).join(' ')).toUpperCase();
+    let name=null, role=null, company=null;
+    if(prospect){
+      // Signature: lines after the last closing formula; each line may hold "Name – Role, COMPANY, phone"
+      let sigStart=-1;
+      body.forEach((l,i)=>{ if(PQ_CLOSINGS.test(l)) sigStart=i; });
+      const sigLines=(sigStart>=0?body.slice(sigStart+1):body.slice(-8)).filter(l=>l && !/message d.origine|original message|forwarded message/i.test(l)).slice(0,10);
+      const sig=parseSignatureBlock(sigLines.join('\n'), { mail:out.mail });
+      if(sig.prenom||sig.nom) name=[sig.prenom, sig.nom].filter(Boolean).join(' ');
+      if(sig.qualite) role=sig.qualite;
+      if(sig.societe) company=sig.societe;
+      // the signature's phones, mobile first, win over numbers quoted elsewhere in the mail
+      if(sig.tel) out.tel=[sig.tel, sig.tel2].filter(Boolean).join(' / ');
+      if(!name && prospect.from){ const dn=prospect.from.replace(/<.*?>/,'').replace(PQ_EMAIL_RE,'').replace(/["'\[\]]/g,'').trim(); if(dn && dn.split(/\s+/).length>=2 && dn.split(/\s+/).length<=4 && !PQ_NOT_NAME.test(dn)) name=dn; }
+    } else if(inlineLine){
+      // relay mail: "M. Hugo Lefebvre, hugo@…, 06…" — the name closest before the address
+      const at=inlineLine.toLowerCase().indexOf(out.mail);
+      const before=inlineLine.slice(0,at);
+      const re=/(?:(?:M\.|Mme|Monsieur|Madame)\s+)?([A-ZÉÈÀÂÎÔ][\p{L}'’-]+)\s+([A-ZÉÈÀÂÎÔ][\p{L}'’-]+)/gu;
+      let m, best=null;
+      while((m=re.exec(before))){ if(!PQ_NOT_NAME.test(m[0]) && /[a-zé]/.test(m[0])) best=m[1]+' '+m[2]; }
+      if(!best){
+        // or a few lines above, introduced by a civility ("M. Olivier Mercier, gérant de …")
+        const li=lines.indexOf(inlineLine);
+        for(let i=li-1;i>=Math.max(0,li-3) && !best;i--){ const c=/(?:M\.|Mme|Monsieur|Madame)\s+([A-ZÉÈÀÂÎÔ][\p{L}'’-]+)\s+([A-ZÉÈÀÂÎÔ][\p{L}'’-]+)/u.exec(lines[i]); if(c) best=c[1]+' '+c[2]; }
+      }
+      if(best) name=best;
     }
-    if(roleLine) out.qualite=roleLine.replace(/\s*[-–|,]\s*$/,'');
-    if(companyLine) out.producteur=companyLine.replace(/\s+/g,' ').toUpperCase();
-    else { const m=/\b(?:société|societe|entreprise|ferme|exploitation|commune de|ville de)\s+([A-Z][\p{L}'&.\- ]{2,40})/u.exec(bodyText); if(m) out.producteur=m[1].trim().toUpperCase(); }
+    if(name){ const n=pqSplitName(name); out.prenom=n.prenom; out.nom=n.nom; }
+    if(role) out.qualite=role.replace(/\s*[-–|,]\s*$/,'');
+    const scope=prospect?bodyText:text;
+    if(!company) company=pqCompanyInText(prospect?bodyText:lines.filter(l=>!(caPerson && l.includes(caPerson))).join('\n'));
+    if(!company){ const m=/\b(?:société|societe|entreprise|ferme|exploitation|commune de|ville de)\s+([A-Z][\p{L}'&.\- ]{2,40})/u.exec(scope); if(m) company=(/^(commune|ville)/i.test(m[0])?m[0]:m[1]).trim(); }
+    if(!company && out.mail && !PQ_GENERIC_DOMAINS.test(out.mail.split('@')[1]||'')){
+      company=(out.mail.split('@')[1]||'').replace(/\.[a-z]{2,4}$/,'').replace(/[-_.]+/g,' ');
+    }
+    if(company) out.producteur=company.replace(/\s+/g,' ').trim().toUpperCase();
 
+    // Location: postal code (5 digits, overseas 97x xx), "(46)", "département … 64", then département names
     let dept=null, city=null;
-    const cpm=/\b(?:[àa]|sur|de|commune de)?\s*([A-ZÉÈ][\p{L}'-]+(?:[ -][A-ZÉÈ]?[\p{L}'-]+){0,3})?\s*,?\s*\(?\b((?:0[1-9]|[1-8]\d|9[0-5]|97[1-6])\d{3})\b\)?/u.exec(text.replace(PQ_EMAIL_RE,' ').replace(PQ_PHONE_RE,' '));
+    const noContact=scope.replace(PQ_EMAIL_RE,' ').replace(PQ_PHONE_RE,' ');
+    const cpm=/\b(?:[àa]|sur|de|commune de)?\s*([A-ZÉÈ][\p{L}'-]+(?:[ -][A-ZÉÈ]?[\p{L}'-]+){0,3})?\s*,?\s*\(?\b((?:0[1-9]|[1-8]\d|9[0-5])\d{3}|97[1-6]\d{2})\b\)?/u.exec(noContact);
     if(cpm){ dept=pqDeptFromPostal(cpm[2]); if(cpm[1] && !/^(Le|La|Les|De|Du|Des)$/.test(cpm[1])) city=cpm[1].trim(); }
-    if(!dept){ const m=/\((\d{2}|2A|2B)\)/.exec(text); if(m) dept=PQ_DEPTS.find(d=>d[0]===m[1].padStart(2,'0'))||null; }
-    if(!dept){ const ft=pqFold(bodyText); dept=PQ_DEPTS.slice().sort((a,b)=>b[1].length-a[1].length).find(d=>new RegExp('\\b'+pqFold(d[1]).replace(/[-']/g,'[ -\']')+'\\b').test(ft))||null; }
+    if(!dept){ const m=/\((\d{2}|2A|2B|97\d)\)/.exec(noContact); if(m) dept=PQ_DEPTS.find(d=>d[0]===m[1].padStart(2,'0'))||null; }
+    if(!dept){ const m=/d[ée]partement[^\n\d]{0,30}?\b(\d{2,3}|2A|2B)\b/i.exec(noContact); if(m) dept=PQ_DEPTS.find(d=>d[0]===m[1].padStart(2,'0'))||null; }
+    if(!dept){ const ft=pqFold(noContact); dept=PQ_DEPTS.slice().sort((a,b)=>b[1].length-a[1].length).find(d=>new RegExp('(^|[^a-z])'+pqFold(d[1]).replace(/[-' ]/g,'[ \'-]')+'([^a-z]|$)').test(ft))||null; }
     if(dept){ out.dept=pqDeptLabel(dept); out.region=PQ_REGIONS[dept[2]]; }
 
-    const ft=pqFold(bodyText||text);
-    const pv=/photovolta|\bpv\b|solaire|ombriere|panneaux/.test(ft), eol=/eolien/.test(ft);
-    if(pv&&eol) out.install='PV et Eolien'; else if(pv) out.install='PV'; else if(eol) out.install='Eolien';
-    else if(/biogaz|methanis/.test(ft)) out.install='BIOGAZ'; else if(/hydro/.test(ft)) out.install='Hydro';
+    // Installation & contract
+    const ft=pqFold(scope);
+    const eol=/eolien|eolienne/.test(ft);
+    const pv=/photovolta|voltai|\bpv\b|solaire|ombriere|panneaux|toiture|hangar/.test(ft) || (!eol && /\b\d[\d\s.,]*\s*(kwc|mwc)\b|crete/.test(ft));
+    if(pv&&eol) out.install='PV et Eolien'; else if(eol) out.install='Eolien'; else if(/biogaz|methanis|cogeneration/.test(ft)) out.install='BIOGAZ'; else if(/hydro/.test(ft)) out.install='Hydro'; else if(pv) out.install='PV';
     if(/\bs21\b/.test(ft)) out.contrat='AO S21 CR';
     else if(/\baos\b|appel d.offres? simplifie/.test(ft)) out.contrat='AOS CRE';
-    else if(/obligation d.achat|sortie d.oa|\boa\b/.test(ft)) out.contrat="Sortie d'OA / CR";
     else if(/autoconsommation collective|\bacc\b/.test(ft)) out.contrat='Surplus ACC';
+    else if(/obligation d.achat|sortie d.oa|\boa\b/.test(ft) && !/jusqu.(en|au) 20(2[8-9]|[3-9]\d)/.test(ft)) out.contrat="Sortie d'OA / CR";
     else if(/\bppa\b/.test(ft)) out.contrat='PPA Spot';
-    else if(/appel d.offres?|\bao\b|\bcre\b/.test(ft)) out.contrat=/complement de remuneration|\bcr\b/.test(ft)?'AO CRE CR':'AO CRE';
-    const pm=/(\d[\d\s]*(?:[.,]\d+)?)\s*(mwc|mw|kwc|kw)\b(?!h)/i.exec(bodyText||text);
-    if(pm){ let v=pqNum(pm[1]); if(/^m/i.test(pm[2])) v*=1000; out.kwc=String(Math.round(v*100)/100); }
-    const vm=/(\d[\d\s]*(?:[.,]\d+)?)\s*(gwh|mwh|kwh)(?!\s*\/\s*kwc)/i.exec(bodyText||text);
-    if(vm){ let v=pqNum(vm[1]); const u=vm[2].toLowerCase(); if(u==='gwh') v*=1000; if(u==='kwh') v/=1000; out.mwh=String(Math.round(v)); }
-    const mesSent=(bodyText||text).split(/(?<=[.!?\n])/).find(s=>/mise en service|mis\p{L}* en service|mett\p{L}* en service|\bmes\b|\bmsi\b|raccord/iu.test(s));
-    if(mesSent){ const d=pqParseDateLoose(mesSent); if(d) out.mesPrev=d; }
-    const dm=/(?:contrat|durée|duree|sur|pour)\s+(?:de\s+|d.une durée de\s+)?(\d{1,2})\s*(ans?|années?)\b/i.exec(bodyText||text);
+    else if(/appel d.offres?|\bao\b|\bcre\b|laureat|ppe2/.test(ft)) out.contrat=/complement de remuneration|\bcr\b/.test(ft)?'AO CRE CR':'AO CRE';
+
+    // Power & volume
+    // a stated total ("soit 16,8 MW", "total 5 MWc") wins over the first figure
+    const powRe=PQ_QTY+'\\s*(mwc|mwp|mw|kwc|kwp|kw)\\b(?!h)';
+    const pm=new RegExp('(?:soit|au total|total(?:e)?(?:\\s+de)?)\\s*:?\\s*'+powRe,'iu').exec(scope)||new RegExp(powRe,'iu').exec(scope);
+    if(pm){ let v=pqQty(pm[1],pm[2]); if(/^m/i.test(pm[2])) v*=1000; out.kwc=String(Math.round(v*100)/100); }
+    const vm=new RegExp(PQ_QTY+'\\s*(gwh|mwh|kwh)(?!\\s*\\/\\s*kwc)','iu').exec(scope);
+    if(vm){ let v=pqQty(vm[1],vm[2]); const u=vm[2].toLowerCase(); if(u==='gwh') v*=1000; if(u==='kwh') v/=1000; out.mwh=String(Math.round(v)); }
+
+    // Commissioning date (not "en service depuis …"), contract length / start
+    const mesSent=scope.split(/(?<=[.!?\n])/).find(s=>/mise en service|\bmis\p{L}* en service|\bm[eé]t\p{L}* en service|\ben service (?:en|au|à|a|le|pour|pr[ée]vue?)\b|\bmes\b|\bmsi\b|\bcod\b|raccordement/iu.test(s) && !/depuis/i.test(s));
+    if(mesSent){ const d=pqParseDateLoose(mesSent.replace(/\d+[.,]?\d*\s*(mwc|mw|kwc|kw)\b/ig,'')); if(d) out.mesPrev=d; }
+    const dm=/(?:contrat|dur[ée]e|pendant|sur|pour|offre)[^.\n]{0,40}?\b(\d{1,2})\s*(?:ans|années|annees)\b/i.exec(scope);
     if(dm) out.duree=dm[1];
-    const deb=/(?:à partir du|a partir du|dès le|des le|début(?:\s+du contrat)?\s*(?:le|au|:)?)\s+([\d\/.\-]+|\d{1,2}(?:er)?\s+\p{L}+\s+\d{4})/iu.exec(bodyText||text);
+    const deb=/(?:à partir du|a partir du|dès le|des le|à compter du|a compter du|début(?:\s+du contrat)?\s*(?:le|au|:)?)\s+([\d\/.\-]+|\d{1,2}(?:er)?\s+\p{L}+\s+\d{4})/iu.exec(scope);
     if(deb){ const d=pqParseDateLoose(deb[1]); if(d) out.debut=d; }
+
+    // Plant name: CRE file number, "Parc éolien de …", else "Centrale de <ville>"; a list of plants gives the first one
+    const multi=parseMailInstallations(scope);
     const cre=/\bPR\/\d{4}\/\d{4,6}\b/.exec(text);
-    const named=/\b(parc|centrale|ferme)\s+(?:éolien(?:ne)?|solaire|photovoltaïque|PV|hydro\p{L}*)?\s*(de la|de l'|de l’|du|des|de)\s+([A-ZÉÈ][\p{L}'’-]+(?:[ -][A-ZÉÈ][\p{L}'’-]+)*)/u.exec(bodyText||text);
-    if(cre) out.centrale=cre[0];
+    const named=/\b(parc|centrale|ferme)\s+(?:éolien(?:ne)?|solaire|photovoltaïque|PV|hydro\p{L}*)?\s*(de la|de l'|de l’|du|des|de)\s+([A-ZÉÈ][\p{L}'’-]+(?:[ -][A-ZÉÈ][\p{L}'’-]+)*)/u.exec(scope);
+    if(multi.length){ out.centrale=multi[0].centrale; if(multi[0].kwc) out.kwc=multi[0].kwc; }
+    else if(cre) out.centrale=cre[0];
     else if(named) out.centrale=(named[0].charAt(0).toUpperCase()+named[0].slice(1)).trim();
     else if(city) out.centrale='Centrale de '+city;
+    if(!out.centrale) delete out.centrale;
+
     const notes=[];
     if(/au sol/.test(ft)) notes.push('Centrale au sol');
-    if(/toiture|en toit/.test(ft)) notes.push('Toiture');
+    if(/toiture|en toit|hangar/.test(ft)) notes.push('Toiture');
     if(/ombriere/.test(ft)) notes.push('Ombrière');
+    if(/agrivolta/.test(ft)) notes.push('Agrivoltaïsme');
     if(/laureat/.test(ft)) notes.push('Lauréat AO');
     if(/bride/.test(ft)) notes.push('Production bridée');
     if(/stockage|batterie|bess/.test(ft)) notes.push('Stockage');
@@ -3639,52 +3975,157 @@
     if(notes.length) out.particularites=notes.join(' · ');
     let first='Mail reçu';
     if(out.origine==='Crédit Agricole') first='Lead transmis par '+(caPerson?caPerson+' ('+(out.ca!=='N/A'?out.ca:'Crédit Agricole')+')':(out.ca!=='N/A'?out.ca:'le Crédit Agricole'));
+    else if(!prospect && blocks.some(b=>b.relay)) first='Lead transmis en interne';
     out.commentaires=pqIsoToFr(toISO(new Date()))+' : '+first+(subject?' — '+subject:'')+'.';
     return out;
   }
 
-  // ----- Producer Excel: one column per plant (label in a column, values to its right) -----
-  const PQ_XLS_ROWS=[
-    { k:'centrale', re:/^(nom\s*(de\s*l.)?(installation|centrale|projet|parc|site)|installation|centrale|projet|nom du projet|site)\b/ },
-    { k:'kwc', re:/puissance.*(install|crete|nominale|kwc|mwc|dc)|^p\s*(installee|crete)|kwc|mwc/, unit:true },
-    { k:'mwh', re:/\bp50\b|production.*(annuelle|estimee|attendue|mwh)|productible.*mwh|volume.*mwh/, vol:true },
-    { k:'mesPrev', re:/mise en service|\bmsi\b|\bmes\b|\bcod\b/, date:true },
-    { k:'install', re:/^(type|filiere|technologie|techno|energie)\b/ },
-    { k:'dept', re:/departement|code postal|^cp\b|commune|adresse|localisation/ },
-    { k:'contrat', re:/mecanisme|soutien|type de contrat|appel d.offres?|tarif/ }
-  ];
-  function pqXlsxToInstallations(wb){
+  // A list of plants in the mail ("- Centrale de Cholet (49) : 1,2 MWc, MES 03/2027"): one installation per line
+  function parseMailInstallations(raw){
     const found=[];
-    wb.SheetNames.forEach(name=>{
-      const rows=XLSX.utils.sheet_to_json(wb.Sheets[name],{header:1,raw:true,defval:''});
-      const hits={};
-      rows.forEach(r=>{
-        for(let c=0;c<Math.min(r.length,4);c++){
-          const label=pqFold(r[c]).trim(); if(!label || typeof r[c]!=='string' || /^(centrale|installation|projet|site|parc)\s*n?°?\s*\d+$/.test(label)) continue;
-          const def=PQ_XLS_ROWS.find(d=>d.re.test(label) && !hits[d.k]);
-          if(def){ hits[def.k]={ label, row:r, col:c, def }; break; }
-        }
-      });
-      if(!hits.kwc && !hits.centrale) return;
-      const anchor=hits.kwc||hits.centrale;
-      const valueCols=[]; for(let c=anchor.col+1;c<anchor.row.length;c++){ if(String(anchor.row[c]).trim()!=='') valueCols.push(c); }
-      valueCols.forEach(c=>{
-        const inst={};
-        Object.values(hits).forEach(h=>{
-          const v=h.row[c]; if(v===''||v==null) return;
-          if(h.def.date){ const d=pqCellDate(v); if(d) inst.mesPrev=d; return; }
-          if(h.def.unit){ let n=typeof v==='number'?v:pqNum(v); if(isNaN(n)) return; if(/mw/.test(h.label) || (/\bmw/i.test(String(v)))) n*=1000; inst.kwc=String(Math.round(n*100)/100); return; }
-          if(h.def.vol){ let n=typeof v==='number'?v:pqNum(v); if(isNaN(n)) return; if(/gwh/.test(h.label)) n*=1000; if(/kwh/.test(h.label) && !/kwc/.test(h.label)) n/=1000; inst.mwh=String(Math.round(n)); return; }
-          if(h.def.k==='install'){ const f=pqFold(v); inst.install=/eol/.test(f)?'Eolien':/pv|photo|solaire/.test(f)?'PV':/biog|metha/.test(f)?'BIOGAZ':/hydro/.test(f)?'Hydro':''; if(!inst.install) delete inst.install; return; }
-          if(h.def.k==='dept'){ const d=pqDeptFromText(v); if(d){ inst.dept=pqDeptLabel(d); inst.region=PQ_REGIONS[d[2]]; } return; }
-          if(h.def.k==='contrat'){ const f=pqFold(v); inst.contrat=/s21/.test(f)?'AO S21 CR':/\baos\b|simplifi/.test(f)?'AOS CRE':/\boa\b|obligation/.test(f)?"Sortie d'OA / CR":/acc/.test(f)?'Surplus ACC':/ppa/.test(f)?'PPA Spot':/ao|cre|complement/.test(f)?'AO CRE CR':''; if(!inst.contrat) delete inst.contrat; return; }
-          inst[h.def.k]=String(v).trim();
-        });
-        if(Object.keys(inst).length>=2) found.push(inst);
-      });
+    String(raw||'').replace(/\r/g,'').replace(/ /g,' ').split('\n').forEach(l=>{
+      const m=/^\s*(?:[-•*·–]|\d+[.)])\s*(.+)$/.exec(l); if(!m) return;
+      const s=m[1];
+      const pm=new RegExp(PQ_QTY+'\\s*(mwc|mwp|mw|kwc|kwp|kw)\\b(?!h)','iu').exec(s); if(!pm) return;
+      let v=pqQty(pm[1],pm[2]); if(/^m/i.test(pm[2])) v*=1000;
+      const inst={ kwc:String(Math.round(v*100)/100) };
+      const name=s.slice(0,pm.index).replace(/\((\d{2,3}|2A|2B)\)/,' ').replace(/[\s:–,-]+$/,'').replace(/\s+/g,' ').trim();
+      if(name) inst.centrale=name.charAt(0).toUpperCase()+name.slice(1);
+      const d=pqDeptFromText(s); if(d){ inst.dept=pqDeptLabel(d); inst.region=PQ_REGIONS[d[2]]; }
+      const rest=s.slice(pm.index+pm[0].length);
+      if(/mes|service|msi|cod|\d{1,2}\/\d{4}/i.test(rest)){ const dt=pqParseDateLoose(rest); if(dt) inst.mesPrev=dt; }
+      found.push(inst);
     });
-    return found;
+    return found.length>=2?found:[];
   }
+
+  // ----- Producer Excel → installations -----
+  // Two layouts are recognised on every sheet, and the one that reads the most values wins:
+  //  - one column per plant: labels in a left column (Puissance installée, P50…), a plant per column to the right
+  //    (the Selfee « Caractéristiques Centrales » template is of this kind);
+  //  - one row per plant: a header row (Projet | Puissance | P50 …), a plant per row below; « Total » rows skipped.
+  // Order matters: the first definition matching a label wins (« Puissance unitaire » before « Puissance »).
+  const XL_DEFS=[
+    { k:'nbm', re:/nombre d.(eoliennes|machines|turbines|aerogenerateurs)|^nb (d.)?(eoliennes|machines|turbines)/ },
+    { k:'unit', re:/puissance unitaire/, not:/onduleur|kva/ },
+    { k:'centrale', re:/^(nom\b.*\b(installation|centrale|projet|parc|site)\b.*|nom|nom du projet|nom du site|installation|centrale|projet|site|parc|ouvrage|designation|(plant|project|site|asset) name|plant|asset)$/ },
+    { k:'siret', re:/siret|siren/ },
+    { k:'spv', re:/\bspv\b|societe de projet|raison sociale|^societe$/ },
+    { k:'adresse', re:/^adresse/ },
+    { k:'commune', re:/^(commune|ville|localite)\b/ },
+    { k:'cp', re:/code postal|^cp$/ },
+    { k:'dept', re:/^(departement|dept|dpt|location|localisation|county)\b/ },
+    { k:'install', re:/^(type|filiere|technologie|techno|energie|nature projet|nature du projet|type d.installation|type de centrale|technology)$/, not:/injection|contrat|liste/ },
+    { k:'kwc', re:/puissance|^p ?(installee|crete|nominale)\b|^pc$|\bkwc\b|\bmwc\b|capacity|\bpower\b|\bmwp\b|\bkwp\b/, not:/raccordement|\bac\b|kva|mva|unitaire|onduleur|injection|reservee|kwh ?\/ ?kwc|par kwc|productible/ },
+    { k:'mwh', re:/\bp50\b|production|productible|volume|energie (produite|annuelle)|\byield\b|generation|annual energy/, not:/kwh ?\/ ?kwc|\bp90\b|par kwc/ },
+    { k:'p90', re:/\bp90\b/, not:/kwh ?\/ ?kwc/ },
+    { k:'fin', re:/fin (de l.|d.)?oa\b|fin (du |de )?contrat|echeance|date de fin/ },
+    { k:'mesPrev', re:/mise en service|\bmsi\b|\bmes\b|\bcod\b|date de raccordement|raccordement prevu|premiere injection|commissioning|\bcod date\b/, not:/type d.injection/ },
+    { k:'contrat', re:/mecanisme|soutien|type de contrat|appel d.offres?|^tarif|^contrat$|cadre (juridique|contractuel)/ }
+  ];
+  const xlLabel=v=>pqFold(v).replace(/\s+/g,' ').trim();
+  function xlDef(v){
+    if(typeof v!=='string' || !v.trim() || v.length>80) return null;
+    const lf=xlLabel(v);
+    if(/^(centrale|installation|projet|site|parc)\s*n?°?\s*\d+$/.test(lf)) return null;   // "Centrale 1" is a column title, not a label
+    return XL_DEFS.find(d=>d.re.test(lf) && !(d.not && d.not.test(lf)))||null;
+  }
+  const xlUnit=s=>{ const m=/\b(mwc|mwp|mw|kwc|kwp|kw|kva|gwh|mwh|kwh)\b/.exec(pqFold(s)); return m?m[1]:''; };
+  // number + unit from a cell; the unit written in the cell wins over the one in the label
+  function xlQty(v, labelUnit){
+    if(typeof v==='number') return { n:v, unit:labelUnit };
+    const s=String(v||'').replace(/ /g,' ').trim(); if(!s) return null;
+    const m=new RegExp(PQ_QTY+'\\s*(mwc|mwp|mw|kwc|kwp|kw|kva|gwh|mwh|kwh)?','iu').exec(s); if(!m) return null;
+    const unit=(m[2]||labelUnit||'').toLowerCase();
+    return { n:pqQty(m[1], unit), unit };
+  }
+  const xlRound=(n,d)=>String(Math.round(n*Math.pow(10,d))/Math.pow(10,d));
+  function xlInstallType(v){ const f=pqFold(v); return /eol/.test(f)?'Eolien':/hydro/.test(f)?'Hydro':/biog|metha|cogen/.test(f)?'BIOGAZ':/pv|photo|solaire|ombri|toiture|\bsol\b|agrivolta|hangar/.test(f)?'PV':''; }
+  function xlContrat(v){ const f=pqFold(v); return /s21/.test(f)?'AO S21 CR':/\baos\b|simplifi/.test(f)?'AOS CRE':/\boa\b|obligation/.test(f)?"Sortie d'OA / CR":/\bacc\b|autoconsommation/.test(f)?'Surplus ACC':/ppa/.test(f)?'PPA Spot':/\bao\b|cre|complement/.test(f)?'AO CRE CR':''; }
+  // one value of one plant, converted for the installation form
+  function xlSet(inst, def, label, v){
+    if(v===''||v==null) return;
+    const lu=xlUnit(label);
+    switch(def.k){
+      case 'kwc': { const q=xlQty(v, lu); if(!q||isNaN(q.n)) return; const dcFirst=/\bdc\b|crete|installee|totale|kwc|mwc/.test(xlLabel(label)); if(inst.kwc && !dcFirst) return; inst.kwc=xlRound(/^m/.test(q.unit)?q.n*1000:q.n, 2); return; }
+      case 'unit': { const q=xlQty(v, lu||'mw'); if(q&&!isNaN(q.n)) inst._unitKw=/^m/.test(q.unit)?q.n*1000:q.n; return; }
+      case 'nbm': { const n=parseFloat(v); if(n) inst._nb=n; return; }
+      case 'mwh': case 'p90': { const q=xlQty(v, lu||'mwh'); if(!q||isNaN(q.n)) return; let n=q.n; if(q.unit==='gwh') n*=1000; if(q.unit==='kwh') n/=1000; inst[def.k]=String(Math.round(n)); return; }
+      case 'mesPrev': case 'fin': { const d=pqCellDate(v); if(d) inst[def.k]=d; return; }
+      case 'dept': { const d=pqDeptFromText(String(v)); if(d){ inst.dept=pqDeptLabel(d); inst.region=PQ_REGIONS[d[2]]; } return; }
+      case 'cp': { const cp=typeof v==='number'?String(v).padStart(5,'0'):String(v).trim(); inst.cp=cp; return; }
+      case 'install': { const t=xlInstallType(v); if(t) inst.install=t; if(/au sol|\bsol\b/i.test(v)) inst._nature='Centrale au sol'; else if(/toiture|hangar/i.test(v)) inst._nature='Toiture'; else if(/ombri/i.test(v)) inst._nature='Ombrière'; return; }
+      case 'contrat': { const c=xlContrat(v); if(c) inst.contrat=c; return; }
+      default: inst[def.k]=String(v).trim();
+    }
+  }
+  function xlFinish(inst){
+    if(!inst.kwc && inst._nb && inst._unitKw) inst.kwc=xlRound(inst._nb*inst._unitKw, 2);
+    if(!inst.dept && inst.cp){ const d=pqDeptFromPostal(inst.cp); if(d){ inst.dept=pqDeptLabel(d); inst.region=PQ_REGIONS[d[2]]; } }
+    if(!inst.dept && inst.adresse){ const d=pqDeptFromText(inst.adresse); if(d){ inst.dept=pqDeptLabel(d); inst.region=PQ_REGIONS[d[2]]; } }
+    if(!inst.cp && inst.adresse){ const m=/\b(\d{5})\b/.exec(inst.adresse); if(m) inst.cp=m[1]; }
+    if(!inst.install && (inst.kwc||'') && /kwc|mwc|crete/.test(inst._labels||'')) inst.install='PV';
+    if(inst._nature) inst.particularites=inst._nature;
+    Object.keys(inst).forEach(k=>{ if(k.charAt(0)==='_') delete inst[k]; });
+    return inst;
+  }
+  const xlFilled=list=>list.reduce((s,i)=>s+Object.keys(i).length,0);
+  // layout « one column per plant »
+  function xlVertical(rows){
+    let best=[];
+    for(let c=0;c<3;c++){
+      const hits=[];
+      rows.forEach((r,ri)=>{ const d=xlDef(r[c]); if(d && !hits.some(h=>h.def.k===d.k && d.k!=='kwc')) hits.push({ def:d, ri, label:r[c] }); });
+      const keys=new Set(hits.map(h=>h.def.k));
+      if(keys.size<2 || !['kwc','mwh','centrale'].some(k=>keys.has(k))) continue;
+      const first=Math.min(...hits.map(h=>h.ri));
+      const width=Math.max(...rows.map(r=>r.length));
+      const plants=[];
+      for(let j=c+1;j<width;j++){
+        const filled=hits.filter(h=>rows[h.ri][j]!=='' && rows[h.ri][j]!=null).length;
+        if(filled<2) continue;
+        const inst={ _labels:hits.map(h=>xlLabel(h.label)).join(' ') };
+        hits.forEach(h=>xlSet(inst, h.def, h.label, rows[h.ri][j]));
+        // a plant named in the column title ("Centrale du Moulin") when there is no name row
+        if(!inst.centrale){ for(let r=first-1;r>=0;r--){ const t=rows[r][j]; if(typeof t==='string' && t.trim() && !/^(centrale|installation|projet|site|parc)\s*n?°?\s*\d+$/i.test(pqFold(t).trim())){ inst.centrale=t.trim(); break; } } }
+        plants.push(xlFinish(inst));
+      }
+      if(xlFilled(plants)>xlFilled(best)) best=plants;
+    }
+    return best;
+  }
+  // layout « one row per plant »
+  function xlHorizontal(rows){
+    let best=[];
+    rows.slice(0,40).forEach((head,hi)=>{
+      const cols=[]; head.forEach((v,j)=>{ const d=xlDef(v); if(d) cols.push({ def:d, j, label:v }); });
+      const keys=new Set(cols.map(c=>c.def.k));
+      if(keys.size<2 || !['kwc','mwh'].some(k=>keys.has(k))) return;
+      const plants=[]; let blanks=0;
+      for(let r=hi+1;r<rows.length && blanks<2;r++){
+        const row=rows[r]||[];
+        if(!row.some(v=>v!==''&&v!=null)){ blanks++; continue; } blanks=0;
+        const firstCell=String(row.find(v=>v!==''&&v!=null)||'');
+        if(/^(total|sous-total|somme|moyenne|ensemble)\b/i.test(pqFold(firstCell))) continue;
+        const inst={ _labels:cols.map(c=>xlLabel(c.label)).join(' ') };
+        cols.forEach(c=>xlSet(inst, c.def, c.label, row[c.j]));
+        if(!inst.centrale){ const nameCell=row.find((v,j)=>typeof v==='string' && v.trim() && !cols.some(c=>c.j===j)); if(nameCell) inst.centrale=nameCell.trim(); }
+        if(Object.keys(inst).filter(k=>k.charAt(0)!=='_').length>=2) plants.push(xlFinish(inst));
+      }
+      if(xlFilled(plants)>xlFilled(best)) best=plants;
+    });
+    return best;
+  }
+  function pqRowsToInstallations(sheetNames, getRows){
+    const found=[];
+    sheetNames.forEach(name=>{
+      const rows=(getRows(name)||[]).map(r=>(r||[]).map(v=>v==null?'':v));
+      const v=xlVertical(rows), h=xlHorizontal(rows);
+      found.push(...(xlFilled(h)>xlFilled(v)?h:v));
+    });
+    return found.filter(i=>i.kwc||i.mwh||i.centrale);
+  }
+  function pqXlsxToInstallations(wb){ return pqRowsToInstallations(wb.SheetNames, n=>XLSX.utils.sheet_to_json(wb.Sheets[n],{header:1,raw:true,defval:''})); }
 
   // ----- Files: .eml / .txt / .msg (Outlook) / .xlsx; SheetJS is loaded on first use -----
   let xlsxLoading=null;
@@ -3812,14 +4253,7 @@
       if(ch) touchCrm(c);
     }
   }
-  function createStageTask(o, stageKey, due, urgency){
-    const s=oppStage(stageKey); if(!s) return null;
-    const other=s.who && s.who!=='Com';
-    const task=createTask({ title:s.task+' — '+oppName(o), client:o.company, due:due||'', urgency:urgency||'moyenne', status:other?'en_attente':'a_faire', description:other?('À suivre : étape portée par '+s.who+'.'):'' });
-    task.opportunityId=o.id; task.stageLabel=s.label; touch(task); saveTasks();
-    o.taskId=task.id;
-    return task;
-  }
+
 
   // ----- Board -----
   let pipeShowExited=false;
@@ -4030,7 +4464,7 @@
     };
     let h=sec('prod','Producteur',true)+sec('contact','Contact principal',true);
     st.installs.forEach((inst,i)=>{
-      const fs=PQ_FIELDS.filter(f=>f.sec==='centrale');
+      const fs=PQ_FIELDS.filter(f=>f.sec==='centrale').concat(PQ_EXTRA_FIELDS);
       h+='<div class="pq-sec pq-inst"><div class="pq-sec-h">'+(st.installs.length>1?'Installation '+(i+1):'Installation')
         +(st.installs.length>1?'<button type="button" class="pq-link" data-remove="'+i+'">Retirer</button>':'')+'</div>'
         +'<div class="pq-grid">'+fs.map(f=>pqFieldHtml(f,String(i),inst[f.k],st.auto.has(i+'.'+f.k))).join('')+'</div></div>';
@@ -4076,7 +4510,7 @@
     pqRender();
   }
   let pqParseTimer=null, pqLastFiles=null;
-  function pqReparse(){ const files=pqLastFiles||{text:'',installs:[]}; pqApply(parsePipeMail([$('pq-mail').value, files.text].filter(Boolean).join('\n\n')), files.installs); }
+  function pqReparse(){ const files=pqLastFiles||{text:'',installs:[]}; const text=[$('pq-mail').value, files.text].filter(Boolean).join('\n\n'); pqApply(parsePipeMail(text), files.installs.length?files.installs:parseMailInstallations(text)); }
   async function pqHandleFiles(fileList){
     const files=[...fileList]; if(!files.length) return;
     $('pq-files-info').textContent='Lecture…';
@@ -4269,7 +4703,7 @@
     const fr=v=>/^\d{4}-\d{2}-\d{2}$/.test(v||'')?pqIsoToFr(v):(v||'');
     const contact=[o.prenom,(o.nom||'').replace(/^(M\.|Mme)\s+/i,'')].filter(Boolean).join(' ');
     const groups=[
-      ['Centrale', [['Nom',oppName(o)],['Type',o.install],['Contrat',o.contrat],['Puissance',fmtKwc(o.kwc)],['Volume annuel',o.mwh?Number(pqNum(o.mwh)).toLocaleString('fr-FR')+' MWh':''],['Productible',o.kwc&&o.mwh?Math.round(pqNum(o.mwh)*1000/pqNum(o.kwc))+' kWh/kWc':''],['MES prévisionnelle',o.mesPrev],['MES effective',o.mesEff],['Début',o.debut],['Fin',o.fin],['Durée',o.duree?o.duree+' ans':''],['Département',o.dept],['Région',o.region],['Particularités',o.particularites,true]]],
+      ['Centrale', [['Nom',oppName(o)],['Type',o.install],['Contrat',o.contrat],['Puissance',fmtKwc(o.kwc)],['Volume annuel',o.mwh?Number(pqNum(o.mwh)).toLocaleString('fr-FR')+' MWh':''],['Productible',o.kwc&&o.mwh?Math.round(pqNum(o.mwh)*1000/pqNum(o.kwc))+' kWh/kWc':''],['MES prévisionnelle',o.mesPrev],['MES effective',o.mesEff],['Début',o.debut],['Fin',o.fin],['Durée',o.duree?o.duree+' ans':''],['Département',o.dept],['Région',o.region],['Commune',[o.commune,o.cp].filter(Boolean).join(' ')],['P90',o.p90?Number(pqNum(o.p90)).toLocaleString('fr-FR')+' MWh':''],['SPV',[o.spv,o.siret].filter(Boolean).join(' · ')],['Particularités',o.particularites,true]]],
       ['Producteur et contact', [['Producteur',o.producteur||o.company],['Type de marché',o.marche],['Contact',contact],['Qualité',o.qualite],['Téléphone',o.tel,false,true],['Mail',o.mail,false,true]]],
       ['Suivi', [['Chargé',o.charge],['Origine',o.origine],['Crédit Agricole',o.ca&&o.ca!=='N/A'?o.ca:''],['Entrée pipe',fr(o.dateEntree)],['RDV 1',fr(o.rdv1)+(o.rdv1&&o.cr1?' · CR':'')],['RDV 2',fr(o.rdv2)+(o.rdv2&&o.cr2?' · CR':'')],['Go',fr(o.goDate)],['1ère offre',[fr(o.dateOffre),o.nature].filter(Boolean).join(' · ')],['Signature',fr(o.signDate)],['Prochaine action',[o.action,o.relance?'le '+fr(o.relance):''].filter(Boolean).join(' ')],['Stade Pipe',pipeStade(o)],['Statut BDD',bddStatut(o)]]]
     ];
@@ -4315,37 +4749,49 @@
     if(isExited(o)) return;
     offerStageAdvance([o]);
   }
+  // Each installation moves to ITS next stage (a grouped request can hold installations at different stages);
+  // forcedKey (Go → pricing request) applies to every installation that is still before it.
+  const nextStageKey=(o, forcedKey)=>{
+    if(forcedKey) return stageIndex(o.stage)<stageIndex(forcedKey)?forcedKey:null;
+    const n=OPP_STAGES[stageIndex(o.stage)+1]; return n?n.key:null;
+  };
   function offerStageAdvance(list, forcedKey){
-    const o=list[0];
-    const cur=stageIndex(o.stage);
-    const next=forcedKey?oppStage(forcedKey):OPP_STAGES[cur+1];
-    if(!next) return;
-    pendingAdvance={ ids:list.map(x=>x.id), key:next.key };
-    const label=list.length>1?list.length+' installations ('+o.company+')':'« '+o.company+' — '+oppName(o)+' »';
-    $('stage-advance-text').textContent=label+' : passer de « '+stageLabel(o.stage)+' » à « '+next.label+' »'+(next.who!=='Com'?' (porté par '+next.who+', la tâche sera « en attente »)':'')+' ?';
-    $('stage-advance-nogo').classList.toggle('hidden', o.stage!=='qualif_en_cours');
+    const moves=list.map(o=>({ o, key:nextStageKey(o, forcedKey) })).filter(m=>m.key);
+    if(!moves.length) return;
+    pendingAdvance={ moves:moves.map(m=>({ id:m.o.id, key:m.key })) };
+    const o=moves[0].o, next=oppStage(moves[0].key);
+    const same=moves.every(m=>m.key===moves[0].key && m.o.stage===o.stage);
+    const label=moves.length>1?moves.length+' installations ('+o.company+')':'« '+o.company+' — '+oppName(o)+' »';
+    $('stage-advance-text').textContent=same
+      ? label+' : passer de « '+stageLabel(o.stage)+' » à « '+next.label+' »'+(next.who!=='Com'?' (porté par '+next.who+', la tâche sera « en attente »)':'')+' ?'
+      : label+' : chaque installation passe à son étape suivante ('+moves.map(m=>oppName(m.o)+' → '+oppStage(m.key).label).join(', ')+') ?';
+    $('stage-advance-nogo').classList.toggle('hidden', !moves.every(m=>m.o.stage==='qualif_en_cours'));
     $('stage-create-task').checked=true; $('stage-due').value=next.who!=='Com'?pqAddDays(7):''; $('stage-urgency').value='moyenne'; $('stage-due-row').style.display='flex';
     $('stage-advance-overlay').classList.remove('hidden');
   }
   function confirmStageAdvance(){
     if(!pendingAdvance){ closeStageAdvance(); return; }
-    const list=pendingAdvance.ids.map(id=>opportunities.find(x=>x.id===id)).filter(Boolean);
-    const key=pendingAdvance.key;
-    list.forEach(o=>setOppStage(o, key));
-    if($('stage-create-task').checked && list.length){
-      const req=list.length>1 && list[0].requestId ? opportunities.find(x=>x.id===list[0].requestId) : null;
-      const target=req||list[0];
-      const s=oppStage(key), other=s.who!=='Com';
-      const task=createTask({ title:s.task+' — '+(req?list.length+' installations':oppName(list[0])), client:list[0].company, due:$('stage-due').value, urgency:$('stage-urgency').value, status:other?'en_attente':'a_faire', description:other?'À suivre : étape portée par '+s.who+'.':'' });
-      task.opportunityId=target.id; task.stageLabel=s.label; touch(task); saveTasks();
-      target.taskId=task.id; touchCrm(target);
+    const moves=pendingAdvance.moves.map(m=>({ o:opportunities.find(x=>x.id===m.id), key:m.key })).filter(m=>m.o);
+    moves.forEach(m=>setOppStage(m.o, m.key));
+    const list=moves.map(m=>m.o);
+    if($('stage-create-task').checked && moves.length){
+      // one task per target stage; grouped installations of a request share it
+      const byKey=new Map(); moves.forEach(m=>{ if(!byKey.has(m.key)) byKey.set(m.key,[]); byKey.get(m.key).push(m.o); });
+      byKey.forEach((group,key)=>{
+        const req=group.length>1 && group[0].requestId ? opportunities.find(x=>x.id===group[0].requestId) : null;
+        const target=req||group[0];
+        const s=oppStage(key), other=s.who!=='Com';
+        const task=createTask({ title:s.task+' — '+(req?group.length+' installations':oppName(group[0])), client:group[0].company, due:$('stage-due').value, urgency:$('stage-urgency').value, status:other?'en_attente':'a_faire', description:other?'À suivre : étape portée par '+s.who+'.':'' });
+        task.opportunityId=target.id; task.stageLabel=s.label; touch(task); saveTasks();
+        target.taskId=task.id; touchCrm(target);
+      });
     }
     saveCrm(); closeStageAdvance(); render(); renderPipeline();
-    if(key==='demande_prix'){ const reqId=list[0].requestId; if(reqId) openRequestDetail(reqId); else openOppDetail(list[0].id); }
+    if(moves.some(m=>m.key==='demande_prix')){ const reqId=list[0].requestId; if(reqId) openRequestDetail(reqId); else openOppDetail(list[0].id); }
   }
   function noGoFromAdvance(){
     if(!pendingAdvance) return;
-    pendingAdvance.ids.map(id=>opportunities.find(x=>x.id===id)).filter(Boolean).forEach(o=>{ o.stageBeforeExit=o.stage; o.stage='no_go'; o.lostAt=Date.now(); touchCrm(o); });
+    pendingAdvance.moves.map(m=>opportunities.find(x=>x.id===m.id)).filter(Boolean).forEach(o=>{ o.stageBeforeExit=o.stage; o.stage='no_go'; o.lostAt=Date.now(); touchCrm(o); });
     saveCrm(); closeStageAdvance(); renderPipeline();
   }
   function closeStageAdvance(){ $('stage-advance-overlay').classList.add('hidden'); pendingAdvance=null; }
@@ -4388,7 +4834,7 @@
     const live=list.filter(o=>!isExited(o));
     if(live.length){
       const same=live.every(o=>o.stage===live[0].stage);
-      actions.appendChild(oppActionBtn(same?'Tout passer à l\u2019étape suivante':'Avancer les installations', ()=>{ closeOppDetail(); offerStageAdvance(live, live[0].stage==='qualif_en_cours'?'demande_prix':null); }));
+      actions.appendChild(oppActionBtn(same?'Tout passer à l\u2019étape suivante':'Avancer chaque installation', ()=>{ closeOppDetail(); offerStageAdvance(live, live.every(o=>o.stage==='qualif_en_cours')?'demande_prix':null); }));
     }
     actions.appendChild(oppActionBtn('Copier l\u2019objet', e=>copyToClipboard(ml.subject, e.target), 'ghost-btn'));
     actions.appendChild(oppActionBtn('Copier le mail', e=>copyToClipboard(ml.body, e.target), 'ghost-btn'));
@@ -4492,8 +4938,8 @@
       17:'France', 18:or(o.region), 19:or(o.dept), 20:or(deptName),
       21:offre?PQ_MONTH_NAMES[offre.getMonth()]:null, 22:dateCell(o.dateOffre), 23:or(o.nature), 24:or(bddStatut(o)),
       25:dateCell(o.signDate), 26:looseDateCell(o.debut), 27:looseDateCell(o.mesEff||o.mesPrev), 28:looseDateCell(o.fin), 30:or(o.particularites),
-      31:or(o.producteur||o.company), 33:oppName(o), 34:or(o.dept), 36:/PV et/.test(o.install||'')?null:or(o.install), 37:or(ty),
-      38:kwc||null, 39:kwc&&mwh?Math.round(mwh*1000/kwc):null, 40:mwh||null
+      31:or(o.spv||o.producteur||o.company), 32:or(o.siret), 33:oppName(o), 34:or(o.dept), 35:or(o.cp), 36:/PV et/.test(o.install||'')?null:or(o.install), 37:or(ty),
+      38:kwc||null, 39:kwc&&mwh?Math.round(mwh*1000/kwc):null, 40:mwh||null, 41:o.p90?pqNum(o.p90):null
     });
     // Aggregated volume per year 2026 → 2041, prorated on the contract dates when both are known
     const from=pqToDate(o.debut)||pqToDate(o.mesEff)||pqToDate(o.mesPrev), to=pqToDate(o.fin);
@@ -4807,9 +5253,20 @@
     reminderRow.style.display='none'; recurRow.style.display='none';
   }
 
+  // Reminders already shown are remembered on this device (id + reminder time), so reopening the app
+  // doesn't fire every past reminder again; a reminder more than a day late is skipped.
+  try{ JSON.parse(localStorage.getItem('todo_reminders-notified')||'[]').forEach(k=>notifiedIds.add(k)); }catch(e){}
   function checkReminders(){
-    const now=Date.now();
-    tasks.forEach(t=>{ if(t.reminder&&!t.archived&&!notifiedIds.has(t.id)){ if(new Date(t.reminder).getTime()<=now){ notifiedIds.add(t.id); if('Notification'in window&&Notification.permission==='granted'){ new Notification('Rappel : '+t.title,{body:[t.client,t.project].filter(Boolean).join(' · ')||'Échéance à venir'}); } } } });
+    const now=Date.now(); let changed=false;
+    tasks.forEach(t=>{
+      if(!t.reminder || t.archived || t.deleted) return;
+      const key=t.id+'@'+t.reminder, at=new Date(t.reminder).getTime();
+      if(notifiedIds.has(key) || isNaN(at) || at>now) return;
+      notifiedIds.add(key); changed=true;
+      if(now-at>86400000) return;
+      if('Notification'in window&&Notification.permission==='granted'){ new Notification('Rappel : '+t.title,{body:[t.client,t.project].filter(Boolean).join(' · ')||'Échéance à venir'}); }
+    });
+    if(changed){ try{ localStorage.setItem('todo_reminders-notified', JSON.stringify([...notifiedIds].slice(-500))); }catch(e){} }
   }
 
   function openSnoozePopover(e,id){
@@ -5221,7 +5678,7 @@
   function refreshContactsTypeFilter(){
     const sel=$('contacts-type-filter');
     const current=sel.value;
-    sel.innerHTML='<option value="">Tous les types</option>' + companyTypesList.slice().sort().map(t=>'<option value="'+t.replace(/"/g,'&quot;')+'">'+t+'</option>').join('');
+    sel.innerHTML='<option value="">Tous les types</option>' + companyTypesList.slice().sort().map(t=>'<option value="'+escapeHtml(t)+'">'+escapeHtml(t)+'</option>').join('');
     if(companyTypesList.includes(current)) sel.value=current;
   }
   $('contacts-type-filter').addEventListener('change', renderContacts);
@@ -5288,7 +5745,8 @@
   $('stage-advance-overlay').addEventListener('click', e=>{ if(e.target.id==='stage-advance-overlay') closeStageAdvance(); });
   document.addEventListener('keydown', e=>{
     if(e.key!=='Escape') return;
-    if(!$('opp-detail-overlay').classList.contains('hidden')) closeOppDetail();
+    if(!$('guide-overlay').classList.contains('hidden')) $('guide-overlay').classList.add('hidden');
+    else if(!$('opp-detail-overlay').classList.contains('hidden')) closeOppDetail();
     else if(!$('prequal-overlay').classList.contains('hidden')) closePrequalForm();
   });
   $('export-btn').onclick=exportData;
@@ -5405,7 +5863,7 @@
       await loadXlsxLib();
       const wb=XLSX.read(await file.arrayBuffer(),{type:'array',cellDates:true});
       parcData=parseParcWorkbook(wb); parcData.fileName=file.name;
-      saveParc(); renderParc();
+      saveParc(); ensureRenewalTasks(); renderParc();
     }catch(e){ console.error(e); $('parc-info').textContent='Fichier illisible : '+(e.message||e); }
   }
 
@@ -5415,8 +5873,60 @@
       const res=await bridgeCall('GET','/bdd/read',null,60000);
       const names=Object.keys(res.sheets||{});
       parcData=parseParcSheets(names, n=>res.sheets[n]||[]); parcData.fileName='Excel (pont local)';
-      saveParc(); renderParc();
+      saveParc(); ensureRenewalTasks(); renderParc();
     }catch(e){ if(!silent) $('parc-info').textContent=e.message; }
+  }
+  // A Parc contract (statut Gagné) of a company: matched on Nom_prod or Développeur
+  function parcForCompany(name){
+    if(parcData===null) loadParc();
+    const k=parcNorm(name);
+    if(!parcData || k.length<4) return [];
+    return parcData.items.filter(p=>[p.prod,p.dev].some(v=>{ const a=parcNorm(v); return a && (a===k || (a.length>=4 && (a.includes(k) || k.includes(a)))); }));
+  }
+
+  // ---------- Renewals: a task per won contract ending within N months (once, on every device) ----------
+  const RENEW_KEY='renew-months';
+  const renewMonths=()=>{ try{ return parseInt(localStorage.getItem('todo_'+RENEW_KEY),10)||6; }catch(e){ return 6; } };
+  function parcKey(p){ const s=[p.prod,p.inst,p.fin].map(parcNorm).join('|'); let h=5381; for(let i=0;i<s.length;i++) h=((h*33)^s.charCodeAt(i))>>>0; return h.toString(36); }
+  function renewalCandidates(){
+    if(!parcData) return [];
+    const today=toISO(new Date()), lim=new Date(); lim.setMonth(lim.getMonth()+renewMonths());
+    const limIso=toISO(lim);
+    return parcData.items.filter(p=>p.statut==='Gagné' && p.fin && p.fin>=today && p.fin<=limIso);
+  }
+  // One task per developer and end date (8 Solaris contracts ending on 31/12 = one task). Deterministic id:
+  // the same group gives the same task on the phone and the computer, and a deleted or completed renewal
+  // task is never created again.
+  const renewGroupId=p=>{ const s=parcNorm(p.dev||p.prod)+'|'+p.fin; let h=5381; for(let i=0;i<s.length;i++) h=((h*33)^s.charCodeAt(i))>>>0; return 'renew_'+h.toString(36); };
+  function ensureRenewalTasks(){
+    const groups=new Map();
+    renewalCandidates().forEach(p=>{ const id=renewGroupId(p); if(!groups.has(id)) groups.set(id,[]); groups.get(id).push(p); });
+    let n=0;
+    groups.forEach((list,id)=>{
+      if(tasks.some(t=>t.id===id)) return;
+      const p=list[0], who=p.dev||p.prod;
+      const fin=new Date(p.fin+'T00:00:00'), due=new Date(fin); due.setDate(due.getDate()-120);
+      const today=new Date(); today.setHours(0,0,0,0);
+      const kwc=list.reduce((s,x)=>s+(x.kwc||0),0);
+      const t=createTask({ title:list.length>1?'Renouveler '+list.length+' contrats — '+who:'Renouveler le contrat — '+(p.inst||p.prod), client:who,
+        due:toISO(due<today?today:due), urgency:'haute', status:'a_faire',
+        description:'Fin de contrat le '+pqIsoToFr(p.fin)+' · '+(kwc?fmtMwc(kwc):'')+'\n'+list.map(x=>'- '+(x.inst||x.prod)+(x.kwc?' ('+fmtKwc(x.kwc)+(x.cadre?', '+x.cadre:'')+')':'')).join('\n')+'\nIssu du Parc (Suivi Agrégation).' });
+      t.id=id; n++;
+    });
+    if(n){ saveTasks(); render(); }
+    return n;
+  }
+  // Puts a contract back into the pipeline (stage: pricing request), prefilled from the Parc
+  function renewalToPipeline(p){
+    const company=ensureCompany(p.dev||p.prod);
+    const o={ id:newOppId('opp'), kind:'installation', company, title:p.inst||p.prod, centrale:p.inst||p.prod, producteur:p.prod, stage:'demande_prix', requestId:null, taskId:null,
+      kwc:p.kwc?String(p.kwc):'', mwh:p.p50?String(Math.round(p.p50)):'', dept:p.dept, region:p.region, install:p.enr==='PV'||p.enr==='Eolien'||p.enr==='Hydro'?p.enr:'',
+      contrat:p.cadre==='CR'?(p.ao==='AOS CRE'?'AOS CRE':'AO CRE CR'):p.cadre==='OA'?"Sortie d'OA / CR":p.cadre==='ACC'?'Surplus ACC':'',
+      charge:p.charge, origine:'Contact direct', ca:p.ca||'N/A', dateEntree:toISO(new Date()), annee:String(new Date().getFullYear()), goDate:toISO(new Date()),
+      commentaires:pqIsoToFr(toISO(new Date()))+' : renouvellement du contrat qui se termine le '+pqIsoToFr(p.fin)+'.', renewalOf:parcKey(p),
+      createdAt:Date.now(), updatedAt:Date.now(), deleted:false };
+    opportunities.push(o); saveCrm();
+    return o;
   }
   const fmtGwh=mwh=>(Math.round(mwh/100)/10).toLocaleString('fr-FR')+' GWh';
   const fmtMwc=kwc=>(Math.round(kwc/100)/10).toLocaleString('fr-FR')+' MWc';
@@ -5435,19 +5945,22 @@
     const active=won.filter(p=>(p.vols[y]||0)>0);
     const volY=active.reduce((s,p)=>s+(p.vols[y]||0),0);
     const obj=parcData.objectives[y];
-    const soon=won.filter(p=>p.fin && p.fin>=today && p.fin<=toISO(new Date(Date.now()+365*86400000)));
+    const soon=renewalCandidates();
     const pending=parcData.items.filter(p=>p.statut==='En attente');
 
     // year chips
     const years=document.createElement('div'); years.className='parc-years';
     PARC_YEARS.slice(0,6).forEach(yy=>{ const b=document.createElement('button'); b.type='button'; b.textContent=yy; b.className=yy===y?'on':''; b.onclick=()=>{ parcYear=yy; renderParc(); }; years.appendChild(b); });
+    const rm=document.createElement('label'); rm.className='parc-renew-setting'; rm.innerHTML='Renouvellement : alerte à <select id="parc-renew-months">'+[3,4,6,9,12].map(m=>'<option value="'+m+'"'+(m===renewMonths()?' selected':'')+'>'+m+' mois</option>').join('')+'</select>';
+    rm.querySelector('select').onchange=e=>{ try{ localStorage.setItem('todo_'+RENEW_KEY, e.target.value); }catch(err){} ensureRenewalTasks(); renderParc(); };
+    years.appendChild(rm);
     body.appendChild(years);
 
     const kpis=document.createElement('div'); kpis.className='parc-kpis';
     const kpi=(num,label,sub,cls)=>{ const k=document.createElement('div'); k.className='stat-card'; k.innerHTML='<div class="stat-card-num'+(cls?' '+cls:'')+'">'+escapeHtml(num)+'</div><div class="stat-card-label">'+escapeHtml(label)+'</div>'+(sub?'<div class="parc-kpi-sub">'+escapeHtml(sub)+'</div>':''); kpis.appendChild(k); };
     kpi(fmtGwh(volY), 'Volume agrégé '+y, obj?Math.round(volY/1000/obj*100)+' % de l\u2019objectif ('+obj.toLocaleString('fr-FR')+' GWh)':'', 'accent');
     kpi(String(active.length), 'Contrats actifs '+y, fmtMwc(active.reduce((s,p)=>s+p.kwc,0)));
-    kpi(String(soon.length), 'Fins de contrat < 12 mois', won.filter(p=>p.renouv==='A renouveler').length+' marqués « A renouveler »', soon.length?'crit':'');
+    kpi(String(soon.length), 'Fins de contrat < '+renewMonths()+' mois', won.filter(p=>p.renouv==='A renouveler').length+' marqués « A renouveler »', soon.length?'crit':'');
     kpi(String(pending.length), 'Offres en attente', fmtMwc(pending.reduce((s,p)=>s+p.kwc,0)));
     body.appendChild(kpis);
 
@@ -5462,10 +5975,15 @@
 
     if(soon.length){
       const s=document.createElement('div'); s.className='parc-block';
-      s.innerHTML='<div class="parc-h">Échéances dans les 12 mois</div>';
+      s.innerHTML='<div class="parc-h">Échéances dans les '+renewMonths()+' mois · une tâche de renouvellement est créée pour chacune</div>';
       soon.sort((a,b)=>a.fin.localeCompare(b.fin)).forEach(p=>{
         const r=document.createElement('div'); r.className='parc-due';
-        r.innerHTML='<span class="parc-due-date">'+escapeHtml(pqIsoToFr(p.fin))+'</span><span class="parc-due-name">'+escapeHtml(p.prod)+(p.inst?' · '+escapeHtml(p.inst):'')+'</span><span class="parc-due-meta">'+escapeHtml([p.cadre, p.kwc?fmtKwc(p.kwc):'', p.renouv].filter(Boolean).join(' · '))+'</span>';
+        const key=parcKey(p), task=tasks.find(t=>t.id===renewGroupId(p)), opp=opportunities.find(o=>!o.deleted && o.renewalOf===key);
+        r.innerHTML='<span class="parc-due-date">'+escapeHtml(pqIsoToFr(p.fin))+'</span><span class="parc-due-name">'+escapeHtml(p.prod)+(p.inst?' · '+escapeHtml(p.inst):'')+'</span><span class="parc-due-meta">'+escapeHtml([p.cadre, p.kwc?fmtKwc(p.kwc):'', p.renouv, task?(task.archived?'tâche faite':task.deleted?'tâche supprimée':'tâche de renouvellement créée'):''].filter(Boolean).join(' · '))+'</span>';
+        const act=document.createElement('span'); act.className='parc-due-act';
+        if(opp){ const b=document.createElement('button'); b.type='button'; b.className='pq-link'; b.textContent='Voir dans le pipeline'; b.onclick=()=>{ document.querySelector('.tab[data-tab="pipeline"]').click(); setTimeout(()=>openOppDetail(opp.id),50); }; act.appendChild(b); }
+        else { const b=document.createElement('button'); b.type='button'; b.className='pq-link'; b.textContent='Remettre dans le pipeline'; b.onclick=()=>{ const o=renewalToPipeline(p); document.querySelector('.tab[data-tab="pipeline"]').click(); setTimeout(()=>openOppDetail(o.id),50); }; act.appendChild(b); }
+        r.appendChild(act);
         s.appendChild(r);
       });
       body.appendChild(s);
@@ -5611,11 +6129,22 @@
   $('parc-bridge-btn').onclick=()=>importParcFromBridge(false);
   $('parc-file').addEventListener('change', e=>{ if(e.target.files[0]) importParcFile(e.target.files[0]); e.target.value=''; });
   $('vcf-btn').onclick=openVcfExport;
+  $('help-btn').onclick=()=>$('guide-overlay').classList.remove('hidden');
+  $('guide-close').onclick=()=>$('guide-overlay').classList.add('hidden');
+  $('guide-overlay').addEventListener('click', e=>{ if(e.target.id==='guide-overlay') $('guide-overlay').classList.add('hidden'); });
+  $('guide-nav').addEventListener('click', e=>{
+    const b=e.target.closest('[data-g]'); if(!b) return;
+    $('guide-nav').querySelectorAll('button').forEach(x=>x.classList.toggle('on', x===b));
+    $('guide-overlay').querySelectorAll('.guide-body section').forEach(s=>{ s.hidden=s.dataset.g!==b.dataset.g; });
+  });
   $('vcf-go').onclick=doVcfExport;
   $('vcf-close').onclick=()=>$('vcf-overlay').classList.add('hidden');
   $('vcf-mode-all').onchange=()=>{ if($('vcf-mode-all').checked) $('vcf-mode-changed').checked=false; };
   $('vcf-mode-changed').onchange=()=>{ if($('vcf-mode-changed').checked) $('vcf-mode-all').checked=false; };
   $('vcf-overlay').addEventListener('click', e=>{ if(e.target.id==='vcf-overlay') $('vcf-overlay').classList.add('hidden'); });
+
+  // Test hooks (tests/smoke_test.py and the mail corpus set window.TODO_TEST_HOOKS before loading)
+  if(window.TODO_TEST_HOOKS) window.__todo={ parsePipeMail, parsePipeMailInstallations:parseMailInstallations, parseSignatureBlock, parseSignatureText, xlsxToInstallations:(rowsBySheet)=>pqRowsToInstallations(Object.keys(rowsBySheet), n=>rowsBySheet[n]) };
 
   // Phone version: bottom bar drives the sidebar tabs (which stay the single source of truth).
   if(window.TODO_LITE){

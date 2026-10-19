@@ -60,8 +60,8 @@
       urgency: 'moyenne', status: 'a_faire',
       due: '', reminder: '', link: link,
       recur: null, subtasks: [],
-      archived: false, archivedAt: null,
-      createdAt: Date.now()
+      archived: false, archivedAt: null, deleted: false,
+      createdAt: Date.now(), updatedAt: Date.now()
     });
 
     try{ await window.storage.set(TASKS_KEY, JSON.stringify(tasks), false); }catch(e){}

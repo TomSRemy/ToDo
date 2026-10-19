@@ -54,16 +54,22 @@ def stored(page, key):
     return page.evaluate(f"JSON.parse(localStorage.getItem('todo_{key}')||'null')")
 
 
-def mock_github(page, files, put_ok=True):
-    """files: {'tasks.json': [...], ...} — server state, updated on successful PUTs."""
-    state = {"puts": 0}
+def mock_github(page, files, put_ok=True, large=()):
+    """files: {'tasks.json': [...], ...} — server state, updated on successful PUTs.
+    large: files GitHub reports as > 1 MB (metadata without content, raw fetch needed)."""
+    state = {"puts": 0, "large": large}
 
     def handler(route, request):
         name = request.url.rsplit("/", 1)[-1]
         if name not in files:
             return route.fulfill(status=404, body="{}")
         if request.method == "GET":
-            body = {"sha": "sha-" + name, "content": base64.b64encode(json.dumps(files[name]).encode()).decode()}
+            if "raw" in request.headers.get("accept", ""):
+                return route.fulfill(status=200, content_type="application/vnd.github.raw", body=json.dumps(files[name]))
+            if name in state.get("large", ()):  # > 1 MB: GitHub sends the metadata without content
+                body = {"sha": "sha-" + name, "content": "", "encoding": "none"}
+            else:
+                body = {"sha": "sha-" + name, "encoding": "base64", "content": base64.b64encode(json.dumps(files[name]).encode()).decode()}
             return route.fulfill(status=200, content_type="application/json", body=json.dumps(body))
         state["puts"] += 1
         if not put_ok:
@@ -119,6 +125,43 @@ with sync_playwright() as p:
         check(not errors, f"no page errors ({errors})")
         page.close()
 
+    # --- widget.html uses the same three-way sync (an older copy elsewhere must not bring a task back)
+    files = {"tasks.json": [task("t1", "X", archived=False, updated=3000, title2="ignored")]}
+    files["tasks.json"][0]["description"] = "edited on the phone"
+    seed = dict(SYNC_ON, **{"todo_todo-widget-tasks": json.dumps([task("t1", "X", archived=True, updated=2000)]),
+                            "todo_sync-tasks-base": json.dumps([task("t1", "X", archived=False)])})
+    page, errors = new_page(browser, seed)
+    mock_github(page, files)
+    page.goto(URL.replace("index.html", "widget.html")); page.wait_for_timeout(4500)
+    t1 = stored(page, "todo-widget-tasks")[0]
+    check(t1["archived"] is True and t1["description"] == "edited on the phone", "widget: validation kept and remote edit merged")
+    check(files["tasks.json"][0]["archived"] is True, "widget: merged result pushed")
+    check(not errors, f"no page errors ({errors})")
+    page.close()
+
+    # --- Two tabs (app + widget): a change in one is picked up by the other, never overwritten
+    ctx = browser.new_context()
+    a = ctx.new_page(); b = ctx.new_page()
+    for pg_ in (a, b):
+        pg_.route("**/fonts.g*/**", lambda r: r.abort())
+    a.goto(URL); a.click('[data-tab="tasks"]'); a.fill("#quick-add-input", "Onglet A"); a.press("#quick-add-input", "Enter")
+    b.goto(URL); b.click('[data-tab="tasks"]'); b.fill("#quick-add-input", "Onglet B"); b.press("#quick-add-input", "Enter")
+    a.wait_for_timeout(200)
+    a.fill("#quick-add-input", "Encore A"); a.press("#quick-add-input", "Enter"); a.wait_for_timeout(200)
+    titles = sorted(t["title"] for t in b.evaluate("JSON.parse(localStorage.getItem('todo_todo-widget-tasks'))"))
+    check(titles == ["Encore A", "Onglet A", "Onglet B"], f"two open tabs don't overwrite each other ({titles})")
+    ctx.close()
+
+    # --- Reminders: a reminder already shown doesn't fire again after reopening the app
+    past = (datetime.datetime.now() - datetime.timedelta(minutes=5)).strftime("%Y-%m-%dT%H:%M")
+    page, errors = new_page(browser, {"todo_todo-widget-tasks": json.dumps([task("r1", "Rappel test", reminder=past)])})
+    page.add_init_script("window.__notifs=[]; window.Notification=function(t){ window.__notifs.push(t); }; Notification.permission='granted';")
+    page.goto(URL); page.wait_for_timeout(500)
+    first = page.evaluate("window.__notifs.length")
+    page.reload(); page.wait_for_timeout(500)
+    check(first == 1 and page.evaluate("window.__notifs.length") == 0, "reminder shown once, not again after reload")
+    page.close()
+
     # --- Sync: a failed push must not make the next merge revert the change
     files = {"tasks.json": [task("t1", "X")]}
     seed = dict(SYNC_ON, **{"todo_todo-widget-tasks": json.dumps([task("t1", "X")]), "todo_sync-tasks-base": json.dumps([task("t1", "X")])})
@@ -165,6 +208,17 @@ with sync_playwright() as p:
     page.click("#postit-text"); page.keyboard.press("End"); page.keyboard.type(" + PC")
     page.wait_for_timeout(4500)
     check(files["notes.json"][0]["text"] == "écrit sur le téléphone + PC", "post-it edit pushed")
+    page.close()
+
+    # --- Sync: a data file over 1 MB is read through the raw media type
+    big = [{"id": "c%d" % i, "firstName": "P%d" % i, "lastName": "N", "company": "", "email": "", "phone1": "", "phone2": "", "role": "",
+            "relevance": 0, "comment": "x" * 200, "createdAt": 1, "updatedAt": 1, "deleted": False} for i in range(300)]
+    files = {"crm.json": {"companies": [], "contacts": big, "meetings": [], "opportunities": []}, "tasks.json": [], "notes.json": []}
+    page, errors = new_page(browser, SYNC_ON)
+    mock_github(page, files, large=("crm.json",))
+    page.goto(URL); page.wait_for_timeout(1500)
+    check(len(stored(page, "todo-widget-contacts") or []) == 300, "sync reads a data file over 1 MB")
+    check(not errors, f"no page errors ({errors})")
     page.close()
 
     # --- Contacts on a phone: no horizontal overflow, delete available in the card
@@ -277,7 +331,7 @@ with sync_playwright() as p:
     page.click("#opp-detail-actions >> text=Fermer")
     # pré-qualif → installation
     page.click("#prequal-add-btn"); page.fill("#prequal-company", "Ferme Dupont"); page.fill("#prequal-note", "Salon"); page.click("#prequal-save-btn")
-    page.click('[data-phase="prequal"] .pipe-card'); page.click("text=Projet identifié")
+    page.click('[data-phase="prequal"] .pipe-card'); page.click("#opp-detail-actions >> text=Projet identifié")
     check(page.input_value("#pq1-company") == "Ferme Dupont", "pré-qualif opens the form on its client")
     page.click("#pq-next-btn"); page.fill("#pq-0-centrale", "Toiture A"); page.click("#pq-save-btn")
     check(page.locator('[data-phase="prequal"] .pipe-card').count() == 0 and "Toiture A" in page.inner_text('[data-phase="qualif"]'), "pré-qualif becomes an installation")
@@ -302,6 +356,42 @@ with sync_playwright() as p:
     check(not errors, f"no page errors ({errors})")
     page.close()
 
+    # --- Contacts: « Coller une signature » pre-fills the contact form
+    page, errors = new_page(browser)
+    page.goto(URL); page.click('[data-tab="contacts"]'); page.click("#sig-paste-btn")
+    page.fill("#sig-paste-text", "M. Jean DUPONT\nPrésident\nSAS SOLAIRE DU MIDI\nTél : 04 67 11 22 33 - Mob. : 06 12 34 56 78\njean.dupont@solairedumidi.fr")
+    page.click("#sig-paste-analyze")
+    got = [page.input_value(s_) for s_ in ("#ct-first", "#ct-last", "#ct-role", "#ct-company", "#ct-email", "#ct-phone1", "#ct-phone2")]
+    check(got == ["Jean", "Dupont", "Président", "SAS SOLAIRE DU MIDI", "jean.dupont@solairedumidi.fr", "06 12 34 56 78", "04 67 11 22 33"], f"signature fills the contact form ({got})")
+    check(not errors, f"no page errors ({errors})")
+    page.close()
+
+    # --- Pipeline: a request whose installations are at different stages moves each one forward (never back)
+    mixed = [{"id": "r9", "kind": "request", "company": "SEM", "title": "Demande de pricing", "createdAt": 1, "updatedAt": 1, "deleted": False},
+             {"id": "a", "kind": "installation", "company": "SEM", "centrale": "A", "title": "A", "stage": "negociation", "requestId": "r9", "createdAt": 1, "updatedAt": 1, "deleted": False},
+             {"id": "b", "kind": "installation", "company": "SEM", "centrale": "B", "title": "B", "stage": "collecte", "requestId": "r9", "createdAt": 1, "updatedAt": 1, "deleted": False}]
+    page, errors = new_page(browser, {"todo_todo-widget-opportunities": json.dumps(mixed)})
+    page.goto(URL); page.click('[data-tab="pipeline"]')
+    page.locator('[data-phase="contrat"] .pipe-card', has_text="A").first.click()
+    page.click("#opp-detail-body >> text=Fait partie de")
+    page.click("#opp-detail-actions >> text=Avancer chaque installation"); page.click("#stage-advance-confirm")
+    st = {o["id"]: o.get("stage") for o in stored(page, "todo-widget-opportunities")}
+    check(st["a"] == "pricing_ferme" and st["b"] == "qualif_en_cours", f"mixed request: each installation to its own next stage ({st})")
+    check(not errors, f"no page errors ({errors})")
+    page.close()
+
+    # --- Pipeline: a mail listing several plants gives one installation each; quotes in a mail never reach the HTML
+    page, errors = new_page(browser)
+    page.goto(URL); page.click('[data-tab="pipeline"]'); page.click("#opp-add-btn"); page.fill("#pq1-company", "HELIO OUEST SAS"); page.click("#pq-next-btn")
+    page.fill("#pq-mail", "De : R C <r@helio.fr>\nObjet : x\n\nBonjour,\n- Centrale de Cholet (49) : 1,2 MWc, MES 03/2027\n- Centrale de Saumur (49) : 800 kWc\nCordialement,\nRomain Chevalier")
+    page.wait_for_timeout(500)
+    check(page.input_value("#pq-1-centrale") == "Centrale de Saumur" and page.input_value("#pq-0-mesPrev") == "Mars 2027", "mail listing two plants → two installations")
+    page.fill("#pq-0-centrale", 'x" autofocus onfocus="window.__xss=1" y="')
+    page.select_option("#pq-0-install", "Eolien"); page.wait_for_timeout(300)  # re-renders the form with the value in an attribute
+    check(page.evaluate("window.__xss") is None and page.input_value("#pq-0-centrale").startswith('x" autofocus'), "a quote in a field can't inject HTML")
+    check(not errors, f"no page errors ({errors})")
+    page.close()
+
     # --- Pipeline: producer Excel, one column per plant (SheetJS from cdnjs)
     wb = openpyxl.Workbook(); ws = wb.active
     for r in [["", "Centrale 1", "Centrale 2"], ["Nom Installation", "Les Vignes", "Le Moulin"], ["Département", "Lot (46)", "Gers (32)"],
@@ -313,6 +403,16 @@ with sync_playwright() as p:
     page.set_input_files("#pq-file", str(xlsx)); page.wait_for_function("document.getElementById('pq-files-info').textContent.includes('installation')", timeout=20000)
     check(page.input_value("#pq-0-centrale") == "Les Vignes" and page.input_value("#pq-1-kwc") == "1850" and page.input_value("#pq-1-dept") == "32 - Gers",
           "producer Excel creates one installation per column")
+    # the Selfee « Caractéristiques Centrales » template: SPV, SIRET, P90 reach the form, kVA/productible rows are not taken as power
+    wb = openpyxl.Workbook(); ws = wb.active; ws.title = "Données"
+    for r in [["", "Centrale 1"], ["Nom Installation", "CS Bram"], ["Nom SPV", "BRAM SOLAIRE SAS"], ["SIRET SPV", "123 456 789 00012"], ["Département", "Aude (11)"],
+              ["Puissance raccordement (kVA)", 4200], ["Puissance installée (kWc)", 4986.93], ["P50 (MWh/an)", 6650], ["P90 (MWh/an)", 6100], ["Productible P50 (kWh/kWc/an)", 1333]]:
+        ws.append(r)
+    tpl = pathlib.Path(tempfile.mkdtemp()) / "carac_selfee.xlsx"; wb.save(tpl)
+    page.click("#pq-cancel-btn"); page.click("#opp-add-btn"); page.fill("#pq1-company", "SCEA Y"); page.click("#pq-next-btn")
+    page.set_input_files("#pq-file", str(tpl)); page.wait_for_function("document.getElementById('pq-files-info').textContent.includes('installation')", timeout=20000)
+    got = [page.input_value(s_) for s_ in ("#pq-0-centrale", "#pq-0-kwc", "#pq-0-spv", "#pq-0-siret", "#pq-0-p90", "#pq-0-dept")]
+    check(got == ["CS Bram", "4986.93", "BRAM SOLAIRE SAS", "123 456 789 00012", "6100", "11 - Aude"], f"Selfee template read into the form ({got})")
     check(not errors, f"no page errors ({errors})")
     page.close()
 
@@ -339,6 +439,13 @@ with sync_playwright() as p:
     k = page.inner_text(".parc-kpis")
     check("27,5 GWh" in k and "18 %" in k, f"parc: volume of won contracts vs objective ({k[:60]!r})")
     check("CS DU MOULIN" in page.inner_text("#parc-body") and page.locator(".parc-due").count() == 1, "parc: contract ending soon is listed")
+    renew = [t for t in stored(page, "todo-widget-tasks") if t["id"].startswith("renew_")]
+    check(len(renew) == 1 and "CS DU MOULIN" in renew[0]["title"] and renew[0]["urgency"] == "haute", "parc: renewal task created for the contract ending soon")
+    page.set_input_files("#parc-file", str(parc)); page.wait_for_timeout(1500)
+    check(len([t for t in stored(page, "todo-widget-tasks") if t["id"].startswith("renew_")]) == 1, "parc: reloading the file doesn't duplicate the renewal task")
+    page.click(".parc-due .pq-link:has-text('Remettre dans le pipeline')"); page.wait_for_timeout(300)
+    check(page.is_visible("#opp-detail-overlay") and "CS DU MOULIN" in page.inner_text("#opp-detail-title"), "parc: contract put back into the pipeline")
+    page.click("#opp-detail-actions >> text=Fermer")
     page.click('[data-tab="contacts"]'); page.click("#vcf-btn")
     check(page.inner_text("#vcf-new") == "1", "vcf: duplicates inside the app count once")
     with page.expect_download() as dl:
@@ -404,6 +511,26 @@ with sync_playwright() as p:
     page.goto(URL); page.click('[data-tab="lists"]')
     check(page.evaluate("window.__xss") is None, "conflict panel doesn't execute HTML")
     page.close()
+
+    # --- Service worker (needs http): GitHub reads are never served from the cache
+    import functools, http.server, threading
+    root = pathlib.Path(__file__).resolve().parent.parent
+    srv = http.server.ThreadingHTTPServer(("127.0.0.1", 0), functools.partial(http.server.SimpleHTTPRequestHandler, directory=str(root)))
+    srv.RequestHandlerClass.log_message = lambda *a: None
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    ctx = browser.new_context(service_workers="allow")
+    reads = {"n": 0}
+    def gh(route, req):
+        reads["n"] += 1
+        route.fulfill(status=200, content_type="application/json", headers={"Access-Control-Allow-Origin": "*"},
+                      body=json.dumps({"sha": "s%d" % reads["n"], "encoding": "base64", "content": base64.b64encode(b"[]").decode()}))
+    ctx.route("**/api.github.com/**", gh)
+    ctx.route("**/fonts.g*/**", lambda r: r.abort())
+    page = ctx.new_page(); page.goto("http://127.0.0.1:%d/index.html" % srv.server_address[1])
+    page.wait_for_function("navigator.serviceWorker && navigator.serviceWorker.controller", timeout=15000)
+    shas = [page.evaluate("fetch('https://api.github.com/repos/o/r/contents/data/tasks.json').then(r=>r.json()).then(d=>d.sha)") for _ in range(3)]
+    check(shas == ["s1", "s2", "s3"], f"service worker never serves sync data from its cache ({shas})")
+    ctx.close(); srv.shutdown()
 
     browser.close()
 
