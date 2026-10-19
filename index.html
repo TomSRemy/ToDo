@@ -357,6 +357,13 @@
   .contact-actions button:hover{ color:var(--accent); }
   .contact-actions .del-btn:hover{ color:var(--crit); }
   .contacts-header-row{ display:grid; grid-template-columns:20px 26px minmax(120px,1fr) minmax(30px,100px) minmax(30px,130px) minmax(30px,80px) 50px 50px; gap:9px; align-items:center; padding:8px 15px; border-bottom:1px solid var(--bd); font-family:var(--font-mono); font-size:9px; color:var(--tx3); text-transform:uppercase; letter-spacing:.4px; position:sticky; top:0; background:var(--panel); z-index:5; }
+  /* Narrow screens (phone): avatar, name, email/phone only. Delete lives in the contact card there. */
+  @container taskpanel (max-width: 680px){
+    .contacts-header-row{ display:none; }
+    .contact-row{ grid-template-columns:25px minmax(0,1fr) 22px auto; gap:10px; padding:7px 12px; }
+    .contact-row > :nth-child(1), .contact-row > :nth-child(4), .contact-row > :nth-child(7), .contact-row > :nth-child(8){ display:none; }
+    .contact-detail-card{ padding-left:15px; }
+  }
   .company-group-header{ background:var(--panel-2); padding:6px 15px 6px 12px; margin:0; border-radius:0; border-bottom:1px solid var(--bd-soft); }
   .company-group-chip{ width:18px; height:18px; border-radius:5px; display:flex; align-items:center; justify-content:center; font-family:var(--font-mono); font-size:8px; font-weight:700; flex-shrink:0; }
 
@@ -459,39 +466,27 @@
   .inbox-item-link{ margin-left:auto; color:var(--accent); font-size:11px; text-decoration:none; }
   .inbox-item-link:hover{ text-decoration:underline; }
 
-  /* Calepin (post-it) */
-  #tab-notes{ overflow-y:auto; }
-  .notes-capture{ padding:14px 15px 12px; border-bottom:1px solid var(--bd); display:flex; flex-direction:column; gap:8px; flex-shrink:0; }
-  .notes-kind-switch{ display:flex; gap:6px; align-items:center; }
-  .notes-kind-switch button{ font-family:var(--font-mono); font-size:10px; text-transform:uppercase; letter-spacing:.3px; padding:4px 10px; border-radius:12px; border:1px solid var(--bd); background:var(--panel-2); color:var(--tx2); cursor:pointer; white-space:nowrap; }
-  @media (max-width: 760px){ .notes-hint{ display:none; } }
-  .notes-kind-switch button.active[data-kind="demain"]{ background:var(--postit-demain); border-color:var(--postit-demain); color:var(--postit-ink); }
-  .notes-kind-switch button.active[data-kind="idee"]{ background:var(--postit-idee); border-color:var(--postit-idee); color:var(--postit-ink); }
-  .notes-hint{ font-family:var(--font-mono); font-size:9.5px; color:var(--tx3); margin-left:auto; }
-  #notes-input{ width:100%; resize:none; overflow:hidden; background:var(--panel-2); border:1px solid var(--bd); border-radius:var(--radius); color:var(--tx1); font-family:var(--font-hand); font-size:21px; line-height:1.25; padding:8px 11px; box-sizing:border-box; min-height:46px; }
-  #notes-input::placeholder{ color:var(--tx3); }
-  #notes-input:focus{ outline:none; border-color:var(--accent); }
-  #notes-board{ padding:18px 15px 28px; display:flex; flex-direction:column; gap:22px; }
-  .notes-section-label{ font-family:var(--font-mono); font-size:9.5px; color:var(--tx3); text-transform:uppercase; letter-spacing:.5px; margin-bottom:12px; }
-  .notes-grid{ display:grid; grid-template-columns:repeat(auto-fill,minmax(165px,1fr)); gap:16px; }
-  .postit{ position:relative; min-height:118px; padding:12px 12px 8px; border-radius:2px 2px 12px 2px; color:var(--postit-ink); box-shadow:0 7px 14px rgba(0,0,0,.35); display:flex; flex-direction:column; transition:transform .12s ease; }
-  .postit.idee{ background:var(--postit-idee); }
-  .postit.demain{ background:var(--postit-demain); }
-  .postit:nth-child(3n+1){ transform:rotate(-1.2deg); }
-  .postit:nth-child(3n+2){ transform:rotate(.9deg); }
-  .postit:hover, .postit.editing{ transform:rotate(0) scale(1.02); }
-  .postit-text{ flex:1; font-family:var(--font-hand); font-size:21px; line-height:1.15; white-space:pre-wrap; word-break:break-word; cursor:text; }
-  .postit-text-edit{ flex:1; width:100%; min-height:70px; background:transparent; border:none; resize:none; font-family:var(--font-hand); font-size:21px; line-height:1.15; color:inherit; padding:0; }
-  .postit-text-edit:focus{ outline:none; }
-  .postit-foot{ display:flex; align-items:center; gap:4px; margin-top:8px; font-family:var(--font-mono); font-size:9px; color:rgba(42,36,24,.62); }
-  .postit-foot .grow{ flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-  .postit-btn{ background:rgba(42,36,24,.09); border:none; border-radius:4px; color:var(--postit-ink); font-family:var(--font-mono); font-size:9.5px; padding:3px 6px; cursor:pointer; white-space:nowrap; }
-  .postit-btn:hover{ background:rgba(42,36,24,.2); }
-  .postit.overdue .postit-date{ color:#8E1B12; font-weight:700; }
-  .today-note-row{ display:flex; align-items:center; gap:10px; padding:9px 14px; border-bottom:1px solid var(--bd-soft); cursor:pointer; }
-  .today-note-row:hover{ background:var(--panel-2); }
-  .today-note-chip{ width:12px; height:12px; border-radius:2px; background:var(--postit-demain); flex-shrink:0; }
-  .today-note-text{ flex:1; min-width:0; font-family:var(--font-hand); font-size:19px; color:var(--tx1); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  /* Post-it flottant (un seul, au premier plan, réductible) */
+  .postit-float{ position:fixed; right:18px; bottom:18px; width:300px; height:280px; min-width:220px; min-height:150px; max-width:calc(100vw - 20px); max-height:calc(100vh - 20px); z-index:19000; background:var(--postit-idee); color:var(--postit-ink); border-radius:2px 2px 14px 2px; box-shadow:0 14px 34px rgba(0,0,0,.55), 0 2px 6px rgba(0,0,0,.3); display:flex; flex-direction:column; resize:both; overflow:hidden; }
+  .postit-float.hidden, .postit-tab.hidden{ display:none; }
+  .postit-bar{ display:flex; align-items:center; gap:6px; padding:6px 6px 5px 12px; cursor:grab; user-select:none; touch-action:none; background:rgba(42,36,24,.06); flex-shrink:0; }
+  .postit-bar.dragging{ cursor:grabbing; }
+  .postit-title{ font-family:var(--font-mono); font-size:9.5px; text-transform:uppercase; letter-spacing:.5px; opacity:.6; }
+  .postit-saved{ flex:1; min-width:0; font-family:var(--font-mono); font-size:9px; opacity:0; text-align:right; transition:opacity .3s; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .postit-bar button{ background:rgba(42,36,24,.09); border:none; border-radius:4px; color:var(--postit-ink); font-family:var(--font-mono); font-size:10px; padding:3px 7px; cursor:pointer; white-space:nowrap; }
+  .postit-bar button:hover{ background:rgba(42,36,24,.2); }
+  #postit-min{ font-size:13px; line-height:1; padding:2px 8px; }
+  #postit-text{ flex:1; width:100%; border:none; resize:none; color:var(--postit-ink); font-family:var(--font-hand); font-size:21px; line-height:26px; padding:6px 14px 14px; box-sizing:border-box;
+    background:transparent repeating-linear-gradient(transparent 0 25px, rgba(42,36,24,.11) 25px 26px) 0 6px / 100% 26px local; }
+  #postit-text:focus{ outline:none; }
+  #postit-text::placeholder{ color:rgba(42,36,24,.45); }
+  .postit-tab{ position:fixed; right:18px; bottom:18px; z-index:19000; display:flex; align-items:center; gap:8px; max-width:240px; padding:7px 12px; border:none; border-radius:2px 2px 10px 2px; background:var(--postit-idee); color:var(--postit-ink); box-shadow:0 8px 20px rgba(0,0,0,.45); cursor:pointer; font-family:var(--font-hand); font-size:18px; }
+  .postit-tab svg{ width:15px; height:15px; flex-shrink:0; }
+  .postit-tab span{ overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  @media (max-width: 760px){
+    .postit-float{ left:10px !important; right:10px !important; top:auto !important; bottom:10px !important; width:auto !important; height:46vh !important; resize:none; }
+    .postit-tab{ right:12px; bottom:12px; max-width:60vw; }
+  }
 
   #snooze-popover{ position:fixed; display:none; flex-direction:column; gap:6px; background:var(--panel-3); border:1px solid var(--bd); border-radius:8px; box-shadow:0 12px 32px rgba(0,0,0,.6); padding:10px; z-index:10000; width:208px; }
   .snooze-current{ font-family:var(--font-mono); font-size:10px; color:var(--tx3); padding:0 2px 2px; border-bottom:1px solid var(--bd); padding-bottom:7px; }
@@ -523,7 +518,6 @@
 
     <div class="tabs">
       <span class="tab active" data-tab="today" title="Aujourd'hui"><svg class="tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg><span class="sidebar-label-text">Aujourd'hui</span><span class="tab-badge" id="today-badge"></span></span>
-      <span class="tab" data-tab="notes" title="Calepin"><svg class="tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15.5 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V8.5L15.5 3z"/><path d="M15 3v6h6"/></svg><span class="sidebar-label-text">Calepin</span><span class="tab-badge" id="notes-badge"></span></span>
       <span class="tab" data-tab="tasks" title="Tâches"><svg class="tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg><span class="sidebar-label-text">Tâches</span></span>
       <span class="tab" data-tab="inbox" title="Boîte mail"><svg class="tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg><span class="sidebar-label-text">Boîte mail</span><span class="tab-badge" id="inbox-badge"></span></span>
       <span class="tab" data-tab="archive" title="Archive"><svg class="tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="21 8 21 21 3 21 3 8"/><rect x="1" y="3" width="22" height="5"/><line x1="10" y1="12" x2="14" y2="12"/></svg><span class="sidebar-label-text">Archive</span></span>
@@ -544,18 +538,6 @@
       <span></span>
     </div>
     <div id="today-list"></div>
-  </div>
-
-  <div class="tab-panel hidden" id="tab-notes">
-    <div class="notes-capture">
-      <div class="notes-kind-switch" id="notes-kind-switch">
-        <button type="button" data-kind="demain">Pour demain</button>
-        <button type="button" data-kind="idee">Idée</button>
-        <span class="notes-hint">Entrée = coller · Maj+Entrée = à la ligne</span>
-      </div>
-      <textarea id="notes-input" rows="1" placeholder="Griffonne ici…"></textarea>
-    </div>
-    <div id="notes-board"></div>
   </div>
 
   <div class="tab-panel hidden" id="tab-tasks">
@@ -681,6 +663,7 @@
         <span class="filter-chip active" data-filter="toutes">Toutes</span>
         <span class="filter-chip" data-filter="critique">Critique</span>
         <span class="filter-chip" data-filter="haute">Haute</span>
+        <span class="filter-chip" data-filter="corbeille">Corbeille</span>
       </div>
     </div>
     <div class="table-header archive-table-header">
@@ -948,6 +931,17 @@
   <button id="snooze-clear-date" class="snooze-clear-btn">✕ Retirer la date</button>
 </div>
 
+<div id="postit" class="postit-float hidden" role="dialog" aria-label="Post-it">
+  <div class="postit-bar" id="postit-bar" title="Glisser pour déplacer">
+    <span class="postit-title">Post-it</span>
+    <span class="postit-saved" id="postit-saved"></span>
+    <button type="button" id="postit-to-task" title="Transformer la ligne où est le curseur (ou les lignes sélectionnées) en tâche urgente pour demain">→ tâche demain</button>
+    <button type="button" id="postit-min" title="Réduire (Échap)" aria-label="Réduire">–</button>
+  </div>
+  <textarea id="postit-text" placeholder="Griffonne ici…" spellcheck="false"></textarea>
+</div>
+<button type="button" id="postit-tab" class="postit-tab hidden" title="Ouvrir le post-it (p)" aria-label="Ouvrir le post-it"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15.5 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V8.5L15.5 3z"/><path d="M15 3v6h6"/></svg><span id="postit-tab-preview">Post-it</span></button>
+
 <script>
   // Storage polyfill: uses window.storage if running inside a Claude artifact preview,
   // otherwise falls back to plain localStorage (GitHub Pages, local file, any browser).
@@ -1008,7 +1002,7 @@
   const SYNC_TASKS_PATH='data/tasks.json';
   const SYNC_CRM_PATH='data/crm.json';
   const NOTES_KEY='todo-widget-notes', SYNC_NOTES_PATH='data/notes.json';
-  let notes=[], notesBaseSnapshot=null, lastKnownNotesSha=null, notesSyncPushTimer=null, notesKind='demain';
+  let notes=[], notesBaseSnapshot=null, lastKnownNotesSha=null, notesSyncPushTimer=null;
 
   async function loadAll(){
     try{ const r=await window.storage.get(TASKS_KEY,false); tasks=r&&r.value?JSON.parse(r.value):[]; }catch(e){ tasks=[]; }
@@ -1024,7 +1018,6 @@
     try{ const r=await window.storage.get('sync-crm-base',false); crmBaseSnapshot=r&&r.value?JSON.parse(r.value):null; }catch(e){ crmBaseSnapshot=null; }
     try{ const r=await window.storage.get(NOTES_KEY,false); notes=r&&r.value?JSON.parse(r.value):[]; }catch(e){ notes=[]; }
     try{ const r=await window.storage.get('sync-notes-base',false); notesBaseSnapshot=r&&r.value?JSON.parse(r.value):null; }catch(e){ notesBaseSnapshot=null; }
-    try{ const r=await window.storage.get('notes-kind',false); if(r&&r.value) notesKind=r.value; }catch(e){}
     try{ const r=await window.storage.get('visible-columns',false); if(r&&r.value) visibleColumns=Object.assign(visibleColumns, JSON.parse(r.value)); }catch(e){}
     let seeded=false, crmSeeded=false;
     if(companyTypesList.length===0){
@@ -1048,7 +1041,8 @@
     if(seeded){ saveTasks(); saveClients(); saveProjects(); }
     if(crmSeeded){ saveCrm(); }
     await loadSyncConfig();
-    render(); renderArchive(); renderLists(); renderToday(); renderNotes(); updateConflictBadge(); applyColumnVisibility();
+    consolidateNotes();
+    render(); renderArchive(); renderLists(); renderToday(); initPostit(); updateConflictBadge(); applyColumnVisibility();
     await loadSeenIds();
     fetchInbox();
     setInterval(fetchInbox, 5 * 60 * 1000);
@@ -1217,7 +1211,7 @@
   function scheduleSyncPush(){
     if(!syncConfig.enabled) return;
     clearTimeout(syncPushTimer);
-    syncPushTimer=setTimeout(syncPushNow, 3000);
+    syncPushTimer=setTimeout(()=>{ syncPushTimer=null; syncPushNow(); }, 3000);
   }
 
   async function syncPushNow(){
@@ -1288,7 +1282,7 @@
   function scheduleCrmSyncPush(){
     if(!syncConfig.enabled) return;
     clearTimeout(crmSyncPushTimer);
-    crmSyncPushTimer=setTimeout(syncPushCrmNow, 3000);
+    crmSyncPushTimer=setTimeout(()=>{ crmSyncPushTimer=null; syncPushCrmNow(); }, 3000);
   }
   async function syncPushCrmNow(){
     if(!syncConfig.enabled) return;
@@ -1329,6 +1323,7 @@
   async function saveNotesBase(){ try{ await window.storage.set('sync-notes-base', JSON.stringify(notesBaseSnapshot), false); }catch(e){} }
   async function syncPullNotes(){
     if(!syncConfig.enabled) return;
+    flushPostit();
     try{
       const res=await fetch(syncApiUrl(SYNC_NOTES_PATH), { headers:{ 'Authorization':'Bearer '+syncConfig.token, 'Accept':'application/vnd.github+json' } });
       if(res.status===404){ await syncPushNotesNow(); return; }
@@ -1336,20 +1331,31 @@
       const data=await res.json();
       const remote=JSON.parse(b64DecodeUtf8(data.content));
       notes=threeWayMerge('note', notes, remote, notesBaseSnapshot);
+      consolidateNotes();
       notesBaseSnapshot=remote.map(n=>({...n}));
       lastKnownNotesSha=data.sha;
       await saveNotesLocalOnly(); await saveNotesBase(); await saveConflicts(); updateConflictBadge();
-      renderNotes(); renderToday();
+      renderNotes();
       if(!sameRecords(notes, remote)) scheduleNotesSyncPush();
     }catch(e){ console.error('notes sync pull failed', e); }
   }
   function scheduleNotesSyncPush(){
     if(!syncConfig.enabled) return;
     clearTimeout(notesSyncPushTimer);
-    notesSyncPushTimer=setTimeout(syncPushNotesNow, 3000);
+    notesSyncPushTimer=setTimeout(()=>{ notesSyncPushTimer=null; syncPushNotesNow(); }, 3000);
   }
+  // Leaving the app (phone: switch app, lock screen) must not wait for the 3s debounce.
+  function flushPendingSync(){
+    flushPostit();
+    if(syncPushTimer){ clearTimeout(syncPushTimer); syncPushTimer=null; syncPushNow(); }
+    if(crmSyncPushTimer){ clearTimeout(crmSyncPushTimer); crmSyncPushTimer=null; syncPushCrmNow(); }
+    if(notesSyncPushTimer){ clearTimeout(notesSyncPushTimer); notesSyncPushTimer=null; syncPushNotesNow(); }
+  }
+  document.addEventListener('visibilitychange', ()=>{ if(document.visibilityState==='hidden') flushPendingSync(); });
+  window.addEventListener('pagehide', flushPendingSync);
   async function syncPushNotesNow(){
     if(!syncConfig.enabled) return;
+    flushPostit();
     try{
       let sha=lastKnownNotesSha;
       const getRes=await fetch(syncApiUrl(SYNC_NOTES_PATH), { headers:{ 'Authorization':'Bearer '+syncConfig.token, 'Accept':'application/vnd.github+json' } });
@@ -1358,8 +1364,9 @@
         sha=getData.sha;
         const remote=JSON.parse(b64DecodeUtf8(getData.content));
         notes=threeWayMerge('note', notes, remote, notesBaseSnapshot);
+        consolidateNotes();
         await saveNotesLocalOnly();
-        renderNotes(); renderToday();
+        renderNotes();
       }
       await saveConflicts(); updateConflictBadge();
       const body={ message:'Sync notes', content:b64EncodeUtf8(JSON.stringify(notes)), branch:'main' };
@@ -2066,31 +2073,15 @@
       statsRow.appendChild(card);
     });
 
-    const todayIso=toISO(new Date());
-    const dueNotes=notes.filter(n=>!n.deleted && n.kind==='demain' && n.forDate && n.forDate<=todayIso).sort((a,b)=>(a.createdAt||0)-(b.createdAt||0));
-
     const todayBadge=$('today-badge');
-    const urgentCount=overdueTasks.length+todayTasks.length+dueNotes.length;
+    const urgentCount=overdueTasks.length+todayTasks.length;
     todayBadge.textContent=urgentCount>0?urgentCount:'';
 
     list.innerHTML='';
-    if(overdueTasks.length===0 && todayTasks.length===0 && dueNotes.length===0){
+    if(overdueTasks.length===0 && todayTasks.length===0){
       const e=document.createElement('div'); e.className='today-empty'; e.textContent="Rien d'urgent aujourd'hui.";
       list.appendChild(e);
       return;
-    }
-    if(dueNotes.length){
-      list.appendChild(makeGroupHeader('Griffonné pour aujourd’hui · '+dueNotes.length, 'var(--postit-demain)'));
-      dueNotes.forEach(n=>{
-        const row=document.createElement('div'); row.className='today-note-row'; row.title='Ouvrir le calepin';
-        const chip=document.createElement('span'); chip.className='today-note-chip';
-        const txt=document.createElement('span'); txt.className='today-note-text'; txt.textContent=(n.text||'').replace(/\s*\n\s*/g,' · ');
-        const btn=document.createElement('button'); btn.type='button'; btn.className='postit-btn'; btn.style.cssText='background:var(--panel-3);color:var(--tx2);'; btn.textContent='→ Tâche';
-        btn.onclick=e=>{ e.stopPropagation(); noteToTask(n.id); };
-        row.appendChild(chip); row.appendChild(txt); row.appendChild(btn);
-        row.onclick=()=>document.querySelector('[data-tab="notes"]').click();
-        list.appendChild(row);
-      });
     }
     if(overdueTasks.length){
       list.appendChild(makeGroupHeader('En retard · '+overdueTasks.length, URGENCY_META.critique.color));
@@ -2102,144 +2093,154 @@
     }
   }
 
-  // ===== Calepin (post-it) =====
+  // ===== Post-it flottant =====
+  // One free-text note (id 'scratchpad'), synced like the rest via data/notes.json.
+  // Open/position/size are per-device preferences (plain localStorage).
+  const POSTIT_ID='scratchpad';
+  let postitEl=null, postitTextEl=null, postitTabEl=null, postitDirty=false, postitSaveTimer=null, postitSavedTimer=null;
   function tomorrowISO(){ const d=new Date(); d.setDate(d.getDate()+1); return toISO(d); }
-  function activeNotes(){ return notes.filter(n=>!n.deleted); }
-  function updateNotesBadge(){
-    const n=activeNotes().filter(x=>x.kind==='demain').length;
-    $('notes-badge').textContent=n>0?n:'';
+  function scratchNote(){
+    let n=notes.find(x=>x.id===POSTIT_ID);
+    if(!n){ n={ id:POSTIT_ID, text:'', createdAt:Date.now(), updatedAt:0, deleted:false }; notes.push(n); }
+    n.deleted=false;
+    return n;
   }
-  function addNote(text){
-    text=(text||'').trim(); if(!text) return;
-    notes.push({ id:'note_'+Date.now()+'_'+Math.random().toString(36).slice(2,7), text, kind:notesKind, forDate:notesKind==='demain'?tomorrowISO():'', createdAt:Date.now(), updatedAt:Date.now(), deleted:false });
-    saveNotes(); renderNotes(); renderToday();
+  // Notes from the short-lived multi-post-it version are folded into the single post-it.
+  function consolidateNotes(){
+    const legacy=notes.filter(n=>n.id!==POSTIT_ID && !n.deleted);
+    if(!legacy.length) return;
+    legacy.sort((a,b)=>((a.kind==='demain'?0:1)-(b.kind==='demain'?0:1)) || ((a.createdAt||0)-(b.createdAt||0)));
+    const sp=scratchNote();
+    sp.text=[(sp.text||'').trim(), ...legacy.map(n=>(n.kind==='demain'?'Demain : ':'')+n.text)].filter(Boolean).join('\n');
+    touch(sp);
+    legacy.forEach(n=>{ n.deleted=true; touch(n); });
+    saveNotes();
   }
-  function setNoteKind(id, kind){
-    const n=notes.find(x=>x.id===id); if(!n) return;
-    n.kind=kind; if(kind==='demain' && !n.forDate) n.forDate=tomorrowISO();
-    touch(n); saveNotes(); renderNotes(); renderToday();
+  function flashPostitSaved(msg){
+    const el=$('postit-saved'); if(!el) return;
+    el.textContent=msg; el.style.opacity='.75';
+    clearTimeout(postitSavedTimer); postitSavedTimer=setTimeout(()=>{ el.style.opacity='0'; },1500);
   }
-  function trashNote(id){
-    const n=notes.find(x=>x.id===id); if(!n) return;
-    n.deleted=true; touch(n); saveNotes(); renderNotes(); renderToday();
+  function flushPostit(){
+    if(!postitDirty || !postitTextEl) return;
+    clearTimeout(postitSaveTimer);
+    postitDirty=false;
+    const n=scratchNote();
+    if(n.text!==postitTextEl.value){ n.text=postitTextEl.value; touch(n); saveNotes(); flashPostitSaved('enregistré'); }
+    updatePostitTab();
   }
-  function noteToTask(id){
-    const n=notes.find(x=>x.id===id); if(!n) return;
-    const lines=(n.text||'').split('\n').map(l=>l.trim()).filter(Boolean);
-    const title=(lines[0]||'Post-it').slice(0,140);
-    const description=lines.slice(1).join('\n');
-    const todayIso=toISO(new Date());
-    const due=n.kind==='demain' ? (n.forDate && n.forDate>=todayIso ? n.forDate : todayIso) : '';
-    createTask({ title, description, urgency:n.kind==='demain'?'haute':'moyenne', status:'a_faire', due });
-    n.deleted=true; touch(n); saveNotes();
-    render(); renderLists(); renderNotes(); renderToday();
-  }
-  function buildPostit(n){
-    const todayIso=toISO(new Date());
-    const card=document.createElement('div');
-    card.className='postit '+(n.kind==='demain'?'demain':'idee')+(n.kind==='demain'&&n.forDate&&n.forDate<todayIso?' overdue':'');
-
-    const text=document.createElement('div'); text.className='postit-text'; text.textContent=n.text; text.title='Cliquer pour modifier';
-    text.onclick=()=>{
-      card.classList.add('editing');
-      const ta=document.createElement('textarea'); ta.className='postit-text-edit'; ta.value=n.text;
-      let done=false;
-      const commit=()=>{
-        if(done) return; done=true;
-        const v=ta.value.trim();
-        if(!v){ trashNote(n.id); return; }
-        if(v!==n.text){ n.text=v; touch(n); saveNotes(); renderToday(); }
-        renderNotes();
-      };
-      ta.onblur=commit;
-      ta.onkeydown=e=>{ if(e.key==='Enter'&&!e.shiftKey){ e.preventDefault(); ta.blur(); } else if(e.key==='Escape'){ done=true; renderNotes(); } };
-      card.replaceChild(ta, text);
-      ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length);
-    };
-    card.appendChild(text);
-
-    const foot=document.createElement('div'); foot.className='postit-foot';
-    const date=document.createElement('span'); date.className='grow postit-date';
-    if(n.kind==='demain' && n.forDate){
-      date.textContent=n.forDate===todayIso?'auj.':(n.forDate<todayIso?'retard ':'')+fmtDateShort(n.forDate);
-      date.title=n.forDate<todayIso?'Prévu pour le '+fmtDateShort(n.forDate)+' (en retard)':n.forDate===todayIso?'Prévu pour aujourd’hui':'Prévu pour le '+fmtDateShort(n.forDate);
-    } else {
-      date.textContent=new Date(n.createdAt).toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit'});
-      date.title='Griffonné le '+date.textContent;
-    }
-    foot.appendChild(date);
-
-    const kindBtn=document.createElement('button'); kindBtn.type='button'; kindBtn.className='postit-btn';
-    kindBtn.textContent=n.kind==='demain'?'→ Idée':'→ Demain';
-    kindBtn.title=n.kind==='demain'?'Classer en idée':'À faire demain';
-    kindBtn.onclick=()=>setNoteKind(n.id, n.kind==='demain'?'idee':'demain');
-    foot.appendChild(kindBtn);
-
-    const taskBtn=document.createElement('button'); taskBtn.type='button'; taskBtn.className='postit-btn';
-    taskBtn.textContent='→ Tâche'; taskBtn.title=n.kind==='demain'?'Créer une tâche urgente pour '+(n.forDate?fmtDateShort(n.forDate):'demain'):'Créer une tâche';
-    taskBtn.onclick=()=>noteToTask(n.id);
-    foot.appendChild(taskBtn);
-
-    const del=document.createElement('button'); del.type='button'; del.className='postit-btn'; del.textContent='×'; del.title='Jeter';
-    del.onclick=()=>trashNote(n.id);
-    foot.appendChild(del);
-
-    card.appendChild(foot);
-    return card;
+  function updatePostitTab(){
+    const n=notes.find(x=>x.id===POSTIT_ID && !x.deleted);
+    const first=n ? ((n.text||'').split('\n').map(l=>l.trim()).find(Boolean)||'') : '';
+    $('postit-tab-preview').textContent=first||'Post-it';
   }
   function renderNotes(){
-    const board=$('notes-board'); if(!board) return;
-    board.innerHTML='';
-    $('notes-kind-switch').querySelectorAll('button[data-kind]').forEach(b=>b.classList.toggle('active', b.dataset.kind===notesKind));
-    $('notes-input').placeholder=notesKind==='demain'?'Griffonne ce qui doit être fait demain…':'Griffonne une idée…';
-    const active=activeNotes().sort((a,b)=>(b.createdAt||0)-(a.createdAt||0));
-    const groups=[['demain','Pour demain'],['idee','Idées']];
-    let shown=0;
-    groups.forEach(([kind,label])=>{
-      const items=active.filter(n=>(n.kind==='demain'?'demain':'idee')===kind);
-      if(!items.length) return;
-      shown+=items.length;
-      const sec=document.createElement('div');
-      const l=document.createElement('div'); l.className='notes-section-label'; l.textContent=label+' · '+items.length;
-      const grid=document.createElement('div'); grid.className='notes-grid';
-      items.forEach(n=>grid.appendChild(buildPostit(n)));
-      sec.appendChild(l); sec.appendChild(grid);
-      board.appendChild(sec);
-    });
-    if(!shown){
-      const e=document.createElement('div'); e.className='empty-state';
-      e.textContent='Calepin vide. Griffonne une idée ou un truc à faire demain, Entrée pour le coller.';
-      board.appendChild(e);
+    if(!postitTextEl) return;
+    const n=notes.find(x=>x.id===POSTIT_ID && !x.deleted);
+    const txt=n ? (n.text||'') : '';
+    if(!postitDirty && postitTextEl.value!==txt){
+      const focused=document.activeElement===postitTextEl, pos=postitTextEl.selectionStart;
+      postitTextEl.value=txt;
+      if(focused){ const c=Math.min(pos, txt.length); postitTextEl.setSelectionRange(c,c); }
     }
-    updateNotesBadge();
+    updatePostitTab();
   }
-  function autoGrowNotesInput(){ const ta=$('notes-input'); ta.style.height='auto'; ta.style.height=ta.scrollHeight+'px'; }
-  $('notes-input').addEventListener('keydown', e=>{
-    if(e.key==='Enter' && !e.shiftKey && !e.isComposing){ e.preventDefault(); addNote(e.target.value); e.target.value=''; autoGrowNotesInput(); }
-  });
-  $('notes-input').addEventListener('input', autoGrowNotesInput);
-  $('notes-kind-switch').addEventListener('click', e=>{
-    const b=e.target.closest('button[data-kind]'); if(!b) return;
-    notesKind=b.dataset.kind;
-    window.storage.set('notes-kind', notesKind, false).catch(()=>{});
-    renderNotes(); $('notes-input').focus();
-  });
+  function setPostitOpen(open, focus){
+    if(!postitEl) return;
+    if(!open) flushPostit();
+    postitEl.classList.toggle('hidden', !open);
+    postitTabEl.classList.toggle('hidden', open);
+    try{ localStorage.setItem('postit-open', open?'1':'0'); }catch(e){}
+    if(open){ clampPostit(); if(focus) setTimeout(()=>{ postitTextEl.focus(); const l=postitTextEl.value.length; postitTextEl.setSelectionRange(l,l); },0); }
+  }
+  function openPostit(focus){ setPostitOpen(true, focus); }
+  function clampPostit(){
+    if(!postitEl || window.innerWidth<=760 || !postitEl.style.left) return;
+    const w=postitEl.offsetWidth||300;
+    const x=Math.min(Math.max(0, parseInt(postitEl.style.left)||0), Math.max(0, window.innerWidth-w));
+    const y=Math.min(Math.max(0, parseInt(postitEl.style.top)||0), Math.max(0, window.innerHeight-40));
+    postitEl.style.left=x+'px'; postitEl.style.top=y+'px';
+  }
+  function postitLineToTask(){
+    const ta=postitTextEl, v=ta.value;
+    const start=ta.selectionStart, end=ta.selectionEnd;
+    const ls=v.lastIndexOf('\n', start-1)+1;
+    let le=v.indexOf('\n', (end>start && v[end-1]==='\n') ? end-1 : end); if(le===-1) le=v.length;
+    const lines=v.slice(ls, le).split('\n').map(l=>l.replace(/^\s*(?:[-*•]|demain\s*:)\s*/i,'').trim()).filter(Boolean);
+    if(!lines.length){ flashPostitSaved('mets le curseur sur une ligne'); ta.focus(); return; }
+    const due=tomorrowISO();
+    lines.forEach(l=>createTask({ title:l.slice(0,140), urgency:'haute', status:'a_faire', due }));
+    ta.value=(v.slice(0,ls)+v.slice(le<v.length?le+1:le)).replace(/\n{3,}/g,'\n\n');
+    const c=Math.min(ls, ta.value.length); ta.setSelectionRange(c,c);
+    postitDirty=true; flushPostit();
+    render(); renderLists();
+    flashPostitSaved(lines.length>1 ? lines.length+' tâches pour demain' : 'tâche pour demain créée');
+    ta.focus();
+  }
+  function initPostit(){
+    postitEl=$('postit'); postitTextEl=$('postit-text'); postitTabEl=$('postit-tab');
+    let pos=null, size=null, open=null;
+    try{ pos=JSON.parse(localStorage.getItem('postit-pos')||'null'); size=JSON.parse(localStorage.getItem('postit-size')||'null'); open=localStorage.getItem('postit-open'); }catch(e){}
+    if(size){ postitEl.style.width=size.w+'px'; postitEl.style.height=size.h+'px'; }
+    if(pos){ postitEl.style.left=pos.x+'px'; postitEl.style.top=pos.y+'px'; postitEl.style.right='auto'; postitEl.style.bottom='auto'; }
+    renderNotes();
+    setPostitOpen(open===null ? window.innerWidth>760 : open==='1', false);
+
+    postitTextEl.addEventListener('input', ()=>{ postitDirty=true; clearTimeout(postitSaveTimer); postitSaveTimer=setTimeout(flushPostit, 600); });
+    postitTextEl.addEventListener('blur', flushPostit);
+    postitTextEl.addEventListener('keydown', e=>{ if(e.key==='Escape'){ e.stopPropagation(); setPostitOpen(false); } });
+    $('postit-min').onclick=()=>setPostitOpen(false);
+    postitTabEl.onclick=()=>setPostitOpen(true, true);
+    const toTask=$('postit-to-task');
+    toTask.onmousedown=e=>e.preventDefault(); // keep the cursor/selection in the textarea
+    toTask.onclick=postitLineToTask;
+
+    const bar=$('postit-bar');
+    bar.addEventListener('pointerdown', e=>{
+      if(e.target.closest('button') || window.innerWidth<=760) return;
+      const r=postitEl.getBoundingClientRect(), dx=e.clientX-r.left, dy=e.clientY-r.top;
+      bar.setPointerCapture(e.pointerId); bar.classList.add('dragging');
+      const move=ev=>{
+        postitEl.style.left=Math.min(Math.max(0, ev.clientX-dx), window.innerWidth-r.width)+'px';
+        postitEl.style.top=Math.min(Math.max(0, ev.clientY-dy), window.innerHeight-40)+'px';
+        postitEl.style.right='auto'; postitEl.style.bottom='auto';
+      };
+      const up=()=>{
+        bar.removeEventListener('pointermove',move); bar.removeEventListener('pointerup',up); bar.removeEventListener('pointercancel',up);
+        bar.classList.remove('dragging');
+        try{ localStorage.setItem('postit-pos', JSON.stringify({ x:parseInt(postitEl.style.left)||0, y:parseInt(postitEl.style.top)||0 })); }catch(err){}
+      };
+      bar.addEventListener('pointermove',move); bar.addEventListener('pointerup',up); bar.addEventListener('pointercancel',up);
+    });
+    if(window.ResizeObserver){
+      let t=null;
+      new ResizeObserver(()=>{
+        if(postitEl.classList.contains('hidden') || window.innerWidth<=760) return;
+        clearTimeout(t); t=setTimeout(()=>{ try{ localStorage.setItem('postit-size', JSON.stringify({ w:postitEl.offsetWidth, h:postitEl.offsetHeight })); }catch(e){} },300);
+      }).observe(postitEl);
+    }
+    window.addEventListener('resize', clampPostit);
+  }
 
   let archiveFilter='toutes';
   function renderArchive(){
     const list=$('archive-list');
     list.innerHTML='';
     const q=($('archive-search').value||'').trim().toLowerCase();
-    let arch=tasks.filter(t=>t.archived && !t.deleted).sort((a,b)=>(b.archivedAt||0)-(a.archivedAt||0));
+    const inTrash=archiveFilter==='corbeille';
+    let arch=inTrash
+      ? tasks.filter(t=>t.deleted).sort((a,b)=>(b.updatedAt||0)-(a.updatedAt||0))
+      : tasks.filter(t=>t.archived && !t.deleted).sort((a,b)=>(b.archivedAt||0)-(a.archivedAt||0));
     if(archiveFilter==='critique') arch=arch.filter(t=>t.urgency==='critique');
     else if(archiveFilter==='haute') arch=arch.filter(t=>t.urgency==='haute'||t.urgency==='critique');
     if(q) arch=arch.filter(t=>(t.title+' '+(t.client||'')+' '+(t.project||'')).toLowerCase().includes(q));
-    if(!arch.length){ const e=document.createElement('div'); e.className='empty-state'; e.textContent=q?'Aucun résultat.':'Aucune tâche archivée.'; list.appendChild(e); return; }
+    if(!arch.length){ const e=document.createElement('div'); e.className='empty-state'; e.textContent=q?'Aucun résultat.':(inTrash?'Corbeille vide.':'Aucune tâche archivée.'); list.appendChild(e); return; }
     let n=1;
-    arch.forEach(t=>list.appendChild(buildArchiveRow(t, n++)));
+    arch.forEach(t=>list.appendChild(buildArchiveRow(t, n++, inTrash)));
   }
 
-  function buildArchiveRow(t, rowNum){
+  function buildArchiveRow(t, rowNum, inTrash){
+    const restoreFn=inTrash?untrashTask:restoreTask, restoreTitle=inTrash?'Remettre (sortir de la corbeille)':'Restaurer';
     const row=document.createElement('div'); row.className='task-line';
     row.dataset.id=t.id;
     const grid=document.createElement('div'); grid.className='task-row-grid archive-row-grid';
@@ -2247,9 +2248,9 @@
     const numSpan=document.createElement('span'); numSpan.className='row-num'; numSpan.textContent=rowNum||'';
     grid.appendChild(numSpan);
 
-    const restoreDot=document.createElement('div'); restoreDot.className='task-check'; restoreDot.style.borderColor='var(--tx3)'; restoreDot.title='Restaurer';
+    const restoreDot=document.createElement('div'); restoreDot.className='task-check'; restoreDot.style.borderColor='var(--tx3)'; restoreDot.title=restoreTitle;
     restoreDot.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:9px;height:9px;display:block;stroke:var(--tx3);"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/></svg>';
-    restoreDot.onclick=e=>{ e.stopPropagation(); restoreTask(t.id); };
+    restoreDot.onclick=e=>{ e.stopPropagation(); restoreFn(t.id); };
     grid.appendChild(restoreDot);
 
     const titleWrap=document.createElement('div'); titleWrap.className='td-title';
@@ -2269,7 +2270,8 @@
     grid.appendChild(makeSolidTag(uMeta.label, uMeta.color, null));
 
     const dateTag=document.createElement('span'); dateTag.className='meta-date-compact';
-    dateTag.textContent=t.archivedAt?fmtDateTime(t.archivedAt):'';
+    dateTag.textContent=inTrash?(t.updatedAt?fmtDateTime(t.updatedAt):''):(t.archivedAt?fmtDateTime(t.archivedAt):'');
+    if(inTrash) dateTag.title='Supprimée le '+dateTag.textContent;
     grid.appendChild(dateTag);
 
     const mailWrap=document.createElement('span'); mailWrap.className='task-mail-icon';
@@ -2277,14 +2279,16 @@
     grid.appendChild(mailWrap);
 
     const actions=document.createElement('div'); actions.className='task-actions-compact'; actions.style.opacity='.7';
-    const restore=document.createElement('button'); restore.title='Restaurer';
+    const restore=document.createElement('button'); restore.title=restoreTitle;
     restore.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/></svg>';
-    restore.onclick=e=>{ e.stopPropagation(); restoreTask(t.id); };
+    restore.onclick=e=>{ e.stopPropagation(); restoreFn(t.id); };
     actions.appendChild(restore);
-    const del=document.createElement('button'); del.className='del-btn'; del.title='Supprimer';
-    del.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg>';
-    del.onclick=e=>{ e.stopPropagation(); deleteTask(t.id); };
-    actions.appendChild(del);
+    if(!inTrash){
+      const del=document.createElement('button'); del.className='del-btn'; del.title='Supprimer';
+      del.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg>';
+      del.onclick=e=>{ e.stopPropagation(); deleteTask(t.id); };
+      actions.appendChild(del);
+    }
     grid.appendChild(actions);
 
     row.appendChild(grid);
@@ -2304,7 +2308,7 @@
   }
   function saveEntityChange(entityType){
     if(entityType==='task'){ saveTasks(); render(); renderToday(); renderArchive(); }
-    else if(entityType==='note'){ saveNotes(); renderNotes(); renderToday(); }
+    else if(entityType==='note'){ saveNotes(); renderNotes(); }
     else { saveCrm(); if(typeof renderContacts==='function') renderContacts(); if(typeof renderPipeline==='function') renderPipeline(); }
   }
 
@@ -2941,6 +2945,10 @@
     editBtn.className='contact-detail-edit-link';
     editBtn.onclick=()=>openContactForm(c);
     links.appendChild(editBtn);
+    const delLink=document.createElement('button'); delLink.type='button'; delLink.textContent='Supprimer';
+    delLink.className='contact-detail-edit-link danger-btn';
+    delLink.onclick=()=>{ if(confirm('Supprimer ce contact ?')){ c.deleted=true; touchCrm(c); saveCrm(); renderContacts(); } };
+    links.appendChild(delLink);
     card.appendChild(links);
 
     return card;
@@ -3331,13 +3339,14 @@
     t.archived=true; t.archivedAt=Date.now(); touch(t); saveTasks(); render(); renderArchive();
     if(typeof maybeOfferStageAdvance==='function') maybeOfferStageAdvance(t);
   }
+  function untrashTask(id){ const t=tasks.find(x=>x.id===id); if(t){ t.deleted=false; touch(t); saveTasks(); render(); renderArchive(); } }
   function restoreTask(id){ const t=tasks.find(x=>x.id===id); if(t){ t.archived=false; t.archivedAt=null; t.status='a_faire'; touch(t); saveTasks(); render(); renderArchive(); } }
   function cycleStatus(id){ const t=tasks.find(x=>x.id===id); if(t){ const i=STATUS_CYCLE.indexOf(t.status); t.status=STATUS_CYCLE[(i+1)%STATUS_CYCLE.length]; touch(t); saveTasks(); render(); } }
   function toggleSubtasksExpanded(id){ if(expandedSubtaskIds.has(id)) expandedSubtaskIds.delete(id); else expandedSubtaskIds.add(id); render(); }
   function deleteTask(id){
     const t=tasks.find(x=>x.id===id);
     if(!t) return;
-    if(!confirm('Supprimer "'+t.title+'" ? (récupérable ensuite depuis la Corbeille)')) return;
+    if(!confirm('Supprimer "'+t.title+'" ? (récupérable ensuite dans Archive → Corbeille)')) return;
     t.deleted=true; touch(t);
     if(selectedTaskId===id)selectedTaskId=null; if(editingId===id)editingId=null;
     saveTasks(); render(); renderArchive();
@@ -3459,7 +3468,7 @@
         tasks=data.tasks; clientsList=data.clients||[]; projectsList=data.projects||[];
         tasks.forEach(t=>{ if(t.subtasks===undefined)t.subtasks=[]; if(t.recur===undefined)t.recur=null; if(t.archived===undefined)t.archived=false; });
         saveTasks(); saveClients(); saveProjects(); render(); renderArchive(); renderLists();
-        if(Array.isArray(data.notes)){ notes=data.notes; saveNotes(); renderNotes(); }
+        if(Array.isArray(data.notes)){ notes=data.notes; consolidateNotes(); saveNotes(); renderNotes(); }
         if(data.crm){
           companies=data.crm.companies||[]; contacts=data.crm.contacts||[]; meetings=data.crm.meetings||[]; opportunities=data.crm.opportunities||[];
           if(Array.isArray(data.crm.companyTypes)&&data.crm.companyTypes.length) companyTypesList=data.crm.companyTypes;
@@ -3470,8 +3479,8 @@
     reader.readAsText(file);
   }
 
-  const tabContacts=$('tab-contacts'), tabPipeline=$('tab-pipeline'), tabNotes=$('tab-notes');
-  tabs.forEach(el=>{ el.onclick=()=>{ tabs.forEach(t=>t.classList.remove('active')); el.classList.add('active'); const tgt=el.dataset.tab; tabToday.classList.toggle('hidden',tgt!=='today'); tabTasks.classList.toggle('hidden',tgt!=='tasks'); tabInbox.classList.toggle('hidden',tgt!=='inbox'); tabArchive.classList.toggle('hidden',tgt!=='archive'); tabLists.classList.toggle('hidden',tgt!=='lists'); tabContacts.classList.toggle('hidden',tgt!=='contacts'); tabPipeline.classList.toggle('hidden',tgt!=='pipeline'); tabNotes.classList.toggle('hidden',tgt!=='notes'); if(tgt==='notes'){ renderNotes(); setTimeout(()=>$('notes-input').focus(),0); } if(tgt==='today')renderToday(); if(tgt==='archive')renderArchive(); if(tgt==='contacts'){ refreshContactsTypeFilter(); renderContacts(); fetchContactInbox(); } if(tgt==='pipeline')renderPipeline(); if(tgt==='lists'){ renderLists(); renderStats(); renderConflicts(); $('sync-owner').value=syncConfig.owner||''; $('sync-repo').value=syncConfig.repo||''; if(syncConfig.enabled) setSyncStatus('Synchro active'); } if(tgt==='inbox')fetchInbox(); }; });
+  const tabContacts=$('tab-contacts'), tabPipeline=$('tab-pipeline');
+  tabs.forEach(el=>{ el.onclick=()=>{ tabs.forEach(t=>t.classList.remove('active')); el.classList.add('active'); const tgt=el.dataset.tab; tabToday.classList.toggle('hidden',tgt!=='today'); tabTasks.classList.toggle('hidden',tgt!=='tasks'); tabInbox.classList.toggle('hidden',tgt!=='inbox'); tabArchive.classList.toggle('hidden',tgt!=='archive'); tabLists.classList.toggle('hidden',tgt!=='lists'); tabContacts.classList.toggle('hidden',tgt!=='contacts'); tabPipeline.classList.toggle('hidden',tgt!=='pipeline'); if(tgt==='today')renderToday(); if(tgt==='archive')renderArchive(); if(tgt==='contacts'){ refreshContactsTypeFilter(); renderContacts(); fetchContactInbox(); } if(tgt==='pipeline')renderPipeline(); if(tgt==='lists'){ renderLists(); renderStats(); renderConflicts(); $('sync-owner').value=syncConfig.owner||''; $('sync-repo').value=syncConfig.repo||''; if(syncConfig.enabled) setSyncStatus('Synchro active'); } if(tgt==='inbox')fetchInbox(); }; });
 
   $('submit-task').onclick=addTask;
   addSection.addEventListener('keydown', e=>{ if(e.key==='Enter' && e.target.tagName!=='TEXTAREA'){ e.preventDefault(); addTask(); } });
@@ -3872,7 +3881,7 @@
     if(e.key==='Escape'){ if(snoozePopover.style.display==='flex'){ closeSnoozePopover(); return; } if(editingId){ editingId=null; render(); return; } if(document.activeElement&&document.activeElement.id==='f-title'){ closeAddForm(); return; } if(document.activeElement===quickAddInput){ quickAddInput.blur(); return; } if(document.activeElement===searchInput&&searchQuery){ searchInput.value=''; searchQuery=''; searchClear.classList.remove('show'); render(); return; } return; }
     const tag=document.activeElement.tagName; if(tag==='INPUT'||tag==='TEXTAREA'||tag==='SELECT')return;
     if(e.key==='n'){ e.preventDefault(); quickAddInput.focus(); }
-    else if(e.key==='p'){ e.preventDefault(); document.querySelector('[data-tab="notes"]').click(); }
+    else if(e.key==='p'){ e.preventDefault(); openPostit(true); }
     else if(e.key==='j'||e.key==='k'){ e.preventDefault(); moveSelection(e.key==='j'?1:-1); }
     else if(e.key==='Enter'){ if(selectedTaskId)validateTask(selectedTaskId); }
     else if(e.key==='e'){ if(selectedTaskId){ e.preventDefault(); openEdit(selectedTaskId); } }
