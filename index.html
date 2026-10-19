@@ -1378,6 +1378,22 @@
   function b64EncodeUtf8(str){ return btoa(unescape(encodeURIComponent(str))); }
   function b64DecodeUtf8(b64){ return decodeURIComponent(escape(atob(b64.replace(/\n/g,'')))); }
 
+  // Reads a JSON file of the data repo. The "object" media type works up to 100 MB (the default one stops
+  // at 1 MB); above 1 MB the content comes empty and is fetched again as raw text.
+  async function ghGetJson(path){
+    const auth={ 'Authorization':'Bearer '+syncConfig.token };
+    const res=await fetch(syncApiUrl(path), { headers:Object.assign({ 'Accept':'application/vnd.github.object+json' }, auth), cache:'no-store' });
+    if(!res.ok) return { ok:false, status:res.status };
+    const data=await res.json();
+    let text;
+    if(data.content && data.encoding!=='none') text=b64DecodeUtf8(data.content);
+    else {
+      const raw=await fetch(syncApiUrl(path), { headers:Object.assign({ 'Accept':'application/vnd.github.raw+json' }, auth), cache:'no-store' });
+      if(!raw.ok) return { ok:false, status:raw.status };
+      text=await raw.text();
+    }
+    return { ok:true, status:200, sha:data.sha, json:JSON.parse(text) };
+  }
   function setSyncStatus(msg){ const el=$('sync-status'); if(el) el.textContent=msg; }
 
   // Merge by id: for tasks present on both sides, keep whichever has the
@@ -1489,11 +1505,10 @@
   async function syncPull(){
     if(!syncConfig.enabled) return;
     try{
-      const res=await fetch(syncApiUrl(), { headers:{ 'Authorization':'Bearer '+syncConfig.token, 'Accept':'application/vnd.github+json' } });
-      if(res.status===404){ await syncPushNow(); return; }
-      if(!res.ok){ setSyncStatus('Erreur de synchro (lecture)'); return; }
-      const data=await res.json();
-      const remoteTasks=JSON.parse(b64DecodeUtf8(data.content));
+      const data=await ghGetJson(SYNC_TASKS_PATH);
+      if(data.status===404){ await syncPushNow(); return; }
+      if(!data.ok){ setSyncStatus('Erreur de synchro (lecture)'); return; }
+      const remoteTasks=data.json;
       tasks=threeWayMerge('task', tasks, remoteTasks, tasksBaseSnapshot);
       // The base is what is actually on the server — not the merged result,
       // which may still hold local edits that were never pushed (e.g. app
@@ -1518,11 +1533,10 @@
     if(!syncConfig.enabled) return;
     try{
       let sha=lastKnownSha;
-      const getRes=await fetch(syncApiUrl(), { headers:{ 'Authorization':'Bearer '+syncConfig.token, 'Accept':'application/vnd.github+json' } });
-      if(getRes.ok){
-        const getData=await getRes.json();
+      const getData=await ghGetJson(SYNC_TASKS_PATH);
+      if(getData.ok){
         sha=getData.sha;
-        const remoteTasks=JSON.parse(b64DecodeUtf8(getData.content));
+        const remoteTasks=getData.json;
         tasks=threeWayMerge('task', tasks, remoteTasks, tasksBaseSnapshot);
         await saveTasksLocalOnly();
         refreshAllViews();
@@ -1564,11 +1578,10 @@
   async function syncPullCrm(){
     if(!syncConfig.enabled) return;
     try{
-      const res=await fetch(syncApiUrl(SYNC_CRM_PATH), { headers:{ 'Authorization':'Bearer '+syncConfig.token, 'Accept':'application/vnd.github+json' } });
-      if(res.status===404){ await syncPushCrmNow(); return; }
-      if(!res.ok) return;
-      const data=await res.json();
-      const remote=JSON.parse(b64DecodeUtf8(data.content));
+      const data=await ghGetJson(SYNC_CRM_PATH);
+      if(data.status===404){ await syncPushCrmNow(); return; }
+      if(!data.ok) return;
+      const remote=data.json;
       const merged=mergeCrmBundle({companies,contacts,meetings,opportunities}, remote);
       companies=merged.companies; contacts=merged.contacts; meetings=merged.meetings; opportunities=merged.opportunities;
       lastKnownCrmSha=data.sha;
@@ -1588,11 +1601,10 @@
     if(!syncConfig.enabled) return;
     try{
       let sha=lastKnownCrmSha;
-      const getRes=await fetch(syncApiUrl(SYNC_CRM_PATH), { headers:{ 'Authorization':'Bearer '+syncConfig.token, 'Accept':'application/vnd.github+json' } });
-      if(getRes.ok){
-        const getData=await getRes.json();
+      const getData=await ghGetJson(SYNC_CRM_PATH);
+      if(getData.ok){
         sha=getData.sha;
-        const remote=JSON.parse(b64DecodeUtf8(getData.content));
+        const remote=getData.json;
         const merged=mergeCrmBundle({companies,contacts,meetings,opportunities}, remote);
         companies=merged.companies; contacts=merged.contacts; meetings=merged.meetings; opportunities=merged.opportunities;
         await saveCrmLocalOnly();
@@ -1625,11 +1637,10 @@
     if(!syncConfig.enabled) return;
     flushPostit();
     try{
-      const res=await fetch(syncApiUrl(SYNC_NOTES_PATH), { headers:{ 'Authorization':'Bearer '+syncConfig.token, 'Accept':'application/vnd.github+json' } });
-      if(res.status===404){ await syncPushNotesNow(); return; }
-      if(!res.ok) return;
-      const data=await res.json();
-      const remote=JSON.parse(b64DecodeUtf8(data.content));
+      const data=await ghGetJson(SYNC_NOTES_PATH);
+      if(data.status===404){ await syncPushNotesNow(); return; }
+      if(!data.ok) return;
+      const remote=data.json;
       notes=threeWayMerge('note', notes, remote, notesBaseSnapshot);
       consolidateNotes();
       notesBaseSnapshot=remote.map(n=>({...n}));
@@ -1658,11 +1669,10 @@
     flushPostit();
     try{
       let sha=lastKnownNotesSha;
-      const getRes=await fetch(syncApiUrl(SYNC_NOTES_PATH), { headers:{ 'Authorization':'Bearer '+syncConfig.token, 'Accept':'application/vnd.github+json' } });
-      if(getRes.ok){
-        const getData=await getRes.json();
+      const getData=await ghGetJson(SYNC_NOTES_PATH);
+      if(getData.ok){
         sha=getData.sha;
-        const remote=JSON.parse(b64DecodeUtf8(getData.content));
+        const remote=getData.json;
         notes=threeWayMerge('note', notes, remote, notesBaseSnapshot);
         consolidateNotes();
         await saveNotesLocalOnly();
@@ -1712,7 +1722,8 @@
     try{ await window.storage.set('last-daily-notif', todayStr, false); }catch(e){}
   }
 
-  function escapeHtml(s){ const d=document.createElement('div'); d.textContent=s; return d.innerHTML; }
+  // Also escapes quotes: the result is used inside attribute values (value="…"), fed by pasted mails and synced data.
+  function escapeHtml(s){ return String(s==null?'':s).replace(/[&<>"']/g, ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch])); }
   function isSafeHref(url){ return /^https?:\/\//i.test(url||'') || /^mailto:/i.test(url||''); }
   function toISO(d){ return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
   function hashColor(name,pal){ if(!name)return null; let h=0; for(let i=0;i<name.length;i++){h=(h*31+name.charCodeAt(i))>>>0;} return pal[h%pal.length]; }
@@ -5221,7 +5232,7 @@
   function refreshContactsTypeFilter(){
     const sel=$('contacts-type-filter');
     const current=sel.value;
-    sel.innerHTML='<option value="">Tous les types</option>' + companyTypesList.slice().sort().map(t=>'<option value="'+t.replace(/"/g,'&quot;')+'">'+t+'</option>').join('');
+    sel.innerHTML='<option value="">Tous les types</option>' + companyTypesList.slice().sort().map(t=>'<option value="'+escapeHtml(t)+'">'+escapeHtml(t)+'</option>').join('');
     if(companyTypesList.includes(current)) sel.value=current;
   }
   $('contacts-type-filter').addEventListener('change', renderContacts);

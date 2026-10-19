@@ -54,16 +54,22 @@ def stored(page, key):
     return page.evaluate(f"JSON.parse(localStorage.getItem('todo_{key}')||'null')")
 
 
-def mock_github(page, files, put_ok=True):
-    """files: {'tasks.json': [...], ...} — server state, updated on successful PUTs."""
-    state = {"puts": 0}
+def mock_github(page, files, put_ok=True, large=()):
+    """files: {'tasks.json': [...], ...} — server state, updated on successful PUTs.
+    large: files GitHub reports as > 1 MB (metadata without content, raw fetch needed)."""
+    state = {"puts": 0, "large": large}
 
     def handler(route, request):
         name = request.url.rsplit("/", 1)[-1]
         if name not in files:
             return route.fulfill(status=404, body="{}")
         if request.method == "GET":
-            body = {"sha": "sha-" + name, "content": base64.b64encode(json.dumps(files[name]).encode()).decode()}
+            if "raw" in request.headers.get("accept", ""):
+                return route.fulfill(status=200, content_type="application/vnd.github.raw", body=json.dumps(files[name]))
+            if name in state.get("large", ()):  # > 1 MB: GitHub sends the metadata without content
+                body = {"sha": "sha-" + name, "content": "", "encoding": "none"}
+            else:
+                body = {"sha": "sha-" + name, "encoding": "base64", "content": base64.b64encode(json.dumps(files[name]).encode()).decode()}
             return route.fulfill(status=200, content_type="application/json", body=json.dumps(body))
         state["puts"] += 1
         if not put_ok:
@@ -165,6 +171,17 @@ with sync_playwright() as p:
     page.click("#postit-text"); page.keyboard.press("End"); page.keyboard.type(" + PC")
     page.wait_for_timeout(4500)
     check(files["notes.json"][0]["text"] == "écrit sur le téléphone + PC", "post-it edit pushed")
+    page.close()
+
+    # --- Sync: a data file over 1 MB is read through the raw media type
+    big = [{"id": "c%d" % i, "firstName": "P%d" % i, "lastName": "N", "company": "", "email": "", "phone1": "", "phone2": "", "role": "",
+            "relevance": 0, "comment": "x" * 200, "createdAt": 1, "updatedAt": 1, "deleted": False} for i in range(300)]
+    files = {"crm.json": {"companies": [], "contacts": big, "meetings": [], "opportunities": []}, "tasks.json": [], "notes.json": []}
+    page, errors = new_page(browser, SYNC_ON)
+    mock_github(page, files, large=("crm.json",))
+    page.goto(URL); page.wait_for_timeout(1500)
+    check(len(stored(page, "todo-widget-contacts") or []) == 300, "sync reads a data file over 1 MB")
+    check(not errors, f"no page errors ({errors})")
     page.close()
 
     # --- Contacts on a phone: no horizontal overflow, delete available in the card
