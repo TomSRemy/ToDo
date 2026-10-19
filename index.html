@@ -3493,17 +3493,26 @@
   const pqIsoToFr=s=>{ const m=/^(\d{4})-(\d{2})-(\d{2})$/.exec(s||''); return m?m[3]+'/'+m[2]+'/'+m[1]:(s||''); };
   const pqAddDays=(n)=>{ const d=new Date(); d.setHours(0,0,0,0); d.setDate(d.getDate()+n); return toISO(d); };
   const PQ_MONTHS={ janvier:1, fevrier:2, mars:3, avril:4, mai:5, juin:6, juillet:7, aout:8, septembre:9, octobre:10, novembre:11, decembre:12 };
+  const PQ_MONTH_LABEL={ janvier:'Janvier', fevrier:'Février', mars:'Mars', avril:'Avril', mai:'Mai', juin:'Juin', juillet:'Juillet', aout:'Août', septembre:'Septembre', octobre:'Octobre', novembre:'Novembre', decembre:'Décembre' };
   const PQ_MONTH_NAMES=['JANVIER','FÉVRIER','MARS','AVRIL','MAI','JUIN','JUILLET','AOÛT','SEPTEMBRE','OCTOBRE','NOVEMBRE','DÉCEMBRE'];
 
   // ----- Mail parser (rules, runs locally: nothing leaves the browser) -----
   const PQ_EMAIL_RE=/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g;
   const PQ_PHONE_RE=/(?:\+33\s?\(?0?\)?\s?|\b0)[1-9](?:[\s.\-]?\d{2}){4}\b/g;
   const pqIsCa=e=>{ const d=(e.split('@')[1]||'').toLowerCase(); return /^ca-|credit-?agricole|^ca\.|creditagricole/.test(d); };
-  const PQ_CLOSINGS=/^(bien\s+)?(cordialement|à bientôt|a bientot|bien à vous|bien a vous|salutations|merci( d'avance| par avance)?|bonne (journée|journee|soirée|fin de journée)|best regards|regards|sincères salutations)\b/i;
+  const PQ_CLOSINGS=/^(bien\s+)?(cordialement|à bientôt|a bientot|bien à vous|bien a vous|salutations|merci( d'avance| par avance| beaucoup)?|bonne (journée|journee|soirée|fin de journée)|best regards|regards|sincères salutations|je vous prie d.agr[ée]er|veuillez agr[ée]er|dans l.attente|--\s*$)/i;
   const PQ_LEGAL=/\b(SAS|SASU|SARL|EURL|SA|SCEA|EARL|GAEC|SCI|SNC|SEM|SPL|SCIC|SEML|GIE|SICA|CUMA|SELARL|S\.A\.S\.?|S\.A\.R\.L\.?)\b|\b(commune|mairie|communauté|syndicat|régie|regie|département|conseil)\b/i;
   const PQ_ROLE=/\b(directeur|directrice|gérant|gerant|gérante|président|presidente|responsable|chargé|chargée|ingénieur|ingenieure|ingénieure|associé|associée|dirigeant|dirigeante|fondateur|fondatrice|ceo|cfo|coo|cto|dg|daf|maire|adjoint|adjointe|manager|asset|chef|head|délégué|déléguée|exploitant|exploitante|agriculteur|agricultrice|technicien|technicienne|acheteur|acheteuse|secrétaire|assistant|assistante|comptable|conseiller|conseillère)\b/i;
   const PQ_HEADER=/^(de|from|à|a|to|cc|cci|envoyé|envoye|sent|date|objet|subject)\s*:/i;
   function pqFmtPhone(p){ let d=p.replace(/\D/g,''); if(d.startsWith('33')) d='0'+d.slice(2).replace(/^0/,''); return d.length===10?d.replace(/(\d{2})(?=\d)/g,'$1 ').trim():p.trim(); }
+  // "9 800", "1.250 kWc" (thousands), "4,98 MWc", "2.5 MW" (decimal); "1.250 MWc" stays 1,25 MW
+  const PQ_QTY='(?<![\\p{L}\\d.,])(\\d{1,3}(?:[ .]\\d{3})+(?:,\\d+)?|\\d+(?:[.,]\\d+)?)';
+  function pqQty(s, unit){
+    let t=String(s).replace(/\s/g,'');
+    const big=/^(mw|mwc|gwh)$/i.test(unit||'');
+    if(/^\d{1,3}(\.\d{3})+(,\d+)?$/.test(t) && !(big && /^\d{1,3}\.\d{3}$/.test(t))) t=t.replace(/\./g,'');
+    return parseFloat(t.replace(',','.'));
+  }
   function pqNum(s){ return parseFloat(String(s).replace(/\s/g,'').replace(',','.')); }
   function pqCaisseFromText(s){
     const f=pqFold(s);
@@ -3539,7 +3548,8 @@
     let m=/(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{4})/.exec(s); if(m) return pqPad(m[1])+'/'+pqPad(m[2])+'/'+m[3];
     m=/(\d{4})-(\d{2})-(\d{2})/.exec(s); if(m) return m[3]+'/'+m[2]+'/'+m[1];
     m=/(\d{1,2})(?:er)?\s+(janvier|fevrier|mars|avril|mai|juin|juillet|aout|septembre|octobre|novembre|decembre)\s+(\d{4})/.exec(s); if(m) return pqPad(m[1])+'/'+pqPad(PQ_MONTHS[m[2]])+'/'+m[3];
-    m=/(janvier|fevrier|mars|avril|mai|juin|juillet|aout|septembre|octobre|novembre|decembre)\s+(\d{4})/.exec(s); if(m) return m[1].charAt(0).toUpperCase()+m[1].slice(1)+' '+m[2];
+    m=/(janvier|fevrier|mars|avril|mai|juin|juillet|aout|septembre|octobre|novembre|decembre)\s+(\d{4})/.exec(s); if(m) return PQ_MONTH_LABEL[m[1]]+' '+m[2];
+    m=/\b(0?[1-9]|1[0-2])\/(20\d{2})\b/.exec(s); if(m) return PQ_MONTH_LABEL[Object.keys(PQ_MONTHS)[parseInt(m[1],10)-1]]+' '+m[2];
     m=/\b(t[1-4]|[1-4](?:er|e|eme|ème)\s+trimestre)\s+(\d{4})/.exec(s); if(m){ const q=parseInt(m[1].replace(/\D/g,''),10); return 'T'+q+' '+m[2]; }
     m=/(ete|printemps|automne|hiver|debut|fin|courant)\s+(\d{4})/.exec(s); if(m) return m[0].replace(/^ete/,'été').replace(/^debut/,'début');
     m=/\b(20\d{2})\b/.exec(s); if(m) return m[1];
@@ -3552,28 +3562,65 @@
     return pqParseDateLoose(String(v));
   }
 
+  // Relays forward a lead without being the prospect: Crédit Agricole and colleagues (own domain).
+  const PQ_INTERNAL_DOMAINS=['selfee.fr'];
+  const pqIsInternal=e=>PQ_INTERNAL_DOMAINS.includes((e.split('@')[1]||'').toLowerCase());
+  const pqIsRelay=e=>pqIsCa(e)||pqIsInternal(e);
+  const PQ_GENERIC_DOMAINS=/^(gmail|googlemail|hotmail|outlook|live|msn|yahoo|orange|wanadoo|free|sfr|laposte|neuf|icloud|me|aol|bbox|numericable|proton|protonmail)\./;
+  // words that make a capitalised pair look like a name but are not people
+  const PQ_NOT_NAME=/\b(cr[eé]dit|agricole|[eé]nergies?|solaire|syndicat|centrale|soci[eé]t[eé]|commune|mairie|parc|ville|groupe|service|transitions?|madame|monsieur|bonjour|cordialement|objet|projet|sas|sarl|earl|gaec|scea)\b/i;
+  const PQ_NAME_RE=/^(?:(?:M\.|Mme|Mlle|Monsieur|Madame)\s+)?[A-ZÉÈÀÂÎÔ][\p{L}'’-]+(?:\s+(?:de\s+|de\s+la\s+|du\s+)?[A-ZÉÈÀÂÎÔ][\p{L}'’-]+){1,2}$/u;
+  const PQ_FORM='SAS|SASU|SARL|EURL|EARL|GAEC|SCEA|SCI|SEM|SEML|SCIC|SPL|SA|SNC|GIE|SICA|CUMA';
+
+  function pqSplitName(raw){
+    let n=raw.trim().replace(/^(m\.|mme|mlle|monsieur|madame)\s+/i,'');
+    const parts=n.split(/\s+/);
+    // "DURAND Pierre": the all-caps word is the surname; otherwise the first word is the first name
+    let fi=0; if(parts.length>1 && parts[0]===parts[0].toUpperCase() && parts[0].length>1 && parts[1]!==parts[1].toUpperCase()) fi=parts.length-1;
+    return { prenom:pqTitleCase(fi===0?parts[0]:parts[parts.length-1]), nom:(fi===0?parts.slice(1).join(' '):parts.slice(0,-1).join(' ')).toUpperCase() };
+  }
+  const pqLooksLikeName=s=>PQ_NAME_RE.test(s.trim()) && !PQ_NOT_NAME.test(s) && /[a-zé]/.test(s);
+  const pqLooksLikeCompany=s=>{
+    const t=s.trim(); if(!t || t.split(/\s+/).length>7) return false;
+    if(new RegExp('\\b('+PQ_FORM+')\\b').test(t) || /\b(commune|mairie|communaut[eé]|syndicat|r[eé]gie|d[eé]partement|conseil)\b/i.test(t)) return true;
+    const letters=t.replace(/[^\p{L}]/gu,'');
+    return letters.length>=4 && letters===letters.toUpperCase() && !pqLooksLikeName(t);
+  };
+  // "l'EARL Bastide", "la société VENTS DU NORD SAS", "SARL SOLEIL D'OC" inside a sentence
+  function pqCompanyInText(s){
+    // names never run onto the next line (spaces/tabs only between words)
+    const W="[A-Z0-9ÉÈÀÂÎÔÛÇ][\\p{L}0-9'’&.-]*";
+    let m=new RegExp('\\b('+PQ_FORM+')[ \\t]+('+W+'(?:[ \\t]+(?:(?:des|du|de|les|la|le)(?=[ \\t])|'+W+')){0,4})','u').exec(s);
+    if(m){ const name=(m[1]+' '+m[2]).replace(/\s+(du|de|des|la|le|les)$/i,'').replace(/[.,;:]+$/,''); return name.toUpperCase(); }
+    m=new RegExp("((?:[A-Z0-9ÉÈÀÂÎÔÛÇ][A-Z0-9ÉÈÀÂÎÔÛÇ'’&.-]+[ \\t]+){1,4})("+PQ_FORM+')\\b','u').exec(s);
+    if(m) return (m[1]+m[2]).trim().toUpperCase();
+    return null;
+  }
+
   function parsePipeMail(raw){
-    const out={}, text=String(raw||'').replace(/\r/g,''), lines=text.split('\n').map(l=>l.replace(/\u00a0/g,' ').trim());
+    const out={}, text=String(raw||'').replace(/\r/g,'').replace(/ /g,' '), lines=text.split('\n').map(l=>l.trim());
     if(!text.trim()) return out;
     const all=[...new Set((text.match(PQ_EMAIL_RE)||[]).map(e=>e.toLowerCase()))];
     const caEmails=all.filter(pqIsCa);
-    // Split a forward chain at each "De :"/"From:" header; the prospect is the latest block whose sender is not Crédit Agricole.
+    // Split a forward chain at each "De :"/"From:" header; the prospect is the latest block whose sender is not a relay.
     const blocks=[]; let cur={ from:null, lines:[] };
     lines.forEach(l=>{ const m=/^(de|from)\s*:\s*(.*)$/i.exec(l); if(m){ if(cur.lines.length||cur.from) blocks.push(cur); cur={ from:m[2], lines:[] }; } else cur.lines.push(l); });
     blocks.push(cur);
-    blocks.forEach(b=>{ b.email=((b.from||'').match(PQ_EMAIL_RE)||[])[0]||null; b.isCa=b.email?pqIsCa(b.email):false; });
-    let prospect=blocks.slice().reverse().find(b=>b.from && b.email && !b.isCa)||null;
-    if(!prospect){ const b=blocks[blocks.length-1]; prospect=b.isCa?null:b; }
+    blocks.forEach(b=>{ b.email=((b.from||'').match(PQ_EMAIL_RE)||[])[0]||null; b.relay=b.email?pqIsRelay(b.email):false; });
+    let prospect=blocks.slice().reverse().find(b=>b.from && b.email && !b.relay)||null;
+    if(!prospect){ const b=blocks[blocks.length-1]; prospect=(b.relay||(!b.from && blocks.some(x=>x.relay)))?null:b; }
     const body=prospect?prospect.lines.filter(l=>!PQ_HEADER.test(l)):lines.filter(l=>!PQ_HEADER.test(l));
     const bodyText=body.join('\n');
     const subj=lines.map(l=>/^(objet|subject)\s*:\s*(.*)$/i.exec(l)).filter(Boolean).map(m=>m[2].replace(/^((tr|fw|fwd|re)\s*:\s*)+/i,'').trim()).filter(Boolean);
     const subject=subj[subj.length-1]||subj[0]||'';
 
+    // Origin & Crédit Agricole caisse (a caisse name alone, e.g. "Morbihan", is not enough)
     let caisse=null;
     caEmails.forEach(e=>{ caisse=caisse||pqCaisseFromDomain(e); });
-    const caText=pqCaisseFromText(text);
+    const mentionsCa=/cr[eé]dit\s+agricole|\bca\s+(transitions|t&e)|cat\s*&\s*e/i.test(text);
+    const caText=(caEmails.length||mentionsCa)?pqCaisseFromText(text):null;
     if(caText==='CAT&E' || (!caisse && caText)) caisse=caText;
-    if(caEmails.length || caisse){ out.origine='Crédit Agricole'; out.ca=caisse||'N/A'; }
+    if(caEmails.length || caisse || (mentionsCa && !prospect)){ out.origine='Crédit Agricole'; out.ca=caisse||'N/A'; }
     else if(/boamp/i.test(text)){ out.origine='BOAMP'; out.ca='N/A'; }
     else { out.origine='Contact direct'; out.ca='N/A'; }
 
@@ -3581,75 +3628,117 @@
     if(caEmails.length){
       const idx=lines.findIndex(l=>l.toLowerCase().includes(caEmails[0]));
       for(let i=idx-1;i>=Math.max(0,idx-5);i--){ const l=lines[i]; if(/^[A-ZÉÈ][a-zéèëêïîôç-]+(\s+[A-ZÉÈ][\wéèëêïîôç'-]+){1,2}$/.test(l)){ caPerson=l; break; } }
-      if(!caPerson){ const hb=blocks.find(b=>b.isCa); if(hb) caPerson=(hb.from||'').replace(/<.*?>/,'').replace(/["']/g,'').trim()||null; }
+      if(!caPerson){ const hb=blocks.find(b=>b.relay && pqIsCa(b.email||'')); if(hb) caPerson=(hb.from||'').replace(/<.*?>/,'').replace(/["']/g,'').trim()||null; }
     }
-    const bodyEmails=(bodyText.match(PQ_EMAIL_RE)||[]).map(e=>e.toLowerCase()).filter(e=>!pqIsCa(e));
-    out.mail=(prospect && prospect.email && !pqIsCa(prospect.email))?prospect.email.toLowerCase():(bodyEmails[0]||all.find(e=>!pqIsCa(e))||'');
+
+    // The prospect's own address: sender of its block, else an address quoted in the body by the relay
+    const nonRelay=all.filter(e=>!pqIsRelay(e));
+    let inlineLine=null;
+    if(prospect && prospect.email && !pqIsRelay(prospect.email)) out.mail=prospect.email.toLowerCase();
+    else if(nonRelay.length){
+      out.mail=nonRelay[0];
+      inlineLine=lines.find(l=>l.toLowerCase().includes(nonRelay[0]))||null;
+    }
     if(!out.mail) delete out.mail;
-    const phones=[...new Set((bodyText.match(PQ_PHONE_RE)||[]).map(pqFmtPhone))];
+
+    // Phones: on the line that quotes the prospect first, then in the prospect's part
+    const phoneSrc=(inlineLine&&new RegExp(PQ_PHONE_RE.source).test(inlineLine)?inlineLine+'\n':'')+bodyText;
+    const phones=[...new Set((phoneSrc.match(PQ_PHONE_RE)||[]).map(pqFmtPhone))];
     if(phones.length) out.tel=phones.slice(0,2).join(' / ');
 
-    let sigStart=-1;
-    body.forEach((l,i)=>{ if(PQ_CLOSINGS.test(l)) sigStart=i; });
-    const sig=(sigStart>=0?body.slice(sigStart+1):body.slice(-8)).filter(l=>l && !/^(-{2,}|_{2,})/.test(l) && !/message d.origine|original message/i.test(l)).slice(0,8);
-    let nameLine=null, roleLine=null, companyLine=null;
-    sig.forEach(l=>{
-      if(new RegExp(PQ_EMAIL_RE.source).test(l)) return;
-      if(new RegExp(PQ_PHONE_RE.source).test(l)) return;
-      if(/https?:|www\./i.test(l)) return;
-      if(!companyLine && PQ_LEGAL.test(l)){ companyLine=l; return; }
-      if(!roleLine && PQ_ROLE.test(l) && l.split(/\s+/).length<=8){ roleLine=l; return; }
-      if(!nameLine && /^(?:[Mm]\.|[Mm]me|Mlle|Monsieur|Madame)?\s*[A-ZÉÈÀ][\p{L}'-]+(\s+[A-ZÉÈÀ][\p{L}'-]+){1,2}$/u.test(l)){ nameLine=l; return; }
-    });
-    if(!nameLine && prospect && prospect.from){ const dn=prospect.from.replace(/<.*?>/,'').replace(PQ_EMAIL_RE,'').replace(/["'\[\]]/g,'').trim(); if(dn && dn.split(/\s+/).length>=2 && dn.split(/\s+/).length<=4) nameLine=dn; }
-    if(nameLine){
-      let n=nameLine.trim();
-      const cm=/^(m\.|mme|mlle|monsieur|madame)\s+/i.exec(n); if(cm) n=n.slice(cm[0].length);
-      const parts=n.split(/\s+/);
-      let fi=0; if(parts.length>1 && parts[0]===parts[0].toUpperCase() && parts[0].length>1 && parts[1]!==parts[1].toUpperCase()) fi=parts.length-1;
-      out.prenom=pqTitleCase(fi===0?parts[0]:parts[parts.length-1]);
-      out.nom=(fi===0?parts.slice(1).join(' '):parts.slice(0,-1).join(' ')).toUpperCase();
+    let name=null, role=null, company=null;
+    if(prospect){
+      // Signature: lines after the last closing formula; each line may hold "Name – Role, COMPANY, phone"
+      let sigStart=-1;
+      body.forEach((l,i)=>{ if(PQ_CLOSINGS.test(l)) sigStart=i; });
+      const sigLines=(sigStart>=0?body.slice(sigStart+1):body.slice(-8)).filter(l=>l && !/^(-{2,}|_{2,})$/.test(l) && !/message d.origine|original message|forwarded message/i.test(l)).slice(0,8);
+      sigLines.forEach(l=>{
+        l.split(/\s+[-–|·]\s+|,\s+/).map(p=>p.trim()).filter(Boolean).forEach(p=>{
+          if(new RegExp(PQ_EMAIL_RE.source).test(p) || new RegExp(PQ_PHONE_RE.source).test(p) || /https?:|www\./i.test(p) || /^(t[ée]l|mob|port)/i.test(p)) return;
+          if(/\d{5}/.test(p) || p.split(/\s+/).length>8) return;
+          if(!name && pqLooksLikeName(p)){ name=p; return; }
+          if(!company && pqLooksLikeCompany(p)){ company=p; return; }
+          if(!role && PQ_ROLE.test(p) && p.split(/\s+/).length<=6){ role=p; return; }
+        });
+      });
+      if(!name && prospect.from){ const dn=prospect.from.replace(/<.*?>/,'').replace(PQ_EMAIL_RE,'').replace(/["'\[\]]/g,'').trim(); if(dn && dn.split(/\s+/).length>=2 && dn.split(/\s+/).length<=4 && !PQ_NOT_NAME.test(dn)) name=dn; }
+    } else if(inlineLine){
+      // relay mail: "M. Hugo Lefebvre, hugo@…, 06…" — the name closest before the address
+      const at=inlineLine.toLowerCase().indexOf(out.mail);
+      const before=inlineLine.slice(0,at);
+      const re=/(?:(?:M\.|Mme|Monsieur|Madame)\s+)?([A-ZÉÈÀÂÎÔ][\p{L}'’-]+)\s+([A-ZÉÈÀÂÎÔ][\p{L}'’-]+)/gu;
+      let m, best=null;
+      while((m=re.exec(before))){ if(!PQ_NOT_NAME.test(m[0]) && /[a-zé]/.test(m[0])) best=m[1]+' '+m[2]; }
+      if(!best){
+        // or a few lines above, introduced by a civility ("M. Olivier Mercier, gérant de …")
+        const li=lines.indexOf(inlineLine);
+        for(let i=li-1;i>=Math.max(0,li-3) && !best;i--){ const c=/(?:M\.|Mme|Monsieur|Madame)\s+([A-ZÉÈÀÂÎÔ][\p{L}'’-]+)\s+([A-ZÉÈÀÂÎÔ][\p{L}'’-]+)/u.exec(lines[i]); if(c) best=c[1]+' '+c[2]; }
+      }
+      if(best) name=best;
     }
-    if(roleLine) out.qualite=roleLine.replace(/\s*[-–|,]\s*$/,'');
-    if(companyLine) out.producteur=companyLine.replace(/\s+/g,' ').toUpperCase();
-    else { const m=/\b(?:société|societe|entreprise|ferme|exploitation|commune de|ville de)\s+([A-Z][\p{L}'&.\- ]{2,40})/u.exec(bodyText); if(m) out.producteur=m[1].trim().toUpperCase(); }
+    if(name){ const n=pqSplitName(name); out.prenom=n.prenom; out.nom=n.nom; }
+    if(role) out.qualite=role.replace(/\s*[-–|,]\s*$/,'');
+    const scope=prospect?bodyText:text;
+    if(!company) company=pqCompanyInText(prospect?bodyText:lines.filter(l=>!(caPerson && l.includes(caPerson))).join('\n'));
+    if(!company){ const m=/\b(?:société|societe|entreprise|ferme|exploitation|commune de|ville de)\s+([A-Z][\p{L}'&.\- ]{2,40})/u.exec(scope); if(m) company=(/^(commune|ville)/i.test(m[0])?m[0]:m[1]).trim(); }
+    if(!company && out.mail && !PQ_GENERIC_DOMAINS.test(out.mail.split('@')[1]||'')){
+      company=(out.mail.split('@')[1]||'').replace(/\.[a-z]{2,4}$/,'').replace(/[-_.]+/g,' ');
+    }
+    if(company) out.producteur=company.replace(/\s+/g,' ').trim().toUpperCase();
 
+    // Location: postal code (5 digits, overseas 97x xx), "(46)", "département … 64", then département names
     let dept=null, city=null;
-    const cpm=/\b(?:[àa]|sur|de|commune de)?\s*([A-ZÉÈ][\p{L}'-]+(?:[ -][A-ZÉÈ]?[\p{L}'-]+){0,3})?\s*,?\s*\(?\b((?:0[1-9]|[1-8]\d|9[0-5]|97[1-6])\d{3})\b\)?/u.exec(text.replace(PQ_EMAIL_RE,' ').replace(PQ_PHONE_RE,' '));
+    const noContact=scope.replace(PQ_EMAIL_RE,' ').replace(PQ_PHONE_RE,' ');
+    const cpm=/\b(?:[àa]|sur|de|commune de)?\s*([A-ZÉÈ][\p{L}'-]+(?:[ -][A-ZÉÈ]?[\p{L}'-]+){0,3})?\s*,?\s*\(?\b((?:0[1-9]|[1-8]\d|9[0-5])\d{3}|97[1-6]\d{2})\b\)?/u.exec(noContact);
     if(cpm){ dept=pqDeptFromPostal(cpm[2]); if(cpm[1] && !/^(Le|La|Les|De|Du|Des)$/.test(cpm[1])) city=cpm[1].trim(); }
-    if(!dept){ const m=/\((\d{2}|2A|2B)\)/.exec(text); if(m) dept=PQ_DEPTS.find(d=>d[0]===m[1].padStart(2,'0'))||null; }
-    if(!dept){ const ft=pqFold(bodyText); dept=PQ_DEPTS.slice().sort((a,b)=>b[1].length-a[1].length).find(d=>new RegExp('\\b'+pqFold(d[1]).replace(/[-']/g,'[ -\']')+'\\b').test(ft))||null; }
+    if(!dept){ const m=/\((\d{2}|2A|2B|97\d)\)/.exec(noContact); if(m) dept=PQ_DEPTS.find(d=>d[0]===m[1].padStart(2,'0'))||null; }
+    if(!dept){ const m=/d[ée]partement[^\n\d]{0,30}?\b(\d{2,3}|2A|2B)\b/i.exec(noContact); if(m) dept=PQ_DEPTS.find(d=>d[0]===m[1].padStart(2,'0'))||null; }
+    if(!dept){ const ft=pqFold(noContact); dept=PQ_DEPTS.slice().sort((a,b)=>b[1].length-a[1].length).find(d=>new RegExp('(^|[^a-z])'+pqFold(d[1]).replace(/[-' ]/g,'[ \'-]')+'([^a-z]|$)').test(ft))||null; }
     if(dept){ out.dept=pqDeptLabel(dept); out.region=PQ_REGIONS[dept[2]]; }
 
-    const ft=pqFold(bodyText||text);
-    const pv=/photovolta|\bpv\b|solaire|ombriere|panneaux/.test(ft), eol=/eolien/.test(ft);
-    if(pv&&eol) out.install='PV et Eolien'; else if(pv) out.install='PV'; else if(eol) out.install='Eolien';
-    else if(/biogaz|methanis/.test(ft)) out.install='BIOGAZ'; else if(/hydro/.test(ft)) out.install='Hydro';
+    // Installation & contract
+    const ft=pqFold(scope);
+    const eol=/eolien|eolienne/.test(ft);
+    const pv=/photovolta|voltai|\bpv\b|solaire|ombriere|panneaux|toiture|hangar/.test(ft) || (!eol && /\b\d[\d\s.,]*\s*(kwc|mwc)\b|crete/.test(ft));
+    if(pv&&eol) out.install='PV et Eolien'; else if(eol) out.install='Eolien'; else if(/biogaz|methanis|cogeneration/.test(ft)) out.install='BIOGAZ'; else if(/hydro/.test(ft)) out.install='Hydro'; else if(pv) out.install='PV';
     if(/\bs21\b/.test(ft)) out.contrat='AO S21 CR';
     else if(/\baos\b|appel d.offres? simplifie/.test(ft)) out.contrat='AOS CRE';
-    else if(/obligation d.achat|sortie d.oa|\boa\b/.test(ft)) out.contrat="Sortie d'OA / CR";
     else if(/autoconsommation collective|\bacc\b/.test(ft)) out.contrat='Surplus ACC';
+    else if(/obligation d.achat|sortie d.oa|\boa\b/.test(ft) && !/jusqu.(en|au) 20(2[8-9]|[3-9]\d)/.test(ft)) out.contrat="Sortie d'OA / CR";
     else if(/\bppa\b/.test(ft)) out.contrat='PPA Spot';
-    else if(/appel d.offres?|\bao\b|\bcre\b/.test(ft)) out.contrat=/complement de remuneration|\bcr\b/.test(ft)?'AO CRE CR':'AO CRE';
-    const pm=/(\d[\d\s]*(?:[.,]\d+)?)\s*(mwc|mw|kwc|kw)\b(?!h)/i.exec(bodyText||text);
-    if(pm){ let v=pqNum(pm[1]); if(/^m/i.test(pm[2])) v*=1000; out.kwc=String(Math.round(v*100)/100); }
-    const vm=/(\d[\d\s]*(?:[.,]\d+)?)\s*(gwh|mwh|kwh)(?!\s*\/\s*kwc)/i.exec(bodyText||text);
-    if(vm){ let v=pqNum(vm[1]); const u=vm[2].toLowerCase(); if(u==='gwh') v*=1000; if(u==='kwh') v/=1000; out.mwh=String(Math.round(v)); }
-    const mesSent=(bodyText||text).split(/(?<=[.!?\n])/).find(s=>/mise en service|mis\p{L}* en service|mett\p{L}* en service|\bmes\b|\bmsi\b|raccord/iu.test(s));
-    if(mesSent){ const d=pqParseDateLoose(mesSent); if(d) out.mesPrev=d; }
-    const dm=/(?:contrat|durée|duree|sur|pour)\s+(?:de\s+|d.une durée de\s+)?(\d{1,2})\s*(ans?|années?)\b/i.exec(bodyText||text);
+    else if(/appel d.offres?|\bao\b|\bcre\b|laureat|ppe2/.test(ft)) out.contrat=/complement de remuneration|\bcr\b/.test(ft)?'AO CRE CR':'AO CRE';
+
+    // Power & volume
+    // a stated total ("soit 16,8 MW", "total 5 MWc") wins over the first figure
+    const powRe=PQ_QTY+'\\s*(mwc|mwp|mw|kwc|kwp|kw)\\b(?!h)';
+    const pm=new RegExp('(?:soit|au total|total(?:e)?(?:\\s+de)?)\\s*:?\\s*'+powRe,'iu').exec(scope)||new RegExp(powRe,'iu').exec(scope);
+    if(pm){ let v=pqQty(pm[1],pm[2]); if(/^m/i.test(pm[2])) v*=1000; out.kwc=String(Math.round(v*100)/100); }
+    const vm=new RegExp(PQ_QTY+'\\s*(gwh|mwh|kwh)(?!\\s*\\/\\s*kwc)','iu').exec(scope);
+    if(vm){ let v=pqQty(vm[1],vm[2]); const u=vm[2].toLowerCase(); if(u==='gwh') v*=1000; if(u==='kwh') v/=1000; out.mwh=String(Math.round(v)); }
+
+    // Commissioning date (not "en service depuis …"), contract length / start
+    const mesSent=scope.split(/(?<=[.!?\n])/).find(s=>/mise en service|\bmis\p{L}* en service|\bm[eé]t\p{L}* en service|\ben service (?:en|au|à|a|le|pour|pr[ée]vue?)\b|\bmes\b|\bmsi\b|\bcod\b|raccordement/iu.test(s) && !/depuis/i.test(s));
+    if(mesSent){ const d=pqParseDateLoose(mesSent.replace(/\d+[.,]?\d*\s*(mwc|mw|kwc|kw)\b/ig,'')); if(d) out.mesPrev=d; }
+    const dm=/(?:contrat|dur[ée]e|pendant|sur|pour|offre)[^.\n]{0,40}?\b(\d{1,2})\s*(?:ans|années|annees)\b/i.exec(scope);
     if(dm) out.duree=dm[1];
-    const deb=/(?:à partir du|a partir du|dès le|des le|début(?:\s+du contrat)?\s*(?:le|au|:)?)\s+([\d\/.\-]+|\d{1,2}(?:er)?\s+\p{L}+\s+\d{4})/iu.exec(bodyText||text);
+    const deb=/(?:à partir du|a partir du|dès le|des le|à compter du|a compter du|début(?:\s+du contrat)?\s*(?:le|au|:)?)\s+([\d\/.\-]+|\d{1,2}(?:er)?\s+\p{L}+\s+\d{4})/iu.exec(scope);
     if(deb){ const d=pqParseDateLoose(deb[1]); if(d) out.debut=d; }
+
+    // Plant name: CRE file number, "Parc éolien de …", else "Centrale de <ville>"; a list of plants gives the first one
+    const multi=parseMailInstallations(scope);
     const cre=/\bPR\/\d{4}\/\d{4,6}\b/.exec(text);
-    const named=/\b(parc|centrale|ferme)\s+(?:éolien(?:ne)?|solaire|photovoltaïque|PV|hydro\p{L}*)?\s*(de la|de l'|de l’|du|des|de)\s+([A-ZÉÈ][\p{L}'’-]+(?:[ -][A-ZÉÈ][\p{L}'’-]+)*)/u.exec(bodyText||text);
-    if(cre) out.centrale=cre[0];
+    const named=/\b(parc|centrale|ferme)\s+(?:éolien(?:ne)?|solaire|photovoltaïque|PV|hydro\p{L}*)?\s*(de la|de l'|de l’|du|des|de)\s+([A-ZÉÈ][\p{L}'’-]+(?:[ -][A-ZÉÈ][\p{L}'’-]+)*)/u.exec(scope);
+    if(multi.length){ out.centrale=multi[0].centrale; if(multi[0].kwc) out.kwc=multi[0].kwc; }
+    else if(cre) out.centrale=cre[0];
     else if(named) out.centrale=(named[0].charAt(0).toUpperCase()+named[0].slice(1)).trim();
     else if(city) out.centrale='Centrale de '+city;
+    if(!out.centrale) delete out.centrale;
+
     const notes=[];
     if(/au sol/.test(ft)) notes.push('Centrale au sol');
-    if(/toiture|en toit/.test(ft)) notes.push('Toiture');
+    if(/toiture|en toit|hangar/.test(ft)) notes.push('Toiture');
     if(/ombriere/.test(ft)) notes.push('Ombrière');
+    if(/agrivolta/.test(ft)) notes.push('Agrivoltaïsme');
     if(/laureat/.test(ft)) notes.push('Lauréat AO');
     if(/bride/.test(ft)) notes.push('Production bridée');
     if(/stockage|batterie|bess/.test(ft)) notes.push('Stockage');
@@ -3657,8 +3746,28 @@
     if(notes.length) out.particularites=notes.join(' · ');
     let first='Mail reçu';
     if(out.origine==='Crédit Agricole') first='Lead transmis par '+(caPerson?caPerson+' ('+(out.ca!=='N/A'?out.ca:'Crédit Agricole')+')':(out.ca!=='N/A'?out.ca:'le Crédit Agricole'));
+    else if(!prospect && blocks.some(b=>b.relay)) first='Lead transmis en interne';
     out.commentaires=pqIsoToFr(toISO(new Date()))+' : '+first+(subject?' — '+subject:'')+'.';
     return out;
+  }
+
+  // A list of plants in the mail ("- Centrale de Cholet (49) : 1,2 MWc, MES 03/2027"): one installation per line
+  function parseMailInstallations(raw){
+    const found=[];
+    String(raw||'').replace(/\r/g,'').replace(/ /g,' ').split('\n').forEach(l=>{
+      const m=/^\s*(?:[-•*·–]|\d+[.)])\s*(.+)$/.exec(l); if(!m) return;
+      const s=m[1];
+      const pm=new RegExp(PQ_QTY+'\\s*(mwc|mwp|mw|kwc|kwp|kw)\\b(?!h)','iu').exec(s); if(!pm) return;
+      let v=pqQty(pm[1],pm[2]); if(/^m/i.test(pm[2])) v*=1000;
+      const inst={ kwc:String(Math.round(v*100)/100) };
+      const name=s.slice(0,pm.index).replace(/\((\d{2,3}|2A|2B)\)/,' ').replace(/[\s:–,-]+$/,'').replace(/\s+/g,' ').trim();
+      if(name) inst.centrale=name.charAt(0).toUpperCase()+name.slice(1);
+      const d=pqDeptFromText(s); if(d){ inst.dept=pqDeptLabel(d); inst.region=PQ_REGIONS[d[2]]; }
+      const rest=s.slice(pm.index+pm[0].length);
+      if(/mes|service|msi|cod|\d{1,2}\/\d{4}/i.test(rest)){ const dt=pqParseDateLoose(rest); if(dt) inst.mesPrev=dt; }
+      found.push(inst);
+    });
+    return found.length>=2?found:[];
   }
 
   // ----- Producer Excel: one column per plant (label in a column, values to its right) -----
@@ -4094,7 +4203,7 @@
     pqRender();
   }
   let pqParseTimer=null, pqLastFiles=null;
-  function pqReparse(){ const files=pqLastFiles||{text:'',installs:[]}; pqApply(parsePipeMail([$('pq-mail').value, files.text].filter(Boolean).join('\n\n')), files.installs); }
+  function pqReparse(){ const files=pqLastFiles||{text:'',installs:[]}; const text=[$('pq-mail').value, files.text].filter(Boolean).join('\n\n'); pqApply(parsePipeMail(text), files.installs.length?files.installs:parseMailInstallations(text)); }
   async function pqHandleFiles(fileList){
     const files=[...fileList]; if(!files.length) return;
     $('pq-files-info').textContent='Lecture…';
@@ -5634,6 +5743,9 @@
   $('vcf-mode-all').onchange=()=>{ if($('vcf-mode-all').checked) $('vcf-mode-changed').checked=false; };
   $('vcf-mode-changed').onchange=()=>{ if($('vcf-mode-changed').checked) $('vcf-mode-all').checked=false; };
   $('vcf-overlay').addEventListener('click', e=>{ if(e.target.id==='vcf-overlay') $('vcf-overlay').classList.add('hidden'); });
+
+  // Test hooks (tests/smoke_test.py and the mail corpus set window.TODO_TEST_HOOKS before loading)
+  if(window.TODO_TEST_HOOKS) window.__todo={ parsePipeMail, parsePipeMailInstallations:(typeof parseMailInstallations==='function'?parseMailInstallations:null) };
 
   // Phone version: bottom bar drives the sidebar tabs (which stay the single source of truth).
   if(window.TODO_LITE){

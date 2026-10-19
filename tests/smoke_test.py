@@ -346,6 +346,18 @@ with sync_playwright() as p:
     check(not errors, f"no page errors ({errors})")
     page.close()
 
+    # --- Pipeline: a mail listing several plants gives one installation each; quotes in a mail never reach the HTML
+    page, errors = new_page(browser)
+    page.goto(URL); page.click('[data-tab="pipeline"]'); page.click("#opp-add-btn"); page.fill("#pq1-company", "HELIO OUEST SAS"); page.click("#pq-next-btn")
+    page.fill("#pq-mail", "De : R C <r@helio.fr>\nObjet : x\n\nBonjour,\n- Centrale de Cholet (49) : 1,2 MWc, MES 03/2027\n- Centrale de Saumur (49) : 800 kWc\nCordialement,\nRomain Chevalier")
+    page.wait_for_timeout(500)
+    check(page.input_value("#pq-1-centrale") == "Centrale de Saumur" and page.input_value("#pq-0-mesPrev") == "Mars 2027", "mail listing two plants → two installations")
+    page.fill("#pq-0-centrale", 'x" autofocus onfocus="window.__xss=1" y="')
+    page.select_option("#pq-0-install", "Eolien"); page.wait_for_timeout(300)  # re-renders the form with the value in an attribute
+    check(page.evaluate("window.__xss") is None and page.input_value("#pq-0-centrale").startswith('x" autofocus'), "a quote in a field can't inject HTML")
+    check(not errors, f"no page errors ({errors})")
+    page.close()
+
     # --- Pipeline: producer Excel, one column per plant (SheetJS from cdnjs)
     wb = openpyxl.Workbook(); ws = wb.active
     for r in [["", "Centrale 1", "Centrale 2"], ["Nom Installation", "Les Vignes", "Le Moulin"], ["Département", "Lot (46)", "Gers (32)"],
