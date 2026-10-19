@@ -309,6 +309,13 @@
   .list-manager .list-hint{ font-size:11px; color:var(--tx3); margin:0 0 10px; }
   .chip-row{ display:flex; flex-wrap:wrap; gap:7px; margin-bottom:10px; }
   .manage-chip{ display:inline-flex; align-items:center; gap:6px; border-radius:10px; padding:4px 6px 4px 10px; font-size:12px; font-family:var(--font-mono); }
+  .client-type-head{ display:flex; align-items:center; gap:8px; width:100%; background:none; border:none; border-bottom:1px solid var(--bd-soft); padding:10px 4px; cursor:pointer; color:var(--tx2); font:600 10.5px var(--font-mono); text-transform:uppercase; letter-spacing:.5px; text-align:left; }
+  .client-type-head:hover{ color:var(--tx1); }
+  .client-type-head .chev{ width:11px; height:11px; color:var(--tx3); transition:transform .15s; flex-shrink:0; }
+  .client-type-head[aria-expanded="false"] .chev{ transform:rotate(-90deg); }
+  .client-type-head .n{ color:var(--tx3); font-weight:400; }
+  .client-type-body{ padding-left:19px; }
+  .client-type-body.hidden{ display:none; }
   .client-list-row{ display:flex; align-items:center; gap:10px; padding:8px 4px; border-bottom:1px solid var(--bd-soft); }
   .client-list-row .dot{ width:9px; height:9px; border-radius:50%; flex-shrink:0; }
   .client-list-row .name{ flex:1; min-width:0; font-size:13px; color:var(--tx1); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
@@ -3196,7 +3203,30 @@
     let list=clientsList.slice().sort((a,b)=>a.localeCompare(b));
     if(q) list=list.filter(n=>n.toLowerCase().includes(q));
     if(!list.length){ const p=document.createElement('p'); p.className='list-empty'; p.textContent=q?'Aucun résultat.':'Aucun client.'; container.appendChild(p); return; }
-    list.forEach(n=>container.appendChild(buildClientListRow(n)));
+    const typeOf=n=>{ const co=companies.find(x=>x.name===n && !x.deleted); return (co&&co.type)||''; };
+    const groups={};
+    list.forEach(n=>{ const t=typeOf(n); (groups[t]=groups[t]||[]).push(n); });
+    const order=companyTypesList.filter(t=>groups[t]).concat(Object.keys(groups).filter(t=>t && !companyTypesList.includes(t)).sort((a,b)=>a.localeCompare(b))).concat(groups['']?['']:[]);
+    let open=[]; try{ open=JSON.parse(localStorage.getItem('reflists-open-types')||'[]'); }catch(e){}
+    order.forEach(t=>{
+      const isOpen=!!q || open.includes(t);
+      const head=document.createElement('button'); head.type='button'; head.className='client-type-head';
+      head.setAttribute('aria-expanded', isOpen?'true':'false');
+      head.innerHTML='<svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>';
+      const lbl=document.createElement('span'); lbl.textContent=t||'Sans type'; head.appendChild(lbl);
+      const cnt=document.createElement('span'); cnt.className='n'; cnt.textContent='· '+groups[t].length; head.appendChild(cnt);
+      const body=document.createElement('div'); body.className='client-type-body'+(isOpen?'':' hidden');
+      groups[t].forEach(n=>body.appendChild(buildClientListRow(n)));
+      head.onclick=()=>{
+        const nowOpen=head.getAttribute('aria-expanded')!=='true';
+        head.setAttribute('aria-expanded', nowOpen?'true':'false'); body.classList.toggle('hidden', !nowOpen);
+        if(q) return;
+        let o=[]; try{ o=JSON.parse(localStorage.getItem('reflists-open-types')||'[]'); }catch(e){}
+        o=o.filter(x=>x!==t); if(nowOpen) o.push(t);
+        try{ localStorage.setItem('reflists-open-types', JSON.stringify(o)); }catch(e){}
+      };
+      container.appendChild(head); container.appendChild(body);
+    });
   }
 
   function buildClientListRow(name){

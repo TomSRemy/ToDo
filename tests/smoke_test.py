@@ -178,6 +178,24 @@ with sync_playwright() as p:
     check(not errors, f"no page errors ({errors})")
     page.close()
 
+    # --- Réf. & data: clients grouped by company type, collapsed by default, search opens them
+    cos = [{"id": f"co{i}", "name": n, "type": t, "whatTheyDo": "", "marketScope": [], "website": "", "createdAt": 1, "updatedAt": 1, "deleted": False}
+           for i, (n, t) in enumerate([("Alpha", "Fournisseur"), ("Beta", "Client"), ("Gamma", "Client"), ("Delta", "")])]
+    page, errors = new_page(browser, {"todo_todo-widget-clients": json.dumps(["Alpha", "Beta", "Gamma", "Delta"]),
+                                      "todo_todo-widget-companies": json.dumps(cos)})
+    page.goto(URL); page.click('[data-tab="lists"]')
+    heads = page.eval_on_selector_all("#client-list-rows .client-type-head", "els=>els.map(e=>e.textContent)")
+    check(heads == ["Client· 2", "Fournisseur· 1", "Sans type· 1"], f"client sections by type {heads}")
+    check(page.locator("#client-list-rows .client-list-row:visible").count() == 0, "sections collapsed by default")
+    page.locator("#client-list-rows .client-type-head", has_text="Client").click()
+    check(page.locator("#client-list-rows .client-list-row:visible").count() == 2, "opening a section shows its clients")
+    page.reload(); page.click('[data-tab="lists"]')
+    check(page.locator("#client-list-rows .client-list-row:visible").count() == 2, "open sections remembered")
+    page.fill("#client-list-search", "alp")
+    check(page.locator("#client-list-rows .client-list-row:visible").count() == 1, "search opens matching sections")
+    check(not errors, f"no page errors ({errors})")
+    page.close()
+
     # --- XSS: conflict values are shown as text
     conflicts = [{"id": "cf1", "entityType": "task", "entityId": "t1", "entityName": "T", "field": "title", "fieldLabel": "Titre",
                   "localValue": "<img src=x onerror=\"window.__xss=1\">", "remoteValue": "ok", "resolvedValue": "ok"}]
