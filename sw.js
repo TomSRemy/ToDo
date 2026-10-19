@@ -1,4 +1,4 @@
-const CACHE = 'todo-pwa-v8';
+const CACHE = 'todo-pwa-v9';
 const ASSETS = [
   './',
   './index.html',
@@ -8,6 +8,7 @@ const ASSETS = [
   './widget.html',
   './manifest.json',
   './share-target.html',
+  './icons/apple-touch-icon.png',
   './icons/icon-192.png',
   './icons/icon-512.png',
   './icons/icon-maskable-512.png'
