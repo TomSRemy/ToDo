@@ -213,6 +213,89 @@ with sync_playwright() as p:
     check(not errors, f"no page errors ({errors})")
     page.close()
 
+    # --- Pipeline: client → contact → mail, installations grouped in a pricing request, Go, Excel rows
+    MAIL = ("De : Pierre Lacombe <p.lacombe@vergersdulot.fr>\nObjet : Projet centrale PV\n\n"
+            "Nous mettrons en service en juin 2027 une centrale photovoltaïque au sol de 2,4 MWc à Prayssac (46220), "
+            "lauréate de l'appel d'offres simplifié de la CRE. Production attendue : environ 3 100 MWh par an.\n\n"
+            "Cordialement,\nPierre Lacombe\nGérant\nSCEA LES VERGERS DU LOT\n06 71 23 45 89")
+    legacy = [{"id": "o1", "company": "Solaris", "title": "AO Q3", "stage": "pricing", "taskId": None, "createdAt": 1, "updatedAt": 1, "deleted": False}]
+    anne = [{"id": "c1", "firstName": "Anne", "lastName": "Roux", "role": "Asset manager", "company": "Solaris", "email": "anne@urba.fr",
+             "phone1": "0611223344", "phone2": "", "relevance": 3, "comment": "", "createdAt": 1, "updatedAt": 1, "deleted": False}]
+    page, errors = new_page(browser, {"todo_todo-widget-opportunities": json.dumps(legacy), "todo_todo-widget-contacts": json.dumps(anne),
+                                      "todo_todo-widget-clients": json.dumps(["Solaris"])}, viewport={"width": 1300, "height": 850})
+    page.context.grant_permissions(["clipboard-read", "clipboard-write"])
+    opps = lambda: stored(page, "todo-widget-opportunities")
+    page.goto(URL); page.click('[data-tab="pipeline"]')
+    check("Demande de prix" in page.inner_text('[data-phase="offre"]'), "old opportunities move to the new stages")
+    page.click("#opp-add-btn"); page.fill("#pq1-company", "solaris")
+    check("Client existant" in page.inner_text("#pq1-company-hint"), "step 1 recognises a known client")
+    page.click("#pq-next-btn")
+    check(page.input_value("#pq-s-mail") == "anne@urba.fr", "its only contact is used by default")
+    page.click("#pq-cancel-btn")
+    page.click("#opp-add-btn"); page.fill("#pq1-company", "SCEA Les Vergers du Lot")
+    check("Nouveau client" in page.inner_text("#pq1-company-hint"), "step 1 flags a new client")
+    page.click("#pq-next-btn"); page.fill("#pq-mail", MAIL); page.wait_for_timeout(500)
+    check(page.input_value("#pq-0-kwc") == "2400" and page.input_value("#pq-0-dept") == "46 - Lot" and page.input_value("#pq-s-prenom") == "Pierre",
+          "pasted mail prefills the installation and the contact")
+    page.click("#pq-add-inst"); page.fill("#pq-1-centrale", "Le Moulin"); page.fill("#pq-1-kwc", "1800")
+    page.select_option("#pq-s-charge", "PGU"); page.click("#pq-save-btn")
+    inst = [o for o in opps() if o.get("kind") == "installation" and o["company"] == "SCEA Les Vergers du Lot"]
+    req = [o for o in opps() if o.get("kind") == "request"]
+    check(len(inst) == 2 and len(req) == 1 and all(o["requestId"] == req[0]["id"] for o in inst), "two installations grouped in one request")
+    check(any(c["email"] == "p.lacombe@vergersdulot.fr" for c in stored(page, "todo-widget-contacts")), "contact created from the mail")
+    t = [t for t in stored(page, "todo-widget-tasks") if t.get("opportunityId") == req[0]["id"]]
+    check(len(t) == 1 and t[0]["title"].startswith("Appeler Pierre"), "one call task for the whole request")
+    page.click(".pipe-req-card .pipe-card-title")
+    check("Codes affaire" in page.input_value("#opp-mail-body") and "27(06)" in page.input_value("#opp-mail-body"), "pricing mail with business codes")
+    page.click("#opp-detail-actions >> text=Copier lignes Pipe")
+    rows = page.evaluate("navigator.clipboard.readText()").split("\n")
+    check(len(rows) == 2 and all(len(r.split("\t")) == 37 for r in rows), "Pipe rows: one per installation, 37 columns")
+    page.click("#opp-detail-actions >> text=Fermer")
+    # validating the task offers the next stage for the whole request
+    page.click('[data-tab="tasks"]'); page.locator(".task-line", has_text="Appeler Pierre").locator(".task-check").first.click()
+    page.wait_for_timeout(200)
+    check(page.is_visible("#stage-advance-overlay"), "validating a linked task offers the next stage")
+    page.click("#stage-advance-confirm")
+    check(all(o["stage"] == "prise_contact" for o in opps() if o.get("requestId") == req[0]["id"]), "the request's installations advance together")
+    # Go from the installation sheet
+    page.click('[data-tab="pipeline"]')
+    page.locator('[data-phase="qualif"] .pipe-req-name', has_text="Le Moulin").click()
+    page.click(".opp-stage-step:has-text('Qualification')")
+    page.click("#opp-detail-actions >> text=Go"); page.click("#stage-advance-confirm")
+    moulin = next(o for o in opps() if o.get("centrale") == "Le Moulin")
+    check(moulin["stage"] == "demande_prix" and moulin.get("goDate"), "Go moves to the pricing request and records the date")
+    check(page.is_visible("#opp-mail-body"), "after Go, the pricing request opens")
+    page.click("#opp-detail-actions >> text=Fermer")
+    page.locator('[data-phase="offre"] .pipe-card', has_text="Le Moulin").first.click()
+    check("statut bdd" in page.inner_text("#opp-detail-body").lower() and "En préparation" in page.inner_text("#opp-detail-body"), "installation sheet shows the BDD status")
+    page.click("#opp-detail-actions >> text=Copier ligne BDD")
+    row = page.evaluate("navigator.clipboard.readText()").split("\t")
+    check(len(row) == 91 and row[24] == "En préparation" and row[33] == "Le Moulin", "BDD row: 91 columns, status and plant")
+    page.click("#opp-detail-actions >> text=Fermer")
+    # pré-qualif → installation
+    page.click("#prequal-add-btn"); page.fill("#prequal-company", "Ferme Dupont"); page.fill("#prequal-note", "Salon"); page.click("#prequal-save-btn")
+    page.click('[data-phase="prequal"] .pipe-card'); page.click("text=Projet identifié")
+    check(page.input_value("#pq1-company") == "Ferme Dupont", "pré-qualif opens the form on its client")
+    page.click("#pq-next-btn"); page.fill("#pq-0-centrale", "Toiture A"); page.click("#pq-save-btn")
+    check(page.locator('[data-phase="prequal"] .pipe-card').count() == 0 and "Toiture A" in page.inner_text('[data-phase="qualif"]'), "pré-qualif becomes an installation")
+    check(not errors, f"no page errors ({errors})")
+    page.close()
+
+    # --- Pipeline: producer Excel, one column per plant (SheetJS from cdnjs)
+    import openpyxl, tempfile
+    wb = openpyxl.Workbook(); ws = wb.active
+    for r in [["", "Centrale 1", "Centrale 2"], ["Nom Installation", "Les Vignes", "Le Moulin"], ["Département", "Lot (46)", "Gers (32)"],
+              ["Puissance installée (MWc)", 2.4, 1.85], ["P50 (MWh/an)", 3100, 2300], ["Date de mise en service", "Juin 2027", "Mars 2028"]]:
+        ws.append(r)
+    xlsx = pathlib.Path(tempfile.mkdtemp()) / "carac.xlsx"; wb.save(xlsx)
+    page, errors = new_page(browser)
+    page.goto(URL); page.click('[data-tab="pipeline"]'); page.click("#opp-add-btn"); page.fill("#pq1-company", "SCEA X"); page.click("#pq-next-btn")
+    page.set_input_files("#pq-file", str(xlsx)); page.wait_for_function("document.getElementById('pq-files-info').textContent.includes('installation')", timeout=20000)
+    check(page.input_value("#pq-0-centrale") == "Les Vignes" and page.input_value("#pq-1-kwc") == "1850" and page.input_value("#pq-1-dept") == "32 - Gers",
+          "producer Excel creates one installation per column")
+    check(not errors, f"no page errors ({errors})")
+    page.close()
+
     # --- Réf. & data: clients grouped by company type, collapsed by default, search opens them
     cos = [{"id": f"co{i}", "name": n, "type": t, "whatTheyDo": "", "marketScope": [], "website": "", "createdAt": 1, "updatedAt": 1, "deleted": False}
            for i, (n, t) in enumerate([("Alpha", "Fournisseur"), ("Beta", "Client"), ("Gamma", "Client"), ("Delta", "")])]
