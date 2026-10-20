@@ -394,6 +394,9 @@ with sync_playwright() as p:
     page.click("#pq-next-btn")
     check(page.input_value("#pq-s-producteur") == "RHÔNE ÉNERGIES SAS" and page.input_value("#pq-s-prenom") == "Marc" and page.input_value("#pq-s-tel") == "06 11 11 11 11",
           "step 2 uses the chosen main contact")
+    page.select_option("#pq-contact-switch", "p:0"); page.wait_for_timeout(100)
+    check(page.input_value("#pq-s-prenom") == "Camille" and page.input_value("#pq-s-tel") == "06 77 00 00 06 / 04 75 00 00 06", "step 2: the main contact can be changed")
+    page.select_option("#pq-contact-switch", "p:1"); page.wait_for_timeout(100)
     page.fill("#pq-0-centrale", "Toit A"); page.click("#pq-save-btn")
     names = sorted(c["firstName"] for c in stored(page, "todo-widget-contacts"))
     inst = [o for o in stored(page, "todo-widget-opportunities") if o.get("kind") == "installation"][0]
@@ -402,6 +405,17 @@ with sync_playwright() as p:
     check(camille["phone1"] == "06 77 00 00 06" and camille["phone2"] == "04 75 00 00 06" and camille["id"] in inst.get("otherContactIds", []),
           "the first contact, no longer main, keeps both numbers and is linked as an other contact")
     check(inst.get("prenom") == "Marc", "the installation's main contact is the chosen one")
+    # editing: switch the main contact to Camille, complete an empty field from a pasted mail (filled fields untouched)
+    page.locator(".pipe-card", has_text="Toit A").first.click(); page.click("#opp-detail-actions >> text=Modifier la fiche")
+    cam_opt = page.eval_on_selector("#pq-contact-switch", "s=>[...s.options].find(o=>o.textContent.startsWith('Camille')).value")
+    page.select_option("#pq-contact-switch", cam_opt); page.wait_for_timeout(100)
+    page.fill("#pq-mail", "Bonjour, notre centrale fait 2,4 MWc à Valence (26000).\nCordialement"); page.wait_for_timeout(500)
+    check(page.input_value("#pq-0-kwc") == "2400" and page.input_value("#pq-0-centrale") == "Toit A", "editing: a pasted mail fills empty fields only")
+    page.click("#pq-save-btn")
+    inst = [o for o in stored(page, "todo-widget-opportunities") if o.get("kind") == "installation"][0]
+    marc = next(c for c in stored(page, "todo-widget-contacts") if c["firstName"] == "Marc")
+    check(inst.get("prenom") == "Camille" and marc["id"] in inst.get("otherContactIds", []) and camille["id"] not in inst.get("otherContactIds", []),
+          "editing: the main contact changes, the previous one stays as an other contact")
     check(not errors, f"no page errors ({errors})")
     page.close()
 

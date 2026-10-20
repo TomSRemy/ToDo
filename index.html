@@ -564,10 +564,11 @@
   .pq-start{ display:flex; flex-wrap:wrap; gap:6px 16px; font-size:12px; color:var(--tx2); align-items:center; }
   .pq-start.hidden{ display:none; }
   .pq-mail-pane.hidden{ display:none; }
-  @media (min-width:1000px){ .pq-box.edit .pq-layout{ grid-template-columns:1fr; } }
   .pq-start select{ background:var(--panel-2); border:1px solid var(--bd); border-radius:6px; color:var(--tx1); font-size:12px; padding:5px 7px; margin-left:4px; }
   .pq-start input{ accent-color:var(--accent); }
   .pq-step1{ padding:14px 16px; display:flex; flex-direction:column; gap:8px; overflow-y:auto; max-width:760px; }
+  .pq-switch{ margin-left:auto; display:inline-flex; align-items:center; gap:6px; font-family:var(--font-ui); font-size:11.5px; color:var(--tx2); text-transform:none; letter-spacing:0; }
+  .pq-switch select{ background:var(--panel-2); border:1px solid var(--bd); border-radius:6px; color:var(--tx1); font-size:12px; padding:3px 6px; max-width:260px; }
   .pq1-sig{ border:1px dashed var(--bd); border-radius:8px; padding:8px 10px; }
   .pq1-sig[open]{ border-style:solid; }
   .pq1-sig summary{ cursor:pointer; font-size:12.5px; color:var(--accent); list-style:none; }
@@ -1286,7 +1287,7 @@
       </div>
       <div class="pq-layout" id="pq-layout">
         <div class="pq-mail-pane" id="pq-mail-pane">
-          <div class="pq-drop"><span>Collez le mail, ou déposez ici un .msg, un .eml ou l’Excel du producteur</span><label class="pq-link">Choisir un fichier<input type="file" id="pq-file" multiple accept=".msg,.eml,.txt,.xlsx,.xlsm,.xls" hidden></label></div>
+          <div class="pq-drop"><span id="pq-drop-text">Collez le mail, ou déposez ici un .msg, un .eml ou l’Excel du producteur</span><label class="pq-link">Choisir un fichier<input type="file" id="pq-file" multiple accept=".msg,.eml,.txt,.xlsx,.xlsm,.xls" hidden></label></div>
           <textarea id="pq-mail" spellcheck="false" placeholder="Collez ici le mail (avec la signature, et l’historique si c’est un transfert)…"></textarea>
           <div class="pq-files-info" id="pq-files-info"></div>
           <div class="pq-mail-warning" id="pq-mail-warning" hidden>Ceci est la ligne de la liste Outlook (expéditeur, objet, date), pas le contenu du mail. Ouvre le mail puis copie son texte (Ctrl+A puis Ctrl+C), ou enregistre-le (glisser le mail sur le Bureau) et dépose le fichier .msg ici.</div>
@@ -4618,11 +4619,18 @@
     pqLastFiles=null;
     if(editing){
       PQ_SHARED_KEYS.forEach(k=>{ if(editing[k]!==undefined) pqState.shared[k]=editing[k]; });
+      pqState.editOtherIds=(editing.otherContactIds||[]).slice();
+      pqState.peopleList=[]; (editing.otherContactIds||[]).map(id=>contacts.find(c=>c.id===id)).filter(Boolean).forEach(c=>pqState.peopleList.push({ id:c.id, v:contactV(c), label:[c.firstName,c.lastName].filter(Boolean).join(' ')||c.email }));
       const inst={}; PQ_CENTRALE_KEYS.forEach(k=>{ if(editing[k]!==undefined) inst[k]=editing[k]; }); pqState.installs=[inst];
     }
     $('pq-title').textContent=editing?('Modifier — '+oppName(editing)):'Nouvelle opportunité';
     $('pq-mail').value=''; $('pq-files-info').textContent='';
-    $('pq-mail-pane').classList.toggle('hidden', !!editing);
+    // editing: the mail / file area completes the empty fields only (what is already filled is "touched")
+    $('pq-drop-text').textContent=editing?'Pour compléter cette fiche : colle un mail ou dépose un .msg, un .eml ou l\u2019Excel du producteur. Seuls les champs vides seront remplis.':'Collez le mail, ou déposez ici un .msg, un .eml ou l\u2019Excel du producteur';
+    if(editing){
+      Object.keys(pqState.shared).forEach(k=>{ const v=pqState.shared[k]; if(v!==''&&v!=null&&v!==false) pqState.touched.add('s.'+k); });
+      Object.keys(pqState.installs[0]).forEach(k=>{ const v=pqState.installs[0][k]; if(v!==''&&v!=null) pqState.touched.add('0.'+k); });
+    }
     $('pq-overlay').querySelector('.pq-box').classList.toggle('edit', !!editing);
     $('pq-start-stage').innerHTML=OPP_STAGES.map(s=>'<option value="'+s.key+'">'+escapeHtml(PIPE_PHASES.find(p=>p.key===s.phase).label+' · '+s.label)+'</option>').join('');
     $('pq-create-task').checked=true;
@@ -4754,6 +4762,7 @@
     pqState.extraContacts=people.filter(p=>p!==principal && !p.id).map(p=>p.v);
     pqState.extraContactIds=people.filter(p=>p!==principal && p.id).map(p=>p.id);
     pqState.principalPerson=principal;
+    pqState.peopleList=people; pqState.mainKey=principal?'p:'+people.indexOf(principal):'';
     if(!name){ $('pq1-company-hint').textContent='Indique le producteur pour continuer.'; $('pq1-company-hint').className='pq-step-hint new'; $('pq1-company').focus(); return; }
     const st=pqState, known=pqKnownCompany(name), set=(k,v)=>{ if(v){ st.shared[k]=v; st.touched.add('s.'+k); } };
     set('producteur', known||name);
@@ -4809,7 +4818,7 @@
       const inner='<div class="pq-grid">'+fs.map(f=>pqFieldHtml(f,'s',st.shared[f.k],st.auto.has('s.'+f.k))).join('')+'</div>';
       return open?'<div class="pq-sec"><div class="pq-sec-h">'+label+'</div>'+inner+'</div>':'<details class="pq-sec"><summary class="pq-sec-h">'+label+'</summary>'+inner+'</details>';
     };
-    let h=sec('prod','Producteur',true)+sec('contact','Contact principal',true)+pqCountBox();
+    let h=sec('prod','Producteur',true)+sec('contact','Contact principal',true).replace('Contact principal</div>','Contact principal'+pqContactSwitch()+'</div>')+pqCountBox();
     st.installs.forEach((inst,i)=>{
       const fs=PQ_FIELDS.filter(f=>f.sec==='centrale').concat(PQ_EXTRA_FIELDS);
       h+='<div class="pq-sec pq-inst"><div class="pq-sec-h">'+(st.installs.length>1?'Installation '+(i+1):'Installation')
@@ -4842,6 +4851,41 @@
       +c.issues.map(x=>'<div class="pq-count-issue">'+escapeHtml(x)+'</div>').join('')
       +'<label class="pq-count-ok"><input type="checkbox" id="pq-count-ok"'+(st.countConfirmed===c.n?' checked':'')+'> J\u2019ai vérifié : '+c.n+' installation'+(c.n>1?'s':'')+'</label></div>';
   }
+  // Step 2 « Changer de contact principal »: the step-1 people and the client's contacts
+  const contactV=c=>({ prenom:c.firstName||'', nom:(c.lastName||'').toUpperCase(), qualite:c.role||'', tel:[c.phone1,c.phone2].filter(Boolean).join(' / '), mail:(c.email||'').toLowerCase() });
+  function pqContactOptions(){
+    const st=pqState, opts=[], seen=new Set();
+    const keyOf=v=>(v.mail||'')+'|'+pqFold((v.prenom||'')+' '+(v.nom||''));
+    (st.peopleList||[]).forEach((p,i)=>{ opts.push({ key:'p:'+i, id:p.id||null, v:p.v, label:p.label }); seen.add(keyOf(p.v)); if(p.id) seen.add('id:'+p.id); });
+    const company=pqKnownCompany((st.shared.producteur||'').trim());
+    contacts.filter(c=>!c.deleted && company && c.company===company).forEach(c=>{
+      const v=contactV(c); if(seen.has('id:'+c.id) || seen.has(keyOf(v))) return;
+      opts.push({ key:'c:'+c.id, id:c.id, v, label:[c.firstName,c.lastName].filter(Boolean).join(' ')||c.email }); seen.add(keyOf(v));
+    });
+    return opts;
+  }
+  function pqContactSwitch(){
+    const st=pqState, opts=pqContactOptions(); if(opts.length<2) return '';
+    const cur=st.shared, curKey=(st.mainKey && opts.some(o=>o.key===st.mainKey))?st.mainKey:(opts.find(o=>(o.v.mail && o.v.mail===(cur.mail||'').toLowerCase()) || (o.v.prenom===cur.prenom && o.v.nom===cur.nom))||{}).key||'';
+    return '<label class="pq-switch">Changer de contact principal <select id="pq-contact-switch"><option value="">—</option>'+opts.map(o=>'<option value="'+escapeHtml(o.key)+'"'+(o.key===curKey?' selected':'')+'>'+escapeHtml(o.label+(o.v.qualite?' · '+o.v.qualite:''))+'</option>').join('')+'</select></label>';
+  }
+  function pqSwitchContact(key){
+    const st=pqState, opts=pqContactOptions(), o=opts.find(x=>x.key===key); if(!o) return;
+    const prevMail=(st.shared.mail||'').toLowerCase(), prevName=pqFold((st.shared.prenom||'')+' '+(st.shared.nom||''));
+    const prevOpt=opts.find(x=>(prevMail && x.v.mail===prevMail) || pqFold(x.v.prenom+' '+x.v.nom)===prevName);
+    ['prenom','nom','qualite','tel','mail'].forEach(k=>{ st.shared[k]=o.v[k]||''; st.touched.add('s.'+k); st.auto.delete('s.'+k); });
+    st.mainKey=key;
+    // everyone else involved stays linked as an other contact (new people are created at saving)
+    if(st.editId){
+      st.editOtherIds=(st.editOtherIds||[]).filter(id=>id!==o.id);
+      if(prevOpt && prevOpt.id && prevOpt.id!==o.id && !st.editOtherIds.includes(prevOpt.id)) st.editOtherIds.push(prevOpt.id);
+    } else {
+      const others=(st.peopleList||[]).filter((p,i)=>'p:'+i!==key);
+      st.extraContacts=others.filter(p=>!p.id).map(p=>p.v);
+      st.extraContactIds=others.filter(p=>p.id).map(p=>p.id).concat(o.key.startsWith('c:')?[]:[]);
+    }
+    pqRender();
+  }
   function pqSummary(){
     const st=pqState;
     const nAuto=[...st.auto].length;
@@ -4851,7 +4895,7 @@
       else if(pqIsEmpty(f,'s')) todo.push(f.k==='tel'||f.k==='mail'?'Tel ou Mail':f.label);
     });
     const uniq=[...new Set(todo)];
-    $('pq-summary').innerHTML=(nAuto?'<span class="pq-ok">'+nAuto+' champ'+(nAuto>1?'s':'')+' rempli'+(nAuto>1?'s':'')+' automatiquement</span>':'<span class="pq-muted">Collez un mail ou déposez un fichier pour pré-remplir</span>')
+    $('pq-summary').innerHTML=(nAuto?'<span class="pq-ok">'+nAuto+' champ'+(nAuto>1?'s':'')+' rempli'+(nAuto>1?'s':'')+' automatiquement</span>':'<span class="pq-muted">'+(st.editId?'Colle un mail ou dépose un fichier à gauche pour compléter les champs vides':'Collez un mail ou déposez un fichier pour pré-remplir')+'</span>')
       +(uniq.length?'<span class="pq-todo">À compléter : '+escapeHtml(uniq.join(', '))+'</span>':'<span class="pq-ok">Champs obligatoires remplis</span>');
   }
   function pqApply(parsed, xlsInstalls){
@@ -4864,7 +4908,10 @@
       if(PQ_CENTRALE_KEYS.includes(k)){ if(!st.touched.has('0.'+k)){ st.installs[0][k]=v; st.auto.add('0.'+k); } }
       else if(!st.touched.has('s.'+k)){ st.shared[k]=v; st.auto.add('s.'+k); }
     });
-    if(xlsInstalls && xlsInstalls.length){
+    if(xlsInstalls && xlsInstalls.length && st.editId){
+      // editing one installation: the file only completes its empty fields
+      Object.keys(xlsInstalls[0]).forEach(k=>{ if(!st.touched.has('0.'+k) && xlsInstalls[0][k]){ st.installs[0][k]=xlsInstalls[0][k]; st.auto.add('0.'+k); } });
+    } else if(xlsInstalls && xlsInstalls.length){
       const base=Object.assign({}, st.installs[0]);
       st.installs=xlsInstalls.map((x,i)=>{
         const inst=Object.assign({}, i===0?base:{install:base.install, contrat:base.contrat, dept:base.dept, region:base.region}, x);
@@ -4937,7 +4984,8 @@
       o.company=company; o.title=o.centrale; touchCrm(o);
       // producer and contact columns are shared by the installations of a request
       if(o.requestId) requestInstalls(o.requestId).forEach(x=>{ if(x.id===o.id) return; PQ_SHARED_KEYS.filter(k=>!['action','relance','commentaires','rdv1','rdv2','cr1','cr2','dateOffre','nature','qualification'].includes(k)).forEach(k=>{ x[k]=v[k]; }); x.company=company; touchCrm(x); });
-      ensureContact(v, company);
+      const mc=ensureContact(v, company);
+      if(st.editOtherIds){ o.otherContactIds=[...new Set(st.editOtherIds.filter(id=>!mc || id!==mc.id))]; if(!o.otherContactIds.length) delete o.otherContactIds; touchCrm(o); }
       saveCrm(); closeOppForm(); renderPipeline(); render();
       openOppDetail(o.id);
       return;
@@ -6127,6 +6175,7 @@
   $('pq-cancel-btn').onclick=closeOppForm;
   $('pq-form').addEventListener('input', pqOnInput);
   $('pq-form').addEventListener('change', pqOnChange);
+  $('pq-form').addEventListener('change', e=>{ if(e.target.id==='pq-contact-switch' && pqState && e.target.value){ pqSwitchContact(e.target.value); return; } });
   $('pq-form').addEventListener('change', e=>{ if(e.target.id==='pq-count-ok' && pqState){ pqState.countConfirmed=e.target.checked?pqState.installs.length:null; } });
   $('pq-form').addEventListener('click', e=>{
     if(!pqState) return;
