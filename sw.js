@@ -1,10 +1,13 @@
-const CACHE = 'todo-pwa-v13';
+const CACHE = 'todo-pwa-v14';
 // Excel / Outlook reader, loaded on demand by the app: kept for offline use
 const XLSX_URL = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
 const ASSETS = [
   './',
   './index.html',
   './index.html?lite',
+  './app.css',
+  './js/storage.js',
+  './js/app.js',
   './mobile.html',
   './manifest-lite.json',
   './widget.html',
@@ -43,9 +46,10 @@ self.addEventListener('fetch', e => {
   const sameOrigin = new URL(e.request.url).origin === self.location.origin;
   if (!sameOrigin && e.request.url !== XLSX_URL) return;
 
-  // Pages (index.html, mobile.html…): network first, so a new version shows at the first reload;
-  // the cached copy only serves when offline.
-  const isPage = e.request.mode === 'navigate' || /\.html?$/.test(new URL(e.request.url).pathname) || e.request.url.endsWith('/');
+  // Pages and the app's own code (index.html, app.css, js/*.js): network first, so a new version shows at the
+  // first reload and the page never runs with an older copy of its code; the cached copy only serves when offline.
+  const path = new URL(e.request.url).pathname;
+  const isPage = e.request.mode === 'navigate' || /\.html?$/.test(path) || e.request.url.endsWith('/') || /\/app\.css$/.test(path) || /\/js\/[^/]+\.js$/.test(path);
   if (sameOrigin && isPage) {
     e.respondWith(
       fetch(e.request).then(res => {

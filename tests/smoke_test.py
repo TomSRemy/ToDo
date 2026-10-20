@@ -888,6 +888,10 @@ with sync_playwright() as p:
     (site / "index.html").write_text(html.replace("</body>", "<div id='new-version-marker'></div></body>"), encoding="utf-8")
     page.reload()
     check(page.locator("#new-version-marker").count() == 1, "a published update shows at the first reload")
+    app_js = (site / "js" / "app.js").read_text(encoding="utf-8")
+    (site / "js" / "app.js").write_text(app_js + "\ndocument.body.dataset.codeVersion='new';\n", encoding="utf-8")
+    page.reload(); page.wait_for_timeout(300)
+    check(page.evaluate("document.body.dataset.codeVersion") == "new", "a published update of the app's code (js/app.js) runs at the first reload too")
     # a new service worker version takes over by itself and the open page reloads once onto it
     sw = (site / "sw.js").read_text(encoding="utf-8")
     (site / "sw.js").write_text(sw.replace("todo-pwa-v", "todo-pwa-test-v"), encoding="utf-8")
