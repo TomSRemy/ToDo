@@ -28,7 +28,7 @@
     /* PowerKlock palette — dark Bloomberg */
     --bg:#0A0D12; --panel:#0F131A; --panel-2:#141922; --panel-3:#1A2029;
     --bd:#242B36; --bd-soft:#1C222B;
-    --tx1:#E6EAF0; --tx2:#AEB6C2; --tx3:#6B7480;
+    --tx1:#E6EAF0; --tx2:#AEB6C2; --tx3:#7D8693;   /* tx3 lifted from #6B7480: small grey text now reads at 4.5:1 or more */
     --accent:#14D3A9; --accent-dim:#0F3A33;
     --crit:#ED6965; --high:#BB3E03; --med:#7DD3FC; --low:#8B7FB5;
     --ok:#14D3A9; --purple:#8B7FB5;
@@ -61,6 +61,13 @@
   @keyframes syncPulse{ 50%{ opacity:.3; } }
   @media (prefers-reduced-motion: reduce){ .sync-pill[data-k="busy"] .sync-dot{ animation:none; } }
   .sync-pill-lite{ display:none; }
+  /* ---- accessibility: visible keyboard focus, bigger touch areas on the phone, less motion on request ---- */
+  [data-kbd]:focus-visible, button:focus-visible, a:focus-visible, select:focus-visible, .tab:focus-visible{ outline:2px solid var(--accent); outline-offset:2px; border-radius:4px; }
+  html.lite .task-check, html.lite .st-check, html.lite .co-star{ position:relative; }
+  html.lite .task-check::after, html.lite .st-check::after{ content:''; position:absolute; inset:-11px; }
+  html.lite .co-star::after{ content:''; position:absolute; inset:-6px -2px; }
+  html.lite .view-icon-btn{ min-width:38px; min-height:38px; }
+  @media (prefers-reduced-motion: reduce){ *, *::before, *::after{ animation-duration:.01ms !important; animation-iteration-count:1 !important; transition-duration:.01ms !important; scroll-behavior:auto !important; } }
   /* ---- global search (Ctrl+K) ---- */
   .gs-open{ display:flex; align-items:center; gap:9px; margin:14px 14px 0; padding:7px 10px; border:1px solid var(--bd); border-radius:7px; background:none; color:var(--tx3); font:500 12px var(--font-ui); cursor:pointer; text-align:left; }
   .gs-open svg{ width:14px; height:14px; flex-shrink:0; }
@@ -7514,6 +7521,32 @@
     document.addEventListener('click', e=>{ if(e.target.closest('.tab')) setTimeout(sync,0); }, true);
     sync();
   }
+  // ---------- Keyboard and screen readers ----------
+  // Clickable shapes that are not real buttons (check circles, cards, tags, tabs…) become focusable and answer
+  // Enter/Space; icon-only buttons get their tooltip as a spoken name. Applied to everything rendered, as it appears.
+  const KBD_SEL='.task-check, .st-check, .contact-main, .pipe-card, .meta-tag.solid, .company-type-tag, .type-tag, .company-group-header, .parc-kpis .stat-card, .co-stars.editable .co-star, .tab';
+  function a11yfy(root){
+    if(!root || root.nodeType!==1) return;
+    const els=root.matches(KBD_SEL)?[root]:[]; root.querySelectorAll(KBD_SEL).forEach(e=>els.push(e));
+    els.forEach(el=>{
+      if(el.dataset.kbd) return; el.dataset.kbd='1';
+      if(!el.hasAttribute('tabindex')) el.tabIndex=0;
+      const check=el.classList.contains('task-check')||el.classList.contains('st-check');
+      el.setAttribute('role', check?'checkbox':'button');
+      if(check) el.setAttribute('aria-checked', el.classList.contains('on')?'true':'false');
+      if(el.classList.contains('co-star')){ const i=[...el.parentNode.children].indexOf(el)+1; el.setAttribute('aria-label', i+' étoile'+(i>1?'s':'')); }
+      const lab=el.getAttribute('aria-label')||el.title||el.textContent.trim().replace(/\s+/g,' ').slice(0,90); if(lab) el.setAttribute('aria-label', lab);
+    });
+    const btns=root.tagName==='BUTTON'?[root]:[...root.querySelectorAll('button')];
+    btns.forEach(b=>{ if(!b.hasAttribute('aria-label') && !b.textContent.trim() && b.title) b.setAttribute('aria-label', b.title); });
+  }
+  new MutationObserver(ms=>ms.forEach(m=>m.addedNodes.forEach(a11yfy))).observe(document.body, { childList:true, subtree:true });
+  a11yfy(document.body);
+  document.addEventListener('keydown', e=>{
+    const t=e.target;
+    if((e.key==='Enter'||e.key===' ') && t && t.dataset && t.dataset.kbd && !/^(INPUT|TEXTAREA|SELECT|BUTTON|A)$/.test(t.tagName)){ e.preventDefault(); e.stopPropagation(); t.click(); }
+  }, true);
+
   // ---------- Global search (Ctrl+K): tasks, contacts, companies, pipeline, Portefeuille in one list ----------
   // Enter with nothing chosen creates the task (Ctrl+K used to be « add a task »: the habit still works).
   const gsTab=name=>{ const t=document.querySelector('.tab[data-tab="'+name+'"]'); if(t) t.click(); };

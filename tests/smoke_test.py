@@ -358,6 +358,18 @@ with sync_playwright() as p:
     check(not errors, f"no page errors ({errors})")
     page.close()
 
+    # --- Accessibility: keyboard, names for screen readers
+    page, errors = new_page(browser, {"todo_todo-widget-tasks": json.dumps([task("k1", "Au clavier")])}, viewport={"width": 1300, "height": 800})
+    page.goto(URL); page.click('[data-tab="tasks"]')
+    chk = page.locator("#task-list .task-line:has-text('Au clavier') .task-check").first
+    check(chk.get_attribute("role") == "checkbox" and chk.get_attribute("tabindex") == "0" and chk.get_attribute("aria-label") == "Valider", "a11y: the check circle is a named, focusable checkbox")
+    chk.focus(); page.keyboard.press("Space"); page.wait_for_timeout(200)
+    check(stored(page, "todo-widget-tasks")[0]["archived"] is True, "a11y: a task can be validated with the keyboard")
+    unnamed = page.evaluate("[...document.querySelectorAll('button')].filter(b=>b.offsetParent && !b.textContent.trim() && !b.getAttribute('aria-label')).length")
+    check(unnamed == 0, f"a11y: every visible icon button has a name ({unnamed} without)")
+    check(not errors, f"no page errors ({errors})")
+    page.close()
+
     # --- Sync pill: state visible everywhere, token problems explained
     page, errors = new_page(browser, viewport={"width": 1300, "height": 800})
     page.goto(URL); page.wait_for_timeout(300)
