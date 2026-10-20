@@ -846,6 +846,7 @@
   .map-row .map-k{ min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--tx1); }
   .map-row .map-v{ text-align:right; font-family:var(--font-mono); font-size:11px; color:var(--tx3); font-variant-numeric:tabular-nums; white-space:nowrap; }
   .map-dep{ cursor:pointer; position:relative; padding:4px 0 5px; }
+  .map-plant{ cursor:pointer; width:100%; } .map-plant:hover .map-k{ color:var(--accent); }
   .map-row .map-p{ display:block; margin:1px 0 0 14px; font-size:11px; color:var(--tx3); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .map-dep:hover .map-k{ color:var(--accent); }
   .map-line{ grid-column:1 / -1; height:2px; background:var(--bd-soft); border-radius:1px; overflow:hidden; margin-top:2px; }
@@ -7029,11 +7030,17 @@
   const mapTech=v=>{ const f=pqFold(v||''); return /eol/.test(f)?'Eolien':/hydro/.test(f)?'Hydro':/bio|metha|cogen/.test(f)?'Biogaz':/pv|photo|solaire|ombri|toiture/.test(f)?'PV':'Autre'; };
   function parcMapPoints(layer){
     const today=toISO(new Date());
-    if(parcKpiSet) return parcKpiSet.map(p=>({ code:deptCodeOf(p.siteDept||p.dept), kwc:p.kwc||0, tech:mapTech(p.enr), name:p.inst||p.prod, prod:p.prod||p.dev, who:p.dev, extra:p.fin?'fin '+pqIsoToFr(p.fin):p.statut }));
-    if(layer==='pipe') return opportunities.filter(o=>!o.deleted && o.kind==='installation' && !isExited(o)).map(o=>({ code:deptCodeOf(o.dept), kwc:pqNum(o.kwc||'')||0, tech:mapTech(o.install), name:oppName(o), prod:o.producteur||o.company, who:o.company, extra:stageLabel(o.stage) }));
+    if(parcKpiSet) return parcKpiSet.map(p=>({ code:deptCodeOf(p.siteDept||p.dept), kwc:p.kwc||0, tech:mapTech(p.enr), name:p.inst||p.prod, prod:p.prod||p.dev, who:p.dev, ref:{ parc:p }, extra:p.fin?'fin '+pqIsoToFr(p.fin):p.statut }));
+    if(layer==='pipe') return opportunities.filter(o=>!o.deleted && o.kind==='installation' && !isExited(o)).map(o=>({ code:deptCodeOf(o.dept), kwc:pqNum(o.kwc||'')||0, tech:mapTech(o.install), name:oppName(o), prod:o.producteur||o.company, who:o.company, ref:{ opp:o.id }, extra:stageLabel(o.stage) }));
     if(!parcData) return [];
     const list=layer==='pending'?parcData.items.filter(p=>p.statut==='En attente'||p.statut==='En préparation'):parcData.items.filter(p=>p.statut==='Gagné' && (!p.fin || p.fin>=today));
-    return list.map(p=>({ code:deptCodeOf(p.siteDept||p.dept), kwc:p.kwc||0, tech:mapTech(p.enr), name:p.inst||p.prod, prod:p.prod||p.dev, who:p.dev, extra:p.fin?'fin '+pqIsoToFr(p.fin):p.statut }));
+    return list.map(p=>({ code:deptCodeOf(p.siteDept||p.dept), kwc:p.kwc||0, tech:mapTech(p.enr), name:p.inst||p.prod, prod:p.prod||p.dev, who:p.dev, ref:{ parc:p }, extra:p.fin?'fin '+pqIsoToFr(p.fin):p.statut }));
+  }
+  // a plant of the map → its opportunity (pipeline) or its client's sheet (contract of the Portefeuille)
+  function openMapPoint(p){
+    if(p.ref && p.ref.opp){ gsTab('pipeline'); setTimeout(()=>openOppDetail(p.ref.opp),30); return; }
+    const known=allCompanyNames(), pick=[p.who,p.prod].find(n=>n && known.some(k=>sameCo(k,n)));
+    openCompanySheet(pick||p.who||p.prod||'');
   }
   function parcMap(){
     if(!FR_MAP){
@@ -7132,6 +7139,8 @@
       const hit=document.elementFromPoint(e.clientX, e.clientY)||e.target, t=hit.closest && hit.closest('[data-dep]');
       if(t && !by[t.dataset.dep]) return;   // a département with no plant: nothing to open, keep the current selection
       if(!t){ if(parcMapSel){ parcMapSel=null; renderParc(); } return; }
+      // in the open département, a plant opens its sheet; elsewhere the first click opens the département
+      if(parcMapSel===t.dataset.dep && t.dataset.i!=null && dots[+t.dataset.i]){ openMapPoint(dots[+t.dataset.i].p); return; }
       if(parcMapSel===t.dataset.dep){ parcMapSel=null; parcMapView=null; renderParc(); return; }
       parcMapSel=t.dataset.dep;
       const dep=svgEl.querySelector('path[data-dep="'+parcMapSel+'"]');
@@ -7169,7 +7178,7 @@
     side.appendChild(listH);
     const rows=document.createElement('div'); rows.className='map-rows map-scroll';
     if(selV){
-      selV.names.slice().sort((a,b)=>b.kwc-a.kwc).forEach(p=>{ const r=document.createElement('div'); r.className='map-row two'; r.innerHTML='<span class="map-k"><i style="background:'+color(p.tech)+'"></i>'+escapeHtml(p.name)+(p.prod && p.prod!==p.name?'<span class="map-p">'+escapeHtml(p.prod)+'</span>':'')+'</span><span class="map-v">'+escapeHtml(p.kwc?fmtKwc(p.kwc):'')+'</span>'; r.title=[p.prod,p.extra].filter(Boolean).join(' · '); rows.appendChild(r); });
+      selV.names.slice().sort((a,b)=>b.kwc-a.kwc).forEach(p=>{ const r=document.createElement('button'); r.type='button'; r.className='map-row two map-plant'; r.onclick=()=>openMapPoint(p); r.innerHTML='<span class="map-k"><i style="background:'+color(p.tech)+'"></i>'+escapeHtml(p.name)+(p.prod && p.prod!==p.name?'<span class="map-p">'+escapeHtml(p.prod)+'</span>':'')+'</span><span class="map-v">'+escapeHtml(p.kwc?fmtKwc(p.kwc):'')+'</span>'; r.title=[p.prod,p.extra].filter(Boolean).join(' · ')+(p.ref&&p.ref.opp?' — ouvrir l\u2019opportunité':' — ouvrir la fiche client'); rows.appendChild(r); });
     } else {
       const ranked=Object.entries(by).sort((a,b)=>b[1].kwc-a[1].kwc);
       const maxDep=ranked.length?ranked[0][1].kwc:1;
