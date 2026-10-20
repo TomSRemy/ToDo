@@ -338,6 +338,26 @@ with sync_playwright() as p:
     check(not errors, f"no page errors ({errors})")
     page.close()
 
+    # --- Pipeline dashboard: MWc by phase, time per step, deals that drag
+    day_ms = 86400000; now_ms = int(datetime.datetime.now().timestamp() * 1000)
+    pd_opps = [{"id": "p1", "kind": "installation", "company": "A", "centrale": "Alpha", "title": "Alpha", "stage": "negociation", "kwc": "2000", "createdAt": now_ms - 40 * day_ms,
+                "updatedAt": now_ms - 20 * day_ms, "deleted": False, "stageLog": [{"stage": "pricing_indicatif", "at": now_ms - 40 * day_ms}, {"stage": "negociation", "at": now_ms - 20 * day_ms}]},
+               {"id": "p2", "kind": "installation", "company": "B", "centrale": "Beta", "title": "Beta", "stage": "pricing_indicatif", "kwc": "500", "createdAt": now_ms - 2 * day_ms,
+                "updatedAt": now_ms - 2 * day_ms, "deleted": False, "stageLog": [{"stage": "pricing_indicatif", "at": now_ms - 2 * day_ms}]},
+               {"id": "p3", "kind": "installation", "company": "C", "centrale": "Gamma", "title": "Gamma", "stage": "perdu", "kwc": "900", "lostAt": now_ms - day_ms,
+                "createdAt": 1, "updatedAt": now_ms - day_ms, "deleted": False}]
+    page, errors = new_page(browser, {"todo_todo-widget-opportunities": json.dumps(pd_opps)}, viewport={"width": 1300, "height": 900})
+    page.goto(URL); page.click('[data-tab="pipeline"]'); page.click("#pipe-dash-toggle")
+    dash = page.inner_text("#pipeline-board")
+    check("2,5 MWc" in dash and "sortis en" in dash.lower() and page.locator(".pd-bar-row").count() == 5, "pipeline dashboard: MWc in progress, exits of the year, one bar per phase")
+    rows = page.eval_on_selector_all(".pd-trow", "els=>els.map(e=>e.innerText.replace(/\\s+/g,' '))")
+    check(any(r.startswith("Pricing indicatif 11 j") for r in rows) and any(r.startswith("Négociation 20 j") for r in rows), f"pipeline dashboard: average days per step from the history ({rows})")
+    check("Alpha" in page.inner_text(".pd-card:has-text('Dossiers qui traînent')"), "pipeline dashboard: the deal stuck for 20 days is listed")
+    page.click("#pipe-dash-toggle")
+    check(page.locator(".pipe-col").count() >= 5, "pipeline dashboard: one click back to the board")
+    check(not errors, f"no page errors ({errors})")
+    page.close()
+
     # --- Sync pill: state visible everywhere, token problems explained
     page, errors = new_page(browser, viewport={"width": 1300, "height": 800})
     page.goto(URL); page.wait_for_timeout(300)

@@ -647,6 +647,22 @@
   .tw-row .v{ font:500 11.5px var(--font-mono); color:var(--tx2); white-space:nowrap; }
   .tw-row.late .v{ color:var(--crit); }
   html.lite .today-watch{ padding:16px 12px 24px; }
+  #pipeline-board.pipe-dash{ display:flex; flex-direction:column; gap:16px; padding:18px 20px 30px; overflow:visible; }
+  .pd-kpis{ display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:10px; }
+  .pd-grid{ display:grid; grid-template-columns:repeat(auto-fit,minmax(320px,1fr)); gap:14px; align-items:start; }
+  .pd-card{ border:1px solid var(--bd); border-radius:8px; background:var(--panel); padding:14px 16px; display:flex; flex-direction:column; gap:8px; min-width:0; }
+  .pd-card h4{ margin:0; font:500 10.5px var(--font-mono); text-transform:uppercase; letter-spacing:.6px; color:var(--tx3); }
+  .pd-hint{ margin:0; font-size:12px; color:var(--tx3); line-height:1.45; }
+  .pd-bar-row{ display:grid; grid-template-columns:100px minmax(0,1fr) 110px; gap:10px; align-items:center; font-size:12.5px; color:var(--tx2); }
+  .pd-bar{ height:8px; background:var(--panel-3); border-radius:4px; overflow:hidden; } .pd-bar span{ display:block; height:100%; background:#4F6F96; border-radius:4px; }
+  .pd-v{ font:500 11.5px var(--font-mono); color:var(--tx1); text-align:right; white-space:nowrap; }
+  .pd-table{ display:flex; flex-direction:column; }
+  .pd-trow{ display:grid; grid-template-columns:minmax(0,1fr) 50px auto; gap:10px; padding:5px 0; border-bottom:1px solid var(--bd-soft); font-size:12.5px; color:var(--tx2); align-items:baseline; }
+  .pd-trow b{ font:500 12px var(--font-mono); color:var(--tx1); text-align:right; } .pd-trow.slow b{ color:#E5C77F; }
+  .pd-trow .m{ font-size:11px; color:var(--tx3); white-space:nowrap; }
+  .pd-card .tw-row{ margin:0 -16px; padding:8px 16px; }
+  #pipe-dash-toggle.on{ color:var(--accent); border-color:var(--accent); }
+  @media (max-width: 760px){ .pd-kpis{ grid-template-columns:repeat(2,minmax(0,1fr)); } .pd-bar-row{ grid-template-columns:80px minmax(0,1fr) 92px; } }
   .opp-co-link{ background:none; border:none; padding:0; margin:-6px 0 10px; color:var(--accent); font:500 12px var(--font-ui); cursor:pointer; }
   @media (max-width: 760px){ .co-grid{ grid-template-columns:1fr; } .co-col + .co-col{ border-left:none; } .co-kpis{ grid-template-columns:repeat(2,minmax(0,1fr)); } .co-kpi:nth-child(3){ border-left:none; } .co-kpi:nth-child(n+3){ border-top:1px solid var(--bd-soft); } }
   .opp-sheet-head{ display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin:-4px 0 10px; }
@@ -1334,6 +1350,7 @@
       <button id="opp-add-btn" type="button" class="primary-btn">Nouvelle opportunité</button>
       <button id="prequal-add-btn" type="button" class="pipe-bar-btn">Pré-qualif</button>
       <button id="pipe-exited-toggle" type="button" class="pipe-bar-link">Sorties</button>
+      <button id="pipe-dash-toggle" type="button" class="pipe-bar-btn" aria-pressed="false">Tableau de bord</button>
     </div>
     <div id="pipeline-board"></div>
   </div>
@@ -5016,11 +5033,61 @@
 
 
   // ----- Board -----
-  let pipeShowExited=false;
+  let pipeShowExited=false, pipeDash=false;
+  // ---------- Pipeline dashboard: MWc by phase, time spent at each step, deals that drag ----------
+  const kwcNum=o=>parseFloat(String(o.kwc||'').replace(/\s/g,'').replace(',','.'))||0;
+  function stageDurations(){
+    // days per step from the dated stage log; the current step counts up to today
+    const per={}, now=Date.now();
+    opportunities.filter(o=>!o.deleted && o.kind==='installation').forEach(o=>{
+      const log=(o.stageLog||[]).filter(x=>x && x.at>1e12);
+      log.forEach((e,i)=>{ const end=i+1<log.length?log[i+1].at:(isExited(o)||o.stage==='actif'?null:now); if(end==null) return;
+        (per[e.stage]=per[e.stage]||[]).push({ d:(end-e.at)/864e5, live:i+1===log.length }); });
+    });
+    return per;
+  }
+  function renderPipeDash(board){
+    board.classList.add('pipe-dash');
+    const all=opportunities.filter(o=>!o.deleted && o.kind!=='request' && o.stage!=='converti');
+    const live=all.filter(o=>!isExited(o)), year=String(new Date().getFullYear());
+    const yr=ms=>ms && new Date(ms).getFullYear()===+year;
+    const signedYr=all.filter(o=>!isExited(o) && stageIndex(o.stage)>=stageIndex('onboarding') && ((o.stageLog||[]).some(e=>(e.stage==='onboarding'||e.stage==='actif') && yr(e.at)) || (!(o.stageLog||[]).length && yr(o.updatedAt))));
+    const lostYr=all.filter(o=>isExited(o) && yr(o.lostAt));
+    const mw=list=>fmtMwc(list.reduce((s,o)=>s+kwcNum(o),0));
+    const k=document.createElement('div'); k.className='pd-kpis';
+    [[live.length,'dossiers en cours'],[mw(live.filter(o=>o.kind==='installation' && o.stage!=='actif')),'à signer ou en cours'],[signedYr.length+' · '+mw(signedYr),'signés en '+year],[lostYr.length,'sortis en '+year+' (perdu, no go, abandon)']]
+      .forEach(([v,l])=>{ const d=document.createElement('div'); d.className='stat-card'; d.innerHTML='<div class="stat-card-num"></div><div class="stat-card-label"></div>'; d.firstChild.textContent=v; d.lastChild.textContent=l; k.appendChild(d); });
+    board.appendChild(k);
+    const grid=document.createElement('div'); grid.className='pd-grid'; board.appendChild(grid);
+    const card=(title,hint)=>{ const c=document.createElement('section'); c.className='pd-card'; const h=document.createElement('h4'); h.textContent=title; c.appendChild(h); if(hint){ const p=document.createElement('p'); p.className='pd-hint'; p.textContent=hint; c.appendChild(p); } grid.appendChild(c); return c; };
+    // MWc by phase, bars to one scale
+    const ph=PIPE_PHASES.filter(p=>p.key!=='prequal').map(p=>{ const l=live.filter(o=>oppPhase(o)===p.key); return { label:p.label, n:l.length, kwc:l.reduce((s,o)=>s+kwcNum(o),0) }; });
+    const maxK=Math.max(1,...ph.map(p=>p.kwc));
+    const c1=card('MWc par phase','Dossiers en cours, hors pré-qualifications ; puissance renseignée sur la fiche.');
+    ph.forEach(p=>{ const r=document.createElement('div'); r.className='pd-bar-row'; r.innerHTML='<span class="pd-l"></span><span class="pd-bar"><span></span></span><span class="pd-v"></span>';
+      r.querySelector('.pd-l').textContent=p.label; r.querySelector('.pd-bar span').style.width=(p.kwc?Math.max(2,p.kwc/maxK*100):0)+'%'; r.querySelector('.pd-v').textContent=(p.kwc?fmtMwc(p.kwc):'—')+' · '+p.n; c1.appendChild(r); });
+    // time at each step
+    const per=stageDurations(), since=opportunities.reduce((m,o)=>Math.min(m,...(o.stageLog||[]).map(e=>e.at||Infinity)),Infinity);
+    const c2=card('Temps passé par étape', isFinite(since)?'Moyenne en jours, d\u2019après les changements d\u2019étape enregistrés depuis le '+new Date(since).toLocaleDateString('fr-FR')+' ; l\u2019étape en cours compte jusqu\u2019à aujourd\u2019hui.':'Les durées se rempliront au fil des changements d\u2019étape (historique démarré avec cette version).');
+    const t=document.createElement('div'); t.className='pd-table';
+    OPP_STAGES.forEach(s=>{ const v=per[s.key]; if(!v || !v.length) return; const avg=v.reduce((a,x)=>a+x.d,0)/v.length, mx=Math.max(...v.map(x=>x.d));
+      const r=document.createElement('div'); r.className='pd-trow'+(avg>=30?' slow':''); r.innerHTML='<span></span><b></b><span class="m"></span>';
+      r.firstChild.textContent=s.label; r.querySelector('b').textContent=Math.round(avg)+' j'; r.querySelector('.m').textContent=v.length+' dossier'+(v.length>1?'s':'')+' · max '+Math.round(mx)+' j'; t.appendChild(r); });
+    if(t.children.length) c2.appendChild(t);
+    // deals that drag
+    const now=Date.now(), stalled=live.filter(o=>o.stage!=='actif' && lastMove(o)>1e12 && now-lastMove(o)>=STALL_DAYS*864e5).sort((a,b)=>lastMove(a)-lastMove(b));
+    const c3=card('Dossiers qui traînent', stalled.length?'Sans étape ni modification depuis '+STALL_DAYS+' jours ou plus.':'Aucun dossier sans mouvement depuis '+STALL_DAYS+' jours.');
+    stalled.slice(0,10).forEach(o=>{ const d=Math.floor((now-lastMove(o))/864e5); const r=document.createElement('button'); r.type='button'; r.className='tw-row'+(d>=30?' late':'');
+      r.innerHTML='<span class="k"><b></b><span></span></span><span class="v"></span>'; r.querySelector('b').textContent=o.kind==='prequal'?o.company+' (pré-qualif)':oppName(o);
+      r.querySelector('.k span').textContent=[o.kind==='prequal'?'':o.company, stageLabel(o.stage)].filter(Boolean).join(' · '); r.querySelector('.v').textContent=d+' j'; r.onclick=()=>openOppDetail(o.id); c3.appendChild(r); });
+  }
   function renderPipeline(){
     if(normalizeOpps()) saveCrmLocalOnly();
     const board=$('pipeline-board');
-    board.innerHTML='';
+    board.innerHTML=''; board.classList.remove('pipe-dash');
+    $('pipe-dash-toggle').setAttribute('aria-pressed', String(pipeDash)); $('pipe-dash-toggle').classList.toggle('on', pipeDash);
+    $('pipe-exited-toggle').classList.toggle('hidden', pipeDash);
+    if(pipeDash){ renderPipeDash(board); return; }
     const q=pqFold($('opp-search').value.trim());
     const items=opportunities.filter(o=>!o.deleted && o.kind!=='request' && o.stage!=='converti')
       .filter(o=>!q || pqFold([o.company,o.centrale,o.title,o.prenom,o.nom,o.dept].join(' ')).includes(q));
@@ -6691,6 +6758,7 @@
   $('prequal-save-btn').onclick=savePrequal;
   $('prequal-cancel-btn').onclick=closePrequalForm;
   $('pipe-exited-toggle').onclick=()=>{ pipeShowExited=!pipeShowExited; renderPipeline(); };
+  $('pipe-dash-toggle').onclick=()=>{ pipeDash=!pipeDash; renderPipeline(); };
   $('pq-save-btn').onclick=saveOpp;
   $('pq-next-btn').onclick=pqNext;
   $('pq-back-btn').onclick=()=>{ pqShowStep(1); pqStep1Render(); };
