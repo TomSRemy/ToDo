@@ -19,6 +19,7 @@
 <meta name="apple-mobile-web-app-title" content="Todo">
 <style>
   :root{
+    color-scheme:dark;   /* native date/time pickers, their calendar icon and scrollbars in light-on-dark */
     /* PowerKlock palette — dark Bloomberg */
     --bg:#0A0D12; --panel:#0F131A; --panel-2:#141922; --panel-3:#1A2029;
     --bd:#242B36; --bd-soft:#1C222B;
@@ -130,6 +131,15 @@
   #f-title{ font-size:14px; }
   .form-row{ display:flex; gap:10px; }
   .form-row > *{ flex:1; min-width:0; }
+  input::-webkit-calendar-picker-indicator{ cursor:pointer; opacity:.85; }
+  input::-webkit-calendar-picker-indicator:hover{ opacity:1; }
+  input[type=date], input[type=datetime-local], input[type=time]{ cursor:pointer; }
+  .qd{ display:flex; flex-direction:column; gap:6px; min-width:0; flex:1; }
+  .qd-chips{ display:flex; flex-wrap:wrap; gap:5px; }
+  .qd-chips button{ font:500 11.5px var(--font-ui); color:var(--tx2); background:var(--panel-3); border:1px solid var(--bd); border-radius:999px; padding:3px 10px; cursor:pointer; line-height:1.4; white-space:nowrap; }
+  .qd-chips button:hover{ color:var(--tx1); border-color:var(--tx3); }
+  .qd-chips button.on{ color:var(--accent); border-color:var(--accent); }
+  .qd-chips button.qd-clear{ color:var(--tx3); padding:3px 8px; }
   .field-label{ font-family:var(--font-mono); font-size:9.5px; color:var(--tx3); text-transform:uppercase; letter-spacing:.5px; margin-bottom:4px; display:block; }
   .input-with-dot{ position:relative; }
   .input-with-dot input{ padding-left:24px !important; }
@@ -1974,6 +1984,38 @@
   function escapeHtml(s){ return String(s==null?'':s).replace(/[&<>"']/g, ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch])); }
   function isSafeHref(url){ return /^https?:\/\//i.test(url||'') || /^mailto:/i.test(url||''); }
   function toISO(d){ return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
+
+  // ---------- date fields: one-click choices under the field, and a click anywhere on it opens the calendar ----------
+  function qdPresets(withTime){
+    const day=n=>{ const d=new Date(); d.setDate(d.getDate()+n); return d; };
+    const monday=()=>{ const d=new Date(); d.setDate(d.getDate()+((8-d.getDay())%7||7)); return d; };
+    const at=(d,hh,mm)=>toISO(d)+'T'+String(hh).padStart(2,'0')+':'+String(mm||0).padStart(2,'0');
+    if(!withTime) return [["Aujourd'hui",toISO(day(0))],['Demain',toISO(day(1))],['Lundi',toISO(monday())],['Dans 1 sem.',toISO(day(7))],['Dans 1 mois',toISO((d=>{ d.setMonth(d.getMonth()+1); return d; })(new Date()))]];
+    const now=new Date(), inHour=new Date(now.getTime()+3600e3), tonight=at(now,18), list=[['Dans 1 h',at(inHour,inHour.getHours(),Math.ceil(inHour.getMinutes()/5)*5%60)]];
+    if(now.getHours()<17) list.push(['Ce soir 18 h',tonight]);
+    list.push(['Demain 9 h',at(day(1),9)],['Demain 14 h',at(day(1),14)],['Lundi 9 h',at(monday(),9)]);
+    return list;
+  }
+  function quickDates(input){
+    if(!input || input.dataset.qd) return; input.dataset.qd='1';
+    const withTime=input.type==='datetime-local';
+    const box=document.createElement('div'); box.className='qd';
+    input.parentNode.insertBefore(box, input); box.appendChild(input);
+    const chips=document.createElement('div'); chips.className='qd-chips'; box.appendChild(chips);
+    const set=v=>{ input.value=v; input.dispatchEvent(new Event('input',{ bubbles:true })); input.dispatchEvent(new Event('change',{ bubbles:true })); paint(); };
+    // presets are recomputed each time (« Demain » must stay right on a page left open overnight)
+    const paint=()=>{
+      chips.innerHTML='';
+      qdPresets(withTime).forEach(([label,v])=>{ const b=document.createElement('button'); b.type='button'; b.textContent=label; b.title=withTime?v.replace('T',' à '):pqIsoToFr(v); if(input.value===v) b.className='on'; b.onclick=e=>{ e.preventDefault(); set(v); }; chips.appendChild(b); });
+      if(input.value){ const c=document.createElement('button'); c.type='button'; c.className='qd-clear'; c.textContent='✕'; c.title='Effacer la date'; c.onclick=e=>{ e.preventDefault(); set(''); }; chips.appendChild(c); }
+    };
+    input.addEventListener('click', ()=>{ try{ input.showPicker(); }catch(e){} });
+    input.addEventListener('input', paint); input.addEventListener('change', paint); input.addEventListener('focus', paint);
+    paint();
+    // values set by code (form reset, edit) don't fire events: repaint the highlight when they change
+    const desc=Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value');
+    Object.defineProperty(input,'value',{ configurable:true, get(){ return desc.get.call(this); }, set(v){ desc.set.call(this,v); paint(); } });
+  }
   function hashColor(name,pal){ if(!name)return null; let h=0; for(let i=0;i<name.length;i++){h=(h*31+name.charCodeAt(i))>>>0;} return pal[h%pal.length]; }
   const clientColor=n=>{
     if(!n) return null;
@@ -2365,6 +2407,7 @@
       '<button class="add-subtask-btn" type="button">+ sous-tâche</button>'+
       '<div class="edit-btn-row"><button class="edit-cancel" type="button">Annuler</button><button class="edit-save" type="button">Enregistrer</button></div>';
     row.appendChild(f);
+    quickDates(f.querySelector('.e-due'));
 
     const stWrap=f.querySelector('.subtasks-edit');
     let localSubs=(t.subtasks||[]).map(s=>({...s}));
@@ -5819,6 +5862,7 @@
   }
   setupCombo(clientInput, clientDot, $('client-dropdown'), ()=>clientsList, clientColor, removeClient);
   setupCombo(projectInput, projectDot, $('project-dropdown'), ()=>projectsList, projectColor, removeProject);
+  ['f-due','f-reminder','prequal-due','stage-due'].forEach(id=>quickDates($(id)));
   reminderToggle.onclick=()=>{ const o=reminderRow.style.display==='flex'; reminderRow.style.display=o?'none':'flex'; if(!o)$('f-reminder').focus(); };
   recurToggle.onclick=()=>{ recurRow.style.display=recurRow.style.display==='flex'?'none':'flex'; };
 

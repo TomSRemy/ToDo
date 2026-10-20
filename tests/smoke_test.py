@@ -92,6 +92,17 @@ with sync_playwright() as p:
     page.click('[data-tab="tasks"]')
     page.fill("#quick-add-input", "Tâche A"); page.press("#quick-add-input", "Enter")
     page.fill("#quick-add-input", "Tâche B"); page.press("#quick-add-input", "Enter")
+    page.click("#quick-add-more"); page.click('#add-section .qd-chips button:text-is("Demain")')
+    tomorrow = (TODAY + datetime.timedelta(days=1)).isoformat()
+    check(page.input_value("#f-due") == tomorrow and page.locator("#add-section .qd-chips button.on").inner_text() == "Demain",
+          "date field: one click on « Demain » fills the deadline")
+    page.click("#reminder-toggle"); page.click('#reminder-row .qd-chips button:text-is("Demain 9 h")')
+    check(page.input_value("#f-reminder") == tomorrow + "T09:00", "reminder: « Demain 9 h » fills date and time")
+    page.click('#add-section .qd-chips .qd-clear >> nth=0')
+    check(page.input_value("#f-due") == "" and page.evaluate("getComputedStyle(document.documentElement).colorScheme") == "dark",
+          "date field: ✕ clears it; native pickers drawn for a dark page (white calendar icon)")
+    page.evaluate("document.getElementById('f-reminder').value=''")
+    page.click("#quick-add-more")
     page.locator("#task-list .task-line", has_text="Tâche A").locator(".task-check").click()
     check([t["archived"] for t in stored(page, "todo-widget-tasks") if t["title"] == "Tâche A"] == [True], "validated task is archived")
     check(page.locator("#task-list .task-line", has_text="Tâche A").count() == 0, "validated task leaves the open list")
