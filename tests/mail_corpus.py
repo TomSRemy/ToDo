@@ -694,3 +694,30 @@ SIRET : 91000000000015– RCS : 910 000 000 R.C.S. Nancy""",
                  {"centrale": "FAVIER", "kwc": "390", "spv": "FAVIER LUCIEN", "commune": "LUNÉVILLE", "cp": "54300", "dept": "54 - Meurthe-et-Moselle",
                   "particularites": "Autoconsommation prévisionnelle de 35 %, à confirmer"}],
 })
+
+# Plants named in sentences (no bullets, no table)
+HARD += [
+    {
+        "name": "Centrales énumérées dans une phrase",
+        "mail": """De : Romain Chevalier <r.chevalier@helio-ouest.fr>
+Objet : Agrégation
+
+Bonjour, nous souhaitons confier nos centrales de Cholet (1,2 MWc) et de Saumur (800 kWc), toutes deux en Maine-et-Loire, mises en service en 2027.
+Cordialement,
+Romain Chevalier
+HELIO OUEST SAS""",
+        "expect": {"prenom": "Romain", "nom": "CHEVALIER", "producteur": "HELIO OUEST SAS", "dept": "49 - Maine-et-Loire", "kwc": "1200"},
+        "installs": [{"centrale": "Cholet", "kwc": "1200"}, {"centrale": "Saumur", "kwc": "800"}],
+    },
+    {
+        "name": "Toitures municipales en phrase avec deux-points",
+        "mail": """De : Bernard Collin <maire@mairie-saint-julien.fr>
+Objet : Nos trois toitures photovoltaïques
+
+Bonjour, la commune possède trois toitures photovoltaïques : l'école (36 kWc), le gymnase (100 kWc) et la mairie (60 kWc), soit 196 kWc au total, dans le Jura.
+Bernard Collin
+Maire de Saint-Julien""",
+        "expect": {"prenom": "Bernard", "nom": "COLLIN", "dept": "39 - Jura", "install": "PV"},
+        "installs": [{"centrale": "École", "kwc": "36"}, {"centrale": "Gymnase", "kwc": "100"}, {"centrale": "Mairie", "kwc": "60"}],
+    },
+]

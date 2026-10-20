@@ -519,6 +519,16 @@
   .pq-drop .pq-link{ color:var(--accent); }
   #pq-mail{ flex:1; min-height:260px; width:100%; resize:vertical; background:var(--panel-2); color:var(--tx1); border:1px solid var(--bd); border-radius:7px; padding:10px; font:400 12px/1.55 var(--font-mono); }
   .pq-files-info{ font-size:11px; color:var(--tx3); min-height:14px; }
+  .pq-count{ margin:10px 0 2px; padding:9px 11px; border-radius:7px; border:1px solid var(--bd); font-size:12px; display:flex; flex-direction:column; gap:4px; }
+  .pq-count.ok{ border-color:#1F5A4E; background:rgba(20,211,169,.06); }
+  .pq-count.warn{ border-color:#5A4720; background:rgba(217,164,65,.08); }
+  .pq-count-h{ font-weight:600; color:var(--tx1); }
+  .pq-count.ok .pq-count-h{ color:var(--accent); } .pq-count.warn .pq-count-h{ color:#D9A441; }
+  .pq-count-list{ color:var(--tx2); }
+  .pq-count-issue{ color:#D9A441; }
+  .pq-count-ok{ display:flex; align-items:center; gap:7px; color:var(--tx1); cursor:pointer; margin-top:2px; }
+  .pq-count-ok input{ accent-color:var(--accent); }
+  .pq-count.pulse{ box-shadow:0 0 0 2px #D9A441; }
   .pq-mail-warning{ font-size:11.5px; line-height:1.45; color:#D9A441; border:1px solid #5A4720; background:rgba(217,164,65,.08); border-radius:6px; padding:7px 9px; }
   .pq-form{ padding:4px 16px 12px; min-height:0; }
   .pq-sec{ border-bottom:1px solid var(--bd-soft); padding-bottom:8px; }
@@ -4093,7 +4103,50 @@
       if(note && note.length<=120 && !/^(mes|msi|cod)\b/i.test(note)) inst.particularites=note;
       found.push(inst);
     });
+    if(found.length>=2) return found;
+    return parseMailSentencePlants(raw);
+  }
+  // plants named in a sentence: "nos centrales de Cholet (1,2 MWc) et de Saumur (800 kWc)", "l'école (36 kWc), le gymnase (100 kWc)"
+  function parseMailSentencePlants(raw){
+    const text=String(raw||'').replace(/\r/g,'').replace(/\u00a0/g,' ');
+    const re=new RegExp("([\\p{L}'’-]+(?:[ \\t]+[\\p{L}'’-]+){0,4})\\s*\\(\\s*"+PQ_QTY+"\\s*(mwc|mwp|mw|kwc|kwp|kw)\\s*\\)",'giu');
+    const STOP=/^(de|du|des|d|l|le|la|les|et|ou|nos|notre|leurs?|aux?|à|a|sa|son|ses|en|dont|avec|soit|puis)$/i;
+    const found=[]; let m;
+    while((m=re.exec(text))){
+      const words=m[1].split(/[ \t]+/);
+      let k=words.length-1;
+      // the name = the words after the last little word ("de Cholet" → Cholet, "le gymnase" → gymnase, "l'école" → école)
+      while(k>0 && !STOP.test(words[k-1].replace(/['’].*$/,'')) && !/['’]$/.test(words[k-1])) k--;
+      let name=words.slice(k).join(' ').replace(/^[dl]['’]/i,'').trim();
+      if(!name || STOP.test(name)) continue;
+      let v=pqQty(m[2],m[3]); if(/^m/i.test(m[3])) v*=1000;
+      found.push({ centrale:name.charAt(0).toUpperCase()+name.slice(1), kwc:String(Math.round(v*100)/100) });
+    }
     return found.length>=2?found:[];
+  }
+
+  // What the mail announces about the number of plants, to check the installations found against it:
+  // "trois projets", "3 centrales", the names listed in the subject, "soit une puissance totale de 795 kWc".
+  const PQ_NUMBERS={ deux:2, trois:3, quatre:4, cinq:5, six:6, sept:7, huit:8, neuf:9, dix:10, onze:11, douze:12, quinze:15, vingt:20, two:2, three:3, four:4, five:5 };
+  function pqPlantHints(raw){
+    const text=String(raw||'').replace(/\u00a0/g,' ');
+    const hints={ count:null, total:null, source:'' };
+    const cm=/\b(\d{1,2}|deux|trois|quatre|cinq|six|sept|huit|neuf|dix|onze|douze|quinze|vingt|two|three|four|five)\s+(?:(?:nouveaux|nouvelles|autres|futurs?|premiers?|petites?|grandes?)\s+)?(projets?|centrales?|installations?|sites?|parcs?|toitures?|ombri[eè]res?|hangars?|b[aâ]timents?|plants?|unit[ée]s?)\b/i.exec(text);
+    if(cm){ const n=PQ_NUMBERS[cm[1].toLowerCase()]||parseInt(cm[1],10); if(n>=2 && n<=60){ hints.count=n; hints.source='« '+cm[0].trim()+' »'; } }
+    if(!hints.count){
+      const subj=(/^(?:objet|subject)\s*:\s*(.*)$/im.exec(text)||[])[1]||'';
+      const names=pqSubjectNames(text);
+      if(/projets|centrales|sites|parcs|installations/i.test(subj) && names.length>=2){
+        // the names right after "Projets …": "Projets photovoltaïques DURAND, MARTIN et LEROY"
+        const tail=subj.replace(/^.*?(projets|centrales|sites|parcs|installations)\b/i,'');
+        const listed=names.filter(n=>tail.toUpperCase().includes(n));
+        if(listed.length>=2){ hints.count=listed.length; hints.source='objet du mail'; }
+      }
+    }
+    const tm=new RegExp("(?:puissance\\s+totale(?:\\s+install[ée]e)?(?:\\s+de)?|soit(?:\\s+une\\s+puissance\\s+totale(?:\\s+install[ée]e)?\\s+de)?|au\\s+total(?:\\s+de)?|total(?:e)?\\s*(?:de|:)?)\\s*:?\\s*"+PQ_QTY+"\\s*(mwc|mwp|mw|kwc|kwp|kw)\\b",'iu').exec(text)
+            || new RegExp(PQ_QTY+"\\s*(mwc|mwp|mw|kwc|kwp|kw)\\s+au\\s+total",'iu').exec(text);
+    if(tm){ let v=pqQty(tm[1],tm[2]); if(/^m/i.test(tm[2])) v*=1000; hints.total=Math.round(v*100)/100; }
+    return hints;
   }
 
   // ----- Producer Excel → installations -----
@@ -4561,7 +4614,7 @@
       const inner='<div class="pq-grid">'+fs.map(f=>pqFieldHtml(f,'s',st.shared[f.k],st.auto.has('s.'+f.k))).join('')+'</div>';
       return open?'<div class="pq-sec"><div class="pq-sec-h">'+label+'</div>'+inner+'</div>':'<details class="pq-sec"><summary class="pq-sec-h">'+label+'</summary>'+inner+'</details>';
     };
-    let h=sec('prod','Producteur',true)+sec('contact','Contact principal',true);
+    let h=sec('prod','Producteur',true)+sec('contact','Contact principal',true)+pqCountBox();
     st.installs.forEach((inst,i)=>{
       const fs=PQ_FIELDS.filter(f=>f.sec==='centrale').concat(PQ_EXTRA_FIELDS);
       h+='<div class="pq-sec pq-inst"><div class="pq-sec-h">'+(st.installs.length>1?'Installation '+(i+1):'Installation')
@@ -4574,6 +4627,25 @@
     $('pq-form').innerHTML=h+PQ_FIELDS.filter(f=>f.type==='list').map(f=>'<datalist id="pq-dl-'+f.k+'">'+f.opts.map(o=>'<option value="'+escapeHtml(o)+'">').join('')+'</datalist>').join('');
     $('pq-form').querySelectorAll('details').forEach(d=>{ if(openDetails.includes(d.querySelector('summary').textContent)) d.open=true; });
     pqSummary();
+  }
+  // Number of plants: checked against what the mail announces; to be confirmed when there are several or a gap
+  function pqCountCheck(){
+    const st=pqState, n=st.installs.length, h=st.hints||{};
+    const sum=Math.round(st.installs.reduce((s,i)=>s+(pqNum(i.kwc||'')||0),0)*100)/100;
+    const issues=[];
+    if(h.count && h.count!==n) issues.push('Le mail annonce '+h.count+' installations ('+h.source+'), il y en a '+n+' ici : ajoute ou retire une installation, ou confirme si le mail se trompe.');
+    if(h.total && sum && Math.abs(sum-h.total)/h.total>0.02) issues.push('Puissance totale annoncée : '+fmtKwc(h.total)+' ; somme des installations : '+fmtKwc(sum)+'.');
+    const need=!st.editId && (n>=2 || issues.length>0);
+    return { n, sum, issues, need, hints:h };
+  }
+  function pqCountBox(){
+    const c=pqCountCheck(); if(!c.need) return '';
+    const st=pqState, ok=!c.issues.length;
+    const list=st.installs.map(i=>(i.centrale||'(sans nom)')+(i.kwc?' '+fmtKwc(i.kwc):'')).join(' · ');
+    return '<div class="pq-count '+(ok?'ok':'warn')+'" id="pq-count-box"><div class="pq-count-h">'+(ok?'✓':'⚠')+' '+c.n+' installation'+(c.n>1?'s':'')+(c.sum?' — '+fmtKwc(c.sum)+' au total':'')
+      +(ok && c.hints.count?' · conforme au mail ('+escapeHtml(c.hints.source)+')':'')+'</div><div class="pq-count-list">'+escapeHtml(list)+'</div>'
+      +c.issues.map(x=>'<div class="pq-count-issue">'+escapeHtml(x)+'</div>').join('')
+      +'<label class="pq-count-ok"><input type="checkbox" id="pq-count-ok"'+(st.countConfirmed===c.n?' checked':'')+'> J\u2019ai vérifié : '+c.n+' installation'+(c.n>1?'s':'')+'</label></div>';
   }
   function pqSummary(){
     const st=pqState;
@@ -4616,6 +4688,7 @@
     const listOnly=PQ_OUTLOOK_LIST.test(pasted) && pasted.split('\n').filter(l=>l.trim()).length<=4;
     $('pq-mail-warning').hidden=!listOnly;
     const text=[pasted, files.text].filter(Boolean).join('\n\n');
+    pqState.hints=pqPlantHints(text);
     pqApply(parsePipeMail(text), files.installs.length?files.installs:parseMailInstallations(text));
   }
   async function pqHandleFiles(fileList){
@@ -4655,6 +4728,12 @@
     const v=st.shared;
     const producteur=(v.producteur||'').trim();
     if(!producteur){ $('pq-summary').innerHTML='<span class="pq-todo">Indique au moins le nom du producteur.</span>'; const el=$('pq-s-producteur'); if(el) el.focus(); return; }
+    const cc=pqCountCheck();
+    if(cc.need && st.countConfirmed!==cc.n){
+      $('pq-summary').innerHTML='<span class="pq-todo">Vérifie le nombre d\u2019installations, puis coche « J\u2019ai vérifié » avant d\u2019enregistrer.</span>';
+      const box=$('pq-count-box'); if(box){ box.scrollIntoView({ block:'center', behavior:'smooth' }); box.classList.add('pulse'); setTimeout(()=>box.classList.remove('pulse'),900); }
+      return;
+    }
     st.installs.forEach((inst,i)=>{ if(!(inst.centrale||'').trim()) inst.centrale=st.installs.length>1?producteur+' '+(i+1):producteur; });
     if(st.editId){
       const o=opportunities.find(x=>x.id===st.editId); if(!o){ closeOppForm(); return; }
@@ -5829,6 +5908,7 @@
   $('pq-cancel-btn').onclick=closeOppForm;
   $('pq-form').addEventListener('input', pqOnInput);
   $('pq-form').addEventListener('change', pqOnChange);
+  $('pq-form').addEventListener('change', e=>{ if(e.target.id==='pq-count-ok' && pqState){ pqState.countConfirmed=e.target.checked?pqState.installs.length:null; } });
   $('pq-form').addEventListener('click', e=>{
     if(!pqState) return;
     const est=e.target.closest('[data-est]'); if(est){ const i=+est.dataset.s; pqState.installs[i].mwh=est.dataset.est; pqState.touched.add(i+'.mwh'); pqRerenderKeepFocus(); return; }

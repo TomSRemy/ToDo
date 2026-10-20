@@ -303,6 +303,9 @@ with sync_playwright() as p:
           "pasted mail prefills the installation and the contact")
     page.click("#pq-add-inst"); page.fill("#pq-1-centrale", "Le Moulin"); page.fill("#pq-1-kwc", "1800")
     page.select_option("#pq-s-charge", "PGU"); page.click("#pq-save-btn")
+    check(page.is_visible("#pq-overlay") and "nombre d" in page.inner_text("#pq-summary").lower(), "two installations: saving waits for the count to be confirmed")
+    check("2 installations" in page.inner_text("#pq-count-box"), "the form shows the number of installations found")
+    page.check("#pq-count-ok"); page.click("#pq-save-btn")
     inst = [o for o in opps() if o.get("kind") == "installation" and o["company"] == "SCEA Les Vergers du Lot"]
     req = [o for o in opps() if o.get("kind") == "request"]
     check(len(inst) == 2 and len(req) == 1 and all(o["requestId"] == req[0]["id"] for o in inst), "two installations grouped in one request")
@@ -370,6 +373,20 @@ with sync_playwright() as p:
     page.click("#sig-paste-analyze")
     got = [page.input_value(s_) for s_ in ("#ct-first", "#ct-last", "#ct-role", "#ct-company", "#ct-email", "#ct-phone1", "#ct-phone2")]
     check(got == ["Jean", "Dupont", "Président", "SAS SOLAIRE DU MIDI", "jean.dupont@solairedumidi.fr", "06 12 34 56 78", "04 67 11 22 33"], f"signature fills the contact form ({got})")
+    check(not errors, f"no page errors ({errors})")
+    page.close()
+
+    # --- Qualification: the number of plants announced by the mail is checked against the installations found
+    page, errors = new_page(browser)
+    page.goto(URL); page.click('[data-tab="pipeline"]'); page.click("#opp-add-btn"); page.fill("#pq1-company", "SEM"); page.click("#pq-next-btn")
+    page.fill("#pq-mail", "De : H R <h@sem.fr>\nObjet : Nos centrales\n\nNous avons trois projets :\n- Gymnase : 250 kWc\n- École : 100 kWc\nSoit une puissance totale de 600 kWc.\nH R")
+    page.wait_for_timeout(500)
+    box = page.inner_text("#pq-count-box")
+    check("annonce 3 installations" in box and "600 kWc" in box, f"missing plant flagged against the mail ({box!r})")
+    page.click("#pq-add-inst"); page.fill("#pq-2-centrale", "Mairie"); page.fill("#pq-2-kwc", "250"); page.press("#pq-2-kwc", "Tab"); page.wait_for_timeout(200)
+    check("conforme au mail" in page.inner_text("#pq-count-box"), "adding the missing plant makes the count match")
+    page.check("#pq-count-ok"); page.click("#pq-save-btn")
+    check(len([o for o in stored(page, "todo-widget-opportunities") if o.get("kind") == "installation"]) == 3, "three installations saved after confirmation")
     check(not errors, f"no page errors ({errors})")
     page.close()
 
