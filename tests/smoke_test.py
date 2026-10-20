@@ -165,7 +165,8 @@ with sync_playwright() as p:
     page.click("#widget-bubble"); page.wait_for_timeout(150)
     check(page.is_visible("#todo-panel") and page.evaluate("document.activeElement.id") == "quick-add-input" and page.is_visible("#task-list .task-line:has-text('Envoyer ARPE')"),
           "widget: the bubble opens the task panel, ready to type")
-    page.keyboard.type("Rappeler Paul"); page.keyboard.press("Enter"); page.wait_for_timeout(150)
+    page.keyboard.type("Rappeler Paul"); page.keyboard.press("Enter")
+    page.wait_for_function("document.getElementById('widget-badge').textContent==='2'", timeout=10000)
     check(page.inner_text("#widget-badge") == "2" and any(t["title"] == "Rappeler Paul" for t in stored(page, "todo-widget-tasks")), "widget: a task added from the widget is saved")
     page.keyboard.press("Escape"); page.wait_for_timeout(100)
     check(not page.is_visible("#todo-panel"), "widget: Escape folds the panel back into the bubble")
@@ -183,13 +184,17 @@ with sync_playwright() as p:
     for pg_ in (a, b):
         pg_.route("**/fonts.g*/**", lambda r: r.abort())
     a.goto(URL); a.click('[data-tab="tasks"]'); a.fill("#quick-add-input", "Onglet A"); a.press("#quick-add-input", "Enter")
+    a.wait_for_function(f"({PEEK}('todo-widget-tasks')||'').includes('Onglet A')")
     b.goto(URL); b.click('[data-tab="tasks"]'); b.fill("#quick-add-input", "Onglet B"); b.press("#quick-add-input", "Enter")
-    a.wait_for_timeout(200)
-    a.fill("#quick-add-input", "Encore A"); a.press("#quick-add-input", "Enter"); a.wait_for_timeout(200)
+    a.wait_for_function(f"({PEEK}('todo-widget-tasks')||'').includes('Onglet B')", timeout=10000)
+    a.fill("#quick-add-input", "Encore A"); a.press("#quick-add-input", "Enter")
+    try: b.wait_for_function(f"['Encore A','Onglet A','Onglet B'].every(x=>({PEEK}('todo-widget-tasks')||'').includes(x))", timeout=10000)
+    except Exception: pass
     titles = sorted(t["title"] for t in b.evaluate(f"JSON.parse({PEEK}('todo-widget-tasks'))"))
     check(titles == ["Encore A", "Onglet A", "Onglet B"], f"two open tabs don't overwrite each other ({titles})")
     # the share page (older code writing straight into localStorage) while the app is open: merged, nothing lost
-    b.goto(URL.replace("index.html", "share-target.html") + "?title=Partag%C3%A9+depuis+le+t%C3%A9l%C3%A9phone"); a.wait_for_timeout(600)
+    b.goto(URL.replace("index.html", "share-target.html") + "?title=Partag%C3%A9+depuis+le+t%C3%A9l%C3%A9phone")
+    a.wait_for_function(f"({PEEK}('todo-widget-tasks')||'').includes('Partagé') && localStorage.getItem('todo_todo-widget-tasks')===null", timeout=10000)
     titles = sorted(t["title"] for t in a.evaluate(f"JSON.parse({PEEK}('todo-widget-tasks'))"))
     check(titles == ["Encore A", "Onglet A", "Onglet B", "Partagé depuis le téléphone"] and a.evaluate("localStorage.getItem('todo_todo-widget-tasks')") is None,
           f"storage: a task written by the share page joins the open app's data, then leaves localStorage ({titles})")
@@ -253,7 +258,8 @@ with sync_playwright() as p:
     page.click('[data-tab="lists"]'); page.wait_for_function("document.getElementById('storage-gauge').textContent.includes('Tâches')", timeout=5000)
     check("Base de données du navigateur" in page.inner_text("#storage-gauge"), "storage: gauge shows the space used, by kind of data")
     page.evaluate("() => { IDBObjectStore.prototype.put = function(){ throw new DOMException('full', 'QuotaExceededError'); }; }")
-    page.click('[data-tab="tasks"]'); page.fill("#quick-add-input", "Tâche de trop"); page.press("#quick-add-input", "Enter"); page.wait_for_timeout(200)
+    page.click('[data-tab="tasks"]'); page.fill("#quick-add-input", "Tâche de trop"); page.press("#quick-add-input", "Enter")
+    page.wait_for_selector("#storage-alert:not([hidden])", timeout=10000)
     check(page.is_visible("#storage-alert") and "plein" in page.inner_text("#storage-alert"), "storage: a failed save shows a red banner at once")
     page.click("#storage-alert-see")
     check(not page.is_visible("#storage-alert") and page.is_visible("#storage-section"), "storage: the banner leads to the space gauge")
@@ -329,7 +335,8 @@ with sync_playwright() as p:
                                                             {"id": "do2", "kind": "installation", "company": "Solaris", "centrale": "Hangar", "title": "Hangar",
                                                              "stage": "pricing_indicatif", "createdAt": 1, "updatedAt": int(datetime.datetime.now().timestamp() * 1000), "deleted": False}])}
     page, errors = new_page(browser, td_seed, viewport={"width": 1300, "height": 900})
-    page.goto(URL); page.wait_for_timeout(300)
+    page.goto(URL)
+    page.wait_for_function("document.getElementById('today-watch').textContent.includes('Toit Durand')", timeout=10000)
     watch = page.inner_text("#today-watch")
     check("Préparer le comité" in watch and "Toit Durand" in watch and "20 j" in watch and "Hangar" not in watch,
           "today: next 7 days listed, and the deal without movement for 20 days (not the active one)")
@@ -363,7 +370,8 @@ with sync_playwright() as p:
     page.goto(URL); page.click('[data-tab="tasks"]')
     chk = page.locator("#task-list .task-line:has-text('Au clavier') .task-check").first
     check(chk.get_attribute("role") == "checkbox" and chk.get_attribute("tabindex") == "0" and chk.get_attribute("aria-label") == "Valider", "a11y: the check circle is a named, focusable checkbox")
-    chk.focus(); page.keyboard.press("Space"); page.wait_for_timeout(200)
+    chk.focus(); page.keyboard.press("Space")
+    page.wait_for_function(f"({PEEK}('todo-widget-tasks')||'').includes('\"archived\":true')", timeout=10000)
     check(stored(page, "todo-widget-tasks")[0]["archived"] is True, "a11y: a task can be validated with the keyboard")
     unnamed = page.evaluate("[...document.querySelectorAll('button')].filter(b=>b.offsetParent && !b.textContent.trim() && !b.getAttribute('aria-label')).length")
     check(unnamed == 0, f"a11y: every visible icon button has a name ({unnamed} without)")
@@ -391,7 +399,8 @@ with sync_playwright() as p:
     soon = (TODAY + datetime.timedelta(days=10)).isoformat()
     cfg = {"todo_sync-config": json.dumps({"owner": "o", "repo": "r", "token": "t", "enabled": True, "tokenExpires": soon})}
     page, errors = new_page(browser, cfg, viewport={"width": 390, "height": 800}, is_mobile=True, has_touch=True)
-    mock_github(page, files); page.goto(URL + "?lite"); page.wait_for_timeout(1500)
+    mock_github(page, files); page.goto(URL + "?lite")
+    page.wait_for_function("document.getElementById('sync-pill-lite').dataset.k==='warn'", timeout=10000)
     check(page.is_visible("#sync-pill-lite") and page.get_attribute("#sync-pill-lite", "data-k") == "warn" and "10 j" in page.inner_text("#sync-pill-lite"),
           "sync pill: token expiring in 10 days warned, also on the phone version")
     check(not errors, f"no page errors ({errors})")
