@@ -512,7 +512,7 @@ with sync_playwright() as p:
     check(page.is_visible(".parc-map-wrap .parc-map-tip") and "CS DU MOULIN" in page.inner_text(".parc-map-wrap .parc-map-tip") and "Solaire PV" in page.inner_text(".parc-map-wrap .parc-map-tip"), "portefeuille: hovering a dot shows the plant and its technology")
     page.click(".parc-map .dot[data-dep='30']"); page.wait_for_timeout(100)
     check("gard" in page.inner_text(".parc-map-side").lower(), "portefeuille: a plant is placed where it is (Département2), not at the contract's département")
-    check("producteurs (1)" in page.inner_text(".parc-map-side").lower() and page.locator(".parc-map-side .map-prod").count() == 1, "portefeuille: the producers of the selection are listed next to the map")
+    check(page.inner_text(".parc-map-side .map-row.two .map-p") == "SOLARIS", "portefeuille: each installation of the département shows its producer")
     vb0 = page.get_attribute(".parc-map", "viewBox")
     page.click(".map-zoom button >> nth=0"); page.wait_for_timeout(100)
     check(page.get_attribute(".parc-map", "viewBox") != vb0, "portefeuille: the map zooms in")
@@ -522,6 +522,18 @@ with sync_playwright() as p:
           "portefeuille: zoomed in, the detailed outlines are loaded and the shadow is dropped (sharp borders)")
     page.click(".map-zoom button >> nth=2"); page.wait_for_timeout(100)
     check(page.get_attribute(".parc-map", "viewBox").startswith("-14 -14 "), "portefeuille: reset shows all France again")
+    def centre(code):
+        bb = page.locator(f".parc-map path.dep[data-dep='{code}']").bounding_box(); return bb["x"] + bb["width"] / 2, bb["y"] + bb["height"] / 2
+    x, y = centre("29"); page.mouse.move(x, y)
+    for _ in range(3): page.mouse.wheel(0, -100); page.wait_for_timeout(60)
+    x, y = centre("29"); page.mouse.click(x, y); page.wait_for_timeout(200)
+    vb_zoomed = page.get_attribute(".parc-map", "viewBox")
+    check("finistère" in page.inner_text(".parc-map-side .map-eyebrow").lower() and not vb_zoomed.startswith("-14 -14 "),
+          "portefeuille: on a zoomed map, a click on a département opens it (the press used to pan the map and swallow the click)")
+    x, y = centre("22"); page.mouse.click(x, y); page.wait_for_timeout(200)
+    check("finistère" in page.inner_text(".parc-map-side .map-eyebrow").lower() and page.get_attribute(".parc-map", "viewBox") == vb_zoomed,
+          "portefeuille: a click on a département without plants keeps the selection and the zoom")
+    page.click(".map-zoom button >> nth=2"); page.click(".map-back"); page.wait_for_timeout(100)
     page.hover(".parc-kpis .stat-card >> nth=1"); page.wait_for_timeout(100)
     check(page.is_visible(".parc-kpis .chart-tip") and "Solaire PV" in page.inner_text(".parc-kpis .chart-tip"), "portefeuille: hovering a figure shows its detail")
     page.click(".parc-kpis .stat-card >> nth=2"); page.wait_for_timeout(150)

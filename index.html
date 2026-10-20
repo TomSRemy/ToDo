@@ -697,7 +697,7 @@
   .map-row .map-k{ min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--tx1); }
   .map-row .map-v{ text-align:right; font-family:var(--font-mono); font-size:11px; color:var(--tx3); font-variant-numeric:tabular-nums; white-space:nowrap; }
   .map-dep{ cursor:pointer; position:relative; padding:4px 0 5px; }
-  .map-prod{ position:relative; padding:4px 0 5px; cursor:default; }
+  .map-row .map-p{ display:block; margin:1px 0 0 14px; font-size:11px; color:var(--tx3); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .map-dep:hover .map-k{ color:var(--accent); }
   .map-line{ grid-column:1 / -1; height:2px; background:var(--bd-soft); border-radius:1px; overflow:hidden; margin-top:2px; }
   .map-line span{ display:block; height:100%; background:var(--tx3); opacity:.6; }
@@ -6559,7 +6559,7 @@
     if(!frMapLoading) frMapLoading=new Promise((res,rej)=>{ const s=document.createElement('script'); s.src='fr-map.js'; s.onload=()=>{ FR_MAP=window.FR_MAP; res(); }; s.onerror=()=>{ frMapLoading=null; rej(new Error('Carte indisponible')); }; document.head.appendChild(s); });
     return frMapLoading;
   }
-  let parcMapLayer='won', parcMapSel=null, parcMapAll=false, parcMapView=null, parcMapProdAll=false;
+  let parcMapLayer='won', parcMapSel=null, parcMapAll=false, parcMapView=null;
   // a clicked key figure filters the map and the table: null | 'vol' | 'active' | 'soon' | 'pending'
   let parcKpi=null, parcKpiSet=null, parcKpiLabel='';   // view = zoomed box in map units, null = all France
   const deptCodeOf=label=>{ const m=/^\s*(\d{1,3}|2A|2B)\b/i.exec(String(label||'')); if(!m) return null; const c=m[1].toUpperCase(); return /^\d$/.test(c)?'0'+c:c; };
@@ -6624,7 +6624,7 @@
     mapEl.addEventListener('mousemove', e=>{
       const t=e.target.closest('[data-dep]'); if(!t){ tip.hidden=true; return; }
       let html;
-      if(t.dataset.i!=null){ const p=dots[+t.dataset.i].p; html='<b>'+escapeHtml(p.name)+'</b><span><i style="background:'+color(p.tech)+'"></i>'+escapeHtml([techLabel(p.tech), p.kwc?fmtKwc(p.kwc):''].filter(Boolean).join(' · '))+'</span><span class="muted">'+escapeHtml([p.who, p.extra].filter(Boolean).join(' · '))+'</span>'; }
+      if(t.dataset.i!=null){ const p=dots[+t.dataset.i].p; html='<b>'+escapeHtml(p.name)+'</b><span><i style="background:'+color(p.tech)+'"></i>'+escapeHtml([techLabel(p.tech), p.kwc?fmtKwc(p.kwc):''].filter(Boolean).join(' · '))+'</span><span class="muted">'+escapeHtml([p.prod||p.who, p.extra].filter(Boolean).join(' · '))+'</span>'; }
       else { const v=by[t.dataset.dep]; if(!v){ tip.hidden=true; return; } html='<b>'+escapeHtml(t.dataset.name||'')+'</b><span>'+v.n+' installation'+(v.n>1?'s':'')+' · '+escapeHtml(fmtMwc(v.kwc))+'</span>'; }
       tip.innerHTML=html; tip.hidden=false;
       const box=mapEl.getBoundingClientRect(), x=e.clientX-box.left, y=e.clientY-box.top;
@@ -6662,13 +6662,15 @@
     mapEl.appendChild(zc);
     mapEl.addEventListener('wheel', e=>{ e.preventDefault(); const [x,y]=toMap(e.clientX,e.clientY); zoomAt(e.deltaY<0?.8:1.25, x, y); }, { passive:false });
     let drag=null, moved=false;
-    svgEl.addEventListener('pointerdown', e=>{ if(!parcMapView) return; drag={ x:e.clientX, y:e.clientY, v:parcMapView }; moved=false; svgEl.setPointerCapture(e.pointerId); });
-    svgEl.addEventListener('pointermove', e=>{ if(!drag) return; const r=svgEl.getBoundingClientRect(); const dx=(e.clientX-drag.x)/r.width*drag.v.w, dy=(e.clientY-drag.y)/r.height*drag.v.h; if(Math.abs(e.clientX-drag.x)+Math.abs(e.clientY-drag.y)>3) moved=true; parcMapView=clampView({ ...drag.v, x:drag.v.x-dx, y:drag.v.y-dy }); applyView(); });
-    svgEl.addEventListener('pointerup', ()=>{ drag=null; });
+    // pan only once the pointer really moves: capturing it on press would steal the click from the département under it
+    svgEl.addEventListener('pointerdown', e=>{ if(!parcMapView) return; drag={ x:e.clientX, y:e.clientY, v:parcMapView, id:e.pointerId }; moved=false; });
+    svgEl.addEventListener('pointermove', e=>{ if(!drag) return; if(!moved){ if(Math.abs(e.clientX-drag.x)+Math.abs(e.clientY-drag.y)<=3) return; moved=true; try{ svgEl.setPointerCapture(drag.id); }catch(_){} } const r=svgEl.getBoundingClientRect(); const dx=(e.clientX-drag.x)/r.width*drag.v.w, dy=(e.clientY-drag.y)/r.height*drag.v.h; parcMapView=clampView({ ...drag.v, x:drag.v.x-dx, y:drag.v.y-dy }); applyView(); });
+    const endDrag=()=>{ drag=null; }; svgEl.addEventListener('pointerup', endDrag); svgEl.addEventListener('pointercancel', endDrag);
     mapEl.addEventListener('click', e=>{
       if(moved){ moved=false; return; }
-      const t=e.target.closest('[data-dep]');
-      if(!t || !by[t.dataset.dep]){ if(parcMapSel){ parcMapSel=null; renderParc(); } return; }
+      const hit=document.elementFromPoint(e.clientX, e.clientY)||e.target, t=hit.closest && hit.closest('[data-dep]');
+      if(t && !by[t.dataset.dep]) return;   // a département with no plant: nothing to open, keep the current selection
+      if(!t){ if(parcMapSel){ parcMapSel=null; renderParc(); } return; }
       if(parcMapSel===t.dataset.dep){ parcMapSel=null; parcMapView=null; renderParc(); return; }
       parcMapSel=t.dataset.dep;
       const dep=svgEl.querySelector('path[data-dep="'+parcMapSel+'"]');
@@ -6702,29 +6704,11 @@
       mix.forEach(m=>{ const r=document.createElement('div'); r.className='map-row'; r.innerHTML='<span class="map-k"><i style="background:'+m.c+'"></i>'+escapeHtml(m.l)+'</span><span class="map-v">'+m.n+'</span><span class="map-v">'+escapeHtml(fmtMwc(m.kwc))+'</span>'; leg.appendChild(r); });
       side.appendChild(leg);
     }
-    // producers: who owns the MWc in this scope (all of France, or the selected département)
-    const prods={};
-    scope.forEach(p=>{ const k=String(p.prod||'').trim()||'Non renseigné'; (prods[k]=prods[k]||{ n:0, kwc:0, list:[] }); prods[k].n++; prods[k].kwc+=p.kwc; prods[k].list.push(p); });
-    const prodRanked=Object.entries(prods).sort((a,b)=>b[1].kwc-a[1].kwc||b[1].n-a[1].n);
-    if(prodRanked.length){
-      const ph=document.createElement('div'); ph.className='map-eyebrow map-list-h'; ph.textContent='Producteurs ('+prodRanked.length+')'; side.appendChild(ph);
-      const prow=document.createElement('div'); prow.className='map-rows map-prods';
-      const maxProd=prodRanked[0][1].kwc||1;
-      prodRanked.slice(0, parcMapProdAll?prodRanked.length:5).forEach(([name,v])=>{
-        const r=document.createElement('div'); r.className='map-row map-prod'; r.dataset.prod=name;
-        r.innerHTML='<span class="map-k">'+escapeHtml(name)+'</span><span class="map-v">'+v.n+'</span><span class="map-v">'+escapeHtml(fmtMwc(v.kwc))+'</span><span class="map-line"><span style="width:'+Math.max(3,v.kwc/maxProd*100)+'%"></span></span>';
-        prow.appendChild(r);
-      });
-      attachTip(prow, t=>{ const r=t.closest && t.closest('.map-prod'); if(!r) return null; const v=prods[r.dataset.prod];
-        return '<b>'+escapeHtml(r.dataset.prod)+' · '+escapeHtml(fmtMwc(v.kwc))+'</b>'+v.list.slice().sort((a,b)=>b.kwc-a.kwc).slice(0,6).map(p=>tipRow(color(p.tech), p.name, p.kwc?fmtKwc(p.kwc):'')).join('')+(v.list.length>6?'<span class="muted">+ '+(v.list.length-6)+' autres</span>':''); });
-      side.appendChild(prow);
-      if(prodRanked.length>5){ const more=document.createElement('button'); more.type='button'; more.className='map-more'; more.textContent=parcMapProdAll?'Réduire':'Voir les '+prodRanked.length+' producteurs'; more.onclick=()=>{ parcMapProdAll=!parcMapProdAll; renderParc(); }; side.appendChild(more); }
-    }
     const listH=document.createElement('div'); listH.className='map-eyebrow map-list-h'; listH.textContent=selV?'Installations':'Départements';
     side.appendChild(listH);
     const rows=document.createElement('div'); rows.className='map-rows map-scroll';
     if(selV){
-      selV.names.slice().sort((a,b)=>b.kwc-a.kwc).forEach(p=>{ const r=document.createElement('div'); r.className='map-row two'; r.innerHTML='<span class="map-k"><i style="background:'+color(p.tech)+'"></i>'+escapeHtml(p.name)+'</span><span class="map-v">'+escapeHtml(p.kwc?fmtKwc(p.kwc):'')+'</span>'; r.title=[p.prod,p.extra].filter(Boolean).join(' · '); rows.appendChild(r); });
+      selV.names.slice().sort((a,b)=>b.kwc-a.kwc).forEach(p=>{ const r=document.createElement('div'); r.className='map-row two'; r.innerHTML='<span class="map-k"><i style="background:'+color(p.tech)+'"></i>'+escapeHtml(p.name)+(p.prod && p.prod!==p.name?'<span class="map-p">'+escapeHtml(p.prod)+'</span>':'')+'</span><span class="map-v">'+escapeHtml(p.kwc?fmtKwc(p.kwc):'')+'</span>'; r.title=[p.prod,p.extra].filter(Boolean).join(' · '); rows.appendChild(r); });
     } else {
       const ranked=Object.entries(by).sort((a,b)=>b[1].kwc-a[1].kwc);
       const maxDep=ranked.length?ranked[0][1].kwc:1;
