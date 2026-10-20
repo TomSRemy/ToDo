@@ -632,6 +632,21 @@
   .suivi-badge.diff{ color:#E5C77F; border-color:rgba(201,165,90,.5); }
   .suivi-badge.missing{ color:var(--crit); border-color:rgba(237,105,101,.45); }
   .suivi-line{ display:flex; flex-wrap:wrap; align-items:center; gap:8px; font-size:12px; color:var(--tx2); margin:0 0 10px; }
+  .today-watch{ display:flex; flex-direction:column; gap:18px; padding:22px 20px 30px; }
+  .today-watch:empty{ display:none; }
+  .tw-block{ display:flex; flex-direction:column; border:1px solid var(--bd); border-radius:8px; background:var(--panel); overflow:hidden; max-width:900px; }
+  .tw-h{ display:flex; align-items:baseline; justify-content:space-between; gap:10px; padding:10px 14px; border-bottom:1px solid var(--bd-soft); font:500 10.5px var(--font-mono); text-transform:uppercase; letter-spacing:.6px; color:var(--tx3); }
+  .tw-h b{ font:500 12px var(--font-mono); color:var(--tx1); }
+  .tw-hint{ padding:8px 14px 0; font-size:12px; color:var(--tx3); }
+  .tw-row{ display:grid; grid-template-columns:minmax(0,1fr) auto; gap:12px; align-items:center; padding:8px 14px; background:none; border:none; border-bottom:1px solid var(--bd-soft); text-align:left; font:inherit; color:var(--tx2); cursor:pointer; }
+  .tw-row:last-child{ border-bottom:none; }
+  .tw-row:hover{ background:var(--panel-2); }
+  .tw-row .k{ min-width:0; display:flex; flex-direction:column; }
+  .tw-row .k b{ font-weight:500; font-size:13px; color:var(--tx1); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .tw-row .k span{ font-size:11.5px; color:var(--tx3); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .tw-row .v{ font:500 11.5px var(--font-mono); color:var(--tx2); white-space:nowrap; }
+  .tw-row.late .v{ color:var(--crit); }
+  html.lite .today-watch{ padding:16px 12px 24px; }
   .opp-co-link{ background:none; border:none; padding:0; margin:-6px 0 10px; color:var(--accent); font:500 12px var(--font-ui); cursor:pointer; }
   @media (max-width: 760px){ .co-grid{ grid-template-columns:1fr; } .co-col + .co-col{ border-left:none; } .co-kpis{ grid-template-columns:repeat(2,minmax(0,1fr)); } .co-kpi:nth-child(3){ border-left:none; } .co-kpi:nth-child(n+3){ border-top:1px solid var(--bd-soft); } }
   .opp-sheet-head{ display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin:-4px 0 10px; }
@@ -1083,6 +1098,7 @@
       <span></span>
     </div>
     <div id="today-list"></div>
+    <div id="today-watch" class="today-watch"></div>
   </div>
 
   <div class="tab-panel hidden" id="tab-tasks">
@@ -3083,6 +3099,7 @@
     const liteBadge=$('lite-today-badge'); if(liteBadge) liteBadge.textContent=urgentCount>0?urgentCount:'';
 
     list.innerHTML='';
+    renderTodayWatch(weekTasks);
     if(overdueTasks.length===0 && todayTasks.length===0){
       const e=document.createElement('div'); e.className='today-empty'; e.textContent="Rien d'urgent aujourd'hui.";
       list.appendChild(e);
@@ -3095,6 +3112,35 @@
     if(todayTasks.length){
       list.appendChild(makeGroupHeader("Aujourd'hui · "+todayTasks.length, '#14D3A9'));
       sortedTasks(todayTasks).forEach(t=>list.appendChild(buildTableRow(t)));
+    }
+  }
+
+  // Below the day's tasks: the next 7 days, deals that stopped moving, contracts ending soon
+  const STALL_DAYS=15, ENDING_MONTHS=3;
+  function lastMove(o){ const log=o.stageLog||[]; return Math.max(o.updatedAt||0, log.length?log[log.length-1].at:0); }
+  document.addEventListener('click', e=>{ const t=e.target.closest && e.target.closest('.tab[data-tab="today"], #lite-nav [data-go="today"]'); if(t) setTimeout(renderToday,0); });
+  function renderTodayWatch(weekTasks){
+    const box=$('today-watch'); if(!box) return; box.innerHTML='';
+    const block=(title,count,rows,hint)=>{ if(!rows.length) return; const s=document.createElement('section'); s.className='tw-block';
+      const h=document.createElement('div'); h.className='tw-h'; h.innerHTML='<span></span><b></b>'; h.querySelector('span').textContent=title; h.querySelector('b').textContent=count; s.appendChild(h);
+      if(hint){ const p=document.createElement('div'); p.className='tw-hint'; p.textContent=hint; s.appendChild(p); }
+      rows.forEach(r=>s.appendChild(r)); box.appendChild(s); };
+    const row=(title,sub,val,fn,cls)=>{ const r=document.createElement('button'); r.type='button'; r.className='tw-row'+(cls?' '+cls:''); r.onclick=fn;
+      r.innerHTML='<span class="k"><b></b><span></span></span><span class="v"></span>'; r.querySelector('b').textContent=title; r.querySelector('.k span').textContent=sub||''; r.querySelector('.v').textContent=val||''; return r; };
+    const wk=sortedTasks(weekTasks.slice()).sort((a,b)=>(a.due||'').localeCompare(b.due||''));
+    const day=iso=>{ const d=new Date(iso+'T00:00:00'); return d.toLocaleDateString('fr-FR',{ weekday:'short', day:'numeric', month:'short' }); };
+    block('Les 7 prochains jours', wk.length, wk.slice(0,8).map(t=>row(t.title, t.client||'', day(t.due), ()=>openTaskEverywhere(t.id))), wk.length>8?'Les 8 premières ; toutes dans Tâches.':'');
+    const now=Date.now();
+    const stalled=opportunities.filter(o=>!o.deleted && (o.kind==='installation'||o.kind==='prequal') && !isExited(o) && o.stage!=='converti' && o.stage!=='actif' && lastMove(o)>1e12 && now-lastMove(o)>=STALL_DAYS*864e5)
+      .sort((a,b)=>lastMove(a)-lastMove(b));
+    block('Pipeline : sans mouvement depuis '+STALL_DAYS+' jours', stalled.length, stalled.slice(0,8).map(o=>{ const d=Math.floor((now-lastMove(o))/864e5);
+      return row(o.kind==='prequal'?o.company+' (pré-qualif)':oppName(o), [o.kind==='prequal'?'':o.company, stageLabel(o.stage)].filter(Boolean).join(' · '), d+' j', ()=>{ gsTab('pipeline'); setTimeout(()=>openOppDetail(o.id),30); }, d>=30?'late':''); }),
+      'Aucune étape ni modification depuis. Relance, avance ou classe-les.');
+    if(parcData===null) loadParc();
+    if(parcData){
+      const today=toISO(new Date()), lim=new Date(); lim.setMonth(lim.getMonth()+ENDING_MONTHS); const limIso=toISO(lim);
+      const ending=parcData.items.filter(p=>p.statut==='Gagné' && p.fin && p.fin>=today && p.fin<=limIso).sort((a,b)=>a.fin.localeCompare(b.fin));
+      block('Contrats qui finissent dans les '+ENDING_MONTHS+' mois', ending.length, ending.slice(0,8).map(p=>row(p.inst||p.prod||'(sans nom)', [p.dev||p.prod, p.kwc?fmtKwc(p.kwc):''].filter(Boolean).join(' · '), pqIsoToFr(p.fin), ()=>openMapPoint({ who:p.dev, prod:p.prod, ref:{ parc:p } }))));
     }
   }
 

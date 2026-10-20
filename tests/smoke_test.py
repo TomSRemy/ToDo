@@ -320,6 +320,24 @@ with sync_playwright() as p:
     check(not errors, f"no page errors ({errors})")
     page.close()
 
+    # --- Today: the next 7 days and deals that stopped moving, under the day's tasks
+    old_ms = int((datetime.datetime.now() - datetime.timedelta(days=20)).timestamp() * 1000)
+    in3 = (TODAY + datetime.timedelta(days=3)).isoformat()
+    td_seed = {"todo_todo-widget-tasks": json.dumps([task("d1", "Préparer le comité", due=in3)]),
+               "todo_todo-widget-opportunities": json.dumps([{"id": "do1", "kind": "installation", "company": "Solaris", "centrale": "Toit Durand", "title": "Toit Durand",
+                                                             "stage": "pricing_indicatif", "createdAt": old_ms, "updatedAt": old_ms, "deleted": False},
+                                                            {"id": "do2", "kind": "installation", "company": "Solaris", "centrale": "Hangar", "title": "Hangar",
+                                                             "stage": "pricing_indicatif", "createdAt": 1, "updatedAt": int(datetime.datetime.now().timestamp() * 1000), "deleted": False}])}
+    page, errors = new_page(browser, td_seed, viewport={"width": 1300, "height": 900})
+    page.goto(URL); page.wait_for_timeout(300)
+    watch = page.inner_text("#today-watch")
+    check("Préparer le comité" in watch and "Toit Durand" in watch and "20 j" in watch and "Hangar" not in watch,
+          "today: next 7 days listed, and the deal without movement for 20 days (not the active one)")
+    page.locator("#today-watch .tw-row", has_text="Toit Durand").click(); page.wait_for_timeout(200)
+    check(page.is_visible("#opp-detail-overlay"), "today: a stalled deal opens in one click")
+    check(not errors, f"no page errors ({errors})")
+    page.close()
+
     # --- Sync pill: state visible everywhere, token problems explained
     page, errors = new_page(browser, viewport={"width": 1300, "height": 800})
     page.goto(URL); page.wait_for_timeout(300)
