@@ -5601,6 +5601,15 @@
     }
     projectsList=projectsList.filter(p=>p!==n); saveProjects(); render(); renderLists();
   }
+  // the pipeline follows the client too (company, and the Pipe « Nom Producteur » when it was the same name)
+  function renameOppCompany(oldName, newName){
+    opportunities.forEach(o=>{
+      let ch=false;
+      if(o.company===oldName){ o.company=newName; ch=true; }
+      if(o.producteur===oldName){ o.producteur=newName; ch=true; }
+      if(ch) touchCrm(o);
+    });
+  }
   function renameClient(oldName){
     const newName=prompt('Renommer "'+oldName+'" en :', oldName);
     if(newName===null) return;
@@ -5610,9 +5619,11 @@
     if(existing && existing!==oldName){
       const affected=tasks.filter(t=>t.client===oldName).length;
       const affectedContacts=contacts.filter(c=>c.company===oldName && !c.deleted).length;
-      if(!confirm('"'+existing+'" existe déjà. Fusionner "'+oldName+'" dedans ? ('+affected+' tâche(s) et '+affectedContacts+' contact(s) transférés, le doublon disparaît)')) return;
+      const affectedOpps=opportunities.filter(o=>!o.deleted && (o.company===oldName || o.producteur===oldName)).length;
+      if(!confirm('"'+existing+'" existe déjà. Fusionner "'+oldName+'" dedans ? ('+affected+' tâche(s), '+affectedContacts+' contact(s) et '+affectedOpps+' opportunité(s) transférés, le doublon disparaît)')) return;
       tasks.forEach(t=>{ if(t.client===oldName){ t.client=existing; touch(t); } });
       contacts.forEach(c=>{ if(c.company===oldName){ c.company=existing; touchCrm(c); } });
+      renameOppCompany(oldName, existing);
       const dupCo=companies.find(x=>x.name===oldName);
       if(dupCo){ dupCo.deleted=true; touchCrm(dupCo); }
       clientsList=clientsList.filter(c=>c!==oldName);
@@ -5622,6 +5633,7 @@
     clientsList=clientsList.map(c=>c===oldName?trimmed:c);
     tasks.forEach(t=>{ if(t.client===oldName){ t.client=trimmed; touch(t); } });
     contacts.forEach(c=>{ if(c.company===oldName){ c.company=trimmed; touchCrm(c); } });
+    renameOppCompany(oldName, trimmed);
     const co=companies.find(x=>x.name===oldName);
     if(co){ co.name=trimmed; touchCrm(co); }
     saveClients(); saveTasks(); saveCrm(); render(); renderLists();

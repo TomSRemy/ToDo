@@ -614,8 +614,9 @@ with sync_playwright() as p:
     # --- Réf. & data: clients grouped by company type, collapsed by default, search opens them
     cos = [{"id": f"co{i}", "name": n, "type": t, "whatTheyDo": "", "marketScope": [], "website": "", "createdAt": 1, "updatedAt": 1, "deleted": False}
            for i, (n, t) in enumerate([("Alpha", "Fournisseur"), ("Beta", "Client"), ("Gamma", "Client"), ("Delta", "")])]
+    opps_b = [{"id": "ob1", "kind": "installation", "company": "Beta", "producteur": "Beta", "title": "Toit", "stage": "collecte", "createdAt": 1, "updatedAt": 1, "deleted": False}]
     page, errors = new_page(browser, {"todo_todo-widget-clients": json.dumps(["Alpha", "Beta", "Gamma", "Delta"]),
-                                      "todo_todo-widget-companies": json.dumps(cos)})
+                                      "todo_todo-widget-companies": json.dumps(cos), "todo_todo-widget-opportunities": json.dumps(opps_b)})
     page.goto(URL); page.click('[data-tab="lists"]')
     heads = page.eval_on_selector_all("#client-list-rows .client-type-head", "els=>els.map(e=>e.textContent)")
     check(heads == ["Client· 2", "Fournisseur· 1", "Sans type· 1"], f"client sections by type {heads}")
@@ -626,6 +627,11 @@ with sync_playwright() as p:
     check(page.locator("#client-list-rows .client-list-row:visible").count() == 2, "open sections remembered")
     page.fill("#client-list-search", "alp")
     check(page.locator("#client-list-rows .client-list-row:visible").count() == 1, "search opens matching sections")
+    page.fill("#client-list-search", "")
+    page.once("dialog", lambda d: d.accept("Beta Énergie"))
+    page.locator("#client-list-rows .client-list-row", has_text="Beta").locator("button[title=Renommer]").click()
+    opp = next(o for o in stored(page, "todo-widget-opportunities") if o["id"] == "ob1")
+    check(opp["company"] == "Beta Énergie" and opp["producteur"] == "Beta Énergie", f"renaming a client renames its opportunities too ({opp['company']})")
     check(not errors, f"no page errors ({errors})")
     page.close()
 
