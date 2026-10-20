@@ -261,8 +261,10 @@ with sync_playwright() as p:
     check(rel.get("Alpha") == 5, "clicking the stars on the client line rates the client")
     page.click('#contacts-view-switch [data-view="liste"]')
     page.click('.contacts-header-row .sort[data-sort="name"]'); page.click('.contacts-header-row .sort[data-sort="name"]')
-    check(names()[0] == "Hugo Petit", f"clicking Contact twice sorts Z→A {names()[:2]}")
+    check(names()[0] == "Zoé Martin", f"clicking Contact twice sorts Z→A {names()[:2]}")
     page.click('.contacts-header-row .sort[data-sort="name"]')
+    check(names()[:6] == ["Adam Durand", "Hugo Petit", "Léa Bernard", "P0 Nom00", "P1 Nom01", "P2 Nom02"],
+          f"list view: alphabetical as displayed (first name, then last name; P2 before P10) {names()[:6]}")
     page.evaluate("document.getElementById('tab-contacts').scrollTop=600")
     before = page.evaluate("document.getElementById('tab-contacts').scrollTop")
     row = page.locator("#contacts-list .contact-row", has_text="Nom20")

@@ -3208,7 +3208,7 @@
       return;
     }
     const {key,dir}=contactsSort;
-    const byName=(a,b)=>contactSortName(a).localeCompare(contactSortName(b),'fr',{sensitivity:'base'});
+    const byName=(a,b)=>contactSortName(a).localeCompare(contactSortName(b),'fr',{sensitivity:'base', numeric:true});
     const byStars=(a,b)=>(companyStars(b.company)-companyStars(a.company))*dir || byName(a,b);
     const inGroup = (a,b)=>byName(a,b)*(key==='name'?dir:1);
     const pushRow=c=>{ list.appendChild(buildContactRow(c, contactRowCounter++)); if(expandedContacts.has(c.id)) list.appendChild(buildContactInfoCard(c)); };
@@ -3239,7 +3239,8 @@
   let collapsedCompanies=new Set(), companyInfoOpen=new Set();
   let contactsSort={ key:'name', dir:1 };
   try{ const s=JSON.parse(localStorage.getItem('contacts-sort')||'null'); if(s&&['name','co','rel'].includes(s.key)&&(s.dir===1||s.dir===-1)) contactsSort=s; }catch(e){}
-  function contactSortName(c){ return ((c.lastName||'')+' '+(c.firstName||'')).trim() || '\uffff'; }
+  // sorted as displayed (« Prénom Nom »), so the list reads alphabetically; nameless contacts last
+  function contactSortName(c){ return [c.firstName,c.lastName].map(x=>String(x||'').trim()).filter(Boolean).join(' ') || '\uffff'; }
   function updateContactsSortUI(){
     document.querySelectorAll('.contacts-header-row .sort').forEach(el=>{
       const on=el.dataset.sort===contactsSort.key;
