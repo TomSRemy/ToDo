@@ -506,6 +506,7 @@ with sync_playwright() as p:
     page.set_input_files("#parc-file", str(parc)); page.wait_for_function("document.getElementById('parc-info').textContent.includes('lignes')", timeout=20000)
     years = page.eval_on_selector_all(".parc-years button:not(.parc-global)", "els=>els.map(e=>e.textContent)")
     check(years == [str(TODAY.year + i) for i in range(5)], f"portefeuille: 5 years from the current one ({years})")
+    page.wait_for_selector(".parc-map .dep", timeout=10000)   # the map file is loaded on demand
     check(page.locator(".parc-map .dot").count() == 2 and page.locator(".parc-map .dep").count() == 96, "portefeuille: map of the 96 départements, one dot per signed plant")
     page.hover(".parc-map .dot[data-dep='30']"); page.wait_for_timeout(100)
     check(page.is_visible(".parc-map-wrap .parc-map-tip") and "CS DU MOULIN" in page.inner_text(".parc-map-wrap .parc-map-tip") and "Solaire PV" in page.inner_text(".parc-map-wrap .parc-map-tip"), "portefeuille: hovering a dot shows the plant and its technology")
