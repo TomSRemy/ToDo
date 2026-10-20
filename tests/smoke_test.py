@@ -722,6 +722,26 @@ with sync_playwright() as p:
     check(not errors, f"no page errors ({errors})")
     page.close()
 
+    # --- Pipeline ↔ Suivi Agrégation: each deal sent to the Suivi says whether it is there, with the right status
+    sv_opps = [{"id": "sv1", "kind": "installation", "company": "Solaris", "producteur": "SOLARIS", "centrale": "CS du Moulin", "title": "CS du Moulin", "stage": "onboarding",
+                "kwc": "2990", "createdAt": 1, "updatedAt": 1, "deleted": False},
+               {"id": "sv2", "kind": "installation", "company": "X", "producteur": "X", "centrale": "Toit", "title": "Toit", "stage": "onboarding", "kwc": "500", "createdAt": 1, "updatedAt": 1, "deleted": False},
+               {"id": "sv3", "kind": "installation", "company": "Nouveau", "centrale": "Ferme des Pins", "title": "Ferme des Pins", "stage": "negociation", "kwc": "300",
+                "createdAt": 1, "updatedAt": 1, "deleted": False},
+               {"id": "sv4", "kind": "installation", "company": "Nouveau", "centrale": "Hangar", "title": "Hangar", "stage": "collecte", "createdAt": 1, "updatedAt": 1, "deleted": False}]
+    page, errors = new_page(browser, {"todo_todo-widget-opportunities": json.dumps(sv_opps)}, viewport={"width": 1400, "height": 900})
+    page.goto(URL); page.click('[data-tab="parc"]')
+    page.set_input_files("#parc-file", str(parc)); page.wait_for_function("document.getElementById('parc-info').textContent.includes('lignes')", timeout=20000)
+    page.click('[data-tab="pipeline"]')
+    badge = lambda name: page.locator(".pipe-card", has_text=name).locator(".suivi-badge")
+    check(badge("CS du Moulin").get_attribute("class").endswith("ok") and badge("Toit").get_attribute("class").endswith("diff")
+          and badge("Ferme des Pins").get_attribute("class").endswith("missing") and badge("Hangar").count() == 0,
+          "pipeline ↔ Suivi: in the Suivi, status to update, missing — and nothing before « Demande de prix »")
+    page.click(".pipe-card:has-text('Toit')")
+    check("Suivi : En attente → Gagné" in page.inner_text("#opp-detail-body"), "pipeline ↔ Suivi: the sheet says which status to put in the Suivi")
+    check(not errors, f"no page errors ({errors})")
+    page.close()
+
     # --- Excel bridge (local PowerShell server, mocked here): typed rows sent, status shown
     sent = []
     def bridge(route, request):

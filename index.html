@@ -627,6 +627,11 @@
   .co-tl-row b{ font-weight:500; color:var(--tx1); }
   .co-sheet-btn{ background:none; border:1px solid var(--bd); border-radius:5px; color:var(--tx3); cursor:pointer; height:22px; padding:0 7px; font:500 10.5px var(--font-mono); flex-shrink:0; }
   .co-sheet-btn:hover{ color:var(--accent); border-color:var(--accent); }
+  .suivi-badge{ display:inline-flex; align-items:center; gap:3px; font:500 10.5px var(--font-mono); padding:1px 6px; border-radius:999px; border:1px solid var(--bd); white-space:nowrap; }
+  .suivi-badge.ok{ color:var(--ok); border-color:rgba(20,211,169,.35); }
+  .suivi-badge.diff{ color:#E5C77F; border-color:rgba(201,165,90,.5); }
+  .suivi-badge.missing{ color:var(--crit); border-color:rgba(237,105,101,.45); }
+  .suivi-line{ display:flex; flex-wrap:wrap; align-items:center; gap:8px; font-size:12px; color:var(--tx2); margin:0 0 10px; }
   .opp-co-link{ background:none; border:none; padding:0; margin:-6px 0 10px; color:var(--accent); font:500 12px var(--font-ui); cursor:pointer; }
   @media (max-width: 760px){ .co-grid{ grid-template-columns:1fr; } .co-col + .co-col{ border-left:none; } .co-kpis{ grid-template-columns:repeat(2,minmax(0,1fr)); } .co-kpi:nth-child(3){ border-left:none; } .co-kpi:nth-child(n+3){ border-top:1px solid var(--bd-soft); } }
   .opp-sheet-head{ display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin:-4px 0 10px; }
@@ -5012,6 +5017,35 @@
     return chip;
   }
   function fmtKwc(v){ const n=parseFloat(String(v||'').replace(',','.')); if(!n) return ''; return n>=1000?(Math.round(n/10)/100).toLocaleString('fr-FR')+' MWc':Math.round(n).toLocaleString('fr-FR')+' kWc'; }
+  // ---------- Pipeline ↔ Suivi Agrégation: is this deal in the workbook, with the status its stage expects? ----------
+  // From « Demande de prix » on, a deal belongs in the Suivi (En préparation → En attente → Gagné). Matched on the plant's
+  // name (exact, or one inside the other), producer/client as a tie-break. Nothing shown while the Suivi is not loaded.
+  function parcMatchOpp(o){
+    if(parcData===null) loadParc();
+    if(!parcData || !parcData.items) return null;
+    const n=parcNorm(oppName(o)); if(n.length<3) return null;
+    const cos=[o.producteur,o.company,o.spv].map(parcNorm).filter(x=>x.length>=3);
+    const sameName=p=>{ const a=parcNorm(p.inst||p.prod); return a && (a===n || (a.length>=5 && n.length>=5 && (a.includes(n)||n.includes(a)))); };
+    const coHit=p=>[p.prod,p.dev].map(parcNorm).some(a=>a && cos.some(c=>a===c || (a.length>=4 && (a.includes(c)||c.includes(a)))));
+    const cands=parcData.items.filter(sameName);
+    if(!cands.length) return null;
+    return cands.find(p=>parcNorm(p.inst)===n && coHit(p)) || cands.find(coHit) || (cands.length===1?cands[0]:null);
+  }
+  function suiviState(o){
+    if(o.kind!=='installation' || isExited(o) || stageIndex(o.stage)<stageIndex('demande_prix')) return null;
+    if(parcData===null) loadParc();
+    if(!parcData) return null;
+    const want=(oppStage(o.stage)||{}).bdd, p=parcMatchOpp(o);
+    if(!p) return { k:'missing', label:'Pas dans le Suivi', title:'Cette affaire n\u2019est pas encore dans le Suivi Agrégation (attendu : '+want+'). Utilise « Envoyer à la BDD Excel » ou « Copier ligne BDD ».' };
+    if(want && p.statut && pqFold(p.statut)!==pqFold(want)) return { k:'diff', label:'Suivi : '+p.statut+' → '+want, title:'Dans le Suivi avec le statut « '+p.statut+' » ; l\u2019étape du pipeline correspond à « '+want+' ».', p };
+    return { k:'ok', label:'Dans le Suivi'+(p.statut?' ('+p.statut+')':''), title:'Présente dans le Suivi Agrégation'+(p.statut?' avec le statut « '+p.statut+' »':'')+'.', p };
+  }
+  function suiviBadge(o, full){
+    const s=suiviState(o); if(!s) return null;
+    const b=document.createElement('span'); b.className='suivi-badge '+s.k; b.title=s.title;
+    b.textContent=(s.k==='ok'?'✓ ':s.k==='diff'?'↻ ':'! ')+(full?s.label:(s.k==='ok'?'Suivi':s.k==='diff'?'Statut Suivi':'Hors Suivi'));
+    return b;
+  }
   function buildPipeCard(o){
     const card=document.createElement('div'); card.className='pipe-card'; card.dataset.id=o.id;
     card.style.borderLeft='3px solid '+clientColor(o.company);
@@ -5026,6 +5060,7 @@
       const meta=document.createElement('div'); meta.className='pipe-card-meta';
       meta.appendChild(stageChip(o));
       const k=fmtKwc(o.kwc); if(k){ const s=document.createElement('span'); s.textContent=k; meta.appendChild(s); }
+      const sb=suiviBadge(o); if(sb) meta.appendChild(sb);
       card.appendChild(meta);
     }
     card.onclick=()=>openOppDetail(o.id);
@@ -5497,6 +5532,7 @@
     viewingOppId=id;
     const box=$('opp-detail-body'); box.innerHTML='';
     $('opp-detail-title').textContent=o.kind==='prequal'?o.company+' — pré-qualif':o.company+' — '+oppName(o);
+    { const sb=suiviBadge(o, true); if(sb){ const line=document.createElement('div'); line.className='suivi-line'; line.appendChild(sb); const t=document.createElement('span'); t.textContent=sb.title; line.appendChild(t); box.appendChild(line); } }
     if(o.company){ const l=document.createElement('button'); l.type='button'; l.className='opp-co-link'; l.textContent='Fiche '+o.company+' →'; l.onclick=()=>{ closeOppDetail(); openCompanySheet(o.company); }; box.appendChild(l); }
     const actions=$('opp-detail-actions'); actions.innerHTML='';
     if(o.kind==='prequal'){
