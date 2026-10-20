@@ -211,6 +211,33 @@ with sync_playwright() as p:
     check(not errors, f"no page errors ({errors})")
     page.close()
 
+    # --- Sync pill: state visible everywhere, token problems explained
+    page, errors = new_page(browser, viewport={"width": 1300, "height": 800})
+    page.goto(URL); page.wait_for_timeout(300)
+    check(page.get_attribute("#sync-pill", "data-k") == "off" and "désactivée" in page.inner_text("#sync-pill"), "sync pill: says when sync is off")
+    page.click("#sync-pill"); page.wait_for_timeout(200)
+    check(page.is_visible("#sync-section") and page.evaluate("document.activeElement.id") == "sync-owner", "sync pill: click opens the sync settings")
+    page.close()
+    files = {"tasks.json": [], "crm.json": {"companies": [], "contacts": [], "meetings": [], "opportunities": []}, "notes.json": []}
+    page, errors = new_page(browser, SYNC_ON, viewport={"width": 1300, "height": 800})
+    mock_github(page, files); page.goto(URL)
+    page.wait_for_function("document.getElementById('sync-pill').dataset.k==='ok'", timeout=8000)
+    check("Synchronisé" in page.inner_text("#sync-pill"), "sync pill: green with the time of the last sync")
+    page.close()
+    page, errors = new_page(browser, SYNC_ON, viewport={"width": 1300, "height": 800})
+    page.route("**/api.github.com/repos/o/r/contents/data/*", lambda r: r.fulfill(status=401, body="{}"))
+    page.goto(URL); page.wait_for_function("document.getElementById('sync-pill').dataset.k==='err'", timeout=8000)
+    check("Jeton refusé" in page.inner_text("#sync-pill"), "sync pill: a refused token is shown in red, everywhere")
+    page.close()
+    soon = (TODAY + datetime.timedelta(days=10)).isoformat()
+    cfg = {"todo_sync-config": json.dumps({"owner": "o", "repo": "r", "token": "t", "enabled": True, "tokenExpires": soon})}
+    page, errors = new_page(browser, cfg, viewport={"width": 390, "height": 800}, is_mobile=True, has_touch=True)
+    mock_github(page, files); page.goto(URL + "?lite"); page.wait_for_timeout(1500)
+    check(page.is_visible("#sync-pill-lite") and page.get_attribute("#sync-pill-lite", "data-k") == "warn" and "10 j" in page.inner_text("#sync-pill-lite"),
+          "sync pill: token expiring in 10 days warned, also on the phone version")
+    check(not errors, f"no page errors ({errors})")
+    page.close()
+
     # --- Post-it syncs between devices
     files = {"notes.json": [{"id": "scratchpad", "text": "écrit sur le téléphone", "createdAt": 1, "updatedAt": 5, "deleted": False}]}
     page, errors = new_page(browser, SYNC_ON, viewport={"width": 1300, "height": 850})

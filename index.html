@@ -45,6 +45,25 @@
   .app-sidebar-head{ padding:0 20px 18px; }
   .app-sidebar-head h1{ font-size:13px; font-weight:700; margin:0 0 4px; letter-spacing:.3px; font-family:var(--font-mono); color:var(--tx1); text-transform:uppercase; white-space:nowrap; overflow:hidden; }
   .app-sidebar .head-stats{ font-family:var(--font-mono); font-size:11px; color:var(--tx3); }
+  .sync-pill{ display:flex; align-items:center; gap:9px; margin:14px 14px 0; padding:7px 10px; border:1px solid var(--bd); border-radius:7px; background:var(--panel-2); color:var(--tx2); font:500 11.5px var(--font-ui); cursor:pointer; text-align:left; min-width:0; }
+  .sync-pill:hover{ border-color:var(--tx3); color:var(--tx1); }
+  .sync-pill .sync-label{ min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .sync-dot{ width:8px; height:8px; border-radius:50%; flex-shrink:0; background:var(--tx3); }
+  .sync-pill[data-k="ok"] .sync-dot{ background:var(--ok); }
+  .sync-pill[data-k="busy"] .sync-dot{ background:var(--med); animation:syncPulse 1s ease-in-out infinite; }
+  .sync-pill[data-k="warn"]{ border-color:#C9A55A; color:#E5C77F; } .sync-pill[data-k="warn"] .sync-dot{ background:#C9A55A; }
+  .sync-pill[data-k="err"]{ border-color:var(--crit); color:var(--crit); } .sync-pill[data-k="err"] .sync-dot{ background:var(--crit); }
+  @keyframes syncPulse{ 50%{ opacity:.3; } }
+  @media (prefers-reduced-motion: reduce){ .sync-pill[data-k="busy"] .sync-dot{ animation:none; } }
+  .sync-pill-lite{ display:none; }
+  html.lite .sync-pill-lite{ display:flex; position:fixed; z-index:14000; top:calc(env(safe-area-inset-top, 0px) + 8px); right:10px; margin:0; padding:5px 9px; gap:7px; font-size:11px; border-radius:999px; max-width:60vw; box-shadow:0 4px 14px rgba(0,0,0,.35); }
+  html.lite .sync-pill-lite[data-k="ok"]{ padding:5px 8px; }
+  .sync-exp-row{ display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:8px; font-size:12px; color:var(--tx2); }
+  .sync-exp-row .muted{ color:var(--tx3); }
+  .sync-exp-row input{ width:auto; }
+  .sync-token-link{ font-size:12px; color:var(--accent); text-decoration:none; }
+  .sync-token-link:hover{ text-decoration:underline; }
+  @media (max-width: 760px){ .sync-pill:not(.sync-pill-lite){ margin:12px 8px 0; justify-content:center; padding:8px 0; } }
   .app-sidebar-back{
     margin-top:auto; padding:12px 20px 0; font-family:var(--font-mono); font-size:10.5px; color:var(--tx3);
     text-decoration:none; border-top:1px solid var(--bd); padding-top:14px; display:flex; align-items:center; gap:8px;
@@ -836,11 +855,13 @@
   html.lite .lite-nav .lite-badge{ position:absolute; top:2px; left:calc(50% + 6px); min-width:16px; height:16px; border-radius:8px; background:var(--accent); color:#04070C; font-size:9.5px; font-weight:700; display:flex; align-items:center; justify-content:center; padding:0 4px; }
   html.lite .lite-nav .lite-badge:empty{ display:none; }
   html.lite .tab-panel{ padding-bottom:calc(64px + env(safe-area-inset-bottom, 0px)); }
+  html.lite #todo-panel{ padding-top:calc(env(safe-area-inset-top, 0px) + 40px); }   /* room for the sync pill */
   html.lite .postit-tab{ bottom:calc(70px + env(safe-area-inset-bottom, 0px)); }
   html.lite .postit-float{ bottom:calc(70px + env(safe-area-inset-bottom, 0px)) !important; height:42vh !important; }
   html.lite .lite-banner{ display:block; margin:10px 12px 0; padding:9px 12px; border:1px dashed var(--bd); border-radius:8px; font-size:12px; color:var(--tx2); line-height:1.45; }
   html.lite .lite-banner a{ color:var(--accent); }
   .lite-banner{ display:none; }
+  html.lite .lite-banner[hidden]{ display:none; }
   /* tasks: check · title (wraps) · date, client under the title */
   html.lite .table-header{ display:none; }
   html.lite .task-row-grid:not(.archive-row-grid){ grid-template-columns:24px minmax(0,1fr) auto !important; gap:4px 10px; padding:12px 14px; }
@@ -900,13 +921,15 @@
       <span class="tab" data-tab="lists" title="Réf. & data"><svg class="tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg><span class="sidebar-label-text">Réf. &amp; data</span><span class="tab-badge" id="conflicts-badge"></span></span>
     </div>
 
+    <button type="button" class="sync-pill" id="sync-pill" data-k="off"><span class="sync-dot"></span><span class="sync-label sidebar-label-text">Synchro</span></button>
     <button type="button" class="app-sidebar-back app-sidebar-help" id="help-btn" title="Mode d'emploi"><span class="back-arrow">?</span><span class="sidebar-label-text">Mode d'emploi</span></button>
     <a href="widget.html" class="app-sidebar-back app-sidebar-widget" title="Widget"><span class="back-arrow">←</span><span class="sidebar-label-text">Widget</span></a>
   </nav>
 
+<button type="button" class="sync-pill sync-pill-lite" id="sync-pill-lite" data-k="off"><span class="sync-dot"></span><span class="sync-label">Synchro</span></button>
 <div id="todo-panel">
   <div class="tab-panel" id="tab-today">
-    <div class="lite-banner" id="lite-sync-banner" hidden>Synchro GitHub pas encore activée sur ce téléphone : active-la une fois dans la <a href="index.html">version complète</a> (onglet Réf. &amp; data), puis reviens ici.</div>
+    <div class="lite-banner" id="lite-sync-banner" hidden>Synchro GitHub pas encore activée sur ce téléphone : active-la une fois dans la <a href="index.html#sync">version complète</a> (onglet Réf. &amp; data), puis reviens ici.</div>
     <div id="today-stats-row"></div>
     <div class="table-header">
       <span></span><span></span>
@@ -1416,13 +1439,15 @@
       <h2>Statistiques</h2>
       <div id="stats-panel"></div>
     </div>
-    <div class="list-manager" style="margin-top:22px;">
+    <div class="list-manager" style="margin-top:22px;" id="sync-section">
       <h2>Synchronisation multi-appareils</h2>
       <p class="list-hint">À configurer une fois par appareil. Une fois activée, toutes les tâches (pas seulement celles d'Outlook) se synchronisent via ton repo GitHub. ⚠️ Utilise un repo <strong>privé</strong> : les données (dont les contacts/CRM) y sont stockées en clair.</p>
       <div style="display:flex; flex-direction:column; gap:8px;">
         <input type="text" id="sync-owner" placeholder="Ton pseudo GitHub">
         <input type="text" id="sync-repo" placeholder="Nom du repo (ex: ToDo)">
         <input type="password" id="sync-token" placeholder="Token GitHub (fine-grained, Contents read/write)">
+        <label class="sync-exp-row" for="sync-token-exp"><span>Le jeton expire le <span class="muted">(optionnel : pour être prévenu 15 jours avant)</span></span><input type="date" id="sync-token-exp"></label>
+        <a class="sync-token-link" href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener">Créer ou renouveler un jeton sur GitHub ↗</a>
         <button class="data-btn" id="sync-save-btn" style="width:100%;">Activer la synchro sur cet appareil</button>
         <button class="data-btn" id="sync-now-btn" style="width:100%;">Synchroniser maintenant</button>
         <span id="sync-status" style="font-size:11px; color:var(--tx3); font-family:var(--font-mono);"></span>
@@ -1632,7 +1657,8 @@
   // at 1 MB); above 1 MB the content comes empty and is fetched again as raw text.
   async function ghGetJson(path){
     const auth={ 'Authorization':'Bearer '+syncConfig.token };
-    const res=await fetch(syncApiUrl(path), { headers:Object.assign({ 'Accept':'application/vnd.github.object+json' }, auth), cache:'no-store' });
+    const res=await fetch(syncApiUrl(path), { headers:Object.assign({ 'Accept':'application/vnd.github.object+json' }, auth), cache:'no-store' }).catch(e=>{ syncNote(null); throw e; });
+    syncNote(res);
     if(!res.ok) return { ok:false, status:res.status };
     const data=await res.json();
     let text;
@@ -1645,6 +1671,59 @@
     return { ok:true, status:200, sha:data.sha, json:JSON.parse(text) };
   }
   function setSyncStatus(msg){ const el=$('sync-status'); if(el) el.textContent=msg; }
+
+  // ---------- sync state, visible everywhere: pill in the sidebar (top right on the phone version) ----------
+  // Every GitHub read/write of the sync reports here; a failure stays shown until a call succeeds again.
+  const syncState={ busy:0, okAt:0, errAt:0, errStatus:null };
+  function syncNote(res){
+    if(res && (res.ok || res.status===404)){ syncState.okAt=Date.now(); }
+    else { syncState.errAt=Date.now(); syncState.errStatus=res?res.status:0; }
+    paintSyncPill();
+  }
+  const trackSync=fn=>async function(){
+    if(!syncConfig.enabled) return fn.apply(this, arguments);
+    syncState.busy++; paintSyncPill();
+    try{ return await fn.apply(this, arguments); } finally{ syncState.busy--; paintSyncPill(); }
+  };
+  // days left before the token expires (date entered by hand: GitHub does not give it to a web page)
+  function tokenDaysLeft(){
+    const d=syncConfig.tokenExpires; if(!d || !/^\d{4}-\d{2}-\d{2}$/.test(d)) return null;
+    const today=new Date(); today.setHours(0,0,0,0);
+    return Math.round((new Date(d+'T00:00:00').getTime()-today.getTime())/864e5);   // calendar days: 0 = expires today
+  }
+  function syncPillInfo(){
+    const hhmm=t=>new Date(t).toLocaleTimeString('fr-FR',{ hour:'2-digit', minute:'2-digit' });
+    const last=syncState.okAt?'Dernière synchro réussie à '+hhmm(syncState.okAt)+'.':'Pas encore de synchro réussie depuis l\u2019ouverture.';
+    if(!syncConfig.enabled) return { k:'off', label:'Synchro désactivée', title:'Ces données restent sur cet appareil. Clique pour activer la synchro.' };
+    const days=tokenDaysLeft();
+    if(days!=null && days<0) return { k:'err', label:'Jeton expiré', title:'Le jeton GitHub a expiré le '+syncConfig.tokenExpires.split('-').reverse().join('/')+' : plus rien ne se synchronise. Clique pour le renouveler.', fix:true };
+    if(syncState.busy) return { k:'busy', label:'Synchronisation…', title:last };
+    if(syncState.errAt>syncState.okAt){
+      const s=syncState.errStatus;
+      if(!s || !navigator.onLine) return { k:'off', label:'Hors ligne', title:'Pas de réseau : tes changements sont gardés ici et partiront au retour du réseau. '+last };
+      const m=s===401?'Jeton refusé ou expiré':s===403?'Jeton sans les droits':s===404?'Repo introuvable':(s===409||s===422)?'Conflit, nouvel essai':'Erreur GitHub ('+s+')';
+      return { k:'err', label:m, title:m+'. '+last+' '+(s===401||s===403||s===404?'Clique pour corriger le réglage.':'Clique pour réessayer.'), fix:s===401||s===403||s===404 };
+    }
+    if(days!=null && days<=15) return { k:'warn', label:'Jeton : expire dans '+days+' j', title:'Le jeton GitHub expire le '+syncConfig.tokenExpires.split('-').reverse().join('/')+'. Clique pour le renouveler à l\u2019avance.', fix:true };
+    return { k:'ok', label:syncState.okAt?'Synchronisé '+hhmm(syncState.okAt):'Synchro active', title:last+' Clique pour synchroniser maintenant.' };
+  }
+  function paintSyncPill(){
+    const info=syncPillInfo();
+    const ban=$('lite-sync-banner'); if(ban) ban.hidden=!window.TODO_LITE || !!syncConfig.enabled;
+    ['sync-pill','sync-pill-lite'].forEach(id=>{ const el=$(id); if(!el) return; el.dataset.k=info.k; el.title=info.title; el.setAttribute('aria-label', info.label+'. '+info.title); el.querySelector('.sync-label').textContent=info.label; });
+  }
+  function openSyncSettings(){
+    if(window.TODO_LITE){ location.href='index.html#sync'; return; }
+    const tab=document.querySelector('.tab[data-tab="lists"]'); if(tab) tab.click();
+    setTimeout(()=>{ const s=$('sync-section'); if(s) s.scrollIntoView({ behavior:'smooth', block:'start' }); const f=$(syncConfig.token?'sync-token-exp':'sync-owner'); if(f) f.focus({ preventScroll:true }); }, 60);
+  }
+  function syncEverythingNow(){ syncPull(); syncPullCrm(); syncPullNotes(); }
+  function onSyncPillClick(){
+    const info=syncPillInfo();
+    if(info.k==='off' && !syncConfig.enabled) return openSyncSettings();
+    if(info.fix) return openSyncSettings();
+    if(syncConfig.enabled) syncEverythingNow();
+  }
 
   // Merge by id: for tasks present on both sides, keep whichever has the
   // more recent updatedAt. Deletions are tombstones (deleted:true) so their
@@ -1790,6 +1869,7 @@
         headers:{ 'Authorization':'Bearer '+syncConfig.token, 'Accept':'application/vnd.github+json', 'Content-Type':'application/json' },
         body:JSON.stringify(body)
       });
+      syncNote(putRes);
       if(putRes.ok){
         const putData=await putRes.json();
         lastKnownSha=putData.content.sha;
@@ -1803,7 +1883,7 @@
       }else{
         setSyncStatus('Erreur de synchro (écriture)');
       }
-    }catch(e){ console.error('sync push failed', e); setSyncStatus('Erreur de synchro'); }
+    }catch(e){ console.error('sync push failed', e); syncNote(null); setSyncStatus('Erreur de synchro'); }
   }
 
   let lastKnownCrmSha=null, crmSyncPushTimer=null;
@@ -1860,6 +1940,7 @@
         headers:{ 'Authorization':'Bearer '+syncConfig.token, 'Accept':'application/vnd.github+json', 'Content-Type':'application/json' },
         body:JSON.stringify(body)
       });
+      syncNote(putRes);
       if(putRes.ok){
         const putData=await putRes.json();
         lastKnownCrmSha=putData.content.sha;
@@ -1869,7 +1950,7 @@
         crmBaseSnapshot={ companies:companies.map(c=>({...c})), contacts:contacts.map(c=>({...c})), meetings:meetings.map(m=>({...m})), opportunities:opportunities.map(o=>({...o})) };
         await saveSnapshots();
       }
-    }catch(e){ console.error('crm sync push failed', e); }
+    }catch(e){ console.error('crm sync push failed', e); syncNote(null); }
   }
   async function saveNotesLocalOnly(){ try{ await window.storage.set(NOTES_KEY,JSON.stringify(notes),false); }catch(e){ console.error(e); } }
   async function saveNotes(){ await saveNotesLocalOnly(); scheduleNotesSyncPush(); }
@@ -1944,13 +2025,14 @@
         headers:{ 'Authorization':'Bearer '+syncConfig.token, 'Accept':'application/vnd.github+json', 'Content-Type':'application/json' },
         body:JSON.stringify(body)
       });
+      syncNote(putRes);
       if(putRes.ok){
         const putData=await putRes.json();
         lastKnownNotesSha=putData.content.sha;
         notesBaseSnapshot=notes.map(n=>({...n}));
         await saveNotesBase();
       }
-    }catch(e){ console.error('notes sync push failed', e); }
+    }catch(e){ console.error('notes sync push failed', e); syncNote(null); }
   }
 
   async function saveClients(){ try{ await window.storage.set(CLIENTS_KEY,JSON.stringify(clientsList),false); }catch(e){ console.error(e); } }
@@ -5903,6 +5985,7 @@
     syncConfig.repo=$('sync-repo').value.trim();
     const tokenVal=$('sync-token').value.trim();
     if(tokenVal) syncConfig.token=tokenVal;
+    syncConfig.tokenExpires=$('sync-token-exp').value||'';
     if(!syncConfig.owner || !syncConfig.repo || !syncConfig.token){ setSyncStatus('Pseudo, repo et token requis.'); return; }
     setSyncStatus('Vérification du repo…');
     try{
@@ -5919,6 +6002,7 @@
     setSyncStatus('Activation…');
     syncPull();
   };
+  $('sync-token-exp').addEventListener('change', ()=>{ syncConfig.tokenExpires=$('sync-token-exp').value||''; saveSyncConfig(); paintSyncPill(); });
   $('sync-now-btn').onclick=()=>{ if(!syncConfig.enabled){ setSyncStatus('Active la synchro d\u2019abord.'); return; } setSyncStatus('Synchronisation…'); syncPushNow(); syncPushCrmNow(); syncPushNotesNow(); };
   $('contact-add-btn').onclick=()=>openContactForm(null);
   let sigImageFile=null;
@@ -6950,9 +7034,17 @@
     nav.querySelectorAll('button').forEach(b=>{ b.onclick=()=>{ document.querySelector('.tab[data-tab="'+b.dataset.go+'"]').click(); window.scrollTo(0,0); }; });
     document.addEventListener('click', e=>{ if(e.target.closest('.tab')) setTimeout(sync,0); }, true);
     sync();
-    setTimeout(()=>{ $('lite-sync-banner').hidden=!!syncConfig.enabled; }, 300);
   }
-  loadAll();
+  syncPull=trackSync(syncPull); syncPushNow=trackSync(syncPushNow); syncPullCrm=trackSync(syncPullCrm);
+  syncPushCrmNow=trackSync(syncPushCrmNow); syncPullNotes=trackSync(syncPullNotes); syncPushNotesNow=trackSync(syncPushNotesNow);
+  ['sync-pill','sync-pill-lite'].forEach(id=>{ const el=$(id); if(el) el.onclick=onSyncPillClick; });
+  window.addEventListener('online', ()=>{ if(syncConfig.enabled) syncEverythingNow(); else paintSyncPill(); });
+  window.addEventListener('offline', paintSyncPill);
+  loadAll().then(()=>{
+    paintSyncPill();
+    $('sync-token-exp').value=syncConfig.tokenExpires||'';
+    if(location.hash==='#sync' && !window.TODO_LITE) openSyncSettings();
+  });
 })();
 
 if('serviceWorker' in navigator){
