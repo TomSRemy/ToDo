@@ -568,6 +568,13 @@
   .pq-start select{ background:var(--panel-2); border:1px solid var(--bd); border-radius:6px; color:var(--tx1); font-size:12px; padding:5px 7px; margin-left:4px; }
   .pq-start input{ accent-color:var(--accent); }
   .pq-step1{ padding:14px 16px; display:flex; flex-direction:column; gap:8px; overflow-y:auto; max-width:760px; }
+  .pq1-sig{ border:1px dashed var(--bd); border-radius:8px; padding:8px 10px; }
+  .pq1-sig[open]{ border-style:solid; }
+  .pq1-sig summary{ cursor:pointer; font-size:12.5px; color:var(--accent); list-style:none; }
+  .pq1-sig summary::-webkit-details-marker{ display:none; }
+  .pq1-sig summary span{ color:var(--tx3); font-size:11.5px; margin-left:6px; }
+  .pq1-sig textarea{ width:100%; margin-top:8px; background:var(--panel-2); color:var(--tx1); border:1px solid var(--bd); border-radius:6px; padding:8px; font:12px/1.5 var(--font-mono); resize:vertical; }
+  .pq1-sig textarea:focus{ outline:none; border-color:var(--accent); }
   .pq-step-n{ font-family:var(--font-mono); font-size:9.5px; color:var(--tx3); text-transform:uppercase; letter-spacing:.5px; margin-top:6px; }
   .pq-step-row{ display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
   #pq1-company{ flex:1; min-width:220px; background:var(--panel-2); border:1px solid var(--bd); border-radius:6px; color:var(--tx1); font-size:13.5px; padding:8px 10px; }
@@ -647,13 +654,13 @@
   .map-zoom button:hover:not(:disabled){ color:var(--tx1); background:var(--panel-3); }
   .map-zoom button:disabled{ color:var(--tx3); opacity:.45; cursor:default; }
   .parc-map{ width:100%; height:auto; display:block; filter:drop-shadow(0 6px 18px rgba(0,0,0,.45)); }
-  .parc-map .dep{ fill:#2A3340; stroke:#141922; stroke-width:.8; stroke-linejoin:round; cursor:pointer; transition:fill .12s; }
+  .parc-map .reg-edge{ fill:none; stroke:rgba(236,241,247,.82); stroke-width:2.6; stroke-linejoin:round; pointer-events:none; }
+  .parc-map .dep{ fill:#2A3340; stroke:none; cursor:pointer; transition:fill .12s; }
   .parc-map .dep.has{ fill:var(--f); }
-  .parc-map .dep.has:hover{ filter:brightness(1.15); }
-  .parc-map .dep:hover{ fill:#36414F; }
-  .parc-map .dep.sel{ stroke:var(--tx1); stroke-width:1.4; }
-  .parc-map .dep.sel:not(.has){ fill:#36414F; }
+  .parc-map .dep:hover{ filter:brightness(1.18); }
   .parc-map .dep.dim{ fill-opacity:.55; }
+  .parc-map .dep-line{ fill:none; stroke:#141922; stroke-opacity:.7; stroke-width:.6; stroke-linejoin:round; pointer-events:none; }
+  .parc-map .dep-line.sel{ stroke:#fff; stroke-opacity:1; stroke-width:2; }
   .parc-map .dot{ fill:var(--c); stroke:none; cursor:pointer; }
   .parc-map .dot:hover{ stroke:#fff; stroke-width:1.2; }
   .parc-map .dot.dim{ fill-opacity:.25; }
@@ -1247,6 +1254,11 @@
     <div class="modal-box pq-box" role="dialog" aria-labelledby="pq-title">
       <div class="pq-head"><h3 id="pq-title">Nouvelle opportunité</h3><div class="pq-summary" id="pq-summary"></div></div>
       <div class="pq-step1" id="pq-step1">
+        <details class="pq1-sig" id="pq1-sig-box">
+          <summary>Coller une signature <span>remplit le client et le contact (texte ou capture d’écran)</span></summary>
+          <textarea id="pq1-sig" rows="4" spellcheck="false" placeholder="Colle ici la signature du mail (ou une capture d’écran de la signature)…"></textarea>
+          <div class="pq-step-hint" id="pq1-sig-status"></div>
+        </details>
         <div class="pq-step-n">1 · Client</div>
         <div class="pq-step-row">
           <input type="text" id="pq1-company" list="pq1-companies" placeholder="Nom du producteur (existant ou nouveau)" autocomplete="off"><datalist id="pq1-companies"></datalist>
@@ -4608,6 +4620,7 @@
     $('pq1-companies').innerHTML=names.map(n=>'<option value="'+escapeHtml(n)+'">').join('');
     $('pq1-company').value=opts.company||'';
     ['prenom','nom','qualite','tel','mail'].forEach(k=>{ $('pq1-'+k).value=''; });
+    $('pq1-sig').value=''; $('pq1-sig-status').textContent=''; $('pq1-sig-box').open=false; pq1SigAuto=new Set();
     $('pq-overlay').classList.remove('hidden');
     if(editing){ pqShowStep(2); pqRender(); setTimeout(()=>{ const el=$('pq-form').querySelector('input'); if(el) el.focus({preventScroll:true}); },0); }
     else { pqShowStep(1); pqStep1Render(); setTimeout(()=>$(opts.company?'pq-next-btn':'pq1-company').focus({preventScroll:true}),0); }
@@ -4647,6 +4660,28 @@
     nb.onclick=()=>{ pqState.contactChoice='new'; pqState.contactPicked=true; pqStep1Render(); $('pq1-prenom').focus(); };
     box.appendChild(nb);
     $('pq1-new').classList.toggle('hidden', pqState.contactChoice!=='new');
+  }
+  // Step 1 « Coller une signature »: same reader as Contacts; fills the client and the contact.
+  // Fields typed by hand are never overwritten; a new paste replaces what a previous paste filled.
+  let pq1SigAuto=new Set(), pq1SigTimer=null;
+  function pqApplySignature(text){
+    const st=pqState; if(!st) return;
+    const g=parseSignatureText(text||'');
+    const set=(id,v)=>{ const el=$(id); if(!el || !v) return; if(el.value && !pq1SigAuto.has(id)) return; el.value=v; pq1SigAuto.add(id); };
+    if(g.company){ const known=pqKnownCompany(g.company); set('pq1-company', known||g.company); }
+    pqStep1Render();
+    const company=pqKnownCompany($('pq1-company').value.trim());
+    const mail=(g.email||'').toLowerCase();
+    const existing=company && contacts.find(c=>!c.deleted && c.company===company && ((mail && (c.email||'').toLowerCase()===mail) || (g.firstName && c.firstName===g.firstName && (c.lastName||'').toLowerCase()===(g.lastName||'').toLowerCase())));
+    if(existing){ st.contactChoice=existing.id; st.contactPicked=true; }
+    else if(g.firstName||g.lastName||mail){
+      st.contactChoice='new'; st.contactPicked=true;
+      set('pq1-prenom', g.firstName); set('pq1-nom', (g.lastName||'').toUpperCase()); set('pq1-qualite', g.role);
+      set('pq1-tel', [g.phone1, g.phone2].filter(Boolean).join(' / ')); set('pq1-mail', mail);
+    }
+    pqStep1Render();
+    const found=[g.company&&'client', (g.firstName||g.lastName)&&'nom', g.role&&'fonction', g.phone1&&'téléphone', mail&&'mail'].filter(Boolean);
+    $('pq1-sig-status').textContent=found.length?('Lu : '+found.join(', ')+(existing?' — contact déjà connu, sélectionné.':'.')+' Vérifie puis continue.'):'Rien de reconnu dans ce texte.';
   }
   function pqNext(){
     const name=$('pq1-company').value.trim();
@@ -5992,7 +6027,21 @@
   $('pq-save-btn').onclick=saveOpp;
   $('pq-next-btn').onclick=pqNext;
   $('pq-back-btn').onclick=()=>{ pqShowStep(1); pqStep1Render(); };
-  $('pq1-company').addEventListener('input', ()=>pqStep1Render());
+  $('pq1-company').addEventListener('input', ()=>{ pq1SigAuto.delete('pq1-company'); pqStep1Render(); });
+  ['pq1-prenom','pq1-nom','pq1-qualite','pq1-tel','pq1-mail'].forEach(id=>$(id).addEventListener('input', ()=>pq1SigAuto.delete(id)));
+  $('pq1-sig').addEventListener('input', ()=>{ clearTimeout(pq1SigTimer); pq1SigTimer=setTimeout(()=>pqApplySignature($('pq1-sig').value), 300); });
+  $('pq1-sig').addEventListener('paste', async e=>{
+    const items=[...((e.clipboardData||{}).items||[])], img=items.find(i=>i.type && i.type.startsWith('image/'));
+    if(!img) return;
+    e.preventDefault();
+    $('pq1-sig-status').textContent='Lecture de l\u2019image…';
+    try{
+      await loadTesseract();
+      const { data }=await Tesseract.recognize(img.getAsFile(), 'fra+eng');
+      $('pq1-sig').value=(($('pq1-sig').value?$('pq1-sig').value+'\n':'')+data.text).trim();
+      pqApplySignature($('pq1-sig').value);
+    }catch(err){ console.error(err); $('pq1-sig-status').textContent='Lecture de l\u2019image impossible : colle plutôt le texte de la signature.'; }
+  });
   $('pq1-company').addEventListener('keydown', e=>{ if(e.key==='Enter'){ e.preventDefault(); pqNext(); } });
   $('pq-cancel-btn').onclick=closeOppForm;
   $('pq-form').addEventListener('input', pqOnInput);
@@ -6402,7 +6451,17 @@
     // départements tinted by their MWc (square root: small ones stay visible), a dot per plant on top
     const maxDepKwc=Math.max(1,...Object.values(by).map(v=>v.kwc));
     const shade=k=>{ const t=.25+.75*Math.sqrt(k/maxDepKwc), a=[0x2A,0x33,0x40], b=[0x4F,0x6F,0x96]; return '#'+a.map((x,i)=>Math.round(x+(b[i]-x)*t).toString(16).padStart(2,'0')).join(''); };
-    FR_MAP.deps.forEach(([code,name,d])=>{ svg+='<path d="'+d+'" vector-effect="non-scaling-stroke" class="dep'+(by[code]?' has':'')+(parcMapSel===code?' sel':'')+(parcMapSel && parcMapSel!==code?' dim':'')+'"'+(by[code]?' style="--f:'+shade(by[code].kwc)+'"':'')+' data-dep="'+code+'" data-name="'+escapeHtml(name)+'"></path>'; });
+    // Region borders in white: for each region, its départements are drawn once with a thick white stroke, then filled
+    // on top. The fills hide the white inside the region; on a border between two regions, the half of the stroke
+    // lying in the region drawn first stays visible, so every region border (and the coast) shows as a white line.
+    const regionOf=code=>{ const d=PQ_DEPTS.find(x=>x[0]===code); return d?d[2]:-1; };
+    const byRegion={}; FR_MAP.deps.forEach(dep=>{ (byRegion[regionOf(dep[0])]=byRegion[regionOf(dep[0])]||[]).push(dep); });
+    Object.values(byRegion).forEach(list=>{
+      list.forEach(([code,name,d])=>{ svg+='<path d="'+d+'" vector-effect="non-scaling-stroke" class="reg-edge"></path>'; });
+      list.forEach(([code,name,d])=>{ svg+='<path d="'+d+'" class="dep'+(by[code]?' has':'')+(parcMapSel && parcMapSel!==code?' dim':'')+'"'+(by[code]?' style="--f:'+shade(by[code].kwc)+'"':'')+' data-dep="'+code+'" data-name="'+escapeHtml(name)+'"></path>'; });
+    });
+    // département borders as hairlines on top, and the selected one outlined
+    FR_MAP.deps.forEach(([code,name,d])=>{ svg+='<path d="'+d+'" vector-effect="non-scaling-stroke" class="dep-line'+(parcMapSel===code?' sel':'')+'"></path>'; });
     const dots=[];
     Object.entries(by).forEach(([code,v])=>{
       const dep=FR_MAP.deps.find(d=>d[0]===code);

@@ -376,6 +376,20 @@ with sync_playwright() as p:
     check(not errors, f"no page errors ({errors})")
     page.close()
 
+    # --- New opportunity: pasting a signature in step 1 fills the client and the contact
+    page, errors = new_page(browser)
+    page.goto(URL); page.click('[data-tab="pipeline"]'); page.click("#opp-add-btn")
+    page.click("#pq1-sig-box summary")
+    page.fill("#pq1-sig", "Camille DUBOIS\nResponsable financement de projets\nRHÔNE ÉNERGIES SAS\nT. 04 75 00 00 06\nM. 06 77 00 00 06\ncamille.dubois@rhone-energies.fr")
+    page.wait_for_timeout(500)
+    got = [page.input_value(x) for x in ("#pq1-company", "#pq1-prenom", "#pq1-nom", "#pq1-qualite", "#pq1-tel", "#pq1-mail")]
+    check(got == ["RHÔNE ÉNERGIES SAS", "Camille", "DUBOIS", "Responsable financement de projets", "06 77 00 00 06 / 04 75 00 00 06", "camille.dubois@rhone-energies.fr"],
+          f"step 1: a pasted signature fills client and contact ({got})")
+    page.click("#pq-next-btn")
+    check(page.input_value("#pq-s-producteur") == "RHÔNE ÉNERGIES SAS" and page.input_value("#pq-s-prenom") == "Camille", "step 2 starts with the signature's client and contact")
+    check(not errors, f"no page errors ({errors})")
+    page.close()
+
     # --- Qualification: the number of plants announced by the mail is checked against the installations found
     page, errors = new_page(browser)
     page.goto(URL); page.click('[data-tab="pipeline"]'); page.click("#opp-add-btn"); page.fill("#pq1-company", "SEM"); page.click("#pq-next-btn")
