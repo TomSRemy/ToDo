@@ -1278,10 +1278,11 @@
           <div class="pq-f"><label for="pq1-mail">Mail</label><input id="pq1-mail" autocomplete="off"></div>
         </div>
         <p class="pq-step-hint">Tu ne connais pas encore le contact ? Laisse vide : le mail collé à l’étape suivante le remplira.</p>
-        <div class="pq-step-n">Autres contacts <span class="pq-step-hint" style="text-transform:none;letter-spacing:0;">— le premier reste le contact principal (colonnes du Pipe)</span></div>
+        <div class="pq-step-n">Autres contacts</div>
         <div class="pq1-contacts" id="pq1-extra-existing"></div>
         <div id="pq1-extras"></div>
         <button type="button" class="pq-link pq1-add-extra" id="pq1-add-extra">+ Ajouter un autre contact</button>
+        <div class="pq1-principal" id="pq1-principal"></div>
       </div>
       <div class="pq-layout" id="pq-layout">
         <div class="pq-mail-pane" id="pq-mail-pane">
@@ -4613,7 +4614,7 @@
   function openOppForm(opts){
     opts=opts||{};
     const editing=opts.editId?opportunities.find(o=>o.id===opts.editId):null;
-    pqState={ editId:editing?editing.id:null, prequalId:opts.prequalId||null, shared:pqDefaults(), installs:[{}], auto:new Set(), touched:new Set(), contactChoice:null, contactPicked:false, extras:[], extraExisting:new Set(), step:1 };
+    pqState={ editId:editing?editing.id:null, prequalId:opts.prequalId||null, shared:pqDefaults(), installs:[{}], auto:new Set(), touched:new Set(), contactChoice:null, contactPicked:false, extras:[], extraExisting:new Set(), principal:'main', step:1 };
     pqLastFiles=null;
     if(editing){
       PQ_SHARED_KEYS.forEach(k=>{ if(editing[k]!==undefined) pqState.shared[k]=editing[k]; });
@@ -4678,6 +4679,28 @@
       ex.appendChild(b);
     });
     pqExtrasRender();
+    pqPrincipalRender();
+  }
+  // Everyone involved in step 1: the contact block above, existing contacts ticked, new contacts added.
+  // key: 'main' | 'ex:<contact id>' | 'x:<index>'
+  function pqParticipants(){
+    const st=pqState, out=[];
+    if(st.contactChoice && st.contactChoice!=='new'){ const c=contacts.find(x=>x.id===st.contactChoice); if(c) out.push({ key:'main', id:c.id, label:[c.firstName,c.lastName].filter(Boolean).join(' ')||c.email, v:{ prenom:c.firstName, nom:(c.lastName||'').toUpperCase(), qualite:c.role, tel:[c.phone1,c.phone2].filter(Boolean).join(' / '), mail:c.email } }); }
+    else { const v={ prenom:pqTitleCase($('pq1-prenom').value.trim()), nom:$('pq1-nom').value.trim().toUpperCase(), qualite:$('pq1-qualite').value.trim(), tel:[$('pq1-tel').value.trim(), $('pq1-tel2').value.trim()].filter(Boolean).join(' / '), mail:$('pq1-mail').value.trim().toLowerCase() };
+      if(v.prenom||v.nom||v.mail) out.push({ key:'main', label:[v.prenom,v.nom].filter(Boolean).join(' ')||v.mail, v }); }
+    [...st.extraExisting].forEach(id=>{ const c=contacts.find(x=>x.id===id); if(c) out.push({ key:'ex:'+id, id, label:[c.firstName,c.lastName].filter(Boolean).join(' ')||c.email, v:{ prenom:c.firstName, nom:(c.lastName||'').toUpperCase(), qualite:c.role, tel:[c.phone1,c.phone2].filter(Boolean).join(' / '), mail:c.email } }); });
+    st.extras.forEach((x,i)=>{ const v={ prenom:pqTitleCase((x.prenom||'').trim()), nom:(x.nom||'').trim().toUpperCase(), qualite:(x.qualite||'').trim(), tel:[x.tel,x.tel2].map(t=>(t||'').trim()).filter(Boolean).join(' / '), mail:(x.mail||'').trim().toLowerCase() };
+      if(v.prenom||v.nom||v.mail) out.push({ key:'x:'+i, label:[v.prenom,v.nom].filter(Boolean).join(' ')||v.mail, v }); });
+    return out;
+  }
+  // the main contact (Pipe columns) is chosen among them; shown once there are at least two people
+  function pqPrincipalRender(){
+    const box=$('pq1-principal'); if(!box) return;
+    const list=pqParticipants();
+    if(!list.some(p=>p.key===pqState.principal)) pqState.principal=list.length?list[0].key:'main';
+    if(list.length<2){ box.innerHTML=''; return; }
+    box.innerHTML='<div class="pq-step-n">Contact principal <span class="pq-step-hint" style="text-transform:none;letter-spacing:0;">— celui des colonnes du Pipe ; les autres restent liés à l\u2019opportunité</span></div>'
+      +'<div class="pq1-contacts">'+list.map(p=>'<button type="button" data-principal="'+escapeHtml(p.key)+'" class="'+(p.key===pqState.principal?'on':'')+'">'+(p.key===pqState.principal?'★ ':'')+escapeHtml(p.label)+(p.v.qualite?' · '+escapeHtml(p.v.qualite):'')+'</button>').join('')+'</div>';
   }
   // additional new contacts (beyond the main one)
   const PQ_EXTRA_FIELDS_C=[['prenom','Prénom'],['nom','Nom'],['qualite','Qualité'],['tel','Téléphone 1 (mobile)'],['tel2','Téléphone 2'],['mail','Mail']];
@@ -4726,12 +4749,17 @@
   }
   function pqNext(){
     const name=$('pq1-company').value.trim();
-    pqState.extraContacts=pqState.extras.filter(x=>x.prenom||x.nom||x.mail).map(x=>({ ...x, prenom:pqTitleCase((x.prenom||'').trim()), nom:(x.nom||'').trim().toUpperCase(), mail:(x.mail||'').trim().toLowerCase(), tel:[x.tel,x.tel2].map(t=>(t||'').trim()).filter(Boolean).join(' / ') }));
-    pqState.extraContactIds=[...pqState.extraExisting];
+    const people=pqParticipants();
+    const principal=people.find(p=>p.key===pqState.principal)||people[0]||null;
+    pqState.extraContacts=people.filter(p=>p!==principal && !p.id).map(p=>p.v);
+    pqState.extraContactIds=people.filter(p=>p!==principal && p.id).map(p=>p.id);
+    pqState.principalPerson=principal;
     if(!name){ $('pq1-company-hint').textContent='Indique le producteur pour continuer.'; $('pq1-company-hint').className='pq-step-hint new'; $('pq1-company').focus(); return; }
     const st=pqState, known=pqKnownCompany(name), set=(k,v)=>{ if(v){ st.shared[k]=v; st.touched.add('s.'+k); } };
     set('producteur', known||name);
-    if(st.contactChoice && st.contactChoice!=='new'){
+    if(st.principalPerson){
+      const v=st.principalPerson.v; set('prenom',v.prenom); set('nom',v.nom); set('qualite',v.qualite); set('tel',v.tel); set('mail',v.mail);
+    } else if(st.contactChoice && st.contactChoice!=='new'){
       const c=contacts.find(x=>x.id===st.contactChoice);
       if(c){ set('prenom',c.firstName); set('nom',(c.lastName||'').toUpperCase()); set('qualite',c.role); set('tel',[c.phone1,c.phone2].filter(Boolean).join(' / ')); set('mail',c.email); }
     } else {
@@ -6075,9 +6103,11 @@
   $('pq-back-btn').onclick=()=>{ pqShowStep(1); pqStep1Render(); };
   $('pq1-company').addEventListener('input', ()=>{ pq1SigAuto.delete('pq1-company'); pqStep1Render(); });
   ['pq1-prenom','pq1-nom','pq1-qualite','pq1-tel','pq1-tel2','pq1-mail'].forEach(id=>$(id).addEventListener('input', ()=>pq1SigAuto.delete(id)));
+  $('pq1-principal').addEventListener('click', e=>{ const b=e.target.closest('[data-principal]'); if(!b) return; pqState.principal=b.dataset.principal; pqPrincipalRender(); });
+  ['pq1-prenom','pq1-nom','pq1-mail'].forEach(id=>$(id).addEventListener('input', ()=>pqPrincipalRender()));
   $('pq1-add-extra').onclick=()=>{ pqState.extras.push({}); pqExtrasRender(); const els=$('pq1-extras').querySelectorAll('input[data-xk="prenom"]'); if(els.length) els[els.length-1].focus(); };
-  $('pq1-extras').addEventListener('input', e=>{ const i=e.target.dataset.x; if(i==null) return; pqState.extras[+i][e.target.dataset.xk]=e.target.value; });
-  $('pq1-extras').addEventListener('click', e=>{ const r=e.target.closest('[data-x-remove]'); if(!r) return; pqState.extras.splice(+r.dataset.xRemove,1); pqExtrasRender(); });
+  $('pq1-extras').addEventListener('input', e=>{ const i=e.target.dataset.x; if(i==null) return; pqState.extras[+i][e.target.dataset.xk]=e.target.value; pqPrincipalRender(); });
+  $('pq1-extras').addEventListener('click', e=>{ const r=e.target.closest('[data-x-remove]'); if(!r) return; pqState.extras.splice(+r.dataset.xRemove,1); if(pqState.principal.indexOf('x:')===0) pqState.principal='main'; pqExtrasRender(); pqPrincipalRender(); });
   $('pq1-sig').addEventListener('input', ()=>{ clearTimeout(pq1SigTimer); pq1SigTimer=setTimeout(()=>pqApplySignature($('pq1-sig').value), 300); });
   $('pq1-sig').addEventListener('paste', async e=>{
     const items=[...((e.clipboardData||{}).items||[])], img=items.find(i=>i.type && i.type.startsWith('image/'));

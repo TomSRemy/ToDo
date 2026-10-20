@@ -389,14 +389,19 @@ with sync_playwright() as p:
     page.fill("#pq1-sig", "Marc LEROY\nDirecteur technique\nRHÔNE ÉNERGIES SAS\n06 11 11 11 11\nmarc.leroy@rhone-energies.fr"); page.wait_for_timeout(500)
     check(page.input_value("#pq1-prenom") == "Camille" and page.input_value("#pq1-extras input[data-xk='prenom']") == "Marc", "a second signature adds a second contact")
     page.click("#pq1-add-extra"); page.fill("#pq1-extras input[data-x='1'][data-xk='prenom']", "Lucie"); page.fill("#pq1-extras input[data-x='1'][data-xk='nom']", "Roy")
+    check(page.locator("#pq1-principal [data-principal]").count() == 3, "the main contact can be chosen among the three people")
+    page.click("#pq1-principal [data-principal='x:0']")   # Marc becomes the main contact
     page.click("#pq-next-btn")
-    check(page.input_value("#pq-s-producteur") == "RHÔNE ÉNERGIES SAS" and page.input_value("#pq-s-prenom") == "Camille", "step 2 starts with the signature's client and contact")
+    check(page.input_value("#pq-s-producteur") == "RHÔNE ÉNERGIES SAS" and page.input_value("#pq-s-prenom") == "Marc" and page.input_value("#pq-s-tel") == "06 11 11 11 11",
+          "step 2 uses the chosen main contact")
     page.fill("#pq-0-centrale", "Toit A"); page.click("#pq-save-btn")
     names = sorted(c["firstName"] for c in stored(page, "todo-widget-contacts"))
     inst = [o for o in stored(page, "todo-widget-opportunities") if o.get("kind") == "installation"][0]
     check(names == ["Camille", "Lucie", "Marc"] and len(inst.get("otherContactIds", [])) == 2, f"three contacts created, two linked as other contacts ({names})")
     camille = next(c for c in stored(page, "todo-widget-contacts") if c["firstName"] == "Camille")
-    check(camille["phone1"] == "06 77 00 00 06" and camille["phone2"] == "04 75 00 00 06", "both numbers of the main contact are kept (mobile first)")
+    check(camille["phone1"] == "06 77 00 00 06" and camille["phone2"] == "04 75 00 00 06" and camille["id"] in inst.get("otherContactIds", []),
+          "the first contact, no longer main, keeps both numbers and is linked as an other contact")
+    check(inst.get("prenom") == "Marc", "the installation's main contact is the chosen one")
     check(not errors, f"no page errors ({errors})")
     page.close()
 
