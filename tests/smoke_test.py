@@ -260,6 +260,34 @@ with sync_playwright() as p:
     check(not errors, f"no page errors ({errors})")
     page.close()
 
+    # --- Global search (Ctrl+K): everything in one list, Enter alone still creates the task
+    gs_seed = {"todo_todo-widget-tasks": json.dumps([task("g1", "Envoyer ARPE Durand", client="Solaris"), task("g2", "Vieille relance Durand", archived=True)]),
+               "todo_todo-widget-contacts": json.dumps([{"id": "gc1", "firstName": "Paul", "lastName": "Durand", "role": "Gérant", "company": "Solaris", "email": "p@solaris.fr",
+                                                          "phone1": "06 12 00 00 99", "phone2": "", "relevance": 0, "comment": "", "createdAt": 1, "updatedAt": 1, "deleted": False}]),
+               "todo_todo-widget-opportunities": json.dumps([{"id": "go1", "kind": "installation", "company": "Solaris", "centrale": "Toit Durand", "title": "Toit Durand",
+                                                              "stage": "collecte", "kwc": "250", "createdAt": 1, "updatedAt": 1, "deleted": False}])}
+    page, errors = new_page(browser, gs_seed, viewport={"width": 1300, "height": 800})
+    page.goto(URL); page.wait_for_timeout(300)
+    page.keyboard.press("Control+k")
+    check(page.is_visible("#gs-overlay") and page.evaluate("document.activeElement.id") == "gs-input", "search: Ctrl+K opens the global search")
+    page.keyboard.type("durand")
+    groups = page.eval_on_selector_all("#gs-results .gs-group", "els=>els.map(e=>e.textContent)")
+    check(groups == ["Tâches", "Contacts", "Pipeline"] and page.locator("#gs-results .gs-item").count() == 5,
+          f"search: tasks (archived too), contacts and pipeline found at once ({groups})")
+    page.fill("#gs-input", "0612000099")
+    check("Paul Durand" in page.inner_text("#gs-results"), "search: a contact found by phone number")
+    page.locator("#gs-results .gs-item", has_text="Paul Durand").click(); page.wait_for_timeout(200)
+    check(page.is_hidden("#gs-overlay") and page.is_visible("#tab-contacts") and page.is_visible("#contacts-list .contact-info-card, #contacts-list .contact-detail-links"),
+          "search: choosing a contact opens its card in Contacts")
+    page.keyboard.press("Control+k"); page.keyboard.type("toit"); page.keyboard.press("ArrowDown"); page.keyboard.press("Enter"); page.wait_for_timeout(300)
+    check(page.is_visible("#opp-detail-overlay") and "Toit Durand" in page.inner_text("#opp-detail-title"), "search: arrows + Enter open the opportunity")
+    page.keyboard.press("Escape"); page.wait_for_timeout(100)
+    if page.is_visible("#opp-detail-overlay"): page.click("#opp-detail-actions >> text=Fermer")
+    page.keyboard.press("Control+k"); page.keyboard.type("Appeler le notaire"); page.keyboard.press("Enter"); page.wait_for_timeout(200)
+    check(any(t["title"] == "Appeler le notaire" for t in stored(page, "todo-widget-tasks")), "search: Enter without choosing still creates the task (old Ctrl+K habit)")
+    check(not errors, f"no page errors ({errors})")
+    page.close()
+
     # --- Sync pill: state visible everywhere, token problems explained
     page, errors = new_page(browser, viewport={"width": 1300, "height": 800})
     page.goto(URL); page.wait_for_timeout(300)

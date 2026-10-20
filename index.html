@@ -61,6 +61,39 @@
   @keyframes syncPulse{ 50%{ opacity:.3; } }
   @media (prefers-reduced-motion: reduce){ .sync-pill[data-k="busy"] .sync-dot{ animation:none; } }
   .sync-pill-lite{ display:none; }
+  /* ---- global search (Ctrl+K) ---- */
+  .gs-open{ display:flex; align-items:center; gap:9px; margin:14px 14px 0; padding:7px 10px; border:1px solid var(--bd); border-radius:7px; background:none; color:var(--tx3); font:500 12px var(--font-ui); cursor:pointer; text-align:left; }
+  .gs-open svg{ width:14px; height:14px; flex-shrink:0; }
+  .gs-open kbd{ margin-left:auto; font:500 10px var(--font-mono); color:var(--tx3); border:1px solid var(--bd); border-radius:4px; padding:1px 5px; }
+  .gs-open:hover{ color:var(--tx1); border-color:var(--tx3); }
+  @media (max-width: 760px){ .gs-open{ margin:12px 8px 0; justify-content:center; padding:8px 0; } }
+  .gs-open-lite{ display:none; }
+  html.lite .gs-open-lite{ display:flex; position:fixed; z-index:14000; top:calc(env(safe-area-inset-top, 0px) + 8px); left:10px; width:30px; height:30px; border-radius:50%; align-items:center; justify-content:center; background:var(--panel-2); border:1px solid var(--bd); color:var(--tx2); }
+  html.lite .gs-open-lite svg{ width:15px; height:15px; }
+  html.widget .gs-open-lite{ display:none; }
+  .gs-overlay{ position:fixed; inset:0; z-index:22000; background:rgba(4,6,10,.62); display:flex; justify-content:center; align-items:flex-start; padding:12vh 12px 12px; }
+  .gs-overlay[hidden]{ display:none; }
+  .gs-box{ width:min(640px, 100%); max-height:76vh; display:flex; flex-direction:column; background:var(--panel); border:1px solid var(--bd); border-radius:12px; box-shadow:0 24px 60px rgba(0,0,0,.6); overflow:hidden; }
+  .gs-field{ display:flex; align-items:center; gap:10px; padding:12px 14px; border-bottom:1px solid var(--bd); }
+  .gs-field svg{ width:17px; height:17px; color:var(--tx3); flex-shrink:0; }
+  .gs-field input{ flex:1; min-width:0; background:none; border:none; outline:none; color:var(--tx1); font:15px var(--font-ui); padding:4px 0; }
+  .gs-results{ overflow-y:auto; padding:6px; display:flex; flex-direction:column; }
+  .gs-group{ font:500 10px var(--font-mono); text-transform:uppercase; letter-spacing:.6px; color:var(--tx3); padding:10px 10px 4px; }
+  .gs-item{ display:grid; grid-template-columns:22px minmax(0,1fr) auto; gap:10px; align-items:center; padding:8px 10px; border-radius:7px; cursor:pointer; color:var(--tx2); background:none; border:none; text-align:left; font:inherit; width:100%; }
+  .gs-item .gs-ic{ width:22px; height:22px; border-radius:6px; display:flex; align-items:center; justify-content:center; background:var(--panel-3); color:var(--tx3); font:600 11px var(--font-mono); }
+  .gs-item .gs-t{ min-width:0; display:flex; flex-direction:column; }
+  .gs-item .gs-t b{ font-weight:500; color:var(--tx1); font-size:13.5px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .gs-item .gs-t span{ font-size:11.5px; color:var(--tx3); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .gs-item .gs-r{ font:500 11px var(--font-mono); color:var(--tx3); white-space:nowrap; }
+  .gs-item.on{ background:var(--accent-dim); }
+  .gs-item.on .gs-ic{ background:var(--accent); color:#04070C; }
+  .gs-item.create .gs-t b{ color:var(--accent); }
+  .gs-empty{ padding:18px 12px; color:var(--tx3); font-size:13px; text-align:center; }
+  .gs-foot{ display:flex; gap:14px; padding:8px 14px; border-top:1px solid var(--bd); font-size:11px; color:var(--tx3); }
+  .gs-foot kbd{ font:500 10px var(--font-mono); border:1px solid var(--bd); border-radius:4px; padding:0 4px; margin-right:3px; color:var(--tx2); }
+  html.lite .gs-foot{ display:none; }
+  .flash-row{ animation:flashRow 1.6s ease-out; }
+  @keyframes flashRow{ 0%,30%{ background:var(--accent-dim); box-shadow:inset 3px 0 0 var(--accent); } 100%{ background:transparent; box-shadow:none; } }
   .storage-alert{ position:fixed; z-index:21000; top:calc(env(safe-area-inset-top, 0px) + 10px); left:50%; transform:translateX(-50%); width:min(640px, calc(100vw - 24px)); display:flex; align-items:center; gap:10px; padding:10px 12px; border-radius:8px; border:1px solid var(--crit); background:#2A1414; color:#F4C7C5; font-size:13px; line-height:1.45; box-shadow:0 10px 30px rgba(0,0,0,.5); }
   .storage-alert[hidden]{ display:none; }
   .storage-alert.warn{ border-color:#C9A55A; background:#2A2314; color:#EBD9AE; }
@@ -966,12 +999,22 @@
       <span class="tab" data-tab="lists" title="Réf. & data"><svg class="tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg><span class="sidebar-label-text">Réf. &amp; data</span><span class="tab-badge" id="conflicts-badge"></span></span>
     </div>
 
+    <button type="button" class="gs-open" id="gs-open-btn" title="Rechercher partout (Ctrl+K)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg><span class="sidebar-label-text">Rechercher</span><kbd class="sidebar-label-text">Ctrl K</kbd></button>
     <button type="button" class="sync-pill" id="sync-pill" data-k="off"><span class="sync-dot"></span><span class="sync-label sidebar-label-text">Synchro</span></button>
     <button type="button" class="app-sidebar-back app-sidebar-help" id="help-btn" title="Mode d'emploi"><span class="back-arrow">?</span><span class="sidebar-label-text">Mode d'emploi</span></button>
     <a href="index.html?widget" class="app-sidebar-back app-sidebar-widget" title="Widget"><span class="back-arrow">←</span><span class="sidebar-label-text">Widget</span></a>
   </nav>
 
 <div class="storage-alert" id="storage-alert" role="alert" hidden><span id="storage-alert-text"></span><button type="button" id="storage-alert-see">Voir l'espace</button><button type="button" id="storage-alert-close" aria-label="Fermer">✕</button></div>
+<button type="button" class="gs-open-lite" id="gs-open-lite" aria-label="Rechercher partout"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg></button>
+<div class="gs-overlay" id="gs-overlay" hidden>
+  <div class="gs-box" role="dialog" aria-modal="true" aria-label="Rechercher partout">
+    <div class="gs-field"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
+      <input type="text" id="gs-input" placeholder="Tâche, contact, société, centrale, département…" autocomplete="off" role="combobox" aria-expanded="true" aria-controls="gs-results" aria-autocomplete="list"></div>
+    <div class="gs-results" id="gs-results" role="listbox"></div>
+    <div class="gs-foot"><span><kbd>↑</kbd><kbd>↓</kbd> choisir</span><span><kbd>Entrée</kbd> ouvrir</span><span><kbd>Échap</kbd> fermer</span></div>
+  </div>
+</div>
 <div class="widget-hint" id="widget-hint" hidden>Widget Todo : clique sur la bulle en bas à droite, ou Ctrl+K.</div>
 <button type="button" class="widget-bubble" id="widget-bubble" aria-label="Ouvrir les tâches" title="Tâches (Ctrl+K) — glisser pour déplacer"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg><span class="widget-badge" id="widget-badge"></span></button>
 <button type="button" class="sync-pill sync-pill-lite" id="sync-pill-lite" data-k="off"><span class="sync-dot"></span><span class="sync-label">Synchro</span></button>
@@ -1265,7 +1308,7 @@
           </ul>
           <h4>Raccourcis</h4>
           <ul>
-            <li><kbd>n</kbd> ou <kbd>Ctrl</kbd>+<kbd>K</kbd> ajouter une tâche · <kbd>Ctrl</kbd>+<kbd>F</kbd> rechercher · <kbd>p</kbd> ouvrir la note</li>
+            <li><kbd>Ctrl</kbd>+<kbd>K</kbd> rechercher partout (tâches, contacts, sociétés, pipeline, Portefeuille) ; <kbd>Entrée</kbd> sans choisir de résultat crée la tâche · <kbd>n</kbd> ajouter une tâche · <kbd>Ctrl</kbd>+<kbd>F</kbd> filtrer les tâches · <kbd>p</kbd> ouvrir la note</li>
             <li><kbd>j</kbd>/<kbd>k</kbd> se déplacer · <kbd>Entrée</kbd> valider la tâche sélectionnée · <kbd>e</kbd> la modifier · <kbd>Échap</kbd> fermer</li>
           </ul>
         </section>
@@ -3758,7 +3801,7 @@
 
   let expandedContacts=new Set();
   function buildContactRow(c, rowNum){
-    const row=document.createElement('div'); row.className='contact-row'+((rowNum%2===0)?' tint-alt':'');
+    const row=document.createElement('div'); row.className='contact-row'+((rowNum%2===0)?' tint-alt':''); row.dataset.cid=c.id;
 
     const numSpan=document.createElement('span'); numSpan.className='row-num'; numSpan.textContent=rowNum||'';
     row.appendChild(numSpan);
@@ -6572,7 +6615,7 @@
   document.addEventListener('click',e=>{ if(snoozePopover.style.display==='flex'&&!snoozePopover.contains(e.target))closeSnoozePopover(); });
 
   document.addEventListener('keydown',e=>{
-    if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='k'){ e.preventDefault(); if(window.TODO_WIDGET && !window.TODO_PIP && !document.documentElement.classList.contains('widget-open')){ window.__widgetToggle(); return; } quickAddInput.focus(); return; }
+    if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='k'){ e.preventDefault(); if(window.TODO_WIDGET){ if(!window.TODO_PIP && !document.documentElement.classList.contains('widget-open')){ window.__widgetToggle(); return; } quickAddInput.focus(); return; } if($('gs-overlay').hidden) gsOpen(); else gsClose(); return; }
     if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='f'){ e.preventDefault(); searchInput.focus(); return; }
     if(e.key==='Escape'){ if(snoozePopover.style.display==='flex'){ closeSnoozePopover(); return; } if(editingId){ editingId=null; render(); return; } if(document.activeElement&&document.activeElement.id==='f-title'){ closeAddForm(); return; } if(document.activeElement===quickAddInput){ quickAddInput.blur(); return; } if(document.activeElement===searchInput&&searchQuery){ searchInput.value=''; searchQuery=''; searchClear.classList.remove('show'); render(); return; } return; }
     const tag=document.activeElement.tagName; if(tag==='INPUT'||tag==='TEXTAREA'||tag==='SELECT')return;
@@ -7249,6 +7292,83 @@
     document.addEventListener('click', e=>{ if(e.target.closest('.tab')) setTimeout(sync,0); }, true);
     sync();
   }
+  // ---------- Global search (Ctrl+K): tasks, contacts, companies, pipeline, Portefeuille in one list ----------
+  // Enter with nothing chosen creates the task (Ctrl+K used to be « add a task »: the habit still works).
+  const gsTab=name=>{ const t=document.querySelector('.tab[data-tab="'+name+'"]'); if(t) t.click(); };
+  const gsFlash=sel=>setTimeout(()=>{ const el=document.querySelector(sel); if(el){ el.scrollIntoView({ block:'center', behavior:'smooth' }); el.classList.remove('flash-row'); void el.offsetWidth; el.classList.add('flash-row'); } }, 80);
+  function openTaskEverywhere(id){
+    const t=tasks.find(x=>x.id===id); if(!t) return;
+    if(t.archived){ gsTab('archive'); gsFlash('#archive-list [data-id="'+id+'"]'); return; }
+    gsTab('tasks'); if(searchInput.value){ searchInput.value=''; searchQuery=''; searchClear.classList.remove('show'); }
+    selectedTaskId=id; render(); gsFlash('#task-list [data-id="'+id+'"]');
+  }
+  function openContactEverywhere(id){
+    const c=contacts.find(x=>x.id===id); if(!c) return;
+    gsTab('contacts'); const s=$('contact-search'); if(s.value){ s.value=''; $('contact-search-clear').classList.remove('show'); }
+    if(c.company) collapsedCompanies.delete(c.company);
+    expandedContacts.add(id); renderContacts(); gsFlash('#contacts-list [data-cid="'+id+'"]');
+  }
+  function openParcItem(p){
+    gsTab('parc'); parcSearch=p.inst||p.prod||''; if(parcFilter!=='Tous' && p.statut!==parcFilter) parcFilter='Tous'; renderParc();
+  }
+  // all the company names the app knows, from every module
+  function openCompany(name){
+    gsTab('contacts'); collapsedCompanies.delete(name); companyInfoOpen.add(name); renderContacts();
+  }
+  function allCompanyNames(){
+    const m=new Map(); const add=n=>{ n=String(n||'').trim(); if(n && !m.has(pqFold(n))) m.set(pqFold(n), n); };
+    companies.filter(c=>!c.deleted).forEach(c=>add(c.name)); contacts.filter(c=>!c.deleted).forEach(c=>add(c.company));
+    opportunities.filter(o=>!o.deleted).forEach(o=>add(o.company)); clientsList.forEach(add);
+    return [...m.values()];
+  }
+  function gsSearch(q){
+    const words=pqFold(q).split(/\s+/).filter(Boolean); if(!words.length) return [];
+    const hit=(...parts)=>{ const s=pqFold(parts.filter(Boolean).join(' ')); return words.every(w=>s.includes(w)); };
+    const score=title=>pqFold(title).startsWith(words[0])?0:1;
+    const top=(list,n)=>list.sort((a,b)=>score(a.title)-score(b.title)||a.title.localeCompare(b.title,'fr')).slice(0,n);
+    const groups=[];
+    const tk=top(tasks.filter(t=>!t.deleted && hit(t.title,t.client,t.project,t.description)).map(t=>({ ic:t.archived?'✓':'T', title:t.title, sub:[t.client, t.archived?'archivée':(t.due?'pour le '+t.due.split('-').reverse().join('/'):'')].filter(Boolean).join(' · '), go:()=>openTaskEverywhere(t.id) })),6);
+    if(tk.length) groups.push(['Tâches',tk]);
+    const ct=top(activeContacts().filter(c=>hit(c.firstName,c.lastName,c.company,c.role,c.email,(c.phone1||'').replace(/\D/g,''),(c.phone2||'').replace(/\D/g,''))).map(c=>({ ic:((c.firstName||'')[0]||'')+((c.lastName||'')[0]||'')||'?', title:[c.firstName,c.lastName].filter(Boolean).join(' ')||'(sans nom)', sub:[c.role,c.company,c.phone1].filter(Boolean).join(' · '), go:()=>openContactEverywhere(c.id) })),5);
+    if(ct.length) groups.push(['Contacts',ct]);
+    const co=top(allCompanyNames().filter(n=>hit(n)).map(n=>{ const nC=activeContacts().filter(c=>c.company===n).length, nO=activeOpportunities().filter(o=>o.company===n).length;
+      return { ic:'S', title:n, sub:[nC?nC+' contact'+(nC>1?'s':''):'', nO?nO+' opportunité'+(nO>1?'s':''):''].filter(Boolean).join(' · ')||'Société', go:()=>openCompany(n) }; }),5);
+    if(co.length) groups.push(['Sociétés',co]);
+    const op=top(opportunities.filter(o=>!o.deleted && o.kind!=='request' && hit(oppName(o),o.company,o.producteur,o.dept,o.commune)).map(o=>({ ic:'P', title:oppName(o), sub:[o.company, stageLabel(o.stage)].filter(Boolean).join(' · '), right:fmtKwc(o.kwc), go:()=>{ gsTab('pipeline'); setTimeout(()=>openOppDetail(o.id),30); } })),6);
+    if(op.length) groups.push(['Pipeline',op]);
+    if(parcData===null) loadParc();
+    if(parcData){ const pc=top(parcData.items.filter(p=>hit(p.inst,p.prod,p.dev,p.siteDept,p.dept)).map(p=>({ ic:'€', title:p.inst||p.prod||'(sans nom)', sub:[p.prod&&p.prod!==p.inst?p.prod:'', p.statut, p.siteDept||p.dept].filter(Boolean).join(' · '), right:p.kwc?fmtKwc(p.kwc):'', go:()=>openParcItem(p) })),6);
+      if(pc.length) groups.push(['Portefeuille',pc]); }
+    return groups;
+  }
+  let gsList=[], gsActive=0;
+  function gsRender(){
+    const q=$('gs-input').value.trim(), box=$('gs-results'); box.innerHTML=''; gsList=[];
+    if(!q){ box.innerHTML='<div class="gs-empty">Tape un nom, une société, une centrale, un département…<br>Entrée sans choisir : crée la tâche.</div>'; return; }
+    const groups=gsSearch(q);
+    const add=(it,cls)=>{ const i=gsList.length; gsList.push(it); const b=document.createElement('button'); b.type='button'; b.className='gs-item'+(cls?' '+cls:''); b.setAttribute('role','option'); b.id='gs-opt-'+i;
+      b.innerHTML='<span class="gs-ic"></span><span class="gs-t"><b></b><span></span></span><span class="gs-r"></span>';
+      b.querySelector('.gs-ic').textContent=it.ic; b.querySelector('b').textContent=it.title; b.querySelector('.gs-t span').textContent=it.sub||''; b.querySelector('.gs-r').textContent=it.right||'';
+      b.onmousemove=()=>{ if(gsActive!==i){ gsActive=i; gsPaint(); } }; b.onclick=()=>gsGo(i); box.appendChild(b); };
+    add({ ic:'+', title:'Créer la tâche « '+q+' »', sub:'Entrée', go:()=>{ quickAddInput.value=q; quickAdd(); gsTab('tasks'); } }, 'create');
+    groups.forEach(([label,items])=>{ const g=document.createElement('div'); g.className='gs-group'; g.textContent=label; box.appendChild(g); items.forEach(it=>add(it)); });
+    if(!groups.length){ const e=document.createElement('div'); e.className='gs-empty'; e.textContent='Rien trouvé ailleurs.'; box.appendChild(e); }
+    gsActive=0; gsPaint();
+  }
+  function gsPaint(){ document.querySelectorAll('#gs-results .gs-item').forEach((b,i)=>b.classList.toggle('on', i===gsActive)); $('gs-input').setAttribute('aria-activedescendant','gs-opt-'+gsActive); const on=$('gs-opt-'+gsActive); if(on) on.scrollIntoView({ block:'nearest' }); }
+  function gsGo(i){ const it=gsList[i]; if(!it) return; gsClose(); it.go(); }
+  function gsOpen(){ $('gs-overlay').hidden=false; const inp=$('gs-input'); inp.value=''; gsRender(); inp.focus(); }
+  function gsClose(){ $('gs-overlay').hidden=true; }
+  $('gs-input').addEventListener('input', gsRender);
+  $('gs-input').addEventListener('keydown', e=>{
+    if(e.key==='ArrowDown'){ e.preventDefault(); gsActive=Math.min(gsList.length-1, gsActive+1); gsPaint(); }
+    else if(e.key==='ArrowUp'){ e.preventDefault(); gsActive=Math.max(0, gsActive-1); gsPaint(); }
+    else if(e.key==='Enter'){ e.preventDefault(); gsGo(gsActive); }
+    else if(e.key==='Escape'){ e.preventDefault(); e.stopPropagation(); gsClose(); }
+  });
+  $('gs-overlay').addEventListener('click', e=>{ if(e.target.id==='gs-overlay') gsClose(); });
+  $('gs-open-btn').onclick=gsOpen; $('gs-open-lite').onclick=gsOpen;
+
   // ---------- widget mode: the tasks tab in a floating panel opened from a draggable bubble ----------
   function widgetOpenFull(url){
     url=url||'index.html';
