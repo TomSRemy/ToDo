@@ -475,6 +475,11 @@ with sync_playwright() as p:
     check(page.get_attribute(".parc-map", "viewBox").startswith("0 0 "), "portefeuille: reset shows all France again")
     page.hover(".parc-kpis .stat-card >> nth=1"); page.wait_for_timeout(100)
     check(page.is_visible(".parc-kpis .chart-tip") and "Solaire PV" in page.inner_text(".parc-kpis .chart-tip"), "portefeuille: hovering a figure shows its detail")
+    page.click(".parc-kpis .stat-card >> nth=2"); page.wait_for_timeout(150)
+    check(page.is_visible(".parc-kpi-filter") and page.locator(".parc-map .dot").count() == 1 and page.locator(".parc-table tbody tr").count() == 1,
+          "portefeuille: clicking « fins de contrat » filters the map and the table")
+    page.click(".parc-kpi-filter button"); page.wait_for_timeout(150)
+    check(not page.is_visible(".parc-kpi-filter") and page.locator(".parc-map .dot").count() == 2, "portefeuille: removing the filter shows everything again")
     page.click("#parc-source-btn"); page.fill("#parc-link", "https://example.sharepoint.com/sites/x/Suivi.xlsx"); page.click("#parc-link-save")
     check(page.get_attribute("#parc-open-link", "href") == "https://example.sharepoint.com/sites/x/Suivi.xlsx" and page.is_visible("#parc-open-link"), "portefeuille: Excel link saved, opens in one click")
     page.hover(".parc-chart .hz >> nth=0"); page.wait_for_timeout(100)
@@ -576,6 +581,23 @@ with sync_playwright() as p:
     page.wait_for_function("navigator.serviceWorker && navigator.serviceWorker.controller", timeout=15000)
     shas = [page.evaluate("fetch('https://api.github.com/repos/o/r/contents/data/tasks.json').then(r=>r.json()).then(d=>d.sha)") for _ in range(3)]
     check(shas == ["s1", "s2", "s3"], f"service worker never serves sync data from its cache ({shas})")
+    ctx.close(); srv.shutdown()
+
+    # --- Service worker: a new version of the page shows at the first reload (pages are network first)
+    import shutil
+    site = pathlib.Path(tempfile.mkdtemp()) / "site"
+    shutil.copytree(root, site, ignore=shutil.ignore_patterns(".git", "tests", "__pycache__"))
+    srv = http.server.ThreadingHTTPServer(("127.0.0.1", 0), functools.partial(http.server.SimpleHTTPRequestHandler, directory=str(site)))
+    srv.RequestHandlerClass.log_message = lambda *a: None
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    ctx = browser.new_context(service_workers="allow")
+    ctx.route("**/fonts.g*/**", lambda r: r.abort())
+    page = ctx.new_page(); page.goto("http://127.0.0.1:%d/index.html" % srv.server_address[1])
+    page.wait_for_function("navigator.serviceWorker && navigator.serviceWorker.controller", timeout=15000)
+    html = (site / "index.html").read_text(encoding="utf-8")
+    (site / "index.html").write_text(html.replace("</body>", "<div id='new-version-marker'></div></body>"), encoding="utf-8")
+    page.reload()
+    check(page.locator("#new-version-marker").count() == 1, "a published update shows at the first reload")
     ctx.close(); srv.shutdown()
 
     browser.close()

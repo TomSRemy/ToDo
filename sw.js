@@ -1,4 +1,4 @@
-const CACHE = 'todo-pwa-v10';
+const CACHE = 'todo-pwa-v11';
 // Excel / Outlook reader, loaded on demand by the app: kept for offline use
 const XLSX_URL = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
 const ASSETS = [
@@ -42,6 +42,20 @@ self.addEventListener('fetch', e => {
   const sameOrigin = new URL(e.request.url).origin === self.location.origin;
   if (!sameOrigin && e.request.url !== XLSX_URL) return;
 
+  // Pages (index.html, mobile.html…): network first, so a new version shows at the first reload;
+  // the cached copy only serves when offline.
+  const isPage = e.request.mode === 'navigate' || /\.html?$/.test(new URL(e.request.url).pathname) || e.request.url.endsWith('/');
+  if (sameOrigin && isPage) {
+    e.respondWith(
+      fetch(e.request).then(res => {
+        if (res && res.ok) { const clone = res.clone(); caches.open(CACHE).then(c => c.put(e.request, clone)); }
+        return res;
+      }).catch(() => caches.match(e.request).then(c => c || caches.match('./index.html')))
+    );
+    return;
+  }
+
+  // Other files (icons, manifest, Excel library): cache first, refreshed in the background
   e.respondWith(
     caches.match(e.request).then(cached => {
       const fetchPromise = fetch(e.request).then(res => {
