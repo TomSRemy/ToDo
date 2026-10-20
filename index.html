@@ -587,6 +587,48 @@
   .pipe-bar-link{ margin-left:auto; background:none; border:none; color:var(--tx3); font-family:var(--font-mono); font-size:10.5px; cursor:pointer; }
   .pipe-bar-link:hover{ color:var(--accent); }
   .modal-box.wide{ max-width:760px; }
+  /* ---- company sheet (« fiche société ») ---- */
+  .co-sheet.modal-box.wide{ max-width:920px; padding:0; }
+  .co-sheet-head{ display:flex; gap:14px; align-items:flex-start; justify-content:space-between; padding:18px 20px 14px; border-bottom:1px solid var(--bd); position:sticky; top:0; background:var(--panel); z-index:1; }
+  .co-sheet-id{ min-width:0; }
+  .co-sheet-eyebrow{ font:500 10px var(--font-mono); text-transform:uppercase; letter-spacing:.7px; color:var(--tx3); }
+  .co-sheet-head h3{ margin:3px 0 6px; font-size:20px; font-weight:650; color:var(--tx1); }
+  .co-sheet-meta{ display:flex; flex-wrap:wrap; align-items:center; gap:10px; font-size:12px; color:var(--tx2); }
+  .co-sheet-meta a{ color:var(--accent); text-decoration:none; }
+  .co-sheet-btns{ display:flex; gap:8px; align-items:center; flex-shrink:0; }
+  .co-sheet-edit{ background:none; border:1px solid var(--bd); border-radius:6px; color:var(--tx2); height:30px; padding:0 12px; font:500 12.5px var(--font-ui); cursor:pointer; }
+  .co-sheet-edit:hover, .co-sheet-x:hover{ color:var(--tx1); border-color:var(--tx3); }
+  .co-sheet-x{ background:none; border:1px solid var(--bd); border-radius:6px; color:var(--tx2); width:30px; height:30px; cursor:pointer; }
+  .co-kpis{ display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); border-bottom:1px solid var(--bd); }
+  .co-kpi{ padding:12px 20px; display:flex; flex-direction:column; gap:2px; min-width:0; }
+  .co-kpi + .co-kpi{ border-left:1px solid var(--bd-soft); }
+  .co-kpi b{ font:500 19px var(--font-mono); color:var(--tx1); font-variant-numeric:tabular-nums; }
+  .co-kpi span{ font-size:11.5px; color:var(--tx3); }
+  .co-kpi.alert b{ color:var(--crit); }
+  .co-grid{ display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:0; }
+  .co-col{ display:flex; flex-direction:column; min-width:0; }
+  .co-col + .co-col{ border-left:1px solid var(--bd-soft); }
+  .co-sec{ padding:14px 20px; border-bottom:1px solid var(--bd-soft); display:flex; flex-direction:column; gap:4px; }
+  .co-sec h4{ margin:0 0 4px; font:500 10.5px var(--font-mono); text-transform:uppercase; letter-spacing:.6px; color:var(--tx3); display:flex; justify-content:space-between; gap:8px; }
+  .co-row{ display:grid; grid-template-columns:minmax(0,1fr) auto; gap:10px; align-items:baseline; padding:5px 6px; margin:0 -6px; border-radius:6px; background:none; border:none; text-align:left; font:inherit; color:var(--tx2); width:calc(100% + 12px); }
+  button.co-row{ cursor:pointer; } button.co-row:hover{ background:var(--panel-2); }
+  .co-row .k{ min-width:0; display:flex; flex-direction:column; }
+  .co-row .k b{ font-weight:500; font-size:13px; color:var(--tx1); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .co-row .k span{ font-size:11.5px; color:var(--tx3); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .co-row .v{ font:500 11.5px var(--font-mono); color:var(--tx3); white-space:nowrap; font-variant-numeric:tabular-nums; }
+  .co-row.late .v{ color:var(--crit); }
+  .co-empty{ font-size:12.5px; color:var(--tx3); font-style:italic; }
+  .co-more{ align-self:flex-start; background:none; border:none; color:var(--accent); font:500 12px var(--font-ui); cursor:pointer; padding:4px 0; }
+  .co-tl{ display:flex; flex-direction:column; }
+  .co-tl-row{ display:grid; grid-template-columns:72px 10px minmax(0,1fr); gap:8px; font-size:12.5px; color:var(--tx2); padding:4px 0; }
+  .co-tl-row .d{ font:500 11px var(--font-mono); color:var(--tx3); white-space:nowrap; }
+  .co-tl-row i{ width:7px; height:7px; border-radius:50%; background:var(--tx3); margin-top:6px; }
+  .co-tl-row.rdv i{ background:var(--accent); } .co-tl-row.stage i{ background:var(--med); } .co-tl-row.done i{ background:var(--ok); opacity:.6; }
+  .co-tl-row b{ font-weight:500; color:var(--tx1); }
+  .co-sheet-btn{ background:none; border:1px solid var(--bd); border-radius:5px; color:var(--tx3); cursor:pointer; height:22px; padding:0 7px; font:500 10.5px var(--font-mono); flex-shrink:0; }
+  .co-sheet-btn:hover{ color:var(--accent); border-color:var(--accent); }
+  .opp-co-link{ background:none; border:none; padding:0; margin:-6px 0 10px; color:var(--accent); font:500 12px var(--font-ui); cursor:pointer; }
+  @media (max-width: 760px){ .co-grid{ grid-template-columns:1fr; } .co-col + .co-col{ border-left:none; } .co-kpis{ grid-template-columns:repeat(2,minmax(0,1fr)); } .co-kpi:nth-child(3){ border-left:none; } .co-kpi:nth-child(n+3){ border-top:1px solid var(--bd-soft); } }
   .opp-sheet-head{ display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin:-4px 0 10px; }
   .opp-sheet-meta{ font-size:12px; color:var(--tx2); }
   .opp-sheet{ display:flex; flex-direction:column; gap:12px; border-top:1px solid var(--bd-soft); padding-top:10px; }
@@ -1473,6 +1515,16 @@
     </div>
   </div>
 
+  <div id="co-sheet-overlay" class="modal-overlay hidden">
+    <div class="modal-box wide co-sheet" role="dialog" aria-labelledby="co-sheet-title">
+      <div class="co-sheet-head">
+        <div class="co-sheet-id"><div class="co-sheet-eyebrow" id="co-sheet-eyebrow">Société</div><h3 id="co-sheet-title"></h3><div class="co-sheet-meta" id="co-sheet-meta"></div></div>
+        <div class="co-sheet-btns"><button type="button" class="co-sheet-edit" id="co-sheet-edit">Modifier</button><button type="button" class="co-sheet-x" id="co-sheet-close" aria-label="Fermer">✕</button></div>
+      </div>
+      <div id="co-sheet-body"></div>
+    </div>
+  </div>
+
   <div id="opp-detail-overlay" class="modal-overlay hidden">
     <div class="modal-box wide" role="dialog" aria-labelledby="opp-detail-title">
       <h3 id="opp-detail-title"></h3>
@@ -1844,7 +1896,13 @@
     }catch(e){ console.error(e); }
   }
   async function saveCrm(){ await saveCrmLocalOnly(); scheduleCrmSyncPush(); }
-  function touchCrm(o){ o.updatedAt=Date.now(); }
+  function touchCrm(o){
+    o.updatedAt=Date.now();
+    if(o && o.stage && (o.kind==='installation'||o.kind==='prequal'||o.kind==='request')){
+      const log=Array.isArray(o.stageLog)?o.stageLog:[];
+      if(!log.length || log[log.length-1].stage!==o.stage){ log.push({ stage:o.stage, at:o.updatedAt }); o.stageLog=log.slice(-30); }
+    }
+  }
 
   function touch(t){ t.updatedAt=Date.now(); }
 
@@ -3664,6 +3722,10 @@
     typeTag.onclick=e=>openCompanyTypePopover(e, companyName);
     header.appendChild(typeTag);
 
+    const sheetBtn=document.createElement('button'); sheetBtn.type='button'; sheetBtn.className='co-sheet-btn'; sheetBtn.textContent='Fiche';
+    sheetBtn.title='Tout sur '+companyName+' : contacts, pipeline, contrats, échéances, historique';
+    sheetBtn.onclick=e=>{ e.stopPropagation(); openCompanySheet(companyName); };
+    header.appendChild(sheetBtn);
     if(companyHasInfo(co)){
       const infoOpen=companyInfoOpen.has(companyName);
       const info=document.createElement('button'); info.type='button'; info.className='co-info-btn';
@@ -5434,6 +5496,7 @@
     viewingOppId=id;
     const box=$('opp-detail-body'); box.innerHTML='';
     $('opp-detail-title').textContent=o.kind==='prequal'?o.company+' — pré-qualif':o.company+' — '+oppName(o);
+    if(o.company){ const l=document.createElement('button'); l.type='button'; l.className='opp-co-link'; l.textContent='Fiche '+o.company+' →'; l.onclick=()=>{ closeOppDetail(); openCompanySheet(o.company); }; box.appendChild(l); }
     const actions=$('opp-detail-actions'); actions.innerHTML='';
     if(o.kind==='prequal'){
       const p=document.createElement('p'); p.className='modal-hint'; p.textContent=(o.metAt?'Rencontré le '+pqIsoToFr(o.metAt)+'. ':'')+(o.note||'Pas de note.');
@@ -7312,9 +7375,77 @@
     gsTab('parc'); parcSearch=p.inst||p.prod||''; if(parcFilter!=='Tous' && p.statut!==parcFilter) parcFilter='Tous'; renderParc();
   }
   // all the company names the app knows, from every module
-  function openCompany(name){
-    gsTab('contacts'); collapsedCompanies.delete(name); companyInfoOpen.add(name); renderContacts();
+  function openCompany(name){ openCompanySheet(name); }
+
+  // ---------- Company sheet: everything about one client on one screen, with its history ----------
+  const sameCo=(a,b)=>!!a && !!b && pqFold(a).trim()===pqFold(b).trim();
+  let coSheetName=null;
+  const coDate=ms=>{ const d=new Date(ms); return isNaN(d)?'':String(d.getDate()).padStart(2,'0')+'/'+String(d.getMonth()+1).padStart(2,'0')+'/'+String(d.getFullYear()).slice(2); };
+  function companyHistory(name){
+    const ev=[], cts=activeContacts().filter(c=>sameCo(c.company,name)), ids=new Set(cts.map(c=>c.id));
+    meetings.filter(m=>!m.deleted && ids.has(m.contactId)).forEach(m=>{ const c=cts.find(x=>x.id===m.contactId); ev.push({ at:new Date((m.date||'')+'T12:00:00').getTime()||m.createdAt, kind:'rdv', html:'<b>RDV</b> avec '+escapeHtml([c.firstName,c.lastName].filter(Boolean).join(' '))+(m.label?' : '+escapeHtml(m.label):'') }); });
+    tasks.filter(t=>!t.deleted && t.archived && sameCo(t.client,name)).forEach(t=>ev.push({ at:t.archivedAt||t.updatedAt, kind:'done', html:'Fait : '+escapeHtml(t.title) }));
+    opportunities.filter(o=>!o.deleted && (sameCo(o.company,name)||sameCo(o.producteur,name))).forEach(o=>{
+      if(o.createdAt>1e12) ev.push({ at:o.createdAt, kind:'new', html:(o.kind==='request'?'Demande reçue : ':o.kind==='prequal'?'Pré-qualification : ':'Nouvelle opportunité : ')+'<b>'+escapeHtml(o.kind==='prequal'?'rencontre':oppName(o))+'</b>' });
+      (o.stageLog||[]).forEach((s,i)=>{ if(i===0 && Math.abs(s.at-(o.createdAt||0))<60000) return; ev.push({ at:s.at, kind:'stage', html:escapeHtml(o.kind==='prequal'?'Pré-qualif':oppName(o))+' → <b>'+escapeHtml(stageLabel(s.stage))+'</b>' }); });
+    });
+    cts.forEach(c=>{ if(c.createdAt>1e12) ev.push({ at:c.createdAt, kind:'new', html:'Nouveau contact : <b>'+escapeHtml([c.firstName,c.lastName].filter(Boolean).join(' '))+'</b>' }); });
+    return ev.filter(e=>e.at).sort((a,b)=>b.at-a.at);
   }
+  function openCompanySheet(name, opts){
+    opts=opts||{};
+    name=allCompanyNames().find(n=>sameCo(n,name))||name;
+    coSheetName=name;
+    const co=companies.find(x=>!x.deleted && sameCo(x.name,name));
+    const cts=activeContacts().filter(c=>sameCo(c.company,name)).sort((a,b)=>contactSortName(a).localeCompare(contactSortName(b),'fr'));
+    const opps=opportunities.filter(o=>!o.deleted && o.kind!=='request' && (sameCo(o.company,name)||sameCo(o.producteur,name)));
+    const live=opps.filter(o=>!isExited(o) && o.stage!=='converti'), gone=opps.length-live.length;
+    const open=activeTasks().filter(t=>sameCo(t.client,name)).sort((a,b)=>(a.due||'9999').localeCompare(b.due||'9999'));
+    const parc=parcForCompany(name), won=parc.filter(p=>p.statut==='Gagné');
+    const today=toISO(new Date()), in12=toISO(new Date(Date.now()+365*864e5));
+    const late=open.filter(t=>dueStatus(t.due)==='overdue').length;
+    $('co-sheet-title').textContent=name;
+    const meta=$('co-sheet-meta'); meta.innerHTML='';
+    meta.appendChild(starsWidget(companyStars(name), n=>{ setCompanyStars(name, n); openCompanySheet(name); }));
+    const addMeta=t=>{ if(!t) return; const s=document.createElement('span'); s.textContent=t; meta.appendChild(s); };
+    addMeta(co&&co.type); addMeta(co&&co.whatTheyDo);
+    if(co&&co.website){ const a=document.createElement('a'); a.href=co.website.startsWith('http')?co.website:'https://'+co.website; a.target='_blank'; a.rel='noopener'; a.textContent=co.website.replace(/^https?:\/\//,''); meta.appendChild(a); }
+    const kwcOf=list=>list.reduce((s,o)=>s+(pqNum(String(o.kwc||''))||0),0);
+    const body=$('co-sheet-body'); body.innerHTML='';
+    const k=document.createElement('div'); k.className='co-kpis';
+    [[cts.length,'contact'+(cts.length>1?'s':'')],[live.length+(live.length?' · '+fmtMwc(kwcOf(live)):''),'en pipeline'],[won.length+(won.length?' · '+fmtMwc(won.reduce((s,p)=>s+(p.kwc||0),0)):''),'contrat'+(won.length>1?'s':'')+' gagné'+(won.length>1?'s':'')],[open.length,'tâche'+(open.length>1?'s':'')+' ouverte'+(open.length>1?'s':'')+(late?' · '+late+' en retard':''), late]]
+      .forEach(([v,l,alert])=>{ const d=document.createElement('div'); d.className='co-kpi'+(alert?' alert':''); d.innerHTML='<b></b><span></span>'; d.querySelector('b').textContent=v; d.querySelector('span').textContent=l; k.appendChild(d); });
+    body.appendChild(k);
+    const grid=document.createElement('div'); grid.className='co-grid'; body.appendChild(grid);
+    const colL=document.createElement('div'), colR=document.createElement('div'); colL.className=colR.className='co-col'; grid.append(colL, colR);
+    const section=(col,title,rows,empty,extra)=>{ const s=document.createElement('div'); s.className='co-sec'; const h=document.createElement('h4'); h.textContent=title; if(extra) h.appendChild(extra); s.appendChild(h);
+      if(!rows.length){ const e=document.createElement('div'); e.className='co-empty'; e.textContent=empty; s.appendChild(e); } else rows.forEach(r=>s.appendChild(r)); col.appendChild(s); return s; };
+    const row=(title,sub,val,fn,cls)=>{ const r=document.createElement(fn?'button':'div'); if(fn){ r.type='button'; r.onclick=()=>{ closeCompanySheet(); fn(); }; } r.className='co-row'+(cls?' '+cls:'');
+      r.innerHTML='<span class="k"><b></b><span></span></span><span class="v"></span>'; r.querySelector('b').textContent=title; r.querySelector('.k span').textContent=sub||''; r.querySelector('.v').textContent=val||''; return r; };
+    // what is coming up: dated tasks, contracts ending within a year
+    const next=[...open.filter(t=>t.due).map(t=>({ d:t.due, r:row(t.title,'Tâche',pqIsoToFr(t.due),()=>openTaskEverywhere(t.id), dueStatus(t.due)==='overdue'?'late':'') })),
+      ...parc.filter(p=>p.fin && p.fin>=today && p.fin<=in12).map(p=>({ d:p.fin, r:row('Fin de contrat : '+(p.inst||p.prod), p.kwc?fmtKwc(p.kwc):'', pqIsoToFr(p.fin), ()=>openParcItem(p)) }))]
+      .sort((a,b)=>a.d.localeCompare(b.d)).slice(0,6).map(x=>x.r);
+    section(colL,'À venir',next,'Rien de daté pour ce client.');
+    section(colL,'Contacts',cts.map(c=>row([c.firstName,c.lastName].filter(Boolean).join(' ')||'(sans nom)',[c.role,c.email].filter(Boolean).join(' · '),c.phone1||c.phone2||'',()=>openContactEverywhere(c.id))),'Aucun contact.');
+    section(colL,'Pipeline',live.map(o=>row(oppName(o),stageLabel(o.stage)+(o.dept?' · '+o.dept:''),fmtKwc(o.kwc),()=>{ gsTab('pipeline'); setTimeout(()=>openOppDetail(o.id),30); })),'Aucune opportunité en cours.'+(gone?' ('+gone+' terminée'+(gone>1?'s':'')+')':''));
+    section(colR,'Portefeuille',parc.slice().sort((a,b)=>(a.statut==='Gagné'?0:1)-(b.statut==='Gagné'?0:1)||(a.fin||'9').localeCompare(b.fin||'9')).slice(0,8)
+      .map(p=>row(p.inst||p.prod||'(sans nom)',[p.statut,p.fin?'fin '+pqIsoToFr(p.fin):''].filter(Boolean).join(' · '),p.kwc?fmtKwc(p.kwc):'',()=>openParcItem(p))),
+      parcData?'Aucun contrat dans le Suivi Agrégation.':'Charge le Suivi Agrégation dans Portefeuille pour voir les contrats.');
+    section(colR,'Tâches ouvertes',open.slice(0,6).map(t=>row(t.title,t.due?'pour le '+pqIsoToFr(t.due):'sans date','',()=>openTaskEverywhere(t.id),dueStatus(t.due)==='overdue'?'late':'')),'Aucune tâche ouverte.');
+    // history: meetings, done tasks, pipeline steps, new contacts and opportunities
+    const hist=companyHistory(name), all=!!opts.allHistory;
+    const tl=document.createElement('div'); tl.className='co-tl';
+    hist.slice(0, all?hist.length:10).forEach(e=>{ const r=document.createElement('div'); r.className='co-tl-row '+e.kind; r.innerHTML='<span class="d">'+coDate(e.at)+'</span><i></i><span>'+e.html+'</span>'; tl.appendChild(r); });
+    const hs=section(colR,'Historique des échanges',hist.length?[tl]:[],'Pas encore d\u2019échange enregistré. Les RDV notés sur les contacts, les tâches faites et les étapes du pipeline s\u2019afficheront ici.');
+    if(hist.length>10 && !all){ const m=document.createElement('button'); m.type='button'; m.className='co-more'; m.textContent='Voir tout l\u2019historique ('+hist.length+')'; m.onclick=()=>openCompanySheet(name,{ allHistory:true }); hs.appendChild(m); }
+    $('co-sheet-overlay').classList.remove('hidden');
+  }
+  function closeCompanySheet(){ $('co-sheet-overlay').classList.add('hidden'); coSheetName=null; }
+  $('co-sheet-close').onclick=closeCompanySheet;
+  $('co-sheet-overlay').addEventListener('click', e=>{ if(e.target.id==='co-sheet-overlay') closeCompanySheet(); });
+  $('co-sheet-edit').onclick=()=>{ const n=coSheetName; closeCompanySheet(); if(n) openCompanyEditForm(n); };
+  document.addEventListener('keydown', e=>{ if(e.key==='Escape' && coSheetName){ e.stopPropagation(); closeCompanySheet(); } }, true);
   function allCompanyNames(){
     const m=new Map(); const add=n=>{ n=String(n||'').trim(); if(n && !m.has(pqFold(n))) m.set(pqFold(n), n); };
     companies.filter(c=>!c.deleted).forEach(c=>add(c.name)); contacts.filter(c=>!c.deleted).forEach(c=>add(c.company));

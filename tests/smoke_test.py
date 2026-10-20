@@ -288,6 +288,38 @@ with sync_playwright() as p:
     check(not errors, f"no page errors ({errors})")
     page.close()
 
+    # --- Company sheet: contacts, pipeline, tasks, what is coming up and the history of one client
+    now_ms = int(datetime.datetime.now().timestamp() * 1000)
+    late_day = (TODAY - datetime.timedelta(days=2)).isoformat()
+    cs_seed = {"todo_todo-widget-tasks": json.dumps([task("s1", "Relancer pour le CR", client="Solaris", due=late_day),
+                                                    task("s2", "Envoyer la proposition", client="Solaris", archived=True, archivedAt=now_ms - 86400000)]),
+               "todo_todo-widget-contacts": json.dumps([{"id": "sc1", "firstName": "Paul", "lastName": "Durand", "role": "Gérant", "company": "Solaris", "email": "p@solaris.fr",
+                                                        "phone1": "06 12 00 00 99", "phone2": "", "relevance": 0, "comment": "", "createdAt": 1, "updatedAt": 1, "deleted": False}]),
+               "todo_todo-widget-meetings": json.dumps([{"id": "sm1", "contactId": "sc1", "label": "Salon EnerGaïa", "date": (TODAY - datetime.timedelta(days=5)).isoformat(),
+                                                        "createdAt": 1, "updatedAt": 1, "deleted": False}]),
+               "todo_todo-widget-opportunities": json.dumps([{"id": "so1", "kind": "installation", "company": "Solaris", "centrale": "Toit Durand", "title": "Toit Durand", "stage": "negociation",
+                                                             "kwc": "1200", "createdAt": now_ms - 9 * 86400000, "updatedAt": 1, "deleted": False,
+                                                             "stageLog": [{"stage": "collecte", "at": now_ms - 9 * 86400000}, {"stage": "negociation", "at": now_ms - 3 * 86400000}]}])}
+    page, errors = new_page(browser, cs_seed, viewport={"width": 1300, "height": 850})
+    page.goto(URL); page.click('[data-tab="contacts"]')
+    page.locator(".company-group-header", has_text="Solaris").locator(".co-sheet-btn").click()
+    sheet = page.inner_text("#co-sheet-overlay")
+    check(page.is_visible("#co-sheet-overlay") and "1 en retard" in sheet and "1,2 MWc" in sheet and "Toit Durand" in sheet and "Paul Durand" in sheet,
+          "company sheet: contacts, pipeline (MWc), open tasks with the late one, on one screen")
+    hist = page.inner_text("#co-sheet-overlay .co-tl")
+    check("RDV avec Paul Durand : Salon EnerGaïa" in hist and "Fait : Envoyer la proposition" in hist and "Toit Durand → Négociation" in hist,
+          f"company sheet: history of meetings, done tasks and pipeline steps ({hist[:120]!r})")
+    page.locator("#co-sheet-overlay .co-row", has_text="Toit Durand").click(); page.wait_for_timeout(200)
+    check(page.is_hidden("#co-sheet-overlay") and page.is_visible("#opp-detail-overlay"), "company sheet: a line opens the opportunity")
+    page.click(".opp-co-link"); page.wait_for_timeout(100)
+    check(page.is_visible("#co-sheet-overlay") and page.inner_text("#co-sheet-title") == "Solaris", "company sheet: reached from the opportunity too")
+    page.keyboard.press("Escape"); page.wait_for_timeout(100)
+    page.keyboard.press("Control+k"); page.keyboard.type("solaris")
+    page.locator("#gs-results .gs-item", has_text="Solaris").filter(has_text="contact").first.click(); page.wait_for_timeout(100)
+    check(page.is_visible("#co-sheet-overlay"), "company sheet: reached from the global search")
+    check(not errors, f"no page errors ({errors})")
+    page.close()
+
     # --- Sync pill: state visible everywhere, token problems explained
     page, errors = new_page(browser, viewport={"width": 1300, "height": 800})
     page.goto(URL); page.wait_for_timeout(300)
