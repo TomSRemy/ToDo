@@ -150,6 +150,27 @@ with sync_playwright() as p:
     check(not errors, f"no page errors ({errors})")
     page.close()
 
+    # --- widget mode: bubble, small task panel, same code as the app
+    page, errors = new_page(browser, {"todo_todo-widget-tasks": json.dumps([task("w1", "Envoyer ARPE")])}, viewport={"width": 1200, "height": 760})
+    page.goto(URL.replace("index.html", "widget.html")); page.wait_for_timeout(500)
+    check("widget" in page.url and page.is_visible("#widget-bubble") and not page.is_visible("#todo-panel") and not page.is_visible(".app-sidebar"),
+          "widget: widget.html opens the app's widget mode, closed on its bubble")
+    check(page.inner_text("#widget-badge") == "1", "widget: open tasks counted on the bubble")
+    page.click("#widget-bubble"); page.wait_for_timeout(150)
+    check(page.is_visible("#todo-panel") and page.evaluate("document.activeElement.id") == "quick-add-input" and page.is_visible("#task-list .task-line:has-text('Envoyer ARPE')"),
+          "widget: the bubble opens the task panel, ready to type")
+    page.keyboard.type("Rappeler Paul"); page.keyboard.press("Enter"); page.wait_for_timeout(150)
+    check(page.inner_text("#widget-badge") == "2" and any(t["title"] == "Rappeler Paul" for t in stored(page, "todo-widget-tasks")), "widget: a task added from the widget is saved")
+    page.keyboard.press("Escape"); page.wait_for_timeout(100)
+    check(not page.is_visible("#todo-panel"), "widget: Escape folds the panel back into the bubble")
+    b = page.locator("#widget-bubble").bounding_box()
+    page.mouse.move(b["x"] + 20, b["y"] + 20); page.mouse.down(); page.mouse.move(300, 300, steps=8); page.mouse.up(); page.wait_for_timeout(100)
+    check(not page.is_visible("#todo-panel") and abs(page.locator("#widget-bubble").bounding_box()["x"] - 280) < 6, "widget: the bubble can be dragged without opening the panel")
+    page.reload(); page.wait_for_timeout(400)
+    check(abs(page.locator("#widget-bubble").bounding_box()["x"] - 280) < 6, "widget: bubble position remembered")
+    check(not errors, f"no page errors ({errors})")
+    page.close()
+
     # --- Two tabs (app + widget): a change in one is picked up by the other, never overwritten
     ctx = browser.new_context()
     a = ctx.new_page(); b = ctx.new_page()

@@ -9,6 +9,11 @@
   // Phone version: index.html?lite (or mobile.html) — same data and sync, fewer features.
   window.TODO_LITE=/[?&]lite\b/.test(location.search);
   if(window.TODO_LITE){ document.getElementById('app-manifest').href='manifest-lite.json'; document.documentElement.classList.add('lite'); }
+  // Widget: index.html?widget (widget.html redirects here) — a bubble and a small task panel, same code and data as the app;
+  // ?widget&pip is the same panel inside the always-on-top mini window (Chrome/Edge).
+  window.TODO_WIDGET=/[?&]widget\b/.test(location.search) && !window.TODO_LITE;
+  window.TODO_PIP=window.TODO_WIDGET && /[?&]pip\b/.test(location.search);
+  if(window.TODO_WIDGET){ document.documentElement.classList.add('widget'); if(window.TODO_PIP) document.documentElement.classList.add('pip'); }
 </script>
 <meta name="theme-color" content="#0A0D12">
 <link rel="apple-touch-icon" sizes="180x180" href="icons/apple-touch-icon.png">
@@ -56,6 +61,32 @@
   @keyframes syncPulse{ 50%{ opacity:.3; } }
   @media (prefers-reduced-motion: reduce){ .sync-pill[data-k="busy"] .sync-dot{ animation:none; } }
   .sync-pill-lite{ display:none; }
+  /* ---- widget mode (?widget): bubble + floating task panel; ?widget&pip: the panel fills the mini window ---- */
+  .widget-bubble, .widget-head, .widget-hint{ display:none; }
+  html.widget body{ background:transparent; }
+  html.widget .app-sidebar, html.widget .lite-nav, html.widget .postit-float, html.widget .postit-tab, html.widget .sync-pill-lite{ display:none !important; }
+  html.widget .widget-hint:not([hidden]){ display:block; position:fixed; inset:auto 0 50% 0; text-align:center; font:12px var(--font-mono); color:var(--tx3); padding:0 20px; }
+  html.widget .widget-bubble{ display:flex; position:fixed; right:22px; bottom:22px; z-index:20000; width:54px; height:54px; border-radius:50%; align-items:center; justify-content:center; background:var(--panel-2); border:1px solid var(--bd); color:var(--accent); cursor:grab; box-shadow:0 8px 24px rgba(0,0,0,.45); touch-action:none; }
+  html.widget .widget-bubble svg{ width:22px; height:22px; }
+  html.widget .widget-bubble:focus-visible{ outline:2px solid var(--accent); outline-offset:3px; }
+  html.widget.pip .widget-bubble{ display:none; }
+  .widget-badge{ position:absolute; top:-3px; right:-3px; min-width:18px; height:18px; padding:0 5px; border-radius:9px; background:var(--accent); color:#04070C; font:700 10.5px/18px var(--font-mono); text-align:center; }
+  .widget-badge.overdue{ background:var(--crit); color:#fff; }
+  .widget-badge:empty{ display:none; }
+  html.widget #todo-panel{ position:fixed; z-index:19990; width:min(400px, calc(100vw - 16px)); height:min(580px, calc(100vh - 100px)); max-height:none; right:22px; bottom:90px; background:var(--bg); border:1px solid var(--bd); border-radius:12px; box-shadow:0 18px 50px rgba(0,0,0,.55); overflow:hidden; }
+  html.widget:not(.widget-open):not(.pip) #todo-panel{ display:none; }
+  html.widget.pip #todo-panel{ inset:0; width:auto; height:auto; border:none; border-radius:0; box-shadow:none; }
+  html.widget .widget-head{ display:flex; align-items:center; gap:6px; padding:9px 10px 9px 14px; border-bottom:1px solid var(--bd); background:var(--panel); flex-shrink:0; }
+  .widget-title{ font:600 12px var(--font-mono); text-transform:uppercase; letter-spacing:.4px; color:var(--tx1); margin-right:auto; }
+  .widget-title span{ color:var(--tx3); margin-left:4px; }
+  html.widget .sync-pill-w{ margin:0; padding:4px 8px; font-size:10.5px; border-radius:999px; max-width:150px; }
+  html.widget .sync-pill-w[data-k="ok"] .sync-label{ display:none; }
+  .widget-btn{ width:28px; height:28px; display:flex; align-items:center; justify-content:center; background:none; border:1px solid transparent; border-radius:6px; color:var(--tx3); cursor:pointer; }
+  .widget-btn:hover{ color:var(--tx1); border-color:var(--bd); }
+  .widget-btn svg{ width:15px; height:15px; }
+  html.widget.pip #widget-mini, html.widget.pip #widget-close{ display:none; }
+  html.widget #todo-panel .tab-panel{ min-height:0; }
+  html.widget .top-toolbar{ flex-wrap:wrap; row-gap:8px; }
   html.lite .sync-pill-lite{ display:flex; position:fixed; z-index:14000; top:calc(env(safe-area-inset-top, 0px) + 8px); right:10px; margin:0; padding:5px 9px; gap:7px; font-size:11px; border-radius:999px; max-width:60vw; box-shadow:0 4px 14px rgba(0,0,0,.35); }
   html.lite .sync-pill-lite[data-k="ok"]{ padding:5px 8px; }
   .sync-exp-row{ display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:8px; font-size:12px; color:var(--tx2); }
@@ -923,11 +954,20 @@
 
     <button type="button" class="sync-pill" id="sync-pill" data-k="off"><span class="sync-dot"></span><span class="sync-label sidebar-label-text">Synchro</span></button>
     <button type="button" class="app-sidebar-back app-sidebar-help" id="help-btn" title="Mode d'emploi"><span class="back-arrow">?</span><span class="sidebar-label-text">Mode d'emploi</span></button>
-    <a href="widget.html" class="app-sidebar-back app-sidebar-widget" title="Widget"><span class="back-arrow">←</span><span class="sidebar-label-text">Widget</span></a>
+    <a href="index.html?widget" class="app-sidebar-back app-sidebar-widget" title="Widget"><span class="back-arrow">←</span><span class="sidebar-label-text">Widget</span></a>
   </nav>
 
+<div class="widget-hint" id="widget-hint" hidden>Widget Todo : clique sur la bulle en bas à droite, ou Ctrl+K.</div>
+<button type="button" class="widget-bubble" id="widget-bubble" aria-label="Ouvrir les tâches" title="Tâches (Ctrl+K) — glisser pour déplacer"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg><span class="widget-badge" id="widget-badge"></span></button>
 <button type="button" class="sync-pill sync-pill-lite" id="sync-pill-lite" data-k="off"><span class="sync-dot"></span><span class="sync-label">Synchro</span></button>
 <div id="todo-panel">
+  <div class="widget-head" id="widget-head">
+    <span class="widget-title">Tâches <span id="widget-count"></span></span>
+    <button type="button" class="sync-pill sync-pill-w" id="sync-pill-w" data-k="off"><span class="sync-dot"></span><span class="sync-label">Synchro</span></button>
+    <button type="button" class="widget-btn" id="widget-mini" title="Mode mini : toujours au premier plan (Chrome, Edge)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><rect x="12" y="12" width="7" height="5" rx="1"/></svg></button>
+    <button type="button" class="widget-btn" id="widget-full" title="Vue complète"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h6v6"/><path d="M10 14L21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></svg></button>
+    <button type="button" class="widget-btn" id="widget-close" title="Réduire en bulle (Échap)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
+  </div>
   <div class="tab-panel" id="tab-today">
     <div class="lite-banner" id="lite-sync-banner" hidden>Synchro GitHub pas encore activée sur ce téléphone : active-la une fois dans la <a href="index.html#sync">version complète</a> (onglet Réf. &amp; data), puis reviens ici.</div>
     <div id="today-stats-row"></div>
@@ -1710,10 +1750,10 @@
   function paintSyncPill(){
     const info=syncPillInfo();
     const ban=$('lite-sync-banner'); if(ban) ban.hidden=!window.TODO_LITE || !!syncConfig.enabled;
-    ['sync-pill','sync-pill-lite'].forEach(id=>{ const el=$(id); if(!el) return; el.dataset.k=info.k; el.title=info.title; el.setAttribute('aria-label', info.label+'. '+info.title); el.querySelector('.sync-label').textContent=info.label; });
+    ['sync-pill','sync-pill-lite','sync-pill-w'].forEach(id=>{ const el=$(id); if(!el) return; el.dataset.k=info.k; el.title=info.title; el.setAttribute('aria-label', info.label+'. '+info.title); el.querySelector('.sync-label').textContent=info.label; });
   }
   function openSyncSettings(){
-    if(window.TODO_LITE){ location.href='index.html#sync'; return; }
+    if(window.TODO_LITE || window.TODO_WIDGET){ widgetOpenFull('index.html#sync'); return; }
     const tab=document.querySelector('.tab[data-tab="lists"]'); if(tab) tab.click();
     setTimeout(()=>{ const s=$('sync-section'); if(s) s.scrollIntoView({ behavior:'smooth', block:'start' }); const f=$(syncConfig.token?'sync-token-exp':'sync-owner'); if(f) f.focus({ preventScroll:true }); }, 60);
   }
@@ -2599,6 +2639,7 @@
   }
 
   function render(){
+    if(window.__widgetCount) window.__widgetCount();
     const list=listForCurrentView();
     taskList.className=currentView==='bloc'?'view-bloc':'';
     taskList.innerHTML='';
@@ -6358,7 +6399,7 @@
   document.addEventListener('click',e=>{ if(snoozePopover.style.display==='flex'&&!snoozePopover.contains(e.target))closeSnoozePopover(); });
 
   document.addEventListener('keydown',e=>{
-    if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='k'){ e.preventDefault(); quickAddInput.focus(); return; }
+    if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='k'){ e.preventDefault(); if(window.TODO_WIDGET && !window.TODO_PIP && !document.documentElement.classList.contains('widget-open')){ window.__widgetToggle(); return; } quickAddInput.focus(); return; }
     if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='f'){ e.preventDefault(); searchInput.focus(); return; }
     if(e.key==='Escape'){ if(snoozePopover.style.display==='flex'){ closeSnoozePopover(); return; } if(editingId){ editingId=null; render(); return; } if(document.activeElement&&document.activeElement.id==='f-title'){ closeAddForm(); return; } if(document.activeElement===quickAddInput){ quickAddInput.blur(); return; } if(document.activeElement===searchInput&&searchQuery){ searchInput.value=''; searchQuery=''; searchClear.classList.remove('show'); render(); return; } return; }
     const tag=document.activeElement.tagName; if(tag==='INPUT'||tag==='TEXTAREA'||tag==='SELECT')return;
@@ -7035,9 +7076,56 @@
     document.addEventListener('click', e=>{ if(e.target.closest('.tab')) setTimeout(sync,0); }, true);
     sync();
   }
+  // ---------- widget mode: the tasks tab in a floating panel opened from a draggable bubble ----------
+  function widgetOpenFull(url){
+    url=url||'index.html';
+    if(window.TODO_PIP || window.top!==window){ try{ window.open(url, '_blank'); }catch(e){} return; }   // mini window or embedded page: new tab
+    location.href=url;
+  }
+  if(window.TODO_WIDGET){
+    const root=document.documentElement, bubble=$('widget-bubble'), badge=$('widget-badge');
+    document.querySelector('.tab[data-tab="tasks"]').click();
+    if(!window.TODO_PIP && window.top===window) $('widget-hint').hidden=false;
+    const setOpen=open=>{ root.classList.toggle('widget-open', open); bubble.setAttribute('aria-expanded', String(open)); if(open) setTimeout(()=>quickAddInput.focus(), 30); };
+    window.__widgetToggle=()=>setOpen(!root.classList.contains('widget-open'));
+    $('widget-close').onclick=()=>setOpen(false);
+    $('widget-full').onclick=()=>widgetOpenFull();
+    // panel next to the bubble, on the side where there is room
+    const placePanel=()=>{
+      const r=bubble.getBoundingClientRect(), p=$('todo-panel'), pw=p.offsetWidth||400, ph=p.offsetHeight||580;
+      const left=Math.max(8, Math.min(r.right-pw, innerWidth-pw-8));
+      const top=r.top-ph-12>8 ? r.top-ph-12 : Math.max(8, Math.min(r.bottom+12, innerHeight-ph-8));
+      Object.assign(p.style, { left:left+'px', top:top+'px', right:'auto', bottom:'auto' });
+    };
+    // draggable bubble, position kept on this device
+    const POS='todo_widget-bubble-pos';
+    const place=(x,y)=>{ x=Math.max(4, Math.min(x, innerWidth-bubble.offsetWidth-4)); y=Math.max(4, Math.min(y, innerHeight-bubble.offsetHeight-4)); Object.assign(bubble.style, { left:x+'px', top:y+'px', right:'auto', bottom:'auto' }); };
+    try{ const s=JSON.parse(localStorage.getItem(POS)||'null'); if(s) requestAnimationFrame(()=>{ place(s.x, s.y); placePanel(); }); }catch(e){}
+    let drag=null;
+    bubble.addEventListener('pointerdown', e=>{ const r=bubble.getBoundingClientRect(); drag={ dx:e.clientX-r.left, dy:e.clientY-r.top, x:e.clientX, y:e.clientY, moved:false, id:e.pointerId }; });
+    document.addEventListener('pointermove', e=>{ if(!drag) return; if(!drag.moved && Math.abs(e.clientX-drag.x)+Math.abs(e.clientY-drag.y)<5) return; if(!drag.moved){ drag.moved=true; try{ bubble.setPointerCapture(drag.id); }catch(_){} } place(e.clientX-drag.dx, e.clientY-drag.dy); placePanel(); });
+    document.addEventListener('pointerup', ()=>{ if(drag && drag.moved){ const r=bubble.getBoundingClientRect(); try{ localStorage.setItem(POS, JSON.stringify({ x:r.left, y:r.top })); }catch(e){} } });
+    bubble.addEventListener('click', e=>{ if(drag && drag.moved){ drag=null; e.preventDefault(); return; } drag=null; placePanel(); window.__widgetToggle(); });
+    addEventListener('resize', ()=>{ const r=bubble.getBoundingClientRect(); place(r.left, r.top); placePanel(); });
+    document.addEventListener('keydown', e=>{ if(e.key==='Escape' && root.classList.contains('widget-open') && !document.querySelector('.modal:not(.hidden), #add-section.open')) setOpen(false); });
+    // count on the bubble: open tasks, red when one is late
+    const paintCount=()=>{ const open=activeTasks(), late=open.some(t=>dueStatus(t.due)==='overdue'); badge.textContent=open.length||''; badge.classList.toggle('overdue', late); $('widget-count').textContent=open.length?'· '+open.length:''; };
+    window.__widgetCount=paintCount;
+    // mini mode: an always-on-top window (Document Picture-in-Picture) running this same panel
+    $('widget-mini').onclick=async ()=>{
+      if(!('documentPictureInPicture' in window)){ $('widget-mini').title='Mode mini indisponible : il faut Chrome ou Edge (version récente).'; $('widget-mini').classList.add('off'); return; }
+      try{
+        const w=await documentPictureInPicture.requestWindow({ width:380, height:560 });
+        w.document.body.style.cssText='margin:0;background:#0A0D12;';
+        const f=w.document.createElement('iframe'); f.src=new URL('index.html?widget&pip', location.href).href; f.title='Tâches'; f.style.cssText='border:0;width:100vw;height:100vh;display:block;';
+        w.document.body.appendChild(f); setOpen(false);
+      }catch(e){}
+    };
+    if(window.TODO_PIP) setTimeout(()=>quickAddInput.focus(), 300);
+  }
   syncPull=trackSync(syncPull); syncPushNow=trackSync(syncPushNow); syncPullCrm=trackSync(syncPullCrm);
   syncPushCrmNow=trackSync(syncPushCrmNow); syncPullNotes=trackSync(syncPullNotes); syncPushNotesNow=trackSync(syncPushNotesNow);
-  ['sync-pill','sync-pill-lite'].forEach(id=>{ const el=$(id); if(el) el.onclick=onSyncPillClick; });
+  ['sync-pill','sync-pill-lite','sync-pill-w'].forEach(id=>{ const el=$(id); if(el) el.onclick=onSyncPillClick; });
   window.addEventListener('online', ()=>{ if(syncConfig.enabled) syncEverythingNow(); else paintSyncPill(); });
   window.addEventListener('offline', paintSyncPill);
   loadAll().then(()=>{
