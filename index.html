@@ -6002,7 +6002,7 @@
     const limIso=toISO(lim);
     return parcData.items.filter(p=>p.statut==='Gagné' && p.fin && p.fin>=today && p.fin<=limIso);
   }
-  // One task per developer and end date (8 Solaris contracts ending on 31/12 = one task). Deterministic id:
+  // One task per developer and end date (8 contracts of one developer ending on 31/12 = one task). Deterministic id:
   // the same group gives the same task on the phone and the computer, and a deleted or completed renewal
   // task is never created again.
   const renewGroupId=p=>{ const s=parcNorm(p.dev||p.prod)+'|'+p.fin; let h=5381; for(let i=0;i<s.length;i++) h=((h*33)^s.charCodeAt(i))>>>0; return 'renew_'+h.toString(36); };

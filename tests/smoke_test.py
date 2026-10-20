@@ -347,7 +347,7 @@ with sync_playwright() as p:
 
     # --- Phone version (index.html?lite): bottom bar, fewer features, pipeline read-only
     page, errors = new_page(browser, {"todo_todo-widget-opportunities": json.dumps([{"id": "i3", "kind": "installation", "company": "Solaris",
-        "centrale": "Le Moulin", "title": "Le Moulin", "stage": "negociation", "createdAt": 1, "updatedAt": 1, "deleted": False}])},
+        "centrale": "Moulin Neuf", "title": "Moulin Neuf", "stage": "negociation", "createdAt": 1, "updatedAt": 1, "deleted": False}])},
         viewport={"width": 390, "height": 800}, is_mobile=True, has_touch=True)
     page.goto(URL + "?lite")
     check(page.is_visible("#lite-nav") and not page.is_visible(".app-sidebar"), "phone version: bottom bar instead of the sidebar")
@@ -356,7 +356,7 @@ with sync_playwright() as p:
     check(any(t["title"] == "Depuis le téléphone" for t in stored(page, "todo-widget-tasks")), "phone version: quick add works")
     page.click("#lite-nav [data-go=pipeline]")
     check(not page.is_visible("#opp-add-btn"), "phone version: no opportunity form")
-    page.click(".pipe-card:has-text('Le Moulin')")
+    page.click(".pipe-card:has-text('Moulin Neuf')")
     visible = page.eval_on_selector_all("#opp-detail-actions button", "els=>els.filter(e=>e.offsetParent).map(e=>e.textContent)")
     check(visible == ["Fermer"], f"phone version: installation sheet is read-only ({visible})")
     check(page.evaluate("document.documentElement.scrollWidth") <= 390, "phone version fits the screen")
@@ -393,7 +393,7 @@ with sync_playwright() as p:
     page.fill("#pq-mail", "De : R C <r@helio.fr>\nObjet : x\n\nBonjour,\n- Centrale de Cholet (49) : 1,2 MWc, MES 03/2027\n- Centrale de Saumur (49) : 800 kWc\nCordialement,\nRomain Chevalier")
     page.wait_for_timeout(500)
     check(page.input_value("#pq-1-centrale") == "Centrale de Saumur" and page.input_value("#pq-0-mesPrev") == "Mars 2027", "mail listing two plants → two installations")
-    page.fill("#pq-mail", "De\tObjet\tReçu\tTaille\tCatégories\t\nPierre Dupont;  Prénom Nom\tRE: Projets PV\tlun. 16:07\t318 Ko\tTodo-synced"); page.wait_for_timeout(400)
+    page.fill("#pq-mail", "De\tObjet\tReçu\tTaille\tCatégories\t\nPierre Dupont;  Paul Guérin\tRE: Projets PV\tlun. 16:07\t318 Ko\tTodo-synced"); page.wait_for_timeout(400)
     check(page.is_visible("#pq-mail-warning"), "pasting the Outlook list line explains how to get the mail content")
     page.fill("#pq-0-centrale", 'x" autofocus onfocus="window.__xss=1" y="')
     page.select_option("#pq-0-install", "Eolien"); page.wait_for_timeout(300)  # re-renders the form with the value in an attribute
@@ -432,7 +432,7 @@ with sync_playwright() as p:
            "Agrégation 2026", "Agrégation 2027"]
     ws.append(["Date renouvellement"]); ws.append([]); ws.append(hdr)
     soon = (TODAY + datetime.timedelta(days=90))
-    ws.append(["", 2021, "PGU", None, "Contact direct", "N/A", "SOLARIS", "", "CR", "AO CRE", "Occitanie", "34 - Hérault", "Gagné", soon, "A renouveler", "SOLA", "CS DU MOULIN", "PV", 2990, 4500, 4500, 0])
+    ws.append(["", 2021, "PGU", None, "Contact direct", "N/A", "SOLARIS", "", "CR", "AO CRE", "Occitanie", "34 - Hérault", "Gagné", soon, "A renouveler", "SOLARIS", "CS DU MOULIN", "PV", 2990, 4500, 4500, 0])
     ws.append(["", 2022, "SMA", None, "Contact direct", "N/A", "VENTUS", "", "Marché", "", "Bretagne", "29 - Finistère", "Gagné", datetime.date(2028, 12, 31), "En cours", "VENTUS", "Parc B", "PV", 10000, 23000, 23000, 23000])
     ws.append(["", 2026, "PGU", None, "BOAMP", "N/A", "X", "", "CR", "", "Grand Est", "", "En attente", None, "", "X", "Toit", "PV", 500, 600, "", ""])
     d = wb.create_sheet("Dashboard"); d.append(["", "Désignation", "2026", "2027"]); d.append(["", "Object. Agrégation Vol.", 150, 300])

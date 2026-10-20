@@ -648,7 +648,7 @@ Hélène Roussel, Directrice, SEM ENERGIES LOIRE, 04 77 12 34 56""",
 # Outlook bullets "Owner à COMMUNE à CP : power – notes", short names in the subject.
 HARD.append({
     "name": "Installateur, 3 centrales de 3 propriétaires (puces Outlook)",
-    "mail": """Bonjour Monsieur MARTIN,
+    "mail": """Bonjour Monsieur GUÉRIN,
 Merci pour votre retour, je suis disponible le 5/11 à partir de 10hr.
 A bientôt.
  <https://www.example-install.fr/logo.png>
@@ -661,11 +661,11 @@ INSTALL LORRAINE
  <https://www.example-install.fr/emplacement.png>  8 rue des Lilas, 54000 Nancy
 SIRET : 91000000000015– RCS : 910 000 000 R.C.S. Nancy
 ________________________________
-De : Prénom Nom <prenom.nom@exemple.fr>
+De : Paul Guérin <paul.guerin@selfee.fr>
 Objet : TR: INSTALL LORRAINE - Demande d'accompagnement agrégateur – Projets photovoltaïques FAVIER, KORVAL et MERCADIER
 
 Bonjour Monsieur Marchal, je vous propose un échange en visio.
-Prénom NOM
+Paul GUÉRIN
 Responsable Commercial
 
 De : Jean-Noël Marchal <jn.marchal@install-lorraine.fr <mailto:jn.marchal@install-lorraine.fr> >
