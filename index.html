@@ -586,6 +586,9 @@
   .pq1-contacts button:hover{ color:var(--tx1); border-color:var(--tx3); }
   .pq1-contacts button.on{ color:var(--accent); border-color:var(--accent); background:var(--accent-dim); }
   .pq1-new.hidden{ display:none; }
+  .pq1-extra{ border-left:2px solid var(--bd); padding:6px 0 4px 10px; margin-top:6px; }
+  .pq1-extra-h{ display:flex; justify-content:space-between; align-items:center; font-size:11.5px; color:var(--tx3); margin-bottom:4px; }
+  .pq1-add-extra{ color:var(--accent) !important; align-self:flex-start; }
   .pq-step1.hidden, .pq-layout.hidden, .crm-form-actions button.hidden{ display:none; }
   .prequal-note{ width:100%; background:var(--panel-2); border:1px solid var(--bd); border-radius:var(--radius); color:var(--tx1); font-family:var(--font-ui); font-size:13px; padding:8px 10px; resize:vertical; }
   .hidden-row{ display:none !important; }
@@ -1274,6 +1277,10 @@
           <div class="pq-f"><label for="pq1-mail">Mail</label><input id="pq1-mail" autocomplete="off"></div>
         </div>
         <p class="pq-step-hint">Tu ne connais pas encore le contact ? Laisse vide : le mail collé à l’étape suivante le remplira.</p>
+        <div class="pq-step-n">Autres contacts <span class="pq-step-hint" style="text-transform:none;letter-spacing:0;">— le premier reste le contact principal (colonnes du Pipe)</span></div>
+        <div class="pq1-contacts" id="pq1-extra-existing"></div>
+        <div id="pq1-extras"></div>
+        <button type="button" class="pq-link pq1-add-extra" id="pq1-add-extra">+ Ajouter un autre contact</button>
       </div>
       <div class="pq-layout" id="pq-layout">
         <div class="pq-mail-pane" id="pq-mail-pane">
@@ -4488,7 +4495,7 @@
     return finalName;
   }
   function ensureContact(v, company){
-    if(!v.prenom && !v.nom && !v.mail) return;
+    if(!v.prenom && !v.nom && !v.mail) return null;
     const mail=(v.mail||'').toLowerCase();
     const lastName=pqTitleCase(v.nom||'').replace(/^(M\.|Mme)\s+/i,'');
     let c=contacts.find(x=>!x.deleted && ((mail && (x.email||'').toLowerCase()===mail) || (v.prenom && x.firstName===v.prenom && (x.lastName||'').toLowerCase()===lastName.toLowerCase())));
@@ -4504,6 +4511,7 @@
       if(!c.company){ c.company=company; ch=true; }
       if(ch) touchCrm(c);
     }
+    return c;
   }
 
 
@@ -4604,7 +4612,7 @@
   function openOppForm(opts){
     opts=opts||{};
     const editing=opts.editId?opportunities.find(o=>o.id===opts.editId):null;
-    pqState={ editId:editing?editing.id:null, prequalId:opts.prequalId||null, shared:pqDefaults(), installs:[{}], auto:new Set(), touched:new Set(), contactChoice:null, contactPicked:false, step:1 };
+    pqState={ editId:editing?editing.id:null, prequalId:opts.prequalId||null, shared:pqDefaults(), installs:[{}], auto:new Set(), touched:new Set(), contactChoice:null, contactPicked:false, extras:[], extraExisting:new Set(), step:1 };
     pqLastFiles=null;
     if(editing){
       PQ_SHARED_KEYS.forEach(k=>{ if(editing[k]!==undefined) pqState.shared[k]=editing[k]; });
@@ -4660,10 +4668,30 @@
     nb.onclick=()=>{ pqState.contactChoice='new'; pqState.contactPicked=true; pqStep1Render(); $('pq1-prenom').focus(); };
     box.appendChild(nb);
     $('pq1-new').classList.toggle('hidden', pqState.contactChoice!=='new');
+    // other existing contacts of the client: tick the ones also involved
+    const ex=$('pq1-extra-existing'); ex.innerHTML='';
+    list.filter(c=>c.id!==pqState.contactChoice).forEach(c=>{
+      const b=document.createElement('button'); b.type='button'; b.className=pqState.extraExisting.has(c.id)?'on':'';
+      b.textContent=(pqState.extraExisting.has(c.id)?'✓ ':'+ ')+[c.firstName,c.lastName].filter(Boolean).join(' ')+(c.role?' · '+c.role:'');
+      b.onclick=()=>{ pqState.extraExisting.has(c.id)?pqState.extraExisting.delete(c.id):pqState.extraExisting.add(c.id); pqStep1Render(); };
+      ex.appendChild(b);
+    });
+    pqExtrasRender();
+  }
+  // additional new contacts (beyond the main one)
+  const PQ_EXTRA_FIELDS_C=[['prenom','Prénom'],['nom','Nom'],['qualite','Qualité'],['tel','Téléphone'],['mail','Mail']];
+  function pqExtrasRender(){
+    const box=$('pq1-extras'); box.innerHTML='';
+    pqState.extras.forEach((x,i)=>{
+      const d=document.createElement('div'); d.className='pq1-extra';
+      d.innerHTML='<div class="pq1-extra-h"><span>Contact '+(i+2)+'</span><button type="button" class="pq-link" data-x-remove="'+i+'">Retirer</button></div><div class="pq-grid">'
+        +PQ_EXTRA_FIELDS_C.map(([k,l])=>'<div class="pq-f"><label>'+l+'</label><input data-x="'+i+'" data-xk="'+k+'" value="'+escapeHtml(x[k]||'')+'" autocomplete="off"></div>').join('')+'</div>';
+      box.appendChild(d);
+    });
   }
   // Step 1 « Coller une signature »: same reader as Contacts; fills the client and the contact.
   // Fields typed by hand are never overwritten; a new paste replaces what a previous paste filled.
-  let pq1SigAuto=new Set(), pq1SigTimer=null;
+  let pq1SigAuto=new Set(), pq1SigTimer=null, pq1SigApplied=false;
   function pqApplySignature(text){
     const st=pqState; if(!st) return;
     const g=parseSignatureText(text||'');
@@ -4673,7 +4701,18 @@
     const company=pqKnownCompany($('pq1-company').value.trim());
     const mail=(g.email||'').toLowerCase();
     const existing=company && contacts.find(c=>!c.deleted && c.company===company && ((mail && (c.email||'').toLowerCase()===mail) || (g.firstName && c.firstName===g.firstName && (c.lastName||'').toLowerCase()===(g.lastName||'').toLowerCase())));
-    if(existing){ st.contactChoice=existing.id; st.contactPicked=true; }
+    // is the main contact already someone else? (typed by hand or filled by an earlier signature)
+    const mPrenom=$('pq1-prenom').value.trim(), mNom=$('pq1-nom').value.trim(), mMail=$('pq1-mail').value.trim().toLowerCase();
+    const samePerson=(mail && mMail===mail) || (g.firstName && mPrenom.toLowerCase()===g.firstName.toLowerCase() && mNom.toLowerCase()===(g.lastName||'').toLowerCase());
+    const mainFilled=st.contactChoice==='new' && (mPrenom||mMail);
+    const mainIsOther=(st.contactChoice!=='new' && st.contactPicked && !existing) || (mainFilled && !samePerson);
+    if(existing && st.contactPicked && st.contactChoice!==existing.id && st.contactChoice!=='new'){ st.extraExisting.add(existing.id); }
+    else if(existing){ st.contactChoice=existing.id; st.contactPicked=true; }
+    else if(mainIsOther && (g.firstName||g.lastName||mail)){
+      // the main contact is already someone else: this signature is an additional contact
+      if(!st.extras.some(x=>(mail && x.mail===mail) || (x.prenom===g.firstName && x.nom===(g.lastName||'').toUpperCase())))
+        st.extras.push({ prenom:g.firstName||'', nom:(g.lastName||'').toUpperCase(), qualite:g.role||'', tel:[g.phone1,g.phone2].filter(Boolean).join(' / '), mail });
+    }
     else if(g.firstName||g.lastName||mail){
       st.contactChoice='new'; st.contactPicked=true;
       set('pq1-prenom', g.firstName); set('pq1-nom', (g.lastName||'').toUpperCase()); set('pq1-qualite', g.role);
@@ -4681,10 +4720,13 @@
     }
     pqStep1Render();
     const found=[g.company&&'client', (g.firstName||g.lastName)&&'nom', g.role&&'fonction', g.phone1&&'téléphone', mail&&'mail'].filter(Boolean);
-    $('pq1-sig-status').textContent=found.length?('Lu : '+found.join(', ')+(existing?' — contact déjà connu, sélectionné.':'.')+' Vérifie puis continue.'):'Rien de reconnu dans ce texte.';
+    $('pq1-sig-status').textContent=found.length?('Lu : '+found.join(', ')+(existing?' — contact déjà connu, sélectionné.':'.')+' Colle une autre signature pour ajouter un contact.'):'Rien de reconnu dans ce texte.';
+    pq1SigApplied=!!found.length;
   }
   function pqNext(){
     const name=$('pq1-company').value.trim();
+    pqState.extraContacts=pqState.extras.filter(x=>x.prenom||x.nom||x.mail).map(x=>({ ...x, prenom:pqTitleCase((x.prenom||'').trim()), nom:(x.nom||'').trim().toUpperCase(), mail:(x.mail||'').trim().toLowerCase() }));
+    pqState.extraContactIds=[...pqState.extraExisting];
     if(!name){ $('pq1-company-hint').textContent='Indique le producteur pour continuer.'; $('pq1-company-hint').className='pq-step-hint new'; $('pq1-company').focus(); return; }
     const st=pqState, known=pqKnownCompany(name), set=(k,v)=>{ if(v){ st.shared[k]=v; st.touched.add('s.'+k); } };
     set('producteur', known||name);
@@ -4872,7 +4914,9 @@
       return;
     }
     const company=ensureCompany(producteur);
-    ensureContact(v, company);
+    const mainContact=ensureContact(v, company);
+    // other contacts: new ones are created in Contacts, existing ones linked
+    const otherIds=(st.extraContactIds||[]).concat((st.extraContacts||[]).map(x=>{ const c=ensureContact(x, company); return c&&c.id; }).filter(Boolean)).filter(id=>!mainContact || id!==mainContact.id);
     const startStage=$('pq-start-stage').value||'a_qualifier';
     let reqId=null;
     if(st.installs.length>1){
@@ -4884,6 +4928,7 @@
       PQ_SHARED_KEYS.forEach(k=>{ if(v[k]!==undefined) o[k]=v[k]; });
       PQ_CENTRALE_KEYS.forEach(k=>{ if(inst[k]!==undefined) o[k]=inst[k]; });
       if(stageIndex(startStage)>=stageIndex('demande_prix')) o.goDate=toISO(new Date());
+      if(otherIds.length) o.otherContactIds=[...new Set(otherIds)];
       opportunities.push(o);
       return o;
     });
@@ -5014,7 +5059,7 @@
     const contact=[o.prenom,(o.nom||'').replace(/^(M\.|Mme)\s+/i,'')].filter(Boolean).join(' ');
     const groups=[
       ['Centrale', [['Nom',oppName(o)],['Type',o.install],['Contrat',o.contrat],['Puissance',fmtKwc(o.kwc)],['Volume annuel',o.mwh?Number(pqNum(o.mwh)).toLocaleString('fr-FR')+' MWh':''],['Productible',o.kwc&&o.mwh?Math.round(pqNum(o.mwh)*1000/pqNum(o.kwc))+' kWh/kWc':''],['MES prévisionnelle',o.mesPrev],['MES effective',o.mesEff],['Début',o.debut],['Fin',o.fin],['Durée',o.duree?o.duree+' ans':''],['Département',o.dept],['Région',o.region],['Commune',[o.commune,o.cp].filter(Boolean).join(' ')],['P90',o.p90?Number(pqNum(o.p90)).toLocaleString('fr-FR')+' MWh':''],['SPV',[o.spv,o.siret].filter(Boolean).join(' · ')],['Particularités',o.particularites,true]]],
-      ['Producteur et contact', [['Producteur',o.producteur||o.company],['Type de marché',o.marche],['Contact',contact],['Qualité',o.qualite],['Téléphone',o.tel,false,true],['Mail',o.mail,false,true]]],
+      ['Producteur et contact', [['Producteur',o.producteur||o.company],['Type de marché',o.marche],['Contact',contact],['Qualité',o.qualite],['Téléphone',o.tel,false,true],['Mail',o.mail,false,true],['Autres contacts',(o.otherContactIds||[]).map(id=>contacts.find(c=>c.id===id)).filter(Boolean).map(c=>[c.firstName,c.lastName].filter(Boolean).join(' ')+(c.role?' ('+c.role+')':'')+(c.phone1?' · '+c.phone1:'')).join(' ; '),true]]],
       ['Suivi', [['Chargé',o.charge],['Origine',o.origine],['Crédit Agricole',o.ca&&o.ca!=='N/A'?o.ca:''],['Entrée pipe',fr(o.dateEntree)],['RDV 1',fr(o.rdv1)+(o.rdv1&&o.cr1?' · CR':'')],['RDV 2',fr(o.rdv2)+(o.rdv2&&o.cr2?' · CR':'')],['Go',fr(o.goDate)],['1ère offre',[fr(o.dateOffre),o.nature].filter(Boolean).join(' · ')],['Signature',fr(o.signDate)],['Prochaine action',[o.action,o.relance?'le '+fr(o.relance):''].filter(Boolean).join(' ')],['Stade Pipe',pipeStade(o)],['Statut BDD',bddStatut(o)]]]
     ];
     const wrap=document.createElement('div'); wrap.className='opp-sheet';
@@ -6029,9 +6074,14 @@
   $('pq-back-btn').onclick=()=>{ pqShowStep(1); pqStep1Render(); };
   $('pq1-company').addEventListener('input', ()=>{ pq1SigAuto.delete('pq1-company'); pqStep1Render(); });
   ['pq1-prenom','pq1-nom','pq1-qualite','pq1-tel','pq1-mail'].forEach(id=>$(id).addEventListener('input', ()=>pq1SigAuto.delete(id)));
+  $('pq1-add-extra').onclick=()=>{ pqState.extras.push({}); pqExtrasRender(); const els=$('pq1-extras').querySelectorAll('input[data-xk="prenom"]'); if(els.length) els[els.length-1].focus(); };
+  $('pq1-extras').addEventListener('input', e=>{ const i=e.target.dataset.x; if(i==null) return; pqState.extras[+i][e.target.dataset.xk]=e.target.value; });
+  $('pq1-extras').addEventListener('click', e=>{ const r=e.target.closest('[data-x-remove]'); if(!r) return; pqState.extras.splice(+r.dataset.xRemove,1); pqExtrasRender(); });
   $('pq1-sig').addEventListener('input', ()=>{ clearTimeout(pq1SigTimer); pq1SigTimer=setTimeout(()=>pqApplySignature($('pq1-sig').value), 300); });
   $('pq1-sig').addEventListener('paste', async e=>{
     const items=[...((e.clipboardData||{}).items||[])], img=items.find(i=>i.type && i.type.startsWith('image/'));
+    // a new signature replaces the previous text (each paste = one person)
+    if(pq1SigApplied){ $('pq1-sig').value=''; pq1SigApplied=false; }
     if(!img) return;
     e.preventDefault();
     $('pq1-sig-status').textContent='Lecture de l\u2019image…';
