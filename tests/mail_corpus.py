@@ -649,48 +649,48 @@ Hélène Roussel, Directrice, SEM ENERGIES LOIRE, 04 77 12 34 56""",
 HARD.append({
     "name": "Installateur, 3 centrales de 3 propriétaires (puces Outlook)",
     "mail": """Bonjour Monsieur MARTIN,
-Merci pour votre retour, je suis disponible le 22/10 à partir de 10hr.
+Merci pour votre retour, je suis disponible le 5/11 à partir de 10hr.
 A bientôt.
  <https://www.example-install.fr/logo.png>
-\tPaul-Henri MARCHAL
- <https://www.example-install.fr/appel.png>  06 19 00 00 38
- <https://www.example-install.fr/courrier.png>  ph.marchal@install-lorraine.fr <mailto:ph.marchal@install-lorraine.fr>
+\tJean-Noël MARCHAL
+ <https://www.example-install.fr/appel.png>  06 00 00 00 38
+ <https://www.example-install.fr/courrier.png>  jn.marchal@install-lorraine.fr <mailto:jn.marchal@install-lorraine.fr>
 ________________________________
 INSTALL LORRAINE
- <https://www.example-install.fr/appel.png>  03 87 00 00 74
- <https://www.example-install.fr/emplacement.png>  12 rue de l'Exemple, 00000 Ville
-SIRET : 91000000000015– RCS : 910 000 000 R.C.S. Exemple
+ <https://www.example-install.fr/appel.png>  03 00 00 00 74
+ <https://www.example-install.fr/emplacement.png>  8 rue des Lilas, 54000 Nancy
+SIRET : 91000000000015– RCS : 910 000 000 R.C.S. Nancy
 ________________________________
 De : Prénom Nom <prenom.nom@exemple.fr>
-Objet : TR: INSTALL LORRAINE - Demande d'accompagnement agrégateur – Projets photovoltaïques DURAND, MARTIN et LEROY
+Objet : TR: INSTALL LORRAINE - Demande d'accompagnement agrégateur – Projets photovoltaïques FAVIER, KORVAL et MERCADIER
 
 Bonjour Monsieur Marchal, je vous propose un échange en visio.
 Prénom NOM
 Responsable Commercial
 
-De : Paul-Henri Marchal <ph.marchal@install-lorraine.fr <mailto:ph.marchal@install-lorraine.fr> >
-Envoyé : vendredi 16 octobre 2026 09:44
-Objet : INSTALL LORRAINE - Demande d'accompagnement agrégateur – Projets photovoltaïques DURAND, MARTIN et LEROY
+De : Jean-Noël Marchal <jn.marchal@install-lorraine.fr <mailto:jn.marchal@install-lorraine.fr> >
+Envoyé : vendredi 2 octobre 2026 08:30
+Objet : INSTALL LORRAINE - Demande d'accompagnement agrégateur – Projets photovoltaïques FAVIER, KORVAL et MERCADIER
 
 Bonjour,
 Nous avons actuellement trois projets concernés par cette démarche :
-*\tMARTIN à VILLE-SUR-EXEMPLE à 55000 : 178 kWc – Autoconsommation prévisionnelle de 10 %, à confirmer.
-*\tSOCIÉTÉ D'EXPLOITATION DES ÉTABLISSEMENTS JEAN LEROY à PETIT-BOIS 57445 : 204 kWc – Injection totale.
-*\tBRAYEUX ALBERT à VILLERS 54850 : 413 kWc – Autoconsommation prévisionnelle de 40 %, à confirmer.
-Soit une puissance totale installée de 795 kWc.
+*\tKORVAL à SAINT-MIHIEL à 55300 : 150 kWc – Autoconsommation prévisionnelle de 15 %, à confirmer.
+*\tSOCIÉTÉ D'EXPLOITATION DES ÉTABLISSEMENTS JULES MERCADIER à SARREBOURG 57400 : 220 kWc – Injection totale.
+*\tFAVIER LUCIEN à LUNÉVILLE 54300 : 390 kWc – Autoconsommation prévisionnelle de 35 %, à confirmer.
+Soit une puissance totale installée de 760 kWc.
 A bientôt.
-\tPaul-Henri MARCHAL
- <https://www.example-install.fr/appel.png>  06 19 00 00 38
+\tJean-Noël MARCHAL
+ <https://www.example-install.fr/appel.png>  06 00 00 00 38
 ________________________________
 INSTALL LORRAINE
- <https://www.example-install.fr/appel.png>  03 87 00 00 74
-SIRET : 91000000000015– RCS : 910 000 000 R.C.S. Exemple""",
-    "expect": {"prenom": "Paul-Henri", "nom": "MARCHAL", "tel": "06 19 00 00 38", "mail": "ph.marchal@install-lorraine.fr", "producteur": "INSTALL LORRAINE",
-               "origine": "Contact direct", "install": "PV", "centrale": "MARTIN", "kwc": "178"},
-    "installs": [{"centrale": "MARTIN", "kwc": "178", "spv": "MARTIN", "commune": "VILLE-SUR-EXEMPLE", "cp": "55000", "dept": "55 - Meuse",
-                  "particularites": "Autoconsommation prévisionnelle de 10 %, à confirmer"},
-                 {"centrale": "LEROY", "kwc": "204", "spv": "SOCIÉTÉ D'EXPLOITATION DES ÉTABLISSEMENTS JEAN LEROY", "commune": "PETIT-BOIS", "cp": "57445",
+ <https://www.example-install.fr/appel.png>  03 00 00 00 74
+SIRET : 91000000000015– RCS : 910 000 000 R.C.S. Nancy""",
+    "expect": {"prenom": "Jean-Noël", "nom": "MARCHAL", "tel": "06 00 00 00 38", "mail": "jn.marchal@install-lorraine.fr", "producteur": "INSTALL LORRAINE",
+               "origine": "Contact direct", "install": "PV", "centrale": "KORVAL", "kwc": "150"},
+    "installs": [{"centrale": "KORVAL", "kwc": "150", "spv": "KORVAL", "commune": "SAINT-MIHIEL", "cp": "55300", "dept": "55 - Meuse",
+                  "particularites": "Autoconsommation prévisionnelle de 15 %, à confirmer"},
+                 {"centrale": "MERCADIER", "kwc": "220", "spv": "SOCIÉTÉ D'EXPLOITATION DES ÉTABLISSEMENTS JULES MERCADIER", "commune": "SARREBOURG", "cp": "57400",
                   "dept": "57 - Moselle", "particularites": "Injection totale"},
-                 {"centrale": "DURAND", "kwc": "413", "spv": "DURAND PAUL", "commune": "VILLERS", "cp": "54850", "dept": "54 - Meurthe-et-Moselle",
-                  "particularites": "Autoconsommation prévisionnelle de 40 %, à confirmer"}],
+                 {"centrale": "FAVIER", "kwc": "390", "spv": "FAVIER LUCIEN", "commune": "LUNÉVILLE", "cp": "54300", "dept": "54 - Meurthe-et-Moselle",
+                  "particularites": "Autoconsommation prévisionnelle de 35 %, à confirmer"}],
 })

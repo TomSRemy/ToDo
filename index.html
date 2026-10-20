@@ -4061,7 +4061,7 @@
     flush();
     return best;
   }
-  // short project names announced in the subject ("Projets photovoltaïques DURAND, MARTIN et LEROY")
+  // short project names announced in the subject ("Projets photovoltaïques DURAND, KORVAL et MERCADIER")
   function pqSubjectNames(raw){
     const subj=(/^(?:objet|subject)\s*:\s*(.*)$/im.exec(String(raw||''))||[])[1]||'';
     return (subj.match(/\b[A-ZÉÈÀÂÎÔÛÇ][A-ZÉÈÀÂÎÔÛÇ'’-]{2,}\b/g)||[]).filter(w=>!/^(RE|TR|FW|FWD|PV|AO|CRE|MW|MWC|KWC|SAS|SARL|EARL|GAEC|SCEA|ACC|OA|CR)$/.test(w));
