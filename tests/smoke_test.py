@@ -50,8 +50,14 @@ def new_page(browser, seed=None, **ctx):
     return page, errors
 
 
+# the app keeps its data in IndexedDB (in-memory copy: window.storage.peek); localStorage only for settings
+PEEK = "(k=>(window.storage&&window.storage.peek)?window.storage.peek(k):localStorage.getItem('todo_'+k))"
+
+
 def stored(page, key):
-    return page.evaluate(f"JSON.parse(localStorage.getItem('todo_{key}')||'null')")
+    page.wait_for_function("!!window.storage")
+    page.evaluate("async () => { await window.storage.ready; }")
+    return page.evaluate(f"JSON.parse({PEEK}('{key}')||'null')")
 
 
 def mock_github(page, files, put_ok=True, large=()):
@@ -180,8 +186,13 @@ with sync_playwright() as p:
     b.goto(URL); b.click('[data-tab="tasks"]'); b.fill("#quick-add-input", "Onglet B"); b.press("#quick-add-input", "Enter")
     a.wait_for_timeout(200)
     a.fill("#quick-add-input", "Encore A"); a.press("#quick-add-input", "Enter"); a.wait_for_timeout(200)
-    titles = sorted(t["title"] for t in b.evaluate("JSON.parse(localStorage.getItem('todo_todo-widget-tasks'))"))
+    titles = sorted(t["title"] for t in b.evaluate(f"JSON.parse({PEEK}('todo-widget-tasks'))"))
     check(titles == ["Encore A", "Onglet A", "Onglet B"], f"two open tabs don't overwrite each other ({titles})")
+    # the share page (older code writing straight into localStorage) while the app is open: merged, nothing lost
+    b.goto(URL.replace("index.html", "share-target.html") + "?title=Partag%C3%A9+depuis+le+t%C3%A9l%C3%A9phone"); a.wait_for_timeout(600)
+    titles = sorted(t["title"] for t in a.evaluate(f"JSON.parse({PEEK}('todo-widget-tasks'))"))
+    check(titles == ["Encore A", "Onglet A", "Onglet B", "Partagé depuis le téléphone"] and a.evaluate("localStorage.getItem('todo_todo-widget-tasks')") is None,
+          f"storage: a task written by the share page joins the open app's data, then leaves localStorage ({titles})")
     ctx.close()
 
     # --- Reminders: a reminder already shown doesn't fire again after reopening the app
@@ -216,7 +227,7 @@ with sync_playwright() as p:
     page.click("#postit-text"); page.keyboard.press("End")
     page.keyboard.type("\nEnvoyer offre PPA\nidée : webinar ACC")
     # the note is saved after a short pause in typing: wait for the save itself, not a fixed delay
-    page.wait_for_function("(localStorage.getItem('todo_todo-widget-notes')||'').includes('webinar ACC')", timeout=10000)
+    page.wait_for_function(f"({PEEK}('todo-widget-notes')||'').includes('webinar ACC')", timeout=10000)
     page.reload()
     check(page.input_value("#postit-text") == "Demain : Rappeler Sophie\nEnvoyer offre PPA\nidée : webinar ACC", "post-it text persists after reload")
     page.click("#postit-text")
@@ -229,6 +240,23 @@ with sync_playwright() as p:
     check(not page.is_visible("#postit") and page.is_visible("#postit-tab"), "minimise shows the small tab")
     page.keyboard.press("p"); page.wait_for_timeout(100)
     check(page.is_visible("#postit") and page.evaluate("document.activeElement.id") == "postit-text", "'p' reopens the post-it with focus")
+    check(not errors, f"no page errors ({errors})")
+    page.close()
+
+    # --- Storage: data moved from localStorage into IndexedDB, failures and space shown
+    page, errors = new_page(browser, {"todo_todo-widget-tasks": json.dumps([task("m1", "Ancienne tâche")])}, viewport={"width": 1300, "height": 800})
+    page.goto(URL); page.click('[data-tab="tasks"]')
+    check(page.is_visible("#task-list .task-line:has-text('Ancienne tâche')") and page.evaluate("localStorage.getItem('todo_todo-widget-tasks')") is None
+          and page.evaluate("window.storage.mode") == "idb", "storage: existing data moved into the browser database, the old copy removed")
+    page.reload(); page.click('[data-tab="tasks"]')
+    check(page.is_visible("#task-list .task-line:has-text('Ancienne tâche')"), "storage: data still there after reload (read from the database)")
+    page.click('[data-tab="lists"]'); page.wait_for_function("document.getElementById('storage-gauge').textContent.includes('Tâches')", timeout=5000)
+    check("Base de données du navigateur" in page.inner_text("#storage-gauge"), "storage: gauge shows the space used, by kind of data")
+    page.evaluate("() => { IDBObjectStore.prototype.put = function(){ throw new DOMException('full', 'QuotaExceededError'); }; }")
+    page.click('[data-tab="tasks"]'); page.fill("#quick-add-input", "Tâche de trop"); page.press("#quick-add-input", "Enter"); page.wait_for_timeout(200)
+    check(page.is_visible("#storage-alert") and "plein" in page.inner_text("#storage-alert"), "storage: a failed save shows a red banner at once")
+    page.click("#storage-alert-see")
+    check(not page.is_visible("#storage-alert") and page.is_visible("#storage-section"), "storage: the banner leads to the space gauge")
     check(not errors, f"no page errors ({errors})")
     page.close()
 

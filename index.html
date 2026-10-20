@@ -61,6 +61,20 @@
   @keyframes syncPulse{ 50%{ opacity:.3; } }
   @media (prefers-reduced-motion: reduce){ .sync-pill[data-k="busy"] .sync-dot{ animation:none; } }
   .sync-pill-lite{ display:none; }
+  .storage-alert{ position:fixed; z-index:21000; top:calc(env(safe-area-inset-top, 0px) + 10px); left:50%; transform:translateX(-50%); width:min(640px, calc(100vw - 24px)); display:flex; align-items:center; gap:10px; padding:10px 12px; border-radius:8px; border:1px solid var(--crit); background:#2A1414; color:#F4C7C5; font-size:13px; line-height:1.45; box-shadow:0 10px 30px rgba(0,0,0,.5); }
+  .storage-alert[hidden]{ display:none; }
+  .storage-alert.warn{ border-color:#C9A55A; background:#2A2314; color:#EBD9AE; }
+  .storage-alert span{ flex:1; min-width:0; }
+  .storage-alert button{ background:none; border:1px solid currentColor; color:inherit; border-radius:6px; padding:4px 9px; font:600 12px var(--font-ui); cursor:pointer; white-space:nowrap; }
+  .storage-alert #storage-alert-close{ border:none; padding:4px 6px; }
+  .storage-gauge{ display:flex; flex-direction:column; gap:8px; font-size:12.5px; color:var(--tx2); }
+  .storage-gauge .muted{ color:var(--tx3); }
+  .sg-row{ display:grid; grid-template-columns:minmax(0,1fr) auto; gap:10px; padding:4px 0; border-bottom:1px solid var(--bd-soft); }
+  .sg-row b{ font:500 12px var(--font-mono); color:var(--tx1); font-variant-numeric:tabular-nums; }
+  .sg-bar{ height:6px; border-radius:3px; background:var(--panel-3); overflow:hidden; }
+  .sg-bar span{ display:block; height:100%; background:var(--accent); border-radius:3px; }
+  .sg-bar.warn span{ background:#C9A55A; } .sg-bar.crit span{ background:var(--crit); }
+  .sg-mode{ color:var(--tx1); }
   /* ---- widget mode (?widget): bubble + floating task panel; ?widget&pip: the panel fills the mini window ---- */
   .widget-bubble, .widget-head, .widget-hint{ display:none; }
   html.widget body{ background:transparent; }
@@ -957,6 +971,7 @@
     <a href="index.html?widget" class="app-sidebar-back app-sidebar-widget" title="Widget"><span class="back-arrow">←</span><span class="sidebar-label-text">Widget</span></a>
   </nav>
 
+<div class="storage-alert" id="storage-alert" role="alert" hidden><span id="storage-alert-text"></span><button type="button" id="storage-alert-see">Voir l'espace</button><button type="button" id="storage-alert-close" aria-label="Fermer">✕</button></div>
 <div class="widget-hint" id="widget-hint" hidden>Widget Todo : clique sur la bulle en bas à droite, ou Ctrl+K.</div>
 <button type="button" class="widget-bubble" id="widget-bubble" aria-label="Ouvrir les tâches" title="Tâches (Ctrl+K) — glisser pour déplacer"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg><span class="widget-badge" id="widget-badge"></span></button>
 <button type="button" class="sync-pill sync-pill-lite" id="sync-pill-lite" data-k="off"><span class="sync-dot"></span><span class="sync-label">Synchro</span></button>
@@ -1493,6 +1508,11 @@
         <span id="sync-status" style="font-size:11px; color:var(--tx3); font-family:var(--font-mono);"></span>
       </div>
     </div>
+    <div class="list-manager" style="margin-top:22px;" id="storage-section">
+      <h2>Stockage sur cet appareil</h2>
+      <p class="list-hint">Tes données sont enregistrées dans ce navigateur (et sur GitHub si la synchro est active). Si l'espace venait à manquer, un bandeau rouge te prévient aussitôt.</p>
+      <div id="storage-gauge" class="storage-gauge"><span class="muted">Calcul…</span></div>
+    </div>
     <div class="list-manager" style="margin-top:22px;">
       <h2>Pont Excel (ordinateur)</h2>
       <p class="list-hint">Pour écrire directement dans tes fichiers Excel synchronisés avec SharePoint. Télécharge les deux fichiers dans un même dossier de l’ordinateur, double-clique sur le .bat, choisis le fichier Pipe puis le Suivi Agrégation, et recopie ici la clé affichée. Laisse la fenêtre ouverte pendant que tu travailles.</p>
@@ -1546,16 +1566,120 @@
 <button type="button" id="postit-tab" class="postit-tab hidden" title="Ouvrir la note (p)" aria-label="Ouvrir la note"><span id="postit-tab-preview">Post-it</span></button>
 
 <script>
-  // Storage polyfill: uses window.storage if running inside a Claude artifact preview,
-  // otherwise falls back to plain localStorage (GitHub Pages, local file, any browser).
-  if(!window.storage){
-    window.storage = {
-      async get(key){ try{ const v=localStorage.getItem('todo_'+key); return v!==null?{key,value:v,shared:false}:null; }catch(e){ return null; } },
-      async set(key,value){ try{ localStorage.setItem('todo_'+key,value); return {key,value,shared:false}; }catch(e){ return null; } },
-      async delete(key){ try{ localStorage.removeItem('todo_'+key); return {key,deleted:true,shared:false}; }catch(e){ return null; } },
-      async list(prefix){ try{ prefix=prefix||''; const keys=Object.keys(localStorage).filter(k=>k.startsWith('todo_'+prefix)).map(k=>k.slice(5)); return {keys,shared:false}; }catch(e){ return null; } }
+  // ---------- Storage ----------
+  // The data (tasks, CRM, notes, sync reference copies, Portefeuille) lives in IndexedDB: no 5 MB ceiling, and that
+  // ceiling is shared with every other page of tomsremy.github.io. Reads come from an in-memory copy filled at start-up.
+  // Small settings stay in localStorage. Data written by an older page straight into localStorage (todo_* keys) is taken
+  // in, merged item by item (latest updatedAt wins), then removed from localStorage once safely written here.
+  // No IndexedDB (rare private modes): everything stays in localStorage as before.
+  if(!window.storage) (function(){
+    const DB_KEYS=new Set(['todo-widget-tasks','todo-widget-companies','todo-widget-contacts','todo-widget-meetings','todo-widget-opportunities',
+      'todo-widget-notes','todo-widget-clients','todo-widget-projects','todo-widget-company-types','sync-tasks-base','sync-crm-base','sync-notes-base',
+      'sync-conflicts','parc-data','inbox-seen-ids','contact-inbox-seen-ids']);
+    const ENTITY_KEYS=new Set(['todo-widget-tasks','todo-widget-companies','todo-widget-contacts','todo-widget-meetings','todo-widget-opportunities','todo-widget-notes','sync-conflicts']);
+    const SET_KEYS=new Set(['todo-widget-clients','todo-widget-projects','todo-widget-company-types','inbox-seen-ids','contact-inbox-seen-ids']);
+    const cache=new Map();
+    let db=null, mode='ls';
+    const fail=err=>{ try{ window.dispatchEvent(new CustomEvent('todo-storage-error', { detail:{ name:err&&err.name||'Error', message:String(err&&err.message||err) } })); }catch(e){} };
+    const lsGet=k=>{ try{ return localStorage.getItem('todo_'+k); }catch(e){ return null; } };
+    const lsSet=(k,v)=>{ try{ localStorage.setItem('todo_'+k,v); return true; }catch(e){ fail(e); return false; } };
+    const lsDel=k=>{ try{ localStorage.removeItem('todo_'+k); }catch(e){} };
+    // two copies of one key: entities merged by id (latest updatedAt wins), lists of names united, anything else: ours
+    function mergeValues(k, ours, theirs){
+      if(ours==null) return theirs;
+      if(theirs==null || theirs===ours) return ours;
+      try{
+        const a=JSON.parse(ours), b=JSON.parse(theirs);
+        if(ENTITY_KEYS.has(k) && Array.isArray(a) && Array.isArray(b)){
+          const by=new Map(a.map(x=>[x&&x.id,x]));
+          b.forEach(x=>{ if(!x || x.id==null) return; const y=by.get(x.id); if(!y || (x.updatedAt||0)>(y.updatedAt||0)) by.set(x.id,x); });
+          return JSON.stringify([...by.values()]);
+        }
+        if(SET_KEYS.has(k) && Array.isArray(a) && Array.isArray(b)) return JSON.stringify([...new Set([...a,...b])]);
+      }catch(e){}
+      return ours;
+    }
+    const idbReq=r=>new Promise((res,rej)=>{ r.onsuccess=()=>res(r.result); r.onerror=()=>rej(r.error); });
+    function putAll(entries){
+      return new Promise((res,rej)=>{
+        const tx=db.transaction('kv','readwrite'), st=tx.objectStore('kv');
+        entries.forEach(([k,v])=>{ if(v==null) st.delete(k); else st.put(v,k); });
+        tx.oncomplete=()=>res(); tx.onerror=()=>rej(tx.error); tx.onabort=()=>rej(tx.error||new Error('abort'));
+      });
+    }
+    // take in what an older page left in localStorage (at start-up, and live when another tab of an old page writes)
+    async function absorbLocal(keys){
+      const changed=[];
+      keys.forEach(k=>{ const v=lsGet(k); if(v==null) return; const m=mergeValues(k, cache.has(k)?cache.get(k):null, v); if(m!==cache.get(k)){ cache.set(k,m); changed.push([k,m]); } else changed.push([k,null,'same']); });
+      if(!changed.length) return [];
+      await putAll(changed.filter(c=>!c[2]).map(c=>[c[0],c[1]]));
+      changed.forEach(c=>lsDel(c[0]));   // safely written: the old copy goes
+      return changed.filter(c=>!c[2]);
+    }
+    const chan=('BroadcastChannel' in window)?new BroadcastChannel('todo-store'):null;
+    const notify=(k,v)=>{ try{ window.dispatchEvent(new StorageEvent('storage',{ key:'todo_'+k, newValue:v })); }catch(e){} };
+    let isReady=false;
+    const ready=(async()=>{
+      try{
+        if(!('indexedDB' in window)) return;
+        const open=indexedDB.open('todo',1);
+        open.onupgradeneeded=()=>open.result.createObjectStore('kv');
+        db=await idbReq(open);
+        const tx=db.transaction('kv','readonly'), st=tx.objectStore('kv');
+        const [keys,vals]=await Promise.all([idbReq(st.getAllKeys()), idbReq(st.getAll())]);
+        keys.forEach((k,i)=>cache.set(k,vals[i]));
+        mode='idb';
+        await absorbLocal([...DB_KEYS]);
+        try{ if(navigator.storage && navigator.storage.persist) navigator.storage.persist(); }catch(e){}   // ask the browser not to evict it
+      }catch(e){ console.error('IndexedDB unavailable, staying on localStorage', e); db=null; mode='ls'; }
+      finally{ isReady=true; }
+    })();
+    // once ready, the in-memory copy changes at once (same moment as the old synchronous localStorage write)
+    const whenReady=fn=>isReady?fn():ready.then(fn);
+    if(chan) chan.onmessage=e=>{ const {k,v}=e.data||{}; if(!DB_KEYS.has(k)) return; if(v==null) cache.delete(k); else cache.set(k,v); notify(k,v); };
+    // an older page (or the share page) wrote a data key into localStorage while this tab is open: merge it in now
+    window.addEventListener('storage', e=>{
+      if(mode!=='idb' || e.storageArea!==localStorage || !e.key || e.key.indexOf('todo_')!==0) return;
+      const k=e.key.slice(5); if(!DB_KEYS.has(k) || e.newValue==null) return;
+      absorbLocal([k]).then(ch=>ch.forEach(([kk,v])=>{ if(chan) chan.postMessage({ k:kk, v }); notify(kk,v); })).catch(fail);
+    });
+    const inDb=k=>mode==='idb' && DB_KEYS.has(k);
+    async function doSet(key,value){
+      if(!inDb(key)) return lsSet(key,value)?{ key, value, shared:false }:null;
+      cache.set(key,value);
+      try{ await putAll([[key,value]]); }catch(e){ fail(e); return null; }
+      if(chan) chan.postMessage({ k:key, v:value });
+      return { key, value, shared:false };
+    }
+    async function doDelete(key){
+      if(!inDb(key)){ lsDel(key); return { key, deleted:true, shared:false }; }
+      cache.delete(key);
+      try{ await putAll([[key,null]]); }catch(e){ fail(e); return null; }
+      if(chan) chan.postMessage({ k:key, v:null });
+      return { key, deleted:true, shared:false };
+    }
+    window.storage={
+      ready,
+      get mode(){ return mode; },
+      isManaged:k=>inDb(k),
+      async get(key){ await ready; const v=inDb(key)?(cache.has(key)?cache.get(key):null):lsGet(key); return v!=null?{ key, value:v, shared:false }:null; },
+      // value now in memory (for code that cannot wait); null if unknown
+      peek(key){ return inDb(key)?(cache.has(key)?cache.get(key):null):lsGet(key); },
+      set(key,value){ return whenReady(()=>doSet(key,value)); },
+      delete(key){ return whenReady(()=>doDelete(key)); },
+      async list(prefix){ await ready; prefix=prefix||''; const keys=new Set([...cache.keys()].filter(k=>k.startsWith(prefix))); try{ Object.keys(localStorage).filter(k=>k.startsWith('todo_'+prefix)).forEach(k=>keys.add(k.slice(5))); }catch(e){} return { keys:[...keys], shared:false }; },
+      // what the data takes on this device, for the gauge in Réf. & data
+      async usage(){
+        await ready;
+        let data=0; const parts={};
+        const add=(k,v)=>{ const n=(k.length+(v?v.length:0))*2; data+=n; parts[k]=(parts[k]||0)+n; };
+        cache.forEach((v,k)=>add(k,v));
+        let ls=0, lsTodo=0; try{ for(let i=0;i<localStorage.length;i++){ const k=localStorage.key(i), n=(k.length+(localStorage.getItem(k)||'').length)*2; ls+=n; if(k.indexOf('todo_')===0){ lsTodo+=n; if(mode!=='idb') add(k.slice(5), localStorage.getItem(k)); } } }catch(e){}
+        let est=null; try{ if(navigator.storage && navigator.storage.estimate) est=await navigator.storage.estimate(); }catch(e){}
+        return { mode, data, parts, ls, lsTodo, lsLimit:5*1024*1024*2, usage:est&&est.usage, quota:est&&est.quota };
+      }
     };
-  }
+  })();
 </script>
 <script>
 (function(){
@@ -1671,11 +1795,9 @@
 
   async function saveCrmLocalOnly(){
     try{
-      await window.storage.set(COMPANIES_KEY,JSON.stringify(companies),false);
-      await window.storage.set(CONTACTS_KEY,JSON.stringify(contacts),false);
-      await window.storage.set(MEETINGS_KEY,JSON.stringify(meetings),false);
-      await window.storage.set(OPPS_KEY,JSON.stringify(opportunities),false);
-      await window.storage.set(COMPANY_TYPES_KEY,JSON.stringify(companyTypesList),false);
+      // all at once: each one is in memory immediately, the disk writes run together
+      await Promise.all([[COMPANIES_KEY,companies],[CONTACTS_KEY,contacts],[MEETINGS_KEY,meetings],[OPPS_KEY,opportunities],[COMPANY_TYPES_KEY,companyTypesList]]
+        .map(([k,v])=>window.storage.set(k,JSON.stringify(v),false)));
     }catch(e){ console.error(e); }
   }
   async function saveCrm(){ await saveCrmLocalOnly(); scheduleCrmSyncPush(); }
@@ -1756,6 +1878,55 @@
     if(window.TODO_LITE || window.TODO_WIDGET){ widgetOpenFull('index.html#sync'); return; }
     const tab=document.querySelector('.tab[data-tab="lists"]'); if(tab) tab.click();
     setTimeout(()=>{ const s=$('sync-section'); if(s) s.scrollIntoView({ behavior:'smooth', block:'start' }); const f=$(syncConfig.token?'sync-token-exp':'sync-owner'); if(f) f.focus({ preventScroll:true }); }, 60);
+  }
+  // ---------- storage space: gauge in Réf. & data, red banner when a save fails, amber when nearly full ----------
+  const fmtMo=n=>n>=1048576?(n/1048576).toLocaleString('fr-FR',{ maximumFractionDigits:1 })+' Mo':Math.max(1,Math.round(n/1024))+' Ko';
+  const fmtGo=n=>n>=1073741824?(n/1073741824).toLocaleString('fr-FR',{ maximumFractionDigits:1 })+' Go':fmtMo(n);
+  function showStorageAlert(kind, text){
+    const el=$('storage-alert'); if(!el) return;
+    el.classList.toggle('warn', kind==='warn'); $('storage-alert-text').textContent=text; el.hidden=false;
+  }
+  function openStorageSection(){
+    const tab=document.querySelector('.tab[data-tab="lists"]'); if(tab) tab.click();
+    setTimeout(()=>{ const s=$('storage-section'); if(s) s.scrollIntoView({ behavior:'smooth', block:'start' }); }, 60);
+  }
+  let storageFailShown=false;
+  window.addEventListener('todo-storage-error', e=>{
+    const full=/quota/i.test((e.detail&&(e.detail.name+' '+e.detail.message))||'');
+    showStorageAlert('crit', (full?'Enregistrement impossible : l\u2019espace de ce navigateur est plein. ':'Enregistrement impossible sur cet appareil (erreur du navigateur). ')
+      +'Tes derniers changements ne sont pas gardés ici'+(syncConfig.enabled?' ; ils partent quand même sur GitHub à la prochaine synchro.':' : active la synchro ou exporte tes données.'));
+    if(!storageFailShown){ storageFailShown=true; console.error('storage write failed', e.detail); }
+  });
+  async function storageRatio(){
+    const u=await window.storage.usage();
+    const lsRatio=u.ls/u.lsLimit, dbRatio=(u.mode==='idb' && u.quota)?u.usage/u.quota:0;
+    return { u, ratio:Math.max(u.mode==='idb'?0:lsRatio, dbRatio), lsRatio };
+  }
+  async function checkStorageFull(){
+    try{
+      const { ratio }=await storageRatio();
+      if(ratio>=.8 && !sessionStorage.getItem('storage-warned')){
+        sessionStorage.setItem('storage-warned','1');
+        showStorageAlert('warn', 'Espace de stockage presque plein ('+Math.round(ratio*100)+' %). Pense à exporter ou alléger tes données.');
+      }
+    }catch(e){}
+  }
+  async function renderStorageGauge(){
+    const box=$('storage-gauge'); if(!box || !window.storage.usage) return;
+    try{
+      const { u, lsRatio }=await storageRatio();
+      const groups=[['Tâches',['todo-widget-tasks']],['Contacts, sociétés et pipeline',['todo-widget-companies','todo-widget-contacts','todo-widget-meetings','todo-widget-opportunities','todo-widget-company-types','todo-widget-clients','todo-widget-projects']],
+        ['Note rapide',['todo-widget-notes']],['Copies de référence de la synchro',['sync-tasks-base','sync-crm-base','sync-notes-base','sync-conflicts']],['Portefeuille (Excel)',['parc-data']]];
+      const used=new Set(); const rows=groups.map(([l,ks])=>{ ks.forEach(k=>used.add(k)); return [l, ks.reduce((s,k)=>s+(u.parts[k]||0),0)]; });
+      rows.push(['Autres', Object.entries(u.parts).filter(([k])=>!used.has(k)).reduce((s,[,n])=>s+n,0)]);
+      const bar=(r,lab)=>'<div class="sg-bar'+(r>=.9?' crit':r>=.8?' warn':'')+'" title="'+lab+'"><span style="width:'+Math.min(100,Math.max(1,r*100)).toFixed(1)+'%"></span></div>';
+      let html='';
+      if(u.mode==='idb') html+='<div class="sg-mode">Base de données du navigateur : '+fmtMo(u.data)+' de données'+(u.quota?', '+fmtGo(u.quota)+' disponibles en tout':'')+'.</div>'+(u.quota?bar(u.usage/u.quota,'Espace du navigateur utilisé'):'');
+      else html+='<div class="sg-mode">Stockage simple du navigateur : '+Math.round(lsRatio*100)+' % de sa limite (environ 5 Mo).</div>'+bar(lsRatio,'Limite du stockage simple');
+      html+=rows.filter(r=>r[1]>0).map(([l,n])=>'<div class="sg-row"><span>'+l+'</span><b>'+fmtMo(n)+'</b></div>').join('');
+      html+='<div class="muted">Réglages et autres pages de tomsremy.github.io : '+Math.round(lsRatio*100)+' % du stockage simple (limite partagée entre ces pages).</div>';
+      box.innerHTML=html;
+    }catch(e){ box.innerHTML='<span class="muted">Espace non mesurable dans ce navigateur.</span>'; }
   }
   function syncEverythingNow(){ syncPull(); syncPullCrm(); syncPullNotes(); }
   function onSyncPillClick(){
@@ -1851,8 +2022,7 @@
 
   async function saveConflicts(){ try{ await window.storage.set('sync-conflicts', JSON.stringify(conflicts), false); }catch(e){} }
   async function saveSnapshots(){
-    try{ await window.storage.set('sync-tasks-base', JSON.stringify(tasksBaseSnapshot), false); }catch(e){}
-    try{ await window.storage.set('sync-crm-base', JSON.stringify(crmBaseSnapshot), false); }catch(e){}
+    try{ await Promise.all([window.storage.set('sync-tasks-base', JSON.stringify(tasksBaseSnapshot), false), window.storage.set('sync-crm-base', JSON.stringify(crmBaseSnapshot), false)]); }catch(e){}
   }
 
   function refreshAllViews(){
@@ -2029,6 +2199,8 @@
   window.addEventListener('storage', e=>{
     if(!e.key || e.newValue==null || e.key.indexOf('todo_')!==0) return;
     const k=e.key.slice(5);
+    // a data key written straight into localStorage by an older page: the store merges it and tells us the result
+    if(e.storageArea===localStorage && window.storage.isManaged && window.storage.isManaged(k)) return;
     try{
       const v=JSON.parse(e.newValue);
       if(k===TASKS_KEY){ tasks=v; refreshAllViews(); }
@@ -5617,6 +5789,7 @@
   }
 
   function renderLists(){
+    renderStorageGauge();
     renderClientList();
     projectChipRow.innerHTML='';
     if(!projectsList.length){ const p=document.createElement('p'); p.className='list-empty'; p.textContent='Aucun projet.'; projectChipRow.appendChild(p); }
@@ -6449,8 +6622,8 @@
   const PARC_CADRES=['CR','OA','ACC','Marché','Autre'];
   const PARC_COLORS={ CR:'#14D3A9', OA:'#7DD3FC', ACC:'#FFFD82', 'Marché':'#CA6702', Autre:'#6B7480' };
   let parcData=null, parcYear=new Date().getFullYear(), parcFilter='Gagné', parcSearch='';
-  function loadParc(){ try{ const r=localStorage.getItem('todo_'+PARC_KEY); parcData=r?JSON.parse(r):null; }catch(e){ parcData=null; } }
-  function saveParc(){ try{ localStorage.setItem('todo_'+PARC_KEY, JSON.stringify(parcData)); }catch(e){ console.error(e); } }
+  function loadParc(){ try{ const r=window.storage.peek?window.storage.peek(PARC_KEY):localStorage.getItem('todo_'+PARC_KEY); parcData=r?JSON.parse(r):null; }catch(e){ parcData=null; } }
+  function saveParc(){ window.storage.set(PARC_KEY, JSON.stringify(parcData)).catch(e=>console.error(e)); }
   const parcNorm=s=>pqFold(String(s==null?'':s)).replace(/[^a-z0-9%]/g,'');
   function parcIso(v){
     if(v instanceof Date && !isNaN(v)) return toISO(v);
@@ -7128,8 +7301,10 @@
   ['sync-pill','sync-pill-lite','sync-pill-w'].forEach(id=>{ const el=$(id); if(el) el.onclick=onSyncPillClick; });
   window.addEventListener('online', ()=>{ if(syncConfig.enabled) syncEverythingNow(); else paintSyncPill(); });
   window.addEventListener('offline', paintSyncPill);
+  $('storage-alert-close').onclick=()=>{ $('storage-alert').hidden=true; };
+  $('storage-alert-see').onclick=()=>{ $('storage-alert').hidden=true; openStorageSection(); };
   loadAll().then(()=>{
-    paintSyncPill();
+    paintSyncPill(); checkStorageFull(); setInterval(checkStorageFull, 10*60*1000);
     $('sync-token-exp').value=syncConfig.tokenExpires||'';
     if(location.hash==='#sync' && !window.TODO_LITE) openSyncSettings();
   });
