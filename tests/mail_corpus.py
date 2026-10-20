@@ -91,9 +91,9 @@ Commune de Pau
 Objet du marché : agrégation et achat de l'électricité produite par 3 centrales photovoltaïques en toiture (puissance totale 750 kWc), sortie d'obligation d'achat.
 Département de publication : 64
 Date limite de réception des offres : 14/11/2026
-Contact : service énergie, energie@ville-pau.fr, 05 59 27 85 80""",
+Contact : service énergie, energie@ville-pau.fr, 05 59 00 00 12""",
         "expect": {"producteur": "COMMUNE DE PAU", "origine": "BOAMP", "dept": "64 - Pyrénées-Atlantiques", "region": "Nouvelle-Aquitaine",
-                   "install": "PV", "contrat": "Sortie d'OA / CR", "kwc": "750", "tel": "05 59 27 85 80", "mail": "energie@ville-pau.fr"},
+                   "install": "PV", "contrat": "Sortie d'OA / CR", "kwc": "750", "tel": "05 59 00 00 12", "mail": "energie@ville-pau.fr"},
     },
     {
         "name": "Gmail forward, signature sans formule",
@@ -239,8 +239,8 @@ Je vous prie d'agréer mes salutations distinguées.
 Mme Isabelle Garnier
 Chargée de mission énergies renouvelables
 Syndicat Départemental d'Énergie 35
-02 99 23 15 15""",
-        "expect": {"prenom": "Isabelle", "nom": "GARNIER", "tel": "02 99 23 15 15", "mail": "i.garnier@sde35.fr", "dept": "35 - Ille-et-Vilaine",
+02 99 00 00 13""",
+        "expect": {"prenom": "Isabelle", "nom": "GARNIER", "tel": "02 99 00 00 13", "mail": "i.garnier@sde35.fr", "dept": "35 - Ille-et-Vilaine",
                    "region": "Bretagne", "install": "PV", "kwc": "2600", "duree": "2", "producteur": "SYNDICAT DÉPARTEMENTAL D'ÉNERGIE 35"},
     },
     {
