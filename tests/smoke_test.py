@@ -446,10 +446,10 @@ with sync_playwright() as p:
     wb = openpyxl.Workbook(); ws = wb.active; ws.title = "BDD Agrégation"
     hdr = ["Vérification", "Année", "Chargé", "Date entrée BDD", "Source", "Crédit Agricole", "Développeur", "Ref", "Cadre juridique", "Type AO CRE",
            "Région", "Département", "Statut", "Date_fin", "Renouvellement", "Nom_prod", "Nom_Installation_prod", "Type_EnR", "P_installée (KWc)", "P50\n(MWh)",
-           "Agrégation 2026", "Agrégation 2027"]
+           "Agrégation 2026", "Agrégation 2027", "Département 2", "Département2"]
     ws.append(["Date renouvellement"]); ws.append([]); ws.append(hdr)
     soon = (TODAY + datetime.timedelta(days=90))
-    ws.append(["", 2021, "PGU", None, "Contact direct", "N/A", "SOLARIS", "", "CR", "AO CRE", "Occitanie", "34 - Hérault", "Gagné", soon, "A renouveler", "SOLARIS", "CS DU MOULIN", "PV", 2990, 4500, 4500, 0])
+    ws.append(["", 2021, "PGU", None, "Contact direct", "N/A", "SOLARIS", "", "CR", "AO CRE", "Occitanie", "34 - Hérault", "Gagné", soon, "A renouveler", "SOLARIS", "CS DU MOULIN", "PV", 2990, 4500, 4500, 0, "Hérault", "30 - Gard"])
     ws.append(["", 2022, "SMA", None, "Contact direct", "N/A", "VENTUS", "", "Marché", "", "Bretagne", "29 - Finistère", "Gagné", datetime.date(2028, 12, 31), "En cours", "VENTUS", "Parc B", "PV", 10000, 23000, 23000, 23000])
     ws.append(["", 2026, "PGU", None, "BOAMP", "N/A", "X", "", "CR", "", "Grand Est", "", "En attente", None, "", "X", "Toit", "PV", 500, 600, "", ""])
     d = wb.create_sheet("Dashboard"); d.append(["", "Désignation", "2026", "2027"]); d.append(["", "Object. Agrégation Vol.", 150, 300])
@@ -463,9 +463,11 @@ with sync_playwright() as p:
     page.set_input_files("#parc-file", str(parc)); page.wait_for_function("document.getElementById('parc-info').textContent.includes('lignes')", timeout=20000)
     years = page.eval_on_selector_all(".parc-years button", "els=>els.map(e=>e.textContent)")
     check(years == [str(TODAY.year + i) for i in range(5)], f"portefeuille: 5 years from the current one ({years})")
-    check(page.locator(".parc-map .bub").count() == 2 and page.locator(".parc-map .dep").count() == 96, "portefeuille: map of the 96 départements with the signed plants")
-    page.click(".parc-map .bub[data-dep='34']"); page.wait_for_timeout(100)
-    check("Hérault" in page.inner_text(".parc-map-side"), "portefeuille: clicking the map shows the département's plants")
+    check(page.locator(".parc-map .dot").count() == 2 and page.locator(".parc-map .dep").count() == 96, "portefeuille: map of the 96 départements, one dot per signed plant")
+    page.hover(".parc-map .dot[data-dep='30']"); page.wait_for_timeout(100)
+    check(page.is_visible(".parc-map-tip") and "CS DU MOULIN" in page.inner_text(".parc-map-tip") and "Solaire PV" in page.inner_text(".parc-map-tip"), "portefeuille: hovering a dot shows the plant and its technology")
+    page.click(".parc-map .dot[data-dep='30']"); page.wait_for_timeout(100)
+    check("Gard" in page.inner_text(".parc-map-side"), "portefeuille: a plant is placed where it is (Département2), not at the contract's département")
     page.click("#parc-source-btn"); page.fill("#parc-link", "https://example.sharepoint.com/sites/x/Suivi.xlsx"); page.click("#parc-link-save")
     check(page.get_attribute("#parc-open-link", "href") == "https://example.sharepoint.com/sites/x/Suivi.xlsx" and page.is_visible("#parc-open-link"), "portefeuille: Excel link saved, opens in one click")
     page.click(".parc-years button:text-is('2026')")
