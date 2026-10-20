@@ -51,8 +51,10 @@ def main():
             if not ok:
                 misses.append(f"  [{case['name']}] {field}: attendu {want!r}, lu {got.get(field)!r}")
         if "installs" in case:
-            want = [(norm("centrale", i["centrale"]), i["kwc"]) for i in case["installs"]]
-            have = [(norm("centrale", i.get("centrale")), i.get("kwc")) for i in res["installs"]]
+            # every field listed for each expected installation is compared
+            keys = sorted({k for i in case["installs"] for k in i})
+            want = [tuple(norm("centrale", i.get(k)) for k in keys) for i in case["installs"]]
+            have = [tuple(norm("centrale", i.get(k)) for k in keys) for i in res["installs"]]
             ok = want == have
             s = per_field.setdefault("installations", [0, 0]); s[1] += 1; s[0] += ok
             total += 1; good += ok

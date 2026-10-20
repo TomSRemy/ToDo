@@ -519,6 +519,7 @@
   .pq-drop .pq-link{ color:var(--accent); }
   #pq-mail{ flex:1; min-height:260px; width:100%; resize:vertical; background:var(--panel-2); color:var(--tx1); border:1px solid var(--bd); border-radius:7px; padding:10px; font:400 12px/1.55 var(--font-mono); }
   .pq-files-info{ font-size:11px; color:var(--tx3); min-height:14px; }
+  .pq-mail-warning{ font-size:11.5px; line-height:1.45; color:#D9A441; border:1px solid #5A4720; background:rgba(217,164,65,.08); border-radius:6px; padding:7px 9px; }
   .pq-form{ padding:4px 16px 12px; min-height:0; }
   .pq-sec{ border-bottom:1px solid var(--bd-soft); padding-bottom:8px; }
   .pq-sec-h{ display:flex; align-items:center; gap:8px; justify-content:space-between; padding:10px 0 6px; font-family:var(--font-mono); font-size:9.5px; color:var(--tx3); text-transform:uppercase; letter-spacing:.5px; list-style:none; cursor:default; }
@@ -1168,6 +1169,7 @@
           <div class="pq-drop"><span>Collez le mail, ou déposez ici un .msg, un .eml ou l’Excel du producteur</span><label class="pq-link">Choisir un fichier<input type="file" id="pq-file" multiple accept=".msg,.eml,.txt,.xlsx,.xlsm,.xls" hidden></label></div>
           <textarea id="pq-mail" spellcheck="false" placeholder="Collez ici le mail (avec la signature, et l’historique si c’est un transfert)…"></textarea>
           <div class="pq-files-info" id="pq-files-info"></div>
+          <div class="pq-mail-warning" id="pq-mail-warning" hidden>Ceci est la ligne de la liste Outlook (expéditeur, objet, date), pas le contenu du mail. Ouvre le mail puis copie son texte (Ctrl+A puis Ctrl+C), ou enregistre-le (glisser le mail sur le Bureau) et dépose le fichier .msg ici.</div>
         </div>
         <form class="pq-form" id="pq-form" autocomplete="off" novalidate onsubmit="return false"></form>
       </div>
@@ -4059,21 +4061,36 @@
     flush();
     return best;
   }
+  // short project names announced in the subject ("Projets photovoltaïques DURAND, MARTIN et LEROY")
+  function pqSubjectNames(raw){
+    const subj=(/^(?:objet|subject)\s*:\s*(.*)$/im.exec(String(raw||''))||[])[1]||'';
+    return (subj.match(/\b[A-ZÉÈÀÂÎÔÛÇ][A-ZÉÈÀÂÎÔÛÇ'’-]{2,}\b/g)||[]).filter(w=>!/^(RE|TR|FW|FWD|PV|AO|CRE|MW|MWC|KWC|SAS|SARL|EARL|GAEC|SCEA|ACC|OA|CR)$/.test(w));
+  }
   function parseMailInstallations(raw){
     const table=parseMailTable(raw);
     if(table.length) return table;
-    const found=[];
+    const found=[], short=pqSubjectNames(raw);
     String(raw||'').replace(/\r/g,'').replace(/ /g,' ').split('\n').forEach(l=>{
       const m=/^\s*(?:[-•*·–]|\d+[.)])\s*(.+)$/.exec(l); if(!m) return;
       const s=m[1];
       const pm=new RegExp(PQ_QTY+'\\s*(mwc|mwp|mw|kwc|kwp|kw)\\b(?!h)','iu').exec(s); if(!pm) return;
       let v=pqQty(pm[1],pm[2]); if(/^m/i.test(pm[2])) v*=1000;
       const inst={ kwc:String(Math.round(v*100)/100) };
-      const name=s.slice(0,pm.index).replace(/\((\d{2,3}|2A|2B)\)/,' ').replace(/[\s:–,-]+$/,'').replace(/\s+/g,' ').trim();
+      let name=s.slice(0,pm.index).replace(/\((\d{2,3}|2A|2B)\)/,' ').replace(/[\s:–,-]+$/,'').replace(/\s+/g,' ').trim();
+      // "OWNER à COMMUNE (à) 55000": owner, commune and postal code go to their own fields
+      const loc=/^(.+?)\s+(?:à|a|sur|-|–)\s+(.+?)\s*(?:,|\s)\s*(?:à\s+)?\(?((?:0[1-9]|[1-8]\d|9[0-5])\d{3}|97[1-6]\d{2})\)?$/u.exec(name)
+             || /^(.+?)\s+(?:à|a|sur)\s+([A-ZÉÈ][\p{L}' -]+)$/u.exec(name);
+      if(loc){ inst.spv=loc[1].trim(); inst.commune=loc[2].trim(); if(loc[3]) inst.cp=loc[3]; name=inst.spv; }
+      // the plant is called by the short name given in the subject when one matches ("DURAND PAUL" → DURAND)
+      const hit=short.find(w=>new RegExp('(^|[^\\p{L}])'+w.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+'([^\\p{L}]|$)','u').test(name.toUpperCase()));
+      if(hit) name=hit;
       if(name) inst.centrale=name.charAt(0).toUpperCase()+name.slice(1);
-      const d=pqDeptFromText(s); if(d){ inst.dept=pqDeptLabel(d); inst.region=PQ_REGIONS[d[2]]; }
+      const d=inst.cp?pqDeptFromPostal(inst.cp):pqDeptFromText(s); if(d){ inst.dept=pqDeptLabel(d); inst.region=PQ_REGIONS[d[2]]; }
       const rest=s.slice(pm.index+pm[0].length);
       if(/mes|service|msi|cod|\d{1,2}\/\d{4}/i.test(rest)){ const dt=pqParseDateLoose(rest); if(dt) inst.mesPrev=dt; }
+      // what follows the power ("– Injection totale.", "– Autoconsommation prévisionnelle de 10 %, à confirmer.")
+      const note=rest.replace(/^[\s,;:–—-]+/,'').replace(/[.\s]+$/,'').trim();
+      if(note && note.length<=120 && !/^(mes|msi|cod)\b/i.test(note)) inst.particularites=note;
       found.push(inst);
     });
     return found.length>=2?found:[];
@@ -4592,7 +4609,15 @@
     pqRender();
   }
   let pqParseTimer=null, pqLastFiles=null;
-  function pqReparse(){ const files=pqLastFiles||{text:'',installs:[]}; const text=[$('pq-mail').value, files.text].filter(Boolean).join('\n\n'); pqApply(parsePipeMail(text), files.installs.length?files.installs:parseMailInstallations(text)); }
+  // Copying a mail from Outlook's message list gives only its summary line ("De  Objet  Reçu  Taille…"), not its content
+  const PQ_OUTLOOK_LIST=/^\s*(de|from)\s*\t\s*(objet|subject)\s*\t/im;
+  function pqReparse(){
+    const files=pqLastFiles||{text:'',installs:[]}, pasted=$('pq-mail').value;
+    const listOnly=PQ_OUTLOOK_LIST.test(pasted) && pasted.split('\n').filter(l=>l.trim()).length<=4;
+    $('pq-mail-warning').hidden=!listOnly;
+    const text=[pasted, files.text].filter(Boolean).join('\n\n');
+    pqApply(parsePipeMail(text), files.installs.length?files.installs:parseMailInstallations(text));
+  }
   async function pqHandleFiles(fileList){
     const files=[...fileList]; if(!files.length) return;
     $('pq-files-info').textContent='Lecture…';

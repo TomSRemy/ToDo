@@ -393,6 +393,8 @@ with sync_playwright() as p:
     page.fill("#pq-mail", "De : R C <r@helio.fr>\nObjet : x\n\nBonjour,\n- Centrale de Cholet (49) : 1,2 MWc, MES 03/2027\n- Centrale de Saumur (49) : 800 kWc\nCordialement,\nRomain Chevalier")
     page.wait_for_timeout(500)
     check(page.input_value("#pq-1-centrale") == "Centrale de Saumur" and page.input_value("#pq-0-mesPrev") == "Mars 2027", "mail listing two plants → two installations")
+    page.fill("#pq-mail", "De\tObjet\tReçu\tTaille\tCatégories\t\nPierre Dupont;  Prénom Nom\tRE: Projets PV\tlun. 16:07\t318 Ko\tTodo-synced"); page.wait_for_timeout(400)
+    check(page.is_visible("#pq-mail-warning"), "pasting the Outlook list line explains how to get the mail content")
     page.fill("#pq-0-centrale", 'x" autofocus onfocus="window.__xss=1" y="')
     page.select_option("#pq-0-install", "Eolien"); page.wait_for_timeout(300)  # re-renders the form with the value in an attribute
     check(page.evaluate("window.__xss") is None and page.input_value("#pq-0-centrale").startswith('x" autofocus'), "a quote in a field can't inject HTML")

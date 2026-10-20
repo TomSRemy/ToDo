@@ -643,3 +643,54 @@ Hélène Roussel, Directrice, SEM ENERGIES LOIRE, 04 77 12 34 56""",
         "installs": [{"centrale": "Gymnase Jean Moulin", "kwc": "250"}, {"centrale": "École des Tilleuls", "kwc": "100"}, {"centrale": "Centre technique", "kwc": "450"}],
     },
 ]
+
+# Real layout (names changed): an installer asks for three plants owned by three different companies,
+# Outlook bullets "Owner à COMMUNE à CP : power – notes", short names in the subject.
+HARD.append({
+    "name": "Installateur, 3 centrales de 3 propriétaires (puces Outlook)",
+    "mail": """Bonjour Monsieur MARTIN,
+Merci pour votre retour, je suis disponible le 22/10 à partir de 10hr.
+A bientôt.
+ <https://www.example-install.fr/logo.png>
+\tPaul-Henri MARCHAL
+ <https://www.example-install.fr/appel.png>  06 19 00 00 38
+ <https://www.example-install.fr/courrier.png>  ph.marchal@install-lorraine.fr <mailto:ph.marchal@install-lorraine.fr>
+________________________________
+INSTALL LORRAINE
+ <https://www.example-install.fr/appel.png>  03 87 00 00 74
+ <https://www.example-install.fr/emplacement.png>  12 rue de l'Exemple, 00000 Ville
+SIRET : 91000000000015– RCS : 910 000 000 R.C.S. Exemple
+________________________________
+De : Prénom Nom <prenom.nom@exemple.fr>
+Objet : TR: INSTALL LORRAINE - Demande d'accompagnement agrégateur – Projets photovoltaïques DURAND, MARTIN et LEROY
+
+Bonjour Monsieur Marchal, je vous propose un échange en visio.
+Prénom NOM
+Responsable Commercial
+
+De : Paul-Henri Marchal <ph.marchal@install-lorraine.fr <mailto:ph.marchal@install-lorraine.fr> >
+Envoyé : vendredi 16 octobre 2026 09:44
+Objet : INSTALL LORRAINE - Demande d'accompagnement agrégateur – Projets photovoltaïques DURAND, MARTIN et LEROY
+
+Bonjour,
+Nous avons actuellement trois projets concernés par cette démarche :
+*\tMARTIN à VILLE-SUR-EXEMPLE à 55000 : 178 kWc – Autoconsommation prévisionnelle de 10 %, à confirmer.
+*\tSOCIÉTÉ D'EXPLOITATION DES ÉTABLISSEMENTS JEAN LEROY à PETIT-BOIS 57445 : 204 kWc – Injection totale.
+*\tBRAYEUX ALBERT à VILLERS 54850 : 413 kWc – Autoconsommation prévisionnelle de 40 %, à confirmer.
+Soit une puissance totale installée de 795 kWc.
+A bientôt.
+\tPaul-Henri MARCHAL
+ <https://www.example-install.fr/appel.png>  06 19 00 00 38
+________________________________
+INSTALL LORRAINE
+ <https://www.example-install.fr/appel.png>  03 87 00 00 74
+SIRET : 91000000000015– RCS : 910 000 000 R.C.S. Exemple""",
+    "expect": {"prenom": "Paul-Henri", "nom": "MARCHAL", "tel": "06 19 00 00 38", "mail": "ph.marchal@install-lorraine.fr", "producteur": "INSTALL LORRAINE",
+               "origine": "Contact direct", "install": "PV", "centrale": "MARTIN", "kwc": "178"},
+    "installs": [{"centrale": "MARTIN", "kwc": "178", "spv": "MARTIN", "commune": "VILLE-SUR-EXEMPLE", "cp": "55000", "dept": "55 - Meuse",
+                  "particularites": "Autoconsommation prévisionnelle de 10 %, à confirmer"},
+                 {"centrale": "LEROY", "kwc": "204", "spv": "SOCIÉTÉ D'EXPLOITATION DES ÉTABLISSEMENTS JEAN LEROY", "commune": "PETIT-BOIS", "cp": "57445",
+                  "dept": "57 - Moselle", "particularites": "Injection totale"},
+                 {"centrale": "DURAND", "kwc": "413", "spv": "DURAND PAUL", "commune": "VILLERS", "cp": "54850", "dept": "54 - Meurthe-et-Moselle",
+                  "particularites": "Autoconsommation prévisionnelle de 40 %, à confirmer"}],
+})
