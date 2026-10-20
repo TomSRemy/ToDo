@@ -612,6 +612,13 @@ with sync_playwright() as p:
     (site / "index.html").write_text(html.replace("</body>", "<div id='new-version-marker'></div></body>"), encoding="utf-8")
     page.reload()
     check(page.locator("#new-version-marker").count() == 1, "a published update shows at the first reload")
+    # a new service worker version takes over by itself and the open page reloads once onto it
+    sw = (site / "sw.js").read_text(encoding="utf-8")
+    (site / "sw.js").write_text(sw.replace("todo-pwa-v", "todo-pwa-test-v"), encoding="utf-8")
+    (site / "index.html").write_text(html.replace("</body>", "<div id='second-version-marker'></div></body>"), encoding="utf-8")
+    page.evaluate("navigator.serviceWorker.getRegistration().then(r=>r.update())")
+    page.wait_for_selector("#second-version-marker", state="attached", timeout=15000)
+    check(page.locator("#second-version-marker").count() == 1, "an open page switches to a newly published version by itself")
     ctx.close(); srv.shutdown()
 
     browser.close()

@@ -1024,7 +1024,13 @@
 })();
 
 if('serviceWorker' in navigator){
-  window.addEventListener('load', ()=>{ navigator.serviceWorker.register('sw.js').catch(()=>{}); });
+  window.addEventListener('load', ()=>{ navigator.serviceWorker.register('sw.js').then(r=>r.update()).catch(()=>{}); });
+  // A new version was published: once its service worker takes over, reload once so the page itself is the new one
+  // (not on the very first install, when no service worker controlled the page yet).
+  if(navigator.serviceWorker.controller){
+    let reloaded=false;
+    navigator.serviceWorker.addEventListener('controllerchange', ()=>{ if(reloaded) return; reloaded=true; location.reload(); });
+  }
 }
 </script>
 </body>
