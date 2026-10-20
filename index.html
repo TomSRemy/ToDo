@@ -564,6 +564,16 @@
   .pq-step1.hidden, .pq-layout.hidden, .crm-form-actions button.hidden{ display:none; }
   .prequal-note{ width:100%; background:var(--panel-2); border:1px solid var(--bd); border-radius:var(--radius); color:var(--tx1); font-family:var(--font-ui); font-size:13px; padding:8px 10px; resize:vertical; }
   .hidden-row{ display:none !important; }
+  .relevance-picker.hidden{ display:none; }
+  .co-stars{ display:inline-flex; align-items:center; gap:1px; flex-shrink:0; vertical-align:middle; margin-left:4px; }
+  .co-star{ display:flex; color:var(--bd); } .co-star.on{ color:var(--accent); }
+  .co-star svg{ width:11px; height:11px; }
+  .co-stars.editable .co-star{ cursor:pointer; padding:1px; }
+  .co-stars.editable .co-star svg{ width:13px; height:13px; }
+  .co-stars.editable:hover .co-star{ color:var(--tx3); }
+  .co-stars.editable .co-star:hover, .co-stars.editable .co-star:hover ~ .co-star{ color:var(--bd); }
+  .co-stars.editable:hover .co-star:has(~ .co-star:hover), .co-stars.editable .co-star:hover{ color:var(--accent); }
+  .co-stars-row{ align-items:center; gap:10px; font-size:12.5px; color:var(--tx2); }
   .pipe-bar-btn.hidden{ display:none; }
   .bridge-status{ font-size:11px; color:var(--tx3); font-family:var(--font-mono); }
   .bridge-status.on{ color:var(--accent); } .bridge-status.off{ color:#D9A441; }
@@ -995,7 +1005,7 @@
         <input type="text" id="ct-phone2" placeholder="Téléphone 2 (optionnel)">
       </div>
       <div class="crm-form-row">
-        <div class="relevance-picker" id="ct-relevance-picker">
+        <div class="relevance-picker hidden" id="ct-relevance-picker" aria-hidden="true">
           <span data-v="1">★</span><span data-v="2">★</span><span data-v="3">★</span><span data-v="4">★</span><span data-v="5">★</span>
         </div>
         <input type="text" id="ct-meeting" placeholder="Rencontré à… (ex: E-World 26)">
@@ -1196,6 +1206,7 @@
       <div class="crm-form-row"><input type="text" id="co-whatdo" placeholder="Ce qu'ils font (ex: Producteur solaire FR)"></div>
       <div class="crm-form-row"><input type="text" id="co-website" placeholder="Site web / lien"></div>
       <div class="crm-form-row"><input type="text" id="co-scope" placeholder="Périmètre marché, séparé par des virgules (ex: FR, EU)"></div>
+      <div class="crm-form-row co-stars-row"><span>Note du client</span><span id="co-stars-pick"></span></div>
       <div class="crm-form-row">
         <input type="text" id="co-type" placeholder="Type (Client, Consultant, Fournisseur…)" list="co-type-list" autocomplete="off">
         <datalist id="co-type-list"></datalist>
@@ -1445,6 +1456,7 @@
     await loadSyncConfig();
     consolidateNotes();
     loadParc(); ensureRenewalTasks();
+    if(migrateCompanyStars()) saveCrm();
     checkReminders();
     render(); renderArchive(); renderLists(); renderToday(); initPostit(); updateConflictBadge(); applyColumnVisibility();
     await loadSeenIds();
@@ -1506,7 +1518,7 @@
   // Field labels shown in the conflict list, per entity type.
   const CONFLICT_ENTITY_LABELS={
     task:{ name:t=>t.title, fields:{title:'Titre',description:'Description',client:'Client',project:'Projet',urgency:'Urgence',status:'Statut',due:'Échéance'} },
-    company:{ name:c=>c.name, fields:{whatTheyDo:'Activité',website:'Site web',marketScope:'Périmètre',type:'Type'} },
+    company:{ name:c=>c.name, fields:{whatTheyDo:'Activité',website:'Site web',marketScope:'Périmètre',type:'Type',relevance:'Note'} },
     contact:{ name:c=>[c.firstName,c.lastName].filter(Boolean).join(' ')||'(sans nom)', fields:{firstName:'Prénom',lastName:'Nom',role:'Rôle',company:'Société',email:'Email',phone1:'Téléphone 1',phone2:'Téléphone 2',relevance:'Pertinence',comment:'Commentaire'} },
     meeting:{ name:m=>m.label, fields:{label:'Intitulé',date:'Date'} },
     opportunity:{ name:o=>o.title, fields:{title:'Intitulé',company:'Société',stage:'Étape'} },
@@ -2860,6 +2872,42 @@
   function companyInitials(name){ const words=(name||'').trim().split(/\s+/).filter(Boolean); if(!words.length) return '?'; return (words[0].charAt(0)+(words[1]?words[1].charAt(0):'')).toUpperCase(); }
   const STAR_ICON_ON='<svg viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01z"/></svg>';
   const STAR_ICON_OFF='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01z"/></svg>';
+  // Stars (0–5) belong to the client (company.relevance). Older data had them on contacts: a company without a
+  // note starts from the best note of its contacts (deterministic, so every device computes the same value).
+  function companyStars(name){
+    if(!name) return 0;
+    const co=companies.find(x=>x.name===name && !x.deleted);
+    if(co && co.relevance!==undefined) return co.relevance||0;
+    // a company known only through its contacts (no record yet): best note of its contacts
+    return contacts.filter(c=>!c.deleted && c.company===name).reduce((m,c)=>Math.max(m, c.relevance||0), 0);
+  }
+  function migrateCompanyStars(){
+    let changed=false;
+    companies.forEach(co=>{
+      if(co.relevance!==undefined) return;
+      co.relevance=contacts.filter(c=>!c.deleted && c.company===co.name).reduce((m,c)=>Math.max(m, c.relevance||0), 0);
+      changed=true;
+    });
+    return changed;
+  }
+  function setCompanyStars(name, n){
+    let co=companies.find(x=>x.name===name && !x.deleted);
+    if(!co){ co={ id:'co_'+Date.now()+'_'+Math.random().toString(36).slice(2,7), name, whatTheyDo:'', marketScope:[], website:'', type:'', createdAt:Date.now(), updatedAt:Date.now(), deleted:false }; companies.push(co); }
+    co.relevance=(companyStars(name)===n && co.relevance!==undefined)?0:n;   // clicking the current note clears it
+    touchCrm(co); saveCrm(); renderContacts();
+    if(typeof renderPipeline==='function' && !$('tab-pipeline').classList.contains('hidden')) renderPipeline();
+  }
+  // clickable stars (company header / company form) or read-only (rows, pipeline cards)
+  function starsWidget(n, onPick){
+    const w=document.createElement('span'); w.className='co-stars'+(onPick?' editable':'');
+    for(let i=1;i<=5;i++){
+      const s=document.createElement('span'); s.className='co-star'+(i<=n?' on':''); s.innerHTML=i<=n?STAR_ICON_ON:STAR_ICON_OFF;
+      if(onPick){ s.title=i===n?'Retirer la note':('Note : '+i+'/5'); s.onclick=e=>{ e.stopPropagation(); onPick(i); }; }
+      w.appendChild(s);
+    }
+    if(onPick) w.title='Note du client';
+    return w;
+  }
   function starsIconRow(n){
     let html='';
     for(let i=1;i<=5;i++){ html+='<span style="color:'+(i<=n?'var(--accent)':'var(--bd)')+';display:flex;">'+(i<=n?STAR_ICON_ON:STAR_ICON_OFF)+'</span>'; }
@@ -3037,18 +3085,19 @@
     }
     const {key,dir}=contactsSort;
     const byName=(a,b)=>contactSortName(a).localeCompare(contactSortName(b),'fr',{sensitivity:'base'});
-    const byStars=(a,b)=>((b.relevance||0)-(a.relevance||0))*dir || byName(a,b);
-    const inGroup = key==='rel' ? byStars : (a,b)=>byName(a,b)*(key==='name'?dir:1);
+    const byStars=(a,b)=>(companyStars(b.company)-companyStars(a.company))*dir || byName(a,b);
+    const inGroup = (a,b)=>byName(a,b)*(key==='name'?dir:1);
     const pushRow=c=>{ list.appendChild(buildContactRow(c, contactRowCounter++)); if(expandedContacts.has(c.id)) list.appendChild(buildContactInfoCard(c)); };
     if(contactsView==='liste'){
       const byCo=(a,b)=>{ const ca=a.company||'', cb=b.company||''; if(!ca!==!cb) return ca?-1:1; return ca.localeCompare(cb,'fr',{sensitivity:'base'})*dir || byName(a,b); };
-      items.sort(key==='co' ? byCo : inGroup).forEach(pushRow);
+      items.sort(key==='co' ? byCo : key==='rel' ? byStars : inGroup).forEach(pushRow);
       return;
     }
     const groups={};
     items.forEach(c=>{ const k=c.company||'Sans société'; (groups[k]=groups[k]||[]).push(c); });
     Object.keys(groups).sort((a,b)=>{
       if(a==='Sans société') return 1; if(b==='Sans société') return -1;
+      if(key==='rel'){ const d=(companyStars(b)-companyStars(a))*dir; if(d) return d; }
       return a.localeCompare(b,'fr',{sensitivity:'base'})*(key==='co'?dir:1);
     }).forEach(company=>{
       if(company==='Sans société'){
@@ -3102,6 +3151,7 @@
     header.appendChild(countEl);
 
     const co=companies.find(x=>x.name===companyName);
+    header.appendChild(starsWidget(companyStars(companyName), n=>setCompanyStars(companyName, n)));
     const typeTag=document.createElement('span'); typeTag.className='company-type-tag';
     typeTag.textContent = co&&co.type ? co.type : '+ Type';
     typeTag.title='Cliquer pour changer le type d\u2019entreprise';
@@ -3159,6 +3209,9 @@
     $('co-website').value=co.website||'';
     $('co-scope').value=(co.marketScope||[]).join(', ');
     $('co-type').value=co.type||'';
+    let pickN=co.relevance||0;
+    const drawPick=()=>{ const el=$('co-stars-pick'); el.innerHTML=''; el.appendChild(starsWidget(pickN, n=>{ pickN=(pickN===n)?0:n; el.dataset.value=pickN; drawPick(); })); el.dataset.value=pickN; };
+    drawPick();
     $('co-type-list').innerHTML=companyTypesList.map(t=>'<option value="'+t.replace(/"/g,'&quot;')+'">').join('');
     $('company-edit-overlay').classList.remove('hidden');
     $('co-whatdo').focus();
@@ -3172,6 +3225,7 @@
     co.marketScope=$('co-scope').value.split(',').map(s=>s.trim()).filter(Boolean);
     const typeVal=$('co-type').value.trim();
     co.type=typeVal;
+    co.relevance=parseInt($('co-stars-pick').dataset.value||'0',10);
     if(typeVal && !companyTypesList.includes(typeVal)){ companyTypesList.push(typeVal); saveCrmLocalOnly(); }
     touchCrm(co); saveCrm();
     closeCompanyEditForm();
@@ -3303,7 +3357,7 @@
     row.appendChild(phoneCell);
 
     const stars=document.createElement('div'); stars.className='contact-stars';
-    stars.innerHTML=starsIconRow(c.relevance||0);
+    if(contactsView==='liste' && c.company){ stars.appendChild(starsWidget(companyStars(c.company))); stars.title='Note du client '+c.company; }
     row.appendChild(stars);
 
     const actions=document.createElement('div'); actions.className='contact-actions';
@@ -3648,6 +3702,8 @@
     m=/(\d{4})-(\d{2})-(\d{2})/.exec(s); if(m) return m[3]+'/'+m[2]+'/'+m[1];
     m=/(\d{1,2})(?:er)?\s+(janvier|fevrier|mars|avril|mai|juin|juillet|aout|septembre|octobre|novembre|decembre)\s+(\d{4})/.exec(s); if(m) return pqPad(m[1])+'/'+pqPad(PQ_MONTHS[m[2]])+'/'+m[3];
     m=/(janvier|fevrier|mars|avril|mai|juin|juillet|aout|septembre|octobre|novembre|decembre)\s+(\d{4})/.exec(s); if(m) return PQ_MONTH_LABEL[m[1]]+' '+m[2];
+    m=/\b(january|february|march|april|may|june|july|august|september|october|november|december)\s+(\d{4})/.exec(s); if(m) return Object.values(PQ_MONTH_LABEL)[['january','february','march','april','may','june','july','august','september','october','november','december'].indexOf(m[1])]+' '+m[2];
+    m=/\bq([1-4])\s+(\d{4})/.exec(s); if(m) return 'T'+m[1]+' '+m[2];
     m=/\b(0?[1-9]|1[0-2])\/(20\d{2})\b/.exec(s); if(m) return PQ_MONTH_LABEL[Object.keys(PQ_MONTHS)[parseInt(m[1],10)-1]]+' '+m[2];
     m=/\b(t[1-4]|[1-4](?:er|e|eme|ème)\s+trimestre)\s+(\d{4})/.exec(s); if(m){ const q=parseInt(m[1].replace(/\D/g,''),10); return 'T'+q+' '+m[2]; }
     m=/(ete|printemps|automne|hiver|debut|fin|courant)\s+(\d{4})/.exec(s); if(m) return m[0].replace(/^ete/,'été').replace(/^debut/,'début');
@@ -3830,16 +3886,28 @@
   }
 
   function parsePipeMail(raw){
-    const out={}, text=String(raw||'').replace(/\r/g,'').replace(/ /g,' '), lines=text.split('\n').map(l=>l.trim());
+    const out={};
+    // clean-up: "<mailto:…>" / "<tel:…>" copies left by Outlook, "> " quote marks of plain-text replies
+    let text=String(raw||'').replace(/\r/g,'').replace(/\u00a0/g,' ').replace(/<(mailto|tel):[^>]*>/gi,'').replace(/^[ \t]*(>[ \t]?)+/gm,'');
+    // English mail: "12,400 MWh" is twelve thousand four hundred
+    const english=(text.match(/\b(the|our|and|is|with|we|hi|best regards|please|plant)\b/gi)||[]).length>=4;
+    if(english) text=text.replace(/(\d),(\d{3})(?![\d,])/g,'$1$2');
+    const lines=text.split('\n').map(l=>l.trim());
     if(!text.trim()) return out;
     const all=[...new Set((text.match(PQ_EMAIL_RE)||[]).map(e=>e.toLowerCase()))];
     const caEmails=all.filter(pqIsCa);
     // Split a forward chain at each "De :"/"From:" header; the prospect is the latest block whose sender is not a relay.
     const blocks=[]; let cur={ from:null, lines:[] };
-    lines.forEach(l=>{ const m=/^(de|from)\s*:\s*(.*)$/i.exec(l); if(m){ if(cur.lines.length||cur.from) blocks.push(cur); cur={ from:m[2], lines:[] }; } else cur.lines.push(l); });
+    // a new quoted message starts at "De : …" / "From: …" or at "Le jeu. 9 oct. 2026 à 11:02, X <x@y> a écrit :"
+    lines.forEach(l=>{
+      const m=/^(de|from)\s*:\s*(.*)$/i.exec(l)||/^(le|on)\s.{6,120}?(<?[\w.+-]+@[\w.-]+>?).{0,40}(a [ée]crit|wrote)\s*:?\s*$/i.exec(l);
+      if(m){ if(cur.lines.length||cur.from) blocks.push(cur); cur={ from:/^(de|from)$/i.test(m[1])?m[2]:l, lines:[] }; } else cur.lines.push(l);
+    });
     blocks.push(cur);
     blocks.forEach(b=>{ b.email=((b.from||'').match(PQ_EMAIL_RE)||[])[0]||null; b.relay=b.email?pqIsRelay(b.email):false; });
     let prospect=blocks.slice().reverse().find(b=>b.from && b.email && !b.relay)||null;
+    // a reply to us (or to the bank) pasted without its own header: the top message is the prospect's
+    if(!prospect && blocks.length>1 && !blocks[0].from && blocks.slice(1).every(b=>b.relay)) prospect=blocks[0];
     if(!prospect){ const b=blocks[blocks.length-1]; prospect=(b.relay||(!b.from && blocks.some(x=>x.relay)))?null:b; }
     const body=prospect?prospect.lines.filter(l=>!PQ_HEADER.test(l)):lines.filter(l=>!PQ_HEADER.test(l));
     const bodyText=body.join('\n');
@@ -3957,7 +4025,7 @@
     const multi=parseMailInstallations(scope);
     const cre=/\bPR\/\d{4}\/\d{4,6}\b/.exec(text);
     const named=/\b(parc|centrale|ferme)\s+(?:éolien(?:ne)?|solaire|photovoltaïque|PV|hydro\p{L}*)?\s*(de la|de l'|de l’|du|des|de)\s+([A-ZÉÈ][\p{L}'’-]+(?:[ -][A-ZÉÈ][\p{L}'’-]+)*)/u.exec(scope);
-    if(multi.length){ out.centrale=multi[0].centrale; if(multi[0].kwc) out.kwc=multi[0].kwc; }
+    if(multi.length){ out.centrale=multi[0].centrale; if(multi[0].kwc) out.kwc=multi[0].kwc; if(!out.dept && multi[0].dept){ out.dept=multi[0].dept; out.region=multi[0].region; } }
     else if(cre) out.centrale=cre[0];
     else if(named) out.centrale=(named[0].charAt(0).toUpperCase()+named[0].slice(1)).trim();
     else if(city) out.centrale='Centrale de '+city;
@@ -3981,7 +4049,19 @@
   }
 
   // A list of plants in the mail ("- Centrale de Cholet (49) : 1,2 MWc, MES 03/2027"): one installation per line
+  // a table pasted in the mail (tab-separated from Excel/Outlook, or "| a | b |" from a PDF): read like an Excel sheet
+  function parseMailTable(raw){
+    const lines=String(raw||'').replace(/\r/g,'').replace(/\u00a0/g,' ').split('\n');
+    const cells=l=>{ if((l.match(/\t/g)||[]).length>=1) return l.split('\t').map(c=>c.trim()); if((l.match(/\|/g)||[]).length>=2) return l.replace(/^\s*\|/,'').replace(/\|\s*$/,'').split('|').map(c=>c.trim()); return null; };
+    let best=[], block=[];
+    const flush=()=>{ if(block.length>=2){ const found=pqRowsToInstallations(['mail'], ()=>block.map(r=>r.map(c=>/^-?\d+([.,]\d+)?$/.test(c)?parseFloat(c.replace(',','.')):c))); if(found.length>best.length) best=found; } block=[]; };
+    lines.forEach(l=>{ const c=cells(l); if(c && c.filter(Boolean).length>=2) block.push(c); else flush(); });
+    flush();
+    return best;
+  }
   function parseMailInstallations(raw){
+    const table=parseMailTable(raw);
+    if(table.length) return table;
     const found=[];
     String(raw||'').replace(/\r/g,'').replace(/ /g,' ').split('\n').forEach(l=>{
       const m=/^\s*(?:[-•*·–]|\d+[.)])\s*(.+)$/.exec(l); if(!m) return;
@@ -4224,6 +4304,7 @@
   }
   function renderCrm(){
     if(normalizeOpps()) saveCrmLocalOnly();
+    if(migrateCompanyStars()) saveCrmLocalOnly();
     if(!$('tab-pipeline').classList.contains('hidden')) renderPipeline();
     if(!$('tab-contacts').classList.contains('hidden') && typeof renderContacts==='function') renderContacts();
   }
@@ -4307,6 +4388,7 @@
     const card=document.createElement('div'); card.className='pipe-card'; card.dataset.id=o.id;
     card.style.borderLeft='3px solid '+clientColor(o.company);
     const c=document.createElement('div'); c.className='pipe-card-company'; c.style.color=clientColor(o.company); c.textContent=o.company;
+    const cs=companyStars(o.company); if(cs) c.appendChild(starsWidget(cs));
     card.appendChild(c);
     if(o.kind==='prequal'){
       const t=document.createElement('div'); t.className='pipe-card-title'; t.textContent=o.title||'Rencontre';
@@ -5521,6 +5603,7 @@
         if(fillOrConflict(match,'phone2',phone2,'contact')) conflictCount++;
         if(fillOrConflict(match,'comment',comment,'contact')) conflictCount++;
         if(relevance && !match.relevance) match.relevance=relevance;
+        if(relevance && company){ const co=companies.find(x=>x.name===company); if(co && !co.relevance){ co.relevance=relevance; touchCrm(co); } }
         touchCrm(match);
         updated++;
       } else {
@@ -5566,7 +5649,7 @@
           'Email': c.email||'',
           'Téléphone 1': c.phone1||'',
           'Téléphone 2': c.phone2||'',
-          'Pertinence (1-5)': c.relevance||'',
+          'Pertinence (1-5)': companyStars(c.company)||'',
           'Commentaire': c.comment||'',
           'Type société': co?co.type||'':'',
           'What they do': co?co.whatTheyDo||'':'',

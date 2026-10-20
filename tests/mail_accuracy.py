@@ -3,6 +3,7 @@
     python tests/mail_accuracy.py            # summary + every mismatch
     python tests/mail_accuracy.py --min 0.9  # exit 1 if overall accuracy is below 90 %
     python tests/mail_accuracy.py --heldout  # only the mails written after tuning (honest measure)
+    python tests/mail_accuracy.py --hard     # replies, quotes, pasted tables
     python tests/mail_accuracy.py --all
 """
 import json
@@ -13,7 +14,7 @@ import unicodedata
 from playwright.sync_api import sync_playwright
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
-from mail_corpus import CASES, HELDOUT  # noqa: E402
+from mail_corpus import CASES, HARD, HELDOUT  # noqa: E402
 
 URL = (pathlib.Path(__file__).resolve().parent.parent / "index.html").as_uri()
 
@@ -29,7 +30,7 @@ def norm(field, v):
 
 def main():
     minimum = float(sys.argv[sys.argv.index("--min") + 1]) if "--min" in sys.argv else None
-    cases = HELDOUT if "--heldout" in sys.argv else CASES + HELDOUT if "--all" in sys.argv else CASES
+    cases = HELDOUT if "--heldout" in sys.argv else HARD if "--hard" in sys.argv else CASES + HELDOUT + HARD if "--all" in sys.argv else CASES
     with sync_playwright() as p:
         browser = p.chromium.launch()
         page = browser.new_page()
