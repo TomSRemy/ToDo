@@ -382,8 +382,8 @@ with sync_playwright() as p:
     page.click("#pq1-sig-box summary")
     page.fill("#pq1-sig", "Camille DUBOIS\nResponsable financement de projets\nRHÔNE ÉNERGIES SAS\nT. 04 75 00 00 06\nM. 06 77 00 00 06\ncamille.dubois@rhone-energies.fr")
     page.wait_for_timeout(500)
-    got = [page.input_value(x) for x in ("#pq1-company", "#pq1-prenom", "#pq1-nom", "#pq1-qualite", "#pq1-tel", "#pq1-mail")]
-    check(got == ["RHÔNE ÉNERGIES SAS", "Camille", "DUBOIS", "Responsable financement de projets", "06 77 00 00 06 / 04 75 00 00 06", "camille.dubois@rhone-energies.fr"],
+    got = [page.input_value(x) for x in ("#pq1-company", "#pq1-prenom", "#pq1-nom", "#pq1-qualite", "#pq1-tel", "#pq1-tel2", "#pq1-mail")]
+    check(got == ["RHÔNE ÉNERGIES SAS", "Camille", "DUBOIS", "Responsable financement de projets", "06 77 00 00 06", "04 75 00 00 06", "camille.dubois@rhone-energies.fr"],
           f"step 1: a pasted signature fills client and contact ({got})")
     # a second signature (another person) becomes an additional contact; the main one stays
     page.fill("#pq1-sig", "Marc LEROY\nDirecteur technique\nRHÔNE ÉNERGIES SAS\n06 11 11 11 11\nmarc.leroy@rhone-energies.fr"); page.wait_for_timeout(500)
@@ -395,6 +395,8 @@ with sync_playwright() as p:
     names = sorted(c["firstName"] for c in stored(page, "todo-widget-contacts"))
     inst = [o for o in stored(page, "todo-widget-opportunities") if o.get("kind") == "installation"][0]
     check(names == ["Camille", "Lucie", "Marc"] and len(inst.get("otherContactIds", [])) == 2, f"three contacts created, two linked as other contacts ({names})")
+    camille = next(c for c in stored(page, "todo-widget-contacts") if c["firstName"] == "Camille")
+    check(camille["phone1"] == "06 77 00 00 06" and camille["phone2"] == "04 75 00 00 06", "both numbers of the main contact are kept (mobile first)")
     check(not errors, f"no page errors ({errors})")
     page.close()
 

@@ -1273,7 +1273,8 @@
           <div class="pq-f"><label for="pq1-prenom">Prénom</label><input id="pq1-prenom" autocomplete="off"></div>
           <div class="pq-f"><label for="pq1-nom">Nom</label><input id="pq1-nom" autocomplete="off"></div>
           <div class="pq-f"><label for="pq1-qualite">Qualité</label><input id="pq1-qualite" autocomplete="off"></div>
-          <div class="pq-f"><label for="pq1-tel">Téléphone</label><input id="pq1-tel" autocomplete="off"></div>
+          <div class="pq-f"><label for="pq1-tel">Téléphone 1 (mobile)</label><input id="pq1-tel" autocomplete="off"></div>
+          <div class="pq-f"><label for="pq1-tel2">Téléphone 2</label><input id="pq1-tel2" autocomplete="off"></div>
           <div class="pq-f"><label for="pq1-mail">Mail</label><input id="pq1-mail" autocomplete="off"></div>
         </div>
         <p class="pq-step-hint">Tu ne connais pas encore le contact ? Laisse vide : le mail collé à l’étape suivante le remplira.</p>
@@ -4627,7 +4628,7 @@
     const names=[...new Set(clientsList.concat(companies.filter(c=>!c.deleted).map(c=>c.name)))].sort((x,y)=>x.localeCompare(y,'fr'));
     $('pq1-companies').innerHTML=names.map(n=>'<option value="'+escapeHtml(n)+'">').join('');
     $('pq1-company').value=opts.company||'';
-    ['prenom','nom','qualite','tel','mail'].forEach(k=>{ $('pq1-'+k).value=''; });
+    ['prenom','nom','qualite','tel','tel2','mail'].forEach(k=>{ $('pq1-'+k).value=''; });
     $('pq1-sig').value=''; $('pq1-sig-status').textContent=''; $('pq1-sig-box').open=false; pq1SigAuto=new Set();
     $('pq-overlay').classList.remove('hidden');
     if(editing){ pqShowStep(2); pqRender(); setTimeout(()=>{ const el=$('pq-form').querySelector('input'); if(el) el.focus({preventScroll:true}); },0); }
@@ -4679,7 +4680,7 @@
     pqExtrasRender();
   }
   // additional new contacts (beyond the main one)
-  const PQ_EXTRA_FIELDS_C=[['prenom','Prénom'],['nom','Nom'],['qualite','Qualité'],['tel','Téléphone'],['mail','Mail']];
+  const PQ_EXTRA_FIELDS_C=[['prenom','Prénom'],['nom','Nom'],['qualite','Qualité'],['tel','Téléphone 1 (mobile)'],['tel2','Téléphone 2'],['mail','Mail']];
   function pqExtrasRender(){
     const box=$('pq1-extras'); box.innerHTML='';
     pqState.extras.forEach((x,i)=>{
@@ -4711,12 +4712,12 @@
     else if(mainIsOther && (g.firstName||g.lastName||mail)){
       // the main contact is already someone else: this signature is an additional contact
       if(!st.extras.some(x=>(mail && x.mail===mail) || (x.prenom===g.firstName && x.nom===(g.lastName||'').toUpperCase())))
-        st.extras.push({ prenom:g.firstName||'', nom:(g.lastName||'').toUpperCase(), qualite:g.role||'', tel:[g.phone1,g.phone2].filter(Boolean).join(' / '), mail });
+        st.extras.push({ prenom:g.firstName||'', nom:(g.lastName||'').toUpperCase(), qualite:g.role||'', tel:g.phone1||'', tel2:g.phone2||'', mail });
     }
     else if(g.firstName||g.lastName||mail){
       st.contactChoice='new'; st.contactPicked=true;
       set('pq1-prenom', g.firstName); set('pq1-nom', (g.lastName||'').toUpperCase()); set('pq1-qualite', g.role);
-      set('pq1-tel', [g.phone1, g.phone2].filter(Boolean).join(' / ')); set('pq1-mail', mail);
+      set('pq1-tel', g.phone1); set('pq1-tel2', g.phone2); set('pq1-mail', mail);
     }
     pqStep1Render();
     const found=[g.company&&'client', (g.firstName||g.lastName)&&'nom', g.role&&'fonction', g.phone1&&'téléphone', mail&&'mail'].filter(Boolean);
@@ -4725,7 +4726,7 @@
   }
   function pqNext(){
     const name=$('pq1-company').value.trim();
-    pqState.extraContacts=pqState.extras.filter(x=>x.prenom||x.nom||x.mail).map(x=>({ ...x, prenom:pqTitleCase((x.prenom||'').trim()), nom:(x.nom||'').trim().toUpperCase(), mail:(x.mail||'').trim().toLowerCase() }));
+    pqState.extraContacts=pqState.extras.filter(x=>x.prenom||x.nom||x.mail).map(x=>({ ...x, prenom:pqTitleCase((x.prenom||'').trim()), nom:(x.nom||'').trim().toUpperCase(), mail:(x.mail||'').trim().toLowerCase(), tel:[x.tel,x.tel2].map(t=>(t||'').trim()).filter(Boolean).join(' / ') }));
     pqState.extraContactIds=[...pqState.extraExisting];
     if(!name){ $('pq1-company-hint').textContent='Indique le producteur pour continuer.'; $('pq1-company-hint').className='pq-step-hint new'; $('pq1-company').focus(); return; }
     const st=pqState, known=pqKnownCompany(name), set=(k,v)=>{ if(v){ st.shared[k]=v; st.touched.add('s.'+k); } };
@@ -4734,7 +4735,7 @@
       const c=contacts.find(x=>x.id===st.contactChoice);
       if(c){ set('prenom',c.firstName); set('nom',(c.lastName||'').toUpperCase()); set('qualite',c.role); set('tel',[c.phone1,c.phone2].filter(Boolean).join(' / ')); set('mail',c.email); }
     } else {
-      set('prenom',pqTitleCase($('pq1-prenom').value.trim())); set('nom',$('pq1-nom').value.trim().toUpperCase()); set('qualite',$('pq1-qualite').value.trim()); set('tel',$('pq1-tel').value.trim()); set('mail',$('pq1-mail').value.trim().toLowerCase());
+      set('prenom',pqTitleCase($('pq1-prenom').value.trim())); set('nom',$('pq1-nom').value.trim().toUpperCase()); set('qualite',$('pq1-qualite').value.trim()); set('tel',[$('pq1-tel').value.trim(), $('pq1-tel2').value.trim()].filter(Boolean).join(' / ')); set('mail',$('pq1-mail').value.trim().toLowerCase());
     }
     // a known client: reuse what its last installation already says
     if(known){
@@ -6073,7 +6074,7 @@
   $('pq-next-btn').onclick=pqNext;
   $('pq-back-btn').onclick=()=>{ pqShowStep(1); pqStep1Render(); };
   $('pq1-company').addEventListener('input', ()=>{ pq1SigAuto.delete('pq1-company'); pqStep1Render(); });
-  ['pq1-prenom','pq1-nom','pq1-qualite','pq1-tel','pq1-mail'].forEach(id=>$(id).addEventListener('input', ()=>pq1SigAuto.delete(id)));
+  ['pq1-prenom','pq1-nom','pq1-qualite','pq1-tel','pq1-tel2','pq1-mail'].forEach(id=>$(id).addEventListener('input', ()=>pq1SigAuto.delete(id)));
   $('pq1-add-extra').onclick=()=>{ pqState.extras.push({}); pqExtrasRender(); const els=$('pq1-extras').querySelectorAll('input[data-xk="prenom"]'); if(els.length) els[els.length-1].focus(); };
   $('pq1-extras').addEventListener('input', e=>{ const i=e.target.dataset.x; if(i==null) return; pqState.extras[+i][e.target.dataset.xk]=e.target.value; });
   $('pq1-extras').addEventListener('click', e=>{ const r=e.target.closest('[data-x-remove]'); if(!r) return; pqState.extras.splice(+r.dataset.xRemove,1); pqExtrasRender(); });
