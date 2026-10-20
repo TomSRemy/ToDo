@@ -652,6 +652,7 @@
   .map-seg button:hover{ color:var(--tx1); }
   .parc-map-wrap{ position:relative; max-width:440px; margin:0 auto; width:100%; overflow:hidden; border-radius:8px; touch-action:none; }
   .parc-map{ cursor:grab; } .parc-map:active{ cursor:grabbing; }
+  .parc-map.zoomed{ filter:none; shape-rendering:geometricPrecision; }
   .map-zoom{ position:absolute; top:6px; left:6px; display:flex; flex-direction:column; border:1px solid var(--bd); border-radius:7px; overflow:hidden; background:var(--panel); }
   .map-zoom button{ width:26px; height:24px; background:none; border:none; color:var(--tx2); font-size:14px; line-height:1; cursor:pointer; }
   .map-zoom button + button{ border-top:1px solid var(--bd); }
@@ -696,6 +697,7 @@
   .map-row .map-k{ min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--tx1); }
   .map-row .map-v{ text-align:right; font-family:var(--font-mono); font-size:11px; color:var(--tx3); font-variant-numeric:tabular-nums; white-space:nowrap; }
   .map-dep{ cursor:pointer; position:relative; padding:4px 0 5px; }
+  .map-prod{ position:relative; padding:4px 0 5px; cursor:default; }
   .map-dep:hover .map-k{ color:var(--accent); }
   .map-line{ grid-column:1 / -1; height:2px; background:var(--bd-soft); border-radius:1px; overflow:hidden; margin-top:2px; }
   .map-line span{ display:block; height:100%; background:var(--tx3); opacity:.6; }
@@ -6545,13 +6547,19 @@
   // Départements: IGN ADMIN EXPRESS (Licence Ouverte Etalab) via github.com/gregoiredavid/france-geojson, simplified to
   // whole pixels at 560 px wide; drawn in the page (no map service, works offline). Overseas plants are listed under the map.
   // the map (≈180 KB) lives in fr-map.js, loaded the first time the Portefeuille is opened
-  let FR_MAP=window.FR_MAP||null, frMapLoading=null;
+  let FR_MAP=window.FR_MAP||null, frMapLoading=null, frMapHdLoading=null;
+  // finer outlines (≈1 MB, fr-map-hd.js) swapped in when zoomed past ×2.5, so borders stay sharp
+  function loadFrMapHd(){
+    if(window.FR_MAP_HD) return Promise.resolve();
+    if(!frMapHdLoading) frMapHdLoading=new Promise((res,rej)=>{ const s=document.createElement('script'); s.src='fr-map-hd.js'; s.onload=res; s.onerror=()=>{ frMapHdLoading=null; rej(); }; document.head.appendChild(s); });
+    return frMapHdLoading;
+  }
   function loadFrMap(){
     if(FR_MAP) return Promise.resolve();
     if(!frMapLoading) frMapLoading=new Promise((res,rej)=>{ const s=document.createElement('script'); s.src='fr-map.js'; s.onload=()=>{ FR_MAP=window.FR_MAP; res(); }; s.onerror=()=>{ frMapLoading=null; rej(new Error('Carte indisponible')); }; document.head.appendChild(s); });
     return frMapLoading;
   }
-  let parcMapLayer='won', parcMapSel=null, parcMapAll=false, parcMapView=null;
+  let parcMapLayer='won', parcMapSel=null, parcMapAll=false, parcMapView=null, parcMapProdAll=false;
   // a clicked key figure filters the map and the table: null | 'vol' | 'active' | 'soon' | 'pending'
   let parcKpi=null, parcKpiSet=null, parcKpiLabel='';   // view = zoomed box in map units, null = all France
   const deptCodeOf=label=>{ const m=/^\s*(\d{1,3}|2A|2B)\b/i.exec(String(label||'')); if(!m) return null; const c=m[1].toUpperCase(); return /^\d$/.test(c)?'0'+c:c; };
@@ -6560,11 +6568,11 @@
   const mapTech=v=>{ const f=pqFold(v||''); return /eol/.test(f)?'Eolien':/hydro/.test(f)?'Hydro':/bio|metha|cogen/.test(f)?'Biogaz':/pv|photo|solaire|ombri|toiture/.test(f)?'PV':'Autre'; };
   function parcMapPoints(layer){
     const today=toISO(new Date());
-    if(parcKpiSet) return parcKpiSet.map(p=>({ code:deptCodeOf(p.siteDept||p.dept), kwc:p.kwc||0, tech:mapTech(p.enr), name:p.inst||p.prod, who:p.dev, extra:p.fin?'fin '+pqIsoToFr(p.fin):p.statut }));
-    if(layer==='pipe') return opportunities.filter(o=>!o.deleted && o.kind==='installation' && !isExited(o)).map(o=>({ code:deptCodeOf(o.dept), kwc:pqNum(o.kwc||'')||0, tech:mapTech(o.install), name:oppName(o), who:o.company, extra:stageLabel(o.stage) }));
+    if(parcKpiSet) return parcKpiSet.map(p=>({ code:deptCodeOf(p.siteDept||p.dept), kwc:p.kwc||0, tech:mapTech(p.enr), name:p.inst||p.prod, prod:p.prod||p.dev, who:p.dev, extra:p.fin?'fin '+pqIsoToFr(p.fin):p.statut }));
+    if(layer==='pipe') return opportunities.filter(o=>!o.deleted && o.kind==='installation' && !isExited(o)).map(o=>({ code:deptCodeOf(o.dept), kwc:pqNum(o.kwc||'')||0, tech:mapTech(o.install), name:oppName(o), prod:o.producteur||o.company, who:o.company, extra:stageLabel(o.stage) }));
     if(!parcData) return [];
     const list=layer==='pending'?parcData.items.filter(p=>p.statut==='En attente'||p.statut==='En préparation'):parcData.items.filter(p=>p.statut==='Gagné' && (!p.fin || p.fin>=today));
-    return list.map(p=>({ code:deptCodeOf(p.siteDept||p.dept), kwc:p.kwc||0, tech:mapTech(p.enr), name:p.inst||p.prod, who:p.dev, extra:p.fin?'fin '+pqIsoToFr(p.fin):p.statut }));
+    return list.map(p=>({ code:deptCodeOf(p.siteDept||p.dept), kwc:p.kwc||0, tech:mapTech(p.enr), name:p.inst||p.prod, prod:p.prod||p.dev, who:p.dev, extra:p.fin?'fin '+pqIsoToFr(p.fin):p.statut }));
   }
   function parcMap(){
     if(!FR_MAP){
@@ -6595,9 +6603,9 @@
     const shade=k=>{ const t=.25+.75*Math.sqrt(k/maxDepKwc), a=[0x2A,0x33,0x40], b=[0x4F,0x6F,0x96]; return '#'+a.map((x,i)=>Math.round(x+(b[i]-x)*t).toString(16).padStart(2,'0')).join(''); };
     // fills (no stroke), département hairlines, then the real borders of the 13 regions and the coast in white
     FR_MAP.deps.forEach(([code,name,d])=>{ svg+='<path d="'+d+'" class="dep'+(by[code]?' has':'')+'"'+(by[code]?' style="--f:'+shade(by[code].kwc)+'"':'')+' data-dep="'+code+'" data-name="'+escapeHtml(name)+'"></path>'; });
-    FR_MAP.deps.forEach(([code,name,d])=>{ svg+='<path d="'+d+'" vector-effect="non-scaling-stroke" class="dep-line"></path>'; });
+    FR_MAP.deps.forEach(([code,name,d])=>{ svg+='<path d="'+d+'" vector-effect="non-scaling-stroke" class="dep-line" data-ln="'+code+'"></path>'; });
     svg+='<path d="'+FR_MAP.regions+'" vector-effect="non-scaling-stroke" class="reg-line"></path>';
-    if(parcMapSel){ const sd=FR_MAP.deps.find(x=>x[0]===parcMapSel); if(sd) svg+='<path d="'+sd[2]+'" vector-effect="non-scaling-stroke" class="dep-sel"></path>'; }
+    if(parcMapSel){ const sd=FR_MAP.deps.find(x=>x[0]===parcMapSel); if(sd) svg+='<path d="'+sd[2]+'" vector-effect="non-scaling-stroke" class="dep-sel" data-ln="'+parcMapSel+'"></path>'; }
     const dots=[];
     Object.entries(by).forEach(([code,v])=>{
       const dep=FR_MAP.deps.find(d=>d[0]===code);
@@ -6630,10 +6638,21 @@
       const s=v.w/FULL.w;   // dots keep their size on screen, so they spread apart when zooming in
       // and grow a little when zoomed in (×1.6 at the closest zoom) so they stay easy to point at
       svgEl.querySelectorAll('.dot').forEach(c=>c.setAttribute('r', (c.dataset.r0*s*(1+(1-s)*.7)).toFixed(2)));
+      // zoomed in: high-detail outlines, and no drop shadow (a filter makes the browser rasterise the drawing)
+      const hd=s<.4; svgEl.classList.toggle('zoomed', hd);
+      const swap=useHd=>{
+        if(svgEl.dataset.hd===String(useHd)) return; svgEl.dataset.hd=String(useHd);
+        const src=useHd?window.FR_MAP_HD:null, base=Object.fromEntries(FR_MAP.deps.map(x=>[x[0],x[2]]));
+        svgEl.querySelectorAll('.dep').forEach(p=>p.setAttribute('d', src?src.deps[p.dataset.dep]||base[p.dataset.dep]:base[p.dataset.dep]));
+        svgEl.querySelectorAll('[data-ln]').forEach(p=>p.setAttribute('d', src?src.deps[p.dataset.ln]||base[p.dataset.ln]:base[p.dataset.ln]));
+        const rl=svgEl.querySelector('.reg-line'); if(rl) rl.setAttribute('d', src?src.regions:FR_MAP.regions);
+      };
+      if(hd){ if(window.FR_MAP_HD) swap(true); else loadFrMapHd().then(()=>{ if(svgEl.isConnected && svgEl.classList.contains('zoomed')) swap(true); }).catch(()=>{}); }
+      else swap(false);
       zoomOut.disabled=reset.disabled=!parcMapView;
     };
     const clampView=v=>{ const w=Math.min(FULL.w, Math.max(FULL.w/14, v.w)), hh=w*FULL.h/FULL.w; return { w, h:hh, x:Math.min(FULL.w-w*.3, Math.max(-w*.7, v.x)), y:Math.min(FULL.h-hh*.3, Math.max(-hh*.7, v.y)) }; };
-    const zoomAt=(f, cx, cy)=>{ const v=parcMapView||FULL; const nw=v.w*f; if(nw>=FULL.w){ parcMapView=null; applyView(); return; } parcMapView=clampView({ w:nw, h:nw*FULL.h/FULL.w, x:cx-(cx-v.x)*f, y:cy-(cy-v.y)*f }); applyView(); };
+    const zoomAt=(f, cx, cy)=>{ const v=parcMapView||FULL; const nw=Math.max(FULL.w/14, v.w*f); if(nw>=FULL.w){ parcMapView=null; applyView(); return; } f=nw/v.w; parcMapView=clampView({ w:nw, h:nw*FULL.h/FULL.w, x:cx-(cx-v.x)*f, y:cy-(cy-v.y)*f }); applyView(); };
     const toMap=(clientX, clientY)=>{ const r=svgEl.getBoundingClientRect(), v=parcMapView||FULL; return [v.x+(clientX-r.left)/r.width*v.w, v.y+(clientY-r.top)/r.height*v.h]; };
     const zc=document.createElement('div'); zc.className='map-zoom';
     const mk=(txt,title,fn)=>{ const b=document.createElement('button'); b.type='button'; b.textContent=txt; b.title=title; b.onclick=e=>{ e.stopPropagation(); fn(); }; zc.appendChild(b); return b; };
@@ -6683,11 +6702,29 @@
       mix.forEach(m=>{ const r=document.createElement('div'); r.className='map-row'; r.innerHTML='<span class="map-k"><i style="background:'+m.c+'"></i>'+escapeHtml(m.l)+'</span><span class="map-v">'+m.n+'</span><span class="map-v">'+escapeHtml(fmtMwc(m.kwc))+'</span>'; leg.appendChild(r); });
       side.appendChild(leg);
     }
+    // producers: who owns the MWc in this scope (all of France, or the selected département)
+    const prods={};
+    scope.forEach(p=>{ const k=String(p.prod||'').trim()||'Non renseigné'; (prods[k]=prods[k]||{ n:0, kwc:0, list:[] }); prods[k].n++; prods[k].kwc+=p.kwc; prods[k].list.push(p); });
+    const prodRanked=Object.entries(prods).sort((a,b)=>b[1].kwc-a[1].kwc||b[1].n-a[1].n);
+    if(prodRanked.length){
+      const ph=document.createElement('div'); ph.className='map-eyebrow map-list-h'; ph.textContent='Producteurs ('+prodRanked.length+')'; side.appendChild(ph);
+      const prow=document.createElement('div'); prow.className='map-rows map-prods';
+      const maxProd=prodRanked[0][1].kwc||1;
+      prodRanked.slice(0, parcMapProdAll?prodRanked.length:5).forEach(([name,v])=>{
+        const r=document.createElement('div'); r.className='map-row map-prod'; r.dataset.prod=name;
+        r.innerHTML='<span class="map-k">'+escapeHtml(name)+'</span><span class="map-v">'+v.n+'</span><span class="map-v">'+escapeHtml(fmtMwc(v.kwc))+'</span><span class="map-line"><span style="width:'+Math.max(3,v.kwc/maxProd*100)+'%"></span></span>';
+        prow.appendChild(r);
+      });
+      attachTip(prow, t=>{ const r=t.closest && t.closest('.map-prod'); if(!r) return null; const v=prods[r.dataset.prod];
+        return '<b>'+escapeHtml(r.dataset.prod)+' · '+escapeHtml(fmtMwc(v.kwc))+'</b>'+v.list.slice().sort((a,b)=>b.kwc-a.kwc).slice(0,6).map(p=>tipRow(color(p.tech), p.name, p.kwc?fmtKwc(p.kwc):'')).join('')+(v.list.length>6?'<span class="muted">+ '+(v.list.length-6)+' autres</span>':''); });
+      side.appendChild(prow);
+      if(prodRanked.length>5){ const more=document.createElement('button'); more.type='button'; more.className='map-more'; more.textContent=parcMapProdAll?'Réduire':'Voir les '+prodRanked.length+' producteurs'; more.onclick=()=>{ parcMapProdAll=!parcMapProdAll; renderParc(); }; side.appendChild(more); }
+    }
     const listH=document.createElement('div'); listH.className='map-eyebrow map-list-h'; listH.textContent=selV?'Installations':'Départements';
     side.appendChild(listH);
     const rows=document.createElement('div'); rows.className='map-rows map-scroll';
     if(selV){
-      selV.names.slice().sort((a,b)=>b.kwc-a.kwc).forEach(p=>{ const r=document.createElement('div'); r.className='map-row two'; r.innerHTML='<span class="map-k"><i style="background:'+color(p.tech)+'"></i>'+escapeHtml(p.name)+'</span><span class="map-v">'+escapeHtml(p.kwc?fmtKwc(p.kwc):'')+'</span>'; r.title=[p.who,p.extra].filter(Boolean).join(' · '); rows.appendChild(r); });
+      selV.names.slice().sort((a,b)=>b.kwc-a.kwc).forEach(p=>{ const r=document.createElement('div'); r.className='map-row two'; r.innerHTML='<span class="map-k"><i style="background:'+color(p.tech)+'"></i>'+escapeHtml(p.name)+'</span><span class="map-v">'+escapeHtml(p.kwc?fmtKwc(p.kwc):'')+'</span>'; r.title=[p.prod,p.extra].filter(Boolean).join(' · '); rows.appendChild(r); });
     } else {
       const ranked=Object.entries(by).sort((a,b)=>b[1].kwc-a[1].kwc);
       const maxDep=ranked.length?ranked[0][1].kwc:1;
