@@ -516,7 +516,7 @@ with sync_playwright() as p:
     page.click(".map-zoom button >> nth=0"); page.wait_for_timeout(100)
     check(page.get_attribute(".parc-map", "viewBox") != vb0, "portefeuille: the map zooms in")
     page.click(".map-zoom button >> nth=2"); page.wait_for_timeout(100)
-    check(page.get_attribute(".parc-map", "viewBox").startswith("0 0 "), "portefeuille: reset shows all France again")
+    check(page.get_attribute(".parc-map", "viewBox").startswith("-14 -14 "), "portefeuille: reset shows all France again")
     page.hover(".parc-kpis .stat-card >> nth=1"); page.wait_for_timeout(100)
     check(page.is_visible(".parc-kpis .chart-tip") and "Solaire PV" in page.inner_text(".parc-kpis .chart-tip"), "portefeuille: hovering a figure shows its detail")
     page.click(".parc-kpis .stat-card >> nth=2"); page.wait_for_timeout(150)

@@ -6587,7 +6587,9 @@
     const maxKwc=Math.max(1,...pts.map(p=>p.kwc||0));
 
     // land in one quiet tone, départements separated by hairlines; dots carry the information
-    let svg='<svg viewBox="0 0 '+FR_MAP.w+' '+FR_MAP.h+'" class="parc-map" role="img" aria-label="Carte du portefeuille par département">';
+    // a margin around France so the coast and Corsica are never cut by the frame's rounded corners
+    const MP=14, FULLW=FR_MAP.w+2*MP, FULLH=FR_MAP.h+2*MP;
+    let svg='<svg viewBox="'+(-MP)+' '+(-MP)+' '+FULLW+' '+FULLH+'" class="parc-map" role="img" aria-label="Carte du portefeuille par département">';
     // départements tinted by their MWc (square root: small ones stay visible), a dot per plant on top
     const maxDepKwc=Math.max(1,...Object.values(by).map(v=>v.kwc));
     const shade=k=>{ const t=.25+.75*Math.sqrt(k/maxDepKwc), a=[0x2A,0x33,0x40], b=[0x4F,0x6F,0x96]; return '#'+a.map((x,i)=>Math.round(x+(b[i]-x)*t).toString(16).padStart(2,'0')).join(''); };
@@ -6622,10 +6624,10 @@
     });
     mapEl.addEventListener('mouseleave', ()=>{ tip.hidden=true; });
     // --- zoom & pan: wheel, + / − / reset buttons, drag; a click on a département zooms on it
-    const svgEl=mapEl.querySelector('svg'), FULL={ x:0, y:0, w:FR_MAP.w, h:FR_MAP.h };
+    const svgEl=mapEl.querySelector('svg'), FULL={ x:-MP, y:-MP, w:FULLW, h:FULLH };
     const applyView=()=>{
       const v=parcMapView||FULL; svgEl.setAttribute('viewBox', v.x+' '+v.y+' '+v.w+' '+v.h);
-      const s=v.w/FR_MAP.w;   // dots keep their size on screen, so they spread apart when zooming in
+      const s=v.w/FULL.w;   // dots keep their size on screen, so they spread apart when zooming in
       // and grow a little when zoomed in (×1.6 at the closest zoom) so they stay easy to point at
       svgEl.querySelectorAll('.dot').forEach(c=>c.setAttribute('r', (c.dataset.r0*s*(1+(1-s)*.7)).toFixed(2)));
       zoomOut.disabled=reset.disabled=!parcMapView;
