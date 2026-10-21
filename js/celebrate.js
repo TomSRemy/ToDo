@@ -4,7 +4,7 @@
 (function(){
   'use strict';
   const VARIANTS={ won:['panel','turbine','battery'], signed:['gun','gong','champagne'], lost:['umbrella','nowind','plane'] };
-  const LENGTH={ panel:3400, turbine:3400, battery:3400, gun:6600, gong:3800, champagne:4000, umbrella:4000, nowind:4200, plane:4400 };
+  const LENGTH={ panel:3400, turbine:3400, battery:3400, gun:6600, gong:3800, champagne:4000, umbrella:4000, nowind:4200, plane:3900 };
   const COLORS=['#14D3A9','#FFFD82','#ED6965','#7DD3FC','#8B7FB5','#CA6702'];
   const MSG={
     panel:'Offre acceptée ! 😎', turbine:'Offre acceptée ! 🚁', battery:'Offre acceptée ! ⚡ 100 %',
@@ -80,7 +80,7 @@
       +'<text class="cx-cri c1" x="176" y="190" font-family="system-ui,sans-serif" font-style="italic" font-weight="600" font-size="12" fill="#9AA8B8">cri…</text>'
       +'<text class="cx-cri c2" x="192" y="172" font-family="system-ui,sans-serif" font-style="italic" font-weight="600" font-size="12" fill="#9AA8B8">cri…</text>'
       +'<path d="M30 214h200" stroke="#2C3A4A" stroke-width="3" stroke-linecap="round"/>',
-    // lost 3: the paper plane loops and nosedives into the bin; a new one takes off
+    // lost 3: the paper plane loops and nosedives into the bin
     plane:'<g class="cx-bin"><path d="M190 168h40l-5 46h-30z" fill="#2C3A4A" stroke="#9AA8B8" stroke-width="2"/><path d="M186 165h48" stroke="#9AA8B8" stroke-width="4" stroke-linecap="round"/><path d="M202 176l1 30M210 176v30M218 176l-1 30" stroke="#5E6B7A" stroke-width="2" stroke-linecap="round"/></g>'
       +'<g class="cx-swish"><text x="210" y="150" text-anchor="middle" font-family="Impact,\'Arial Black\',system-ui,sans-serif" font-weight="900" font-size="16" fill="#FFD23F" stroke="#E2463A" stroke-width="1">Swish !</text></g>'
       +'<path d="M20 214h220" stroke="#2C3A4A" stroke-width="3" stroke-linecap="round"/>'
@@ -180,7 +180,7 @@
     // cxv-: the variant drawn (the cx- classes are the parts of the drawings)
     const el=document.createElement('div'); el.className='celebrate celebrate-'+kind+' cxv-'+v+(less?' cx-less':''); el.setAttribute('aria-live','polite'); el.dataset.variant=v;
     el.innerHTML='<div class="cx-fx"></div>'+(SVG[v]?'<svg class="cx-art" viewBox="0 0 260 240" aria-hidden="true">'+SVG[v]+'</svg>':'')
-      +(v==='plane'?'<div class="cx-planes"><div class="cx-plane cx-p1">'+PLANE('#E8EEF5')+'</div><div class="cx-plane cx-p2">'+PLANE('#14D3A9')+'</div></div>':'')
+      +(v==='plane'?'<div class="cx-planes"><div class="cx-plane cx-p1">'+PLANE('#E8EEF5')+'</div></div>':'')
       +'<div class="cx-msg"><b>'+esc(MSG[v])+'</b>'+(info&&info.sub?'<span>'+esc(info.sub)+'</span>':'')+'</div>';
     document.body.appendChild(el);
     const fx=el.querySelector('.cx-fx');
