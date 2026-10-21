@@ -1067,6 +1067,37 @@ with sync_playwright() as p:
     check(not errors, f"no page errors ({errors})")
     page.close()
 
+    # --- Pipeline · meeting view: one line per installation by phase, copied for a mail, as an Excel file
+    def mi(i, co, n, st, kwc, mwh, mes, tech="PV"):
+        return {"id": "mt%d" % i, "kind": "installation", "company": co, "producteur": co, "centrale": n, "title": n, "stage": st, "kwc": kwc, "mwh": mwh, "mesPrev": mes,
+                "install": tech, "contrat": "AO CRE CR", "fin": "31/12/2030", "dept": "49 - Maine-et-Loire", "createdAt": 1, "updatedAt": 1, "deleted": False}
+    meet = [mi(1, "SOLARIS", "Toit Durand", "collecte", "300", "360", "01/06/2027"), mi(2, "SOLARIS", "CS du Moulin", "demande_prix", "4500", "5200", "01/03/2027"),
+            mi(3, "VENTUS", "Parc des Crêtes", "offre_attente", "12000", "28000", "01/12/2027", "Eolien"), mi(4, "ZEN", "Hangar 2", "negociation", "250", "290", "15/09/2026"),
+            dict(mi(5, "ZEN", "Perdu", "perdu", "100", "", "2027"))]
+    ctx = browser.new_context(viewport={"width": 1400, "height": 900}, permissions=["clipboard-read", "clipboard-write"], accept_downloads=True)
+    ctx.add_init_script("if(!sessionStorage.getItem('seeded')){ localStorage.setItem('todo_todo-widget-opportunities', %s); sessionStorage.setItem('seeded','1'); }" % json.dumps(json.dumps(meet)))
+    page = ctx.new_page(); errors = []; page.on("pageerror", lambda e: errors.append(str(e)))
+    page.goto(URL); page.click('[data-tab="pipeline"]'); page.click("#pipe-meet-toggle")
+    secs = page.eval_on_selector_all(".meet-table tr.meet-sec th", "els=>els.map(e=>e.innerText.replace(/\\s+/g,' ').trim())")
+    names = page.eval_on_selector_all(".meet-table td.meet-name", "els=>els.map(e=>e.textContent)")
+    check(len(secs) == 3 and names == ["Toit Durand", "Parc des Crêtes", "CS du Moulin", "Hangar 2"] and "4,5 MWc" in page.inner_text(".meet-table") and "jusqu’au 31/12/2030" in page.inner_text(".meet-table"),
+          f"meeting view: one line per installation, by phase, the most advanced first, lost ones left out ({secs}, {names})")
+    page.click(".meet-chip[data-phase='qualif']")
+    check(page.locator(".meet-table td.meet-name").count() == 3 and page.get_attribute(".meet-chip[data-phase='qualif']", "aria-pressed") == "false", "meeting view: a phase can be left out")
+    page.click(".meet-actions >> text=Copier pour mail / Teams"); page.wait_for_timeout(200)
+    clip = page.evaluate("navigator.clipboard.readText()")
+    check(clip.startswith("Pipe agrégation · ce qui arrive") and "Parc des Crêtes" in clip and "Toit Durand" not in clip, "meeting view: copied for a mail (the phases shown only)")
+    with page.expect_download() as dl:
+        page.click(".meet-actions >> text=Excel")
+    f = pathlib.Path(tempfile.mkdtemp()) / dl.value.suggested_filename; dl.value.save_as(f)
+    ws = openpyxl.load_workbook(f).active
+    vals = [[c for c in r] for r in ws.iter_rows(values_only=True)]
+    check(f.name.endswith("_Pipe agrégation - réunion pricing.xlsx") and vals[2][3] == "Puissance (kWc)" and any(r[1] == "CS du Moulin" and r[3] == 4500 for r in vals),
+          f"meeting view: Excel file with real numbers ({f.name})")
+    page.click("#pipe-meet-toggle"); check(page.locator(".pipe-col").count() > 0, "meeting view: back to the board")
+    check(not errors, f"no page errors ({errors})")
+    ctx.close()
+
     # --- Pipeline: a mail listing several plants gives one installation each; quotes in a mail never reach the HTML
     page, errors = new_page(browser)
     page.goto(URL); page.click('[data-tab="pipeline"]'); page.click("#opp-add-btn"); page.fill("#pq1-company", "HELIO OUEST SAS"); page.click("#pq-next-btn")

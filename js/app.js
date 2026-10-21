@@ -3526,7 +3526,7 @@
 
 
   // ----- Board -----
-  let pipeShowExited=false, pipeDash=false;
+  let pipeShowExited=false, pipeDash=false, pipeMeet=false;
   // ---------- Pipeline dashboard: MWc by phase, time spent at each step, deals that drag ----------
   const kwcNum=o=>parseFloat(String(o.kwc||'').replace(/\s/g,'').replace(',','.'))||0;
   function stageDurations(){
@@ -3574,14 +3574,101 @@
       r.innerHTML='<span class="k"><b></b><span></span></span><span class="v"></span>'; r.querySelector('b').textContent=o.kind==='prequal'?o.company+' (pré-qualif)':oppName(o);
       r.querySelector('.k span').textContent=[o.kind==='prequal'?'':o.company, stageLabel(o.stage)].filter(Boolean).join(' · '); r.querySelector('.v').textContent=d+' j'; r.onclick=()=>openOppDetail(o.id); c3.appendChild(r); });
   }
+  // ----- Meeting view: what is coming, one line per installation, to share with the pricing team -----
+  const MEET_PHASES=[{ key:'qualif', label:'Qualification · à venir' }, { key:'offre', label:'Offre · pricing en cours' }, { key:'contrat', label:'Contrat · pricing ferme' }];
+  function meetPhasesOn(){ try{ const v=JSON.parse(localStorage.getItem('pipe-meet-phases')||'null'); if(Array.isArray(v) && v.length) return v; }catch(e){} return MEET_PHASES.map(p=>p.key); }
+  const MEET_COLS=['Producteur','Centrale','Techno','Puissance','P50 (MWh/an)','Dépt','MES','Contrat','Mécanisme','Étape','Prochaine échéance','Chargé'];
+  function meetRow(o){
+    const fr=v=>/^\d{4}-\d{2}-\d{2}$/.test(v||'')?pqIsoToFr(v):(v||'');
+    const s=oppStage(o.stage), task=o.taskId?tasks.find(t=>t.id===o.taskId && !t.done && t.status!=='termine'):null;
+    const next=[o.relance?fr(o.relance):'', task&&task.due?pqIsoToFr(task.due)+' · '+task.title.replace(/\s+—.*$/,''):''].filter(Boolean)[0]||'';
+    const mwh=pqNum(String(o.mwh||''));
+    return [o.producteur||o.company||'', oppName(o), o.install==='Eolien'?'Éolien':(o.install||''), fmtKwc(o.kwc), mwh?Math.round(mwh).toLocaleString('fr-FR'):'',
+      (o.dept||'').replace(/^(\S+)\s+-\s+.*$/,'$1'), o.mesEff?fr(o.mesEff)+' (effective)':fr(o.mesPrev), o.debut&&o.fin?fr(o.debut)+' → '+fr(o.fin):o.fin?'jusqu\u2019au '+fr(o.fin):o.debut?'dès '+fr(o.debut)+(o.duree?', '+o.duree+' ans':''):(o.duree?o.duree+' ans':''),
+      o.contrat||'', s?s.label+(s.who!=='Com'?' ('+s.who+')':''):'', next, o.charge||''];
+  }
+  function meetData(q){
+    const on=meetPhasesOn();
+    const live=opportunities.filter(o=>!o.deleted && o.kind==='installation' && !isExited(o))
+      .filter(o=>!q || pqFold([o.company,o.producteur,o.centrale,o.title,o.dept].join(' ')).includes(q));
+    return MEET_PHASES.filter(p=>on.includes(p.key)).map(p=>{
+      const list=live.filter(o=>oppPhase(o)===p.key).sort((a,b)=>stageIndex(b.stage)-stageIndex(a.stage) || (pqToDate(a.mesEff||a.mesPrev)||9e15)-(pqToDate(b.mesEff||b.mesPrev)||9e15) || (a.company||'').localeCompare(b.company||'','fr'));
+      const kwc=list.reduce((t,o)=>t+(pqNum(String(o.kwc||''))||0),0), mwh=list.reduce((t,o)=>t+(pqNum(String(o.mwh||''))||0),0);
+      return { phase:p, list, rows:list.map(meetRow), kwc, mwh };
+    });
+  }
+  const meetTotal=(kwc,mwh,n)=>[n+' installation'+(n>1?'s':''), kwc?fmtKwc(kwc):'', mwh?(mwh>=1000?(Math.round(mwh/100)/10).toLocaleString('fr-FR')+' GWh/an':Math.round(mwh).toLocaleString('fr-FR')+' MWh/an'):''].filter(Boolean).join(' · ');
+  function meetTitle(){ return 'Pipe agrégation · ce qui arrive · '+new Date().toLocaleDateString('fr-FR',{ day:'numeric', month:'long', year:'numeric' }); }
+  // the same table as HTML with inline styles (pasted into Outlook / Teams, or printed)
+  function meetHtml(groups){
+    const e=escapeHtml, th='style="text-align:left;padding:5px 8px;border-bottom:2px solid #1A7B8C;font:600 11px Arial;color:#333;white-space:nowrap"', td='style="padding:4px 8px;border-bottom:1px solid #ddd;font:12px Arial;color:#111;vertical-align:top"';
+    let h='<p style="font:600 14px Arial;margin:0 0 8px">'+e(meetTitle())+'</p><table style="border-collapse:collapse"><thead><tr>'+MEET_COLS.map(c=>'<th '+th+'>'+e(c)+'</th>').join('')+'</tr></thead><tbody>';
+    groups.forEach(g=>{ if(!g.rows.length) return;
+      h+='<tr><td colspan="'+MEET_COLS.length+'" style="padding:10px 8px 4px;font:700 12px Arial;color:#1A7B8C">'+e(g.phase.label)+' — '+e(meetTotal(g.kwc,g.mwh,g.rows.length))+'</td></tr>';
+      g.rows.forEach(r=>{ h+='<tr>'+r.map((v,i)=>'<td '+td.replace('"padding','"'+(i<2?'font-weight:600;':'')+'padding')+'>'+e(v)+'</td>').join('')+'</tr>'; }); });
+    return h+'</tbody></table>';
+  }
+  async function meetCopy(groups, btn){
+    const html=meetHtml(groups), text=[meetTitle(), MEET_COLS.join('\t')].concat(...groups.filter(g=>g.rows.length).map(g=>[g.phase.label+' — '+meetTotal(g.kwc,g.mwh,g.rows.length)].concat(g.rows.map(r=>r.join('\t'))))).join('\n');
+    try{ await navigator.clipboard.write([new ClipboardItem({ 'text/html':new Blob([html],{ type:'text/html' }), 'text/plain':new Blob([text],{ type:'text/plain' }) })]); flashBtn(btn,'✓ Copié'); }
+    catch(e){ copyToClipboard(text, btn); }
+  }
+  function flashBtn(btn, txt){ if(!btn) return; const l=btn.textContent; btn.textContent=txt; setTimeout(()=>{ btn.textContent=l; },1600); }
+  async function meetXlsx(groups, btn){
+    try{
+      await loadXlsxLib();
+      const aoa=[[meetTitle()],[],MEET_COLS];
+      groups.forEach(g=>{ if(!g.rows.length) return; aoa.push([g.phase.label+' — '+meetTotal(g.kwc,g.mwh,g.rows.length)]); g.list.forEach((o,i)=>{ const r=g.rows[i].slice(); r[3]=pqNum(String(o.kwc||''))||''; r[4]=Math.round(pqNum(String(o.mwh||'')))||''; aoa.push(r); }); aoa.push([]); });
+      aoa[2][3]='Puissance (kWc)';
+      const ws=XLSX.utils.aoa_to_sheet(aoa); ws['!cols']=[22,24,9,14,12,6,14,24,14,22,26,10].map(w=>({ wch:w }));
+      const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'Ce qui arrive');
+      const d=new Date(); XLSX.writeFile(wb, String(d.getFullYear()).slice(2)+pqPad(d.getMonth()+1)+pqPad(d.getDate())+'_Pipe agrégation - réunion pricing.xlsx');
+      flashBtn(btn,'✓ Fichier créé');
+    }catch(e){ flashBtn(btn,'Échec : '+(e.message||e)); }
+  }
+  function meetPrint(groups){
+    const w=window.open('', '_blank'); if(!w){ alert('Autorise les fenêtres pour imprimer.'); return; }
+    w.document.write('<!doctype html><html lang="fr"><head><meta charset="utf-8"><title>'+escapeHtml(meetTitle())+'</title><style>@page{ size:A4 landscape; margin:12mm } body{ margin:0 } tr{ page-break-inside:avoid }</style></head><body>'+meetHtml(groups)+'</body></html>');
+    w.document.close(); w.focus(); setTimeout(()=>w.print(), 200);
+  }
+  function renderPipeMeet(board, q){
+    board.classList.add('pipe-meet');
+    const groups=meetData(q), n=groups.reduce((t,g)=>t+g.rows.length,0);
+    const head=document.createElement('div'); head.className='meet-head';
+    head.innerHTML='<div class="meet-title"><b></b><span></span></div><div class="meet-actions"></div>';
+    head.querySelector('b').textContent='Ce qui arrive'; head.querySelector('span').textContent=meetTotal(groups.reduce((t,g)=>t+g.kwc,0), groups.reduce((t,g)=>t+g.mwh,0), n);
+    const acts=head.querySelector('.meet-actions');
+    const mk=(label, fn, title)=>{ const b=document.createElement('button'); b.type='button'; b.className='pipe-bar-btn'; b.textContent=label; if(title) b.title=title; b.onclick=()=>fn(b); acts.appendChild(b); return b; };
+    mk('Copier pour mail / Teams', b=>meetCopy(groups,b), 'Le tableau, prêt à coller dans un mail Outlook ou dans Teams');
+    mk('Excel', b=>meetXlsx(groups,b), 'Télécharger le tableau en .xlsx');
+    mk('Imprimer / PDF', ()=>meetPrint(groups), 'Imprimer, ou enregistrer en PDF (paysage)');
+    board.appendChild(head);
+    // which phases to show (remembered on this device)
+    const chips=document.createElement('div'); chips.className='meet-chips'; const on=meetPhasesOn();
+    MEET_PHASES.forEach(p=>{ const c=document.createElement('button'); c.type='button'; c.className='meet-chip'+(on.includes(p.key)?' on':''); c.textContent=p.label; c.dataset.phase=p.key; c.setAttribute('aria-pressed', String(on.includes(p.key)));
+      c.onclick=()=>{ let v=meetPhasesOn(); v=v.includes(p.key)?v.filter(k=>k!==p.key):v.concat(p.key); if(!v.length) return; try{ localStorage.setItem('pipe-meet-phases', JSON.stringify(MEET_PHASES.map(x=>x.key).filter(k=>v.includes(k)))); }catch(e){} renderPipeline(); };
+      chips.appendChild(c); });
+    board.appendChild(chips);
+    if(!n){ const e=document.createElement('div'); e.className='today-empty'; e.textContent='Aucune installation dans ces phases.'; board.appendChild(e); return; }
+    const wrap=document.createElement('div'); wrap.className='meet-scroll';
+    let t='<table class="meet-table"><thead><tr>'+MEET_COLS.map(c=>'<th>'+escapeHtml(c)+'</th>').join('')+'</tr></thead><tbody>';
+    groups.forEach(g=>{ if(!g.rows.length) return;
+      t+='<tr class="meet-sec"><th colspan="'+MEET_COLS.length+'">'+escapeHtml(g.phase.label)+'<span>'+escapeHtml(meetTotal(g.kwc,g.mwh,g.rows.length))+'</span></th></tr>';
+      g.rows.forEach((r,i)=>{ t+='<tr data-id="'+escapeHtml(g.list[i].id)+'">'+r.map((v,j)=>'<td'+(j===1?' class="meet-name"':'')+'>'+escapeHtml(v)+'</td>').join('')+'</tr>'; }); });
+    wrap.innerHTML=t+'</tbody></table>';
+    wrap.querySelectorAll('tr[data-id]').forEach(tr=>{ tr.onclick=()=>openOppDetail(tr.dataset.id); });
+    board.appendChild(wrap);
+  }
   function renderPipeline(){
     if(normalizeOpps()) saveCrmLocalOnly();
     const board=$('pipeline-board');
-    board.innerHTML=''; board.classList.remove('pipe-dash');
+    board.innerHTML=''; board.classList.remove('pipe-dash','pipe-meet');
     $('pipe-dash-toggle').setAttribute('aria-pressed', String(pipeDash)); $('pipe-dash-toggle').classList.toggle('on', pipeDash);
-    $('pipe-exited-toggle').classList.toggle('hidden', pipeDash);
+    $('pipe-meet-toggle').setAttribute('aria-pressed', String(pipeMeet)); $('pipe-meet-toggle').classList.toggle('on', pipeMeet);
+    $('pipe-exited-toggle').classList.toggle('hidden', pipeDash||pipeMeet);
     if(pipeDash){ renderPipeDash(board); return; }
     const q=pqFold($('opp-search').value.trim());
+    if(pipeMeet){ renderPipeMeet(board, q); return; }
     const items=opportunities.filter(o=>!o.deleted && o.kind!=='request' && o.stage!=='converti')
       .filter(o=>!q || pqFold([o.company,o.centrale,o.title,o.prenom,o.nom,o.dept].join(' ')).includes(q));
     const live=items.filter(o=>!isExited(o)), exited=items.filter(isExited);
@@ -5918,7 +6005,8 @@
   $('prequal-save-btn').onclick=savePrequal;
   $('prequal-cancel-btn').onclick=closePrequalForm;
   $('pipe-exited-toggle').onclick=()=>{ pipeShowExited=!pipeShowExited; renderPipeline(); };
-  $('pipe-dash-toggle').onclick=()=>{ pipeDash=!pipeDash; renderPipeline(); };
+  $('pipe-dash-toggle').onclick=()=>{ pipeDash=!pipeDash; if(pipeDash) pipeMeet=false; renderPipeline(); };
+  $('pipe-meet-toggle').onclick=()=>{ pipeMeet=!pipeMeet; if(pipeMeet) pipeDash=false; renderPipeline(); };
   $('pq-save-btn').onclick=saveOpp;
   $('pq-next-btn').onclick=pqNext;
   $('pq-back-btn').onclick=()=>{ pqShowStep(1); pqStep1Render(); };

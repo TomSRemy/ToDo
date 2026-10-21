@@ -1365,3 +1365,24 @@ details.req-compare:not([open]) .req-compare-h::before{ transform:rotate(-90deg)
 .celebrate-lost .celebrate-card{ animation:celebrate-sink .7s ease both; }
 @keyframes celebrate-pop{ 0%{ transform:scale(.6); opacity:0; } 100%{ transform:scale(1); opacity:1; } }
 @keyframes celebrate-sink{ 0%{ transform:translateY(-14px); opacity:0; } 60%{ transform:translateY(4px); opacity:1; } 100%{ transform:translateY(0); opacity:1; } }
+
+/* Pipeline · meeting view: one line per installation, grouped by phase, to share with the pricing team */
+#pipeline-board.pipe-meet{ display:flex; flex-direction:column; gap:10px; padding:14px 16px 30px; width:100%; min-width:0; box-sizing:border-box; overflow:visible; }
+.meet-head{ display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; }
+.meet-title{ display:flex; align-items:baseline; gap:10px; }
+.meet-title b{ font-size:16px; color:var(--tx1); }
+.meet-title span{ font-size:12.5px; color:var(--tx2); }
+.meet-actions{ display:flex; gap:6px; flex-wrap:wrap; }
+.meet-chips{ display:flex; gap:6px; flex-wrap:wrap; }
+.meet-chip{ font:500 11.5px var(--font-ui); color:var(--tx3); background:none; border:1px solid var(--bd); border-radius:999px; padding:3px 11px; cursor:pointer; }
+.meet-chip.on{ color:var(--accent); border-color:var(--accent); background:var(--accent-dim); }
+.meet-scroll{ min-width:0; max-width:100%; overflow-x:auto; border:1px solid var(--bd); border-radius:8px; }
+.meet-table{ width:100%; border-collapse:collapse; font-size:12.5px; }
+.meet-table thead th{ position:sticky; top:0; background:var(--panel-2); text-align:left; padding:8px 10px; font:500 10px var(--font-mono); text-transform:uppercase; letter-spacing:.4px; color:var(--tx3); white-space:nowrap; border-bottom:1px solid var(--bd); }
+.meet-table td{ padding:7px 10px; border-bottom:1px solid var(--bd-soft); color:var(--tx2); white-space:nowrap; }
+.meet-table td.meet-name{ color:var(--tx1); font-weight:500; }
+.meet-table td:first-child{ color:var(--tx1); }
+.meet-table tr[data-id]{ cursor:pointer; }
+.meet-table tr[data-id]:hover td{ background:var(--panel-2); }
+.meet-table tr.meet-sec th{ text-align:left; padding:12px 10px 6px; font:700 10.5px var(--font-mono); text-transform:uppercase; letter-spacing:.5px; color:var(--accent); border-bottom:1px solid var(--bd); background:var(--panel); }
+.meet-table tr.meet-sec th span{ margin-left:10px; font:500 11.5px var(--font-ui); text-transform:none; letter-spacing:0; color:var(--tx2); }
