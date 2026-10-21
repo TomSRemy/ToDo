@@ -1571,7 +1571,6 @@ html.lite .pipe-col.empty{ width:100%; }
 .nw-more{ font-size:11px; color:var(--tx3); padding:2px 6px; }
 .nw-hint{ position:absolute; left:12px; bottom:10px; font-size:11px; color:var(--tx3); pointer-events:none; }
 html.lite .nw-local{ margin-left:0; } html.lite .nw-side{ left:12px; width:auto; top:auto; height:45%; }
-.contact-net-link{ align-self:flex-start; margin-top:8px; }
 body.postit-open .nw-side{ bottom:300px; }
 
 /* [[links]]: clickable in the text, proposed while typing, « Mentionné dans » on the sheets */
@@ -1606,3 +1605,8 @@ body.postit-open .nw-side{ bottom:300px; }
 
 /* long lists: the lines out of sight are not laid out until they scroll into view */
 #task-list .task-line, #archive-list .task-line, #contacts-list .contact-row{ content-visibility:auto; contain-intrinsic-size:auto 44px; }
+
+/* inline task edit: the status menu keeps its normal height next to the date and its shortcuts */
+.edit-form .form-row{ align-items:flex-start; }
+/* the network is not on the phone view: no button to it there */
+html.lite .contact-net-link, html.lite #co-sheet-net, html.lite .opp-net-btn{ display:none !important; }

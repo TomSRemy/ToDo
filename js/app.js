@@ -2487,7 +2487,6 @@
       card.appendChild(com);
     }
     { const mb=mentionsBlock('ct:'+c.id); if(mb) card.appendChild(mb); }
-    { const nb=document.createElement('button'); nb.type='button'; nb.className='pq-link contact-net-link'; nb.textContent='Voir dans le réseau'; nb.onclick=()=>openInNetwork('ct:'+c.id); card.appendChild(nb); }
 
     // linked activity: meetings, opportunities and open tasks tied to the same company
     const contactMeetings=meetings.filter(m=>m.contactId===c.id && !m.deleted).sort((a,b)=>(b.date||'').localeCompare(a.date||''));
@@ -2554,6 +2553,8 @@
     editBtn.className='contact-detail-edit-link';
     editBtn.onclick=()=>openContactForm(c);
     links.appendChild(editBtn);
+    const netBtn=document.createElement('button'); netBtn.type='button'; netBtn.textContent='Voir dans le réseau'; netBtn.className='contact-detail-edit-link contact-net-link'; netBtn.onclick=()=>openInNetwork('ct:'+c.id);
+    links.appendChild(netBtn);
     const delLink=document.createElement('button'); delLink.type='button'; delLink.textContent='Supprimer';
     delLink.className='contact-detail-edit-link danger-btn';
     delLink.onclick=()=>{ if(confirm('Supprimer ce contact ?')){ c.deleted=true; touchCrm(c); saveCrm(); renderContacts(); } };
@@ -4713,7 +4714,7 @@
         actions.appendChild(oppActionBtn('Abandonner', ()=>exitOpp(o,'abandonne'), 'ghost-btn danger-btn'));
       }
     }
-    actions.appendChild(oppActionBtn('Voir dans le réseau', ()=>{ closeOppDetail(); openInNetwork('op:'+o.id); }, 'ghost-btn'));
+    actions.appendChild(oppActionBtn('Voir dans le réseau', ()=>{ closeOppDetail(); openInNetwork('op:'+o.id); }, 'ghost-btn opp-net-btn'));
     { const mb=mentionsBlock('op:'+o.id); if(mb) $('opp-detail-body').appendChild(mb); }
     actions.appendChild(oppActionBtn('Supprimer', ()=>{ if(!confirm('Supprimer cette fiche du pipeline ?')) return; o.deleted=true; touchCrm(o); saveCrm(); closeOppDetail(); renderPipeline(); }, 'ghost-btn danger-btn'));
     actions.appendChild(oppActionBtn('Fermer', closeOppDetail, 'ghost-btn lite-keep'));
@@ -5078,7 +5079,7 @@
     excelButtons(actions, list);
     actions.appendChild(oppActionBtn('Copier lignes Pipe', e=>copyPipeLines(list.filter(o=>!isExited(o)), e.target), 'ghost-btn'));
     actions.appendChild(oppActionBtn('Copier lignes BDD', e=>copyToClipboard(list.map(bddRow).join('\n'), e.target), 'ghost-btn'));
-    actions.appendChild(oppActionBtn('Voir dans le réseau', ()=>{ closeOppDetail(); openInNetwork('rq:'+reqId); }, 'ghost-btn'));
+    actions.appendChild(oppActionBtn('Voir dans le réseau', ()=>{ closeOppDetail(); openInNetwork('rq:'+reqId); }, 'ghost-btn opp-net-btn'));
     actions.appendChild(oppActionBtn('Fermer', closeOppDetail, 'ghost-btn lite-keep'));
     $('opp-detail-overlay').classList.remove('hidden');
   }
@@ -7156,7 +7157,7 @@
   function openInNetwork(id){ networkFocusNext=id; gsTab('network'); }
   window.todoOpenInNetwork=openInNetwork;
   window.todoNetworkState=()=>networkView?networkView._state():null;
-  window.todoExtraCommands=(window.todoExtraCommands||[]).concat([{ t:'Ouvrir le réseau', k:'graphe reseau connexions liens neuronal', go:()=>gsTab('network') }]);
+  if(!window.TODO_LITE) window.todoExtraCommands=(window.todoExtraCommands||[]).concat([{ t:'Ouvrir le réseau', k:'graphe reseau connexions liens neuronal', go:()=>gsTab('network') }]);
 
   // ---------- Company sheet: everything about one client on one screen, with its history ----------
   const sameCo=(a,b)=>!!a && !!b && pqFold(a).trim()===pqFold(b).trim();
@@ -7281,8 +7282,8 @@
       { t:'Rétablir (Ctrl+Maj+Z)', k:'redo refaire', go:()=>redoLast() },
       { t:'Mode d’emploi', k:'aide guide help', go:clickEl('help-btn') }
     ];
-    [['today','Aujourd’hui'],['tasks','Tâches'],['inbox','Boîte mail'],['archive','Archive'],['contacts','Contacts'],['pipeline','Pipeline'],['parc','Portefeuille'],['lists','Réf. & data']]
-      .forEach(([tab,label])=>{ if(document.querySelector('.tab[data-tab="'+tab+'"]')) list.push({ t:'Aller à : '+label, k:'onglet ouvrir '+tab, go:go(tab) }); });
+    [['today','Aujourd’hui'],['tasks','Tâches'],['inbox','Boîte mail'],['archive','Archive'],['contacts','Contacts'],['pipeline','Pipeline'],['parc','Portefeuille'],['network','Réseau'],['lists','Réf. & data']]
+      .forEach(([tab,label])=>{ if(tab==='network' && window.TODO_LITE) return; if(document.querySelector('.tab[data-tab="'+tab+'"]')) list.push({ t:'Aller à : '+label, k:'onglet ouvrir '+tab, go:go(tab) }); });
     (window.todoExtraCommands||[]).forEach(c=>list.push(c));   // added by other parts (saved views, network…)
     return list;
   }
