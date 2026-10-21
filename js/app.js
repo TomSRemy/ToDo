@@ -3791,8 +3791,35 @@
         if(est>0) extra='<button type="button" class="pq-sugg" data-est="'+est+'" data-s="'+scope+'">≈ '+est.toLocaleString('fr-FR')+' MWh ('+y+' kWh/kWc)</button>';
       }
     }
+    if(f.k==='debut' && scope!=='s'){
+      const inst=pqState.installs[+scope]||{}, mes=pqFullDate(inst.mesEff||inst.mesPrev), y=new Date().getFullYear();
+      extra='<div class="pq-dchips">'+(mes?'<button type="button" data-dset="debut" data-v="'+mes+'" data-s="'+scope+'">À la MES ('+mes+')</button>':'')
+        +[y+1,y+2].map(Y=>'<button type="button" data-dset="debut" data-v="01/01/'+Y+'" data-s="'+scope+'">1er janv. '+Y+'</button>').join('')
+        +(pqState.installs.length>1?'<button type="button" class="all" data-dall="mes" data-s="'+scope+'">Toutes à leur MES</button>':'')+'</div>';
+    }
+    if(f.k==='duree' && scope!=='s') extra='<div class="pq-dchips">'+[1,2,3,5].map(n=>'<button type="button" data-dset="duree" data-v="'+n+'" data-s="'+scope+'">'+n+' an'+(n>1?'s':'')+'</button>').join('')
+      +(pqState.installs.length>1?'<button type="button" class="all" data-dall="same" data-s="'+scope+'" title="Même début, même durée et même fin pour toutes les installations">Appliquer à toutes</button>':'')+'</div>';
     return '<div class="pq-f'+(f.wide?' wide':'')+(auto?' auto':'')+(empty?' empty':'')+'"><label for="'+id+'">'+escapeHtml(f.label)+' <span class="pq-col">'+f.col+'</span></label>'+input+extra+'</div>';
   }
+  // ---------- Contract dates: start + duration → end, start + end → duration, end + duration → start ----------
+  // « mars 2027 » / « 2027 » become dd/mm/yyyy; a computed date shows in green and can still be typed over.
+  function pqFullDate(s){ const p=pqMonthYear(s); if(!p) return ''; const d=new Date(p.y, (p.m||1)-1, p.d||1); return pqPad(d.getDate())+'/'+pqPad(d.getMonth()+1)+'/'+d.getFullYear(); }
+  const pqDateOf=s=>{ const p=pqMonthYear(s); return p?new Date(p.y,(p.m||1)-1,p.d||1):null; };
+  const pqFmtD=d=>pqPad(d.getDate())+'/'+pqPad(d.getMonth()+1)+'/'+d.getFullYear();
+  function pqLinkDates(i, changed){
+    const st=pqState, inst=st.installs[i]; if(!inst) return;
+    ['debut','fin'].forEach(k=>{ if(inst[k] && k===changed){ const f=pqFullDate(inst[k]); if(f) inst[k]=f; } });
+    // the last value changed decides: start or duration moved → end follows; end moved → duration follows (else start)
+    const set=(k,v)=>{ inst[k]=v; st.auto.add(i+'.'+k); st.touched.delete(i+'.'+k); };
+    const d=pqDateOf(inst.debut), f=pqDateOf(inst.fin), n=parseFloat(String(inst.duree||'').replace(',','.'));
+    const endFrom=()=>{ const e=new Date(d); e.setFullYear(e.getFullYear()+Math.floor(n)); e.setMonth(e.getMonth()+Math.round((n%1)*12)); e.setDate(e.getDate()-1); set('fin', pqFmtD(e)); };
+    const durFrom=()=>{ const yrs=Math.round(((f-d)/864e5+1)/365.25*2)/2; set('duree', String(yrs).replace('.',',')); };
+    const startFrom=()=>{ const s=new Date(f); s.setDate(s.getDate()+1); s.setFullYear(s.getFullYear()-Math.floor(n)); s.setMonth(s.getMonth()-Math.round((n%1)*12)); set('debut', pqFmtD(s)); };
+    if(changed==='fin'){ if(d && f && f>d) durFrom(); else if(f && n>0) startFrom(); }
+    else if(changed==='duree'){ if(d && n>0) endFrom(); else if(f && n>0) startFrom(); }
+    else { if(d && n>0) endFrom(); else if(d && f && f>d) durFrom(); }
+  }
+
   function pqIsEmpty(f, scope){
     const src=scope==='s'?pqState.shared:pqState.installs[+scope]||{};
     if(f.k==='tel'||f.k==='mail') return !pqState.shared.tel && !pqState.shared.mail;
@@ -4119,6 +4146,8 @@
   function pqOnChange(e){
     const el=e.target, k=el.dataset.k, s=el.dataset.s; if(!k||!pqState) return;
     if(k==='dept'){ const d=PQ_DEPTS.find(x=>pqDeptLabel(x)===el.value); const src=s==='s'?pqState.shared:pqState.installs[+s]; if(d && src && !pqState.touched.has(s+'.region')) src.region=PQ_REGIONS[d[2]]; }
+    if(s!=='s' && ['debut','fin','duree'].includes(k)){ pqLinkDates(+s, k); pqRerenderKeepFocus(); return; }
+    if(s!=='s' && ['mesPrev','mesEff'].includes(k)){ pqRerenderKeepFocus(); return; }   // « À la MES » follows the new date
     if(el.type==='checkbox'||el.tagName==='SELECT'||['dept','kwc','tel','mail'].includes(k)) pqRerenderKeepFocus();
   }
   function pqRerenderKeepFocus(){
@@ -5627,6 +5656,19 @@
   $('pq-form').addEventListener('change', e=>{ if(e.target.id==='pq-count-ok' && pqState){ pqState.countConfirmed=e.target.checked?pqState.installs.length:null; } });
   $('pq-form').addEventListener('click', e=>{
     if(!pqState) return;
+    const da=e.target.closest('[data-dall]'); if(da){
+      // every installation: its own commissioning date as start (with the duration shown here), or the same dates as this one
+      const st=pqState, from=st.installs[+da.dataset.s];
+      st.installs.forEach((x,i)=>{
+        if(da.dataset.dall==='mes'){ const m=pqFullDate(x.mesEff||x.mesPrev); if(!m) return; x.debut=m; if(!x.duree && from.duree) x.duree=from.duree; }
+        else ['debut','duree','fin'].forEach(k=>{ if(from[k]) x[k]=from[k]; });
+        ['debut','duree'].forEach(k=>{ if(x[k]){ st.touched.add(i+'.'+k); st.auto.delete(i+'.'+k); } });
+        if(da.dataset.dall==='mes' || !from.fin){ st.auto.add(i+'.fin'); st.touched.delete(i+'.fin'); }
+        pqLinkDates(i, 'debut');
+      });
+      pqRerenderKeepFocus(); return;
+    }
+    const dc=e.target.closest('[data-dset]'); if(dc){ const i=+dc.dataset.s, k=dc.dataset.dset; pqState.installs[i][k]=dc.dataset.v; pqState.touched.add(i+'.'+k); pqState.auto.delete(i+'.'+k); pqLinkDates(i, k); pqRerenderKeepFocus(); return; }
     const est=e.target.closest('[data-est]'); if(est){ const i=+est.dataset.s; pqState.installs[i].mwh=est.dataset.est; pqState.touched.add(i+'.mwh'); pqRerenderKeepFocus(); return; }
     const rm=e.target.closest('[data-remove]'); if(rm){ pqState.installs.splice(+rm.dataset.remove,1); pqState.auto=new Set([...pqState.auto].filter(k=>k.startsWith('s.'))); pqRerenderKeepFocus(); return; }
     if(e.target.id==='pq-add-inst'){ const last=pqState.installs[pqState.installs.length-1]||{}; pqState.installs.push({ install:last.install, contrat:last.contrat }); pqRender(); const f=$('pq-'+(pqState.installs.length-1)+'-centrale'); if(f) f.focus(); }

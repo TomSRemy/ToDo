@@ -1243,3 +1243,9 @@ details.req-compare:not([open]) .req-compare-h::before{ transform:rotate(-90deg)
 .pi-add{ align-self:flex-start; margin-top:6px; background:none; border:none; color:var(--tx3); font:500 12px var(--font-ui); cursor:pointer; padding:2px 0; }
 .pi-add:hover{ color:var(--note-accent); }
 @media (max-width: 760px){ .pi-row{ font-size:15px; } }
+
+/* contract dates: one-click choices under « Date début » and « Durée » */
+.pq-dchips{ display:flex; flex-wrap:wrap; gap:5px; margin-top:5px; }
+.pq-dchips button{ font:500 11px var(--font-ui); color:var(--tx2); background:var(--panel-3); border:1px solid var(--bd); border-radius:999px; padding:2px 9px; cursor:pointer; }
+.pq-dchips button:hover{ color:var(--tx1); border-color:var(--tx3); }
+.pq-dchips button.all{ color:var(--accent); border-color:var(--accent); }
