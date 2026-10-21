@@ -422,12 +422,12 @@ with sync_playwright() as p:
     page, errors = new_page(browser, {"todo_todo-widget-opportunities": json.dumps(two)}, viewport={"width": 1300, "height": 900})
     page.goto(URL); page.click('[data-tab="pipeline"]'); page.locator(".pipe-req-name", has_text="ALPHA PV1").click()
     tabs = page.eval_on_selector_all("#opp-detail-body .req-tab", "els=>els.map(e=>e.innerText.replace(/\\s+/g,' ').trim())")
-    check(tabs == ["INSTALLATION 1 ALPHA PV1 299 kWc", "INSTALLATION 2 BETA PV1 211 kWc"] and "ALPHA PV1" in page.inner_text("#opp-detail-title"),
+    check(tabs == ["Installation 1 ALPHA PV1 299 kWc · VILLE-SUR-EXEMPLE", "Installation 2 BETA PV1 211 kWc · 49 - Maine-et-Loire"] and "ALPHA PV1" in page.inner_text("#opp-detail-title"),
           f"request: both installations shown as tabs in the sheet ({tabs})")
     table = page.inner_text("#opp-detail-body .req-compare")
     check("358 MWh" in table and "à compléter" in table and "3 cases à compléter" in table, "request: side-by-side check, empty cells to complete flagged")
     page.locator("#opp-detail-body .req-tab", has_text="BETA PV1").click()
-    check("BETA PV1" in page.inner_text("#opp-detail-title") and page.locator("#opp-detail-body .req-tab.on").inner_text().startswith("INSTALLATION 2"), "request: a tab opens the other installation")
+    check("BETA PV1" in page.inner_text("#opp-detail-title") and page.locator("#opp-detail-body .req-tab.on").inner_text().startswith("Installation 2"), "request: a tab opens the other installation")
     check(not errors, f"no page errors ({errors})")
     page.close()
 

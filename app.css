@@ -1167,3 +1167,13 @@
 .pq-inst-tag.new{ color:var(--accent); border-color:var(--accent); }
 .pq-inst .pq-sec-h{ justify-content:flex-start; align-items:center; }
 .pq-inst .pq-sec-h .pq-link{ margin-left:auto; }
+
+/* installations of the request: compact lines, one under the other */
+.req-tabs{ flex-direction:column; flex-wrap:nowrap; gap:0; border:1px solid var(--bd); border-radius:8px; overflow:hidden; }
+.req-tab{ flex-direction:row; align-items:baseline; gap:10px; max-width:none; width:100%; padding:6px 12px; border:none; border-radius:0; background:none; }
+.req-tab + .req-tab{ border-top:1px solid var(--bd-soft); }
+.req-tab .n{ font:500 11px var(--font-ui); text-transform:none; letter-spacing:0; color:var(--tx3); width:88px; flex-shrink:0; }
+.req-tab b{ font-size:12.5px; font-weight:500; }
+.req-tab .k{ font:400 12px var(--font-ui); margin-left:auto; white-space:nowrap; }
+.req-tab:hover{ background:var(--panel-2); }
+.req-tab.on{ background:var(--accent-dim); box-shadow:inset 3px 0 0 var(--accent); }

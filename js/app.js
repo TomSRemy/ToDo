@@ -4176,7 +4176,7 @@
     list.forEach((x,i)=>{
       const b=document.createElement('button'); b.type='button'; b.className='req-tab'+(x.id===currentId?' on':''); b.setAttribute('role','tab'); b.setAttribute('aria-selected', String(x.id===currentId));
       b.innerHTML='<span class="n"></span><b></b><span class="k"></span>';
-      b.querySelector('.n').textContent='Installation '+(i+1); b.querySelector('b').textContent=oppName(x); b.querySelector('.k').textContent=fmtKwc(x.kwc)||'';
+      b.querySelector('.n').textContent='Installation '+(i+1); b.querySelector('b').textContent=oppName(x); b.querySelector('.k').textContent=[fmtKwc(x.kwc), x.commune||x.dept].filter(Boolean).join(' · ');
       b.onclick=()=>{ if(x.id!==currentId) openOppDetail(x.id); };
       t.appendChild(b);
     });
@@ -4237,7 +4237,8 @@
       return p;
     };
     const mainName=[o.prenom,(o.nom||'').replace(/^(M\.|Mme)\s+/i,'')].filter(Boolean).join(' ');
-    const others=(o.otherContactIds||[]).map(id=>contacts.find(c=>c.id===id)).filter(Boolean);
+    const mainMail=(o.mail||'').toLowerCase();
+    const others=(o.otherContactIds||[]).map(id=>contacts.find(c=>c.id===id)).filter(c=>c && !c.deleted && !(mainMail && (c.email||'').toLowerCase()===mainMail));
     const contactRows=[['Producteur',[o.producteur||o.company, o.marche].filter(Boolean).join(' · ')]];
     if(mainName||o.tel||o.mail) contactRows.push({ node:person(mainName, o.qualite, phones(o.tel), o.mail, true) });
     else contactRows.push(['Contact principal','']);
