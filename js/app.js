@@ -272,7 +272,8 @@
     note:{ name:n=>'Post-it « '+(n.text||'').slice(0,30)+' »', fields:{text:'Texte',kind:'Type',forDate:'Pour le'} }
   };
 
-  function logConflict(entityType, entity, field, localValue, remoteValue, resolvedValue){
+  // src: where each version comes from, shown with the choice ({ a:'Sur cet appareil…', b:'Dans le fichier…' })
+  function logConflict(entityType, entity, field, localValue, remoteValue, resolvedValue, src){
     const meta=CONFLICT_ENTITY_LABELS[entityType];
     if(conflicts.length>=200) conflicts.splice(0, conflicts.length-199);   // keep the log readable
     conflicts.push({
@@ -281,6 +282,7 @@
       entityName: meta ? meta.name(entity) : entity.id,
       fieldLabel: meta && meta.fields[field] ? meta.fields[field] : field,
       field, localValue, remoteValue, resolvedValue,
+      srcA:src&&src.a||'', srcB:src&&src.b||'',
       at:Date.now()
     });
   }
@@ -322,7 +324,8 @@
         if(localChanged && remoteChanged){
           const takeRemote=(remote.updatedAt||0) > (local.updatedAt||0);
           result[field]=takeRemote?remote[field]:local[field];
-          logConflict(entityType, result, field, local[field], remote[field], result[field]);
+          const when=t=>t?' (modifié le '+new Date(t).toLocaleDateString('fr-FR')+')':'';
+          logConflict(entityType, result, field, local[field], remote[field], result[field], { a:'Sur cet appareil'+when(local.updatedAt), b:'Venu de ton autre appareil, par la synchro'+when(remote.updatedAt) });
         }
       });
       result.updatedAt=Math.max(local.updatedAt||0, remote.updatedAt||0);
@@ -1620,7 +1623,8 @@
     conflicts.forEach(cf=>{
       const row=document.createElement('div'); row.className='conflict-row';
       const head=document.createElement('div'); head.className='conflict-head';
-      head.textContent=cf.entityName+' — '+cf.fieldLabel;
+      const kind={ task:'Tâche', company:'Société', contact:'Contact', meeting:'Rendez-vous', opportunity:'Opportunité', note:'Note' }[cf.entityType]||'';
+      head.textContent=(kind?kind+' « '+cf.entityName+' »':cf.entityName)+' — champ « '+cf.fieldLabel+' » : deux valeurs différentes';
       row.appendChild(head);
 
       const choices=document.createElement('div'); choices.className='conflict-choices';
@@ -1635,9 +1639,9 @@
         }
         return btn;
       }
-      const localBtn=buildChoiceBtn('Version A', cf.localValue);
+      const localBtn=buildChoiceBtn(cf.srcA||'Version A', cf.localValue);
       localBtn.onclick=()=>resolveConflict(cf.id, cf.localValue);
-      const remoteBtn=buildChoiceBtn('Version B', cf.remoteValue);
+      const remoteBtn=buildChoiceBtn(cf.srcB||'Version B', cf.remoteValue);
       remoteBtn.onclick=()=>resolveConflict(cf.id, cf.remoteValue);
       choices.appendChild(localBtn); choices.appendChild(remoteBtn);
       row.appendChild(choices);
@@ -3828,7 +3832,11 @@
         const lab=document.createElement('span'); lab.className='ctm-l'; lab.textContent=l; r.appendChild(lab);
         const opts=document.createElement('div'); opts.className='ctm-opts';
         if(vals.length===1){ const b=document.createElement('b'); b.textContent=vals[0]; opts.appendChild(b); }
-        else vals.forEach((v,vi)=>{ const lb=document.createElement('label'); lb.className='ctm-opt'; const i=document.createElement('input'); i.type='radio'; i.name='ctm-'+gi+'-'+k; i.value=v; i.checked=vi===0; lb.append(i, document.createTextNode(' '+v)); opts.appendChild(lb); });
+        else vals.forEach((v,vi)=>{
+          const lb=document.createElement('label'); lb.className='ctm-opt'; const i=document.createElement('input'); i.type='radio'; i.name='ctm-'+gi+'-'+k; i.value=v; i.checked=vi===0;
+          const from=g.filter(c=>String(c[k]||'').trim()===v).map(c=>'fiche « '+([c.firstName,c.lastName].filter(Boolean).join(' ')||c.email)+' »'+(c.updatedAt>1e12?' modifiée le '+new Date(c.updatedAt).toLocaleDateString('fr-FR'):'')).join(', ');
+          const val=document.createElement('span'); val.className='ctm-v'; val.textContent=v; const src=document.createElement('span'); src.className='ctm-src'; src.textContent='de la '+from;
+          lb.append(i, val, src); opts.appendChild(lb); });
         r.appendChild(opts); t.appendChild(r);
       });
       s.querySelector('.ctm-merge').onclick=()=>{
@@ -5298,12 +5306,14 @@
       if(!newVal) return false;
       const cur=entity[field];
       if(!cur){ entity[field]=newVal; return false; }
-      if(!ciEq(String(cur), String(newVal))){ logConflict(entityType, entity, field, cur, newVal, cur); return true; }
+      if(!ciEq(String(cur), String(newVal))){ logConflict(entityType, entity, field, cur, newVal, cur, importSrc); return true; }
       return false;
     }
 
     let added=0, updated=0, conflictCount=0;
+    let importSrc=null;   // where the two values of a conflict come from (shown in Réf. & data)
     rows.forEach((row, idx)=>{
+      importSrc={ a:'Déjà dans tes contacts', b:'Dans le fichier « '+file.name+' », ligne '+(idx+2) };
       const firstName=pickHeader(row, ['first name','prénom','prenom']);
       const lastName=pickHeader(row, ['last name','nom']);
       if(!firstName && !lastName) return;

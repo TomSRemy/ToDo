@@ -522,6 +522,23 @@ with sync_playwright() as p:
     check(not errors, f"no page errors ({errors})")
     page.close()
 
+    # --- Contacts import: a conflict says which field and where each value comes from
+    imp_ct = [{"id": "ic1", "firstName": "Anne", "lastName": "Roux", "role": "", "company": "Solaris", "email": "anne@exemple.fr", "phone1": "06 11 22 33 44",
+               "phone2": "", "relevance": 0, "comment": "", "createdAt": 1, "updatedAt": 1, "deleted": False}]
+    wb = openpyxl.Workbook(); ws = wb.active
+    ws.append(["Prénom", "Nom", "Société", "Email", "Téléphone"]); ws.append(["Anne", "Roux", "Solaris", "anne@exemple.fr", "06 99 88 77 66"])
+    imp = pathlib.Path(tempfile.mkdtemp()) / "contacts.xlsx"; wb.save(imp)
+    page, errors = new_page(browser, {"todo_todo-widget-contacts": json.dumps(imp_ct)}, viewport={"width": 1300, "height": 900})
+    page.goto(URL); page.click('[data-tab="contacts"]')
+    page.on("dialog", lambda d: d.accept())
+    page.set_input_files("#contact-import-input", str(imp)); page.wait_for_timeout(1500)
+    page.click('[data-tab="lists"]')
+    conf = page.inner_text("#conflicts-list") if page.locator("#conflicts-list").count() else ""
+    check("Contact « Anne Roux » — champ « Téléphone 1 »" in conf and "Déjà dans tes contacts" in conf and "Dans le fichier « contacts.xlsx », ligne 2" in conf and "06 99 88 77 66" in conf,
+          f"import conflict: the field and where each value comes from ({conf[:160]!r})")
+    check(not errors, f"no page errors ({errors})")
+    page.close()
+
     # --- Sync pill: state visible everywhere, token problems explained
     page, errors = new_page(browser, viewport={"width": 1300, "height": 800})
     page.goto(URL); page.wait_for_timeout(300)

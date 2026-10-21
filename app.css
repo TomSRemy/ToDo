@@ -1217,3 +1217,11 @@ details.req-compare:not([open]) .req-compare-h::before{ transform:rotate(-90deg)
 .opp-nav{ display:flex; flex-wrap:wrap; gap:6px 18px; margin:-6px 0 10px; }
 .opp-nav .opp-co-link{ margin:0; }
 .opp-back{ font-weight:600; }
+
+/* where each value comes from */
+.ctm-opts{ flex-direction:column; gap:4px; }
+.ctm-opt{ align-items:baseline; }
+.ctm-v{ color:var(--tx1); font-weight:500; }
+.ctm-src{ font-size:11.5px; color:var(--tx3); }
+.conflict-choice-label{ white-space:normal; }
+.conflict-choice-label{ font:500 11px var(--font-ui); text-transform:none; letter-spacing:0; }
