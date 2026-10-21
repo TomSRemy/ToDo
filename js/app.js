@@ -441,7 +441,7 @@
     if(!syncConfig.enabled) return;
     try{
       const data=await ghGetJson(SYNC_TASKS_PATH);
-      if(data.status===404){ await syncPushNow(); return; }
+      if(data.status===404){ scheduleSyncPush(); return; }
       if(!data.ok){ setSyncStatus('Erreur de synchro (lecture)'); return; }
       const remoteTasks=data.json;
       undoCommit(); tasks=threeWayMerge('task', tasks, remoteTasks, tasksBaseSnapshot); undoRebase();
@@ -458,6 +458,14 @@
     }catch(e){ console.error('sync pull failed', e); setSyncStatus('Erreur de synchro'); }
   }
 
+  // a write refused because the file changed meanwhile (409/422: the other device wrote first): read, merge and write again
+  const syncRetries={};
+  function syncRetryLater(key, status, again){
+    if(status!==409 && status!==422) return false;
+    const n=(syncRetries[key]||0)+1; if(n>3){ syncRetries[key]=0; return false; }
+    syncRetries[key]=n; setTimeout(again, 1200*n); return true;
+  }
+  function syncRetryDone(key){ syncRetries[key]=0; }
   function scheduleSyncPush(){
     if(!syncConfig.enabled) return;
     clearTimeout(syncPushTimer);
@@ -493,10 +501,10 @@
         // just-completed field (e.g. archived) was never really changed locally
         // and silently revert it to the old remote value (tasks "reappearing").
         tasksBaseSnapshot=tasks.map(t=>({...t}));
-        await saveSnapshots();
+        await saveSnapshots(); syncRetryDone('tasks');
         setSyncStatus('Synchronisé '+new Date().toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'}));
       }else{
-        setSyncStatus('Erreur de synchro (écriture)');
+        if(!syncRetryLater('tasks', putRes.status, ()=>syncPushNow())) setSyncStatus('Erreur de synchro (écriture)');
       }
     }catch(e){ console.error('sync push failed', e); syncNote(null); setSyncStatus('Erreur de synchro'); }
   }
@@ -515,7 +523,7 @@
     if(!syncConfig.enabled) return;
     try{
       const data=await ghGetJson(SYNC_CRM_PATH);
-      if(data.status===404){ await syncPushCrmNow(); return; }
+      if(data.status===404){ scheduleCrmSyncPush(); return; }
       if(!data.ok) return;
       const remote=data.json;
       const merged=mergeCrmBundle({companies,contacts,meetings,opportunities}, remote);
@@ -563,8 +571,8 @@
         // or a failed PUT leaves a stale base that reverts real local changes
         // on the next merge.
         crmBaseSnapshot={ companies:companies.map(c=>({...c})), contacts:contacts.map(c=>({...c})), meetings:meetings.map(m=>({...m})), opportunities:opportunities.map(o=>({...o})) };
-        await saveSnapshots();
-      }
+        await saveSnapshots(); syncRetryDone('crm');
+      } else syncRetryLater('crm', putRes.status, ()=>syncPushCrmNow());
     }catch(e){ console.error('crm sync push failed', e); syncNote(null); }
   }
   async function saveNotesLocalOnly(){ try{ await window.storage.set(NOTES_KEY,JSON.stringify(notes),false); }catch(e){ console.error(e); } }
@@ -575,7 +583,7 @@
     flushPostit();
     try{
       const data=await ghGetJson(SYNC_NOTES_PATH);
-      if(data.status===404){ await syncPushNotesNow(); return; }
+      if(data.status===404){ scheduleNotesSyncPush(); return; }
       if(!data.ok) return;
       const remote=data.json;
       undoCommit(); notes=threeWayMerge('note', notes, remote, notesBaseSnapshot); undoRebase();
@@ -641,7 +649,7 @@
     if(!syncConfig.enabled) return;
     try{
       const r=await ghGetJson(SYNC_PARC_PATH);
-      if(r.status===404){ if(parcData) await syncPushParc(null); return; }
+      if(r.status===404){ if(parcData) setTimeout(()=>syncPushParc(null), 0); return; }   // after this read (one at a time)
       if(!r.ok || !r.json || !Array.isArray(r.json.items)) return;
       const remote=r.json, mine=parcData?(parcData.importedAt||0):0;
       if(!parcData || (remote.importedAt||0)>mine){
@@ -698,8 +706,8 @@
         const putData=await putRes.json();
         lastKnownNotesSha=putData.content.sha;
         notesBaseSnapshot=notes.map(n=>({...n}));
-        await saveNotesBase();
-      }
+        await saveNotesBase(); syncRetryDone('notes');
+      } else syncRetryLater('notes', putRes.status, ()=>syncPushNotesNow());
     }catch(e){ console.error('notes sync push failed', e); syncNote(null); }
   }
 
@@ -7369,9 +7377,13 @@
     };
     if(window.TODO_PIP) setTimeout(()=>quickAddInput.focus(), 300);
   }
-  syncPull=trackSync(syncPull); syncPushNow=trackSync(syncPushNow); syncPullCrm=trackSync(syncPullCrm);
-  syncPushCrmNow=trackSync(syncPushCrmNow); syncPullNotes=trackSync(syncPullNotes); syncPushNotesNow=trackSync(syncPushNotesNow);
-  syncPullParc=trackSync(syncPullParc); syncPushParc=trackSync(syncPushParc);
+  // one file at a time: a read and a write of the same file never overlap (they would merge against each other)
+  const syncChains={};
+  const oneAtATime=(key, fn)=>function(){ const args=arguments, self=this; const run=(syncChains[key]||Promise.resolve()).then(()=>fn.apply(self, args)); syncChains[key]=run.catch(()=>{}); return run; };
+  syncPull=oneAtATime('tasks', trackSync(syncPull)); syncPushNow=oneAtATime('tasks', trackSync(syncPushNow));
+  syncPullCrm=oneAtATime('crm', trackSync(syncPullCrm)); syncPushCrmNow=oneAtATime('crm', trackSync(syncPushCrmNow));
+  syncPullNotes=oneAtATime('notes', trackSync(syncPullNotes)); syncPushNotesNow=oneAtATime('notes', trackSync(syncPushNotesNow));
+  syncPullParc=oneAtATime('parc', trackSync(syncPullParc)); syncPushParc=oneAtATime('parc', trackSync(syncPushParc));
   ['sync-pill','sync-pill-lite','sync-pill-w'].forEach(id=>{ const el=$(id); if(el) el.onclick=onSyncPillClick; });
   window.addEventListener('online', ()=>{ if(syncConfig.enabled) syncEverythingNow(); else paintSyncPill(); });
   window.addEventListener('offline', paintSyncPill);

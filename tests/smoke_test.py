@@ -69,10 +69,10 @@ def stored(page, key):
     return page.evaluate(f"JSON.parse({PEEK}('{key}')||'null')")
 
 
-def mock_github(page, files, put_ok=True, large=()):
+def mock_github(page, files, put_ok=True, large=(), conflict_once=None):
     """files: {'tasks.json': [...], ...} — server state, updated on successful PUTs.
     large: files GitHub reports as > 1 MB (metadata without content, raw fetch needed)."""
-    state = {"puts": 0, "large": large}
+    state = {"puts": 0, "large": large, "conflict": conflict_once}
 
     def handler(route, request):
         name = request.url.rsplit("/", 1)[-1]
@@ -87,6 +87,9 @@ def mock_github(page, files, put_ok=True, large=()):
                 body = {"sha": "sha-" + name, "encoding": "base64", "content": base64.b64encode(json.dumps(files[name]).encode()).decode()}
             return route.fulfill(status=200, content_type="application/json", body=json.dumps(body))
         state["puts"] += 1
+        if state.get("conflict"):   # another device wrote just before: 409, and the server now holds its version
+            name_, extra = state["conflict"]; files[name_] = files[name_] + [extra]; state["conflict"] = None
+            return route.fulfill(status=409, body="{}")
         if not put_ok:
             return route.fulfill(status=500, body="{}")
         files[name] = json.loads(base64.b64decode(json.loads(request.post_data)["content"]).decode())
@@ -208,6 +211,20 @@ with sync_playwright() as p:
     check(titles == ["Encore A", "Onglet A", "Onglet B", "Partagé depuis le téléphone"] and a.evaluate("localStorage.getItem('todo_todo-widget-tasks')") is None,
           f"storage: a task written by the share page joins the open app's data, then leaves localStorage ({titles})")
     ctx.close()
+
+    # --- Sync: a write refused because the other device wrote first (409) is merged and written again
+    files = {"tasks.json": [task("t1", "X")]}
+    seed = dict(SYNC_ON, **{"todo_todo-widget-tasks": json.dumps([task("t1", "X")]), "todo_sync-tasks-base": json.dumps([task("t1", "X")])})
+    page, errors = new_page(browser, seed)
+    st = mock_github(page, files, conflict_once=("tasks.json", task("t9", "Venue de l'autre appareil")))
+    page.goto(URL); page.click('[data-tab="tasks"]'); page.wait_for_timeout(500)
+    page.fill("#quick-add-input", "Ajoutée ici"); page.press("#quick-add-input", "Enter")
+    page.wait_for_function("document.querySelector('#task-list') && document.body.innerText.includes('Venue de l')", timeout=15000)
+    page.wait_for_timeout(2500)
+    titles = sorted(x["title"] for x in files["tasks.json"])
+    check(st["puts"] >= 2 and titles == ["Ajoutée ici", "Venue de l'autre appareil", "X"], f"sync: a write refused (409) is merged and written again ({st['puts']} writes, {titles})")
+    check(not errors, f"no page errors ({errors})")
+    page.close()
 
     # --- Reminders: a reminder already shown doesn't fire again after reopening the app
     past = (datetime.datetime.now() - datetime.timedelta(minutes=5)).strftime("%Y-%m-%dT%H:%M")
