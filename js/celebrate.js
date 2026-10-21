@@ -200,7 +200,12 @@
     panel(){ bossaNova(); },   // a little bossa nova while it dances
     turbine(){ hiss(.9,1.4,{ f:300, fto:2400, q:.8, vol:.07, attack:.5, release:.3 }); tone(1568,2.2,.5,{ vol:.08 }); tone(2093,2.28,.5,{ vol:.06 }); },   // whoosh, then « ding »
     battery(){ hiss(.4,.12,{ filter:'highpass', f:2000, vol:.12, attack:.005, release:.08 }); tone(1800,.4,.15,{ type:'square', to:200, vol:.05 }); tone(300,.6,1,{ type:'triangle', to:950, vol:.06 }); tone(1319,1.6,.4,{ vol:.08 }); tone(1760,1.68,.5,{ vol:.07 }); },   // zap, charging, ding
-    gun(){ tone(2637,.15,.5,{ vol:.07 }); tone(3136,.22,.6,{ vol:.06 }); hiss(.15,.08,{ filter:'highpass', f:4000, vol:.08, attack:.005, release:.06 }); for(let i=0;i<14;i++) hiss(.5+i*.13,.06,{ f:900+Math.random()*400, q:2, vol:.06, attack:.005, release:.05 }); },   // « ka-ching », then the shots
+    gun(el){ tone(2637,.15,.5,{ vol:.07 }); tone(3136,.22,.6,{ vol:.06 }); hiss(.15,.08,{ filter:'highpass', f:4000, vol:.08, attack:.005, release:.06 }); for(let i=0;i<14;i++) hiss(.5+i*.13,.06,{ f:900+Math.random()*400, q:2, vol:.06, attack:.005, release:.05 });
+      // when the gun leaves: the cash drawer « chunk », a bright « ka-ching » and a few coins
+      const W=window.innerWidth, out=(W<700?2.25:2.65);
+      setTimeout(()=>{ if(!el.isConnected) return; hiss(0,.09,{ filter:'lowpass', f:500, vol:.12, attack:.004, release:.07 }); tone(90,0,.12,{ vol:.1, to:60 });
+        tone(2093,.07,.9,{ vol:.08 }); tone(2637,.07,.9,{ vol:.07 }); tone(3136,.13,1,{ vol:.07 }); tone(4186,.13,.7,{ vol:.04 });
+        [.3,.38,.47,.53,.62].forEach((t,i)=>tone(3500+i*420,t,.12,{ vol:.03 })); }, out*1000); },   // « ka-ching », the shots, and the final « ka-ching »
     gong(el){ setTimeout(()=>{ if(el.isConnected) gongSound(); }, 620); },
     champagne(el){ setTimeout(()=>{ if(el.isConnected) popSound(); }, 900); hiss(1,1.1,{ filter:'highpass', f:5000, vol:.04, attack:.05, release:.6 }); setTimeout(()=>{ if(el.isConnected) clinkSound(); }, 2050); },   // pop, fizz, « ting »
     umbrella(){ hiss(.3,3.4,{ filter:'lowpass', f:1800, q:.5, vol:.05, attack:.8, release:.8 }); tone(392,1.7,.5,{ vol:.07 }); tone(330,2.15,.8,{ vol:.07 }); },   // rain, two sad notes
