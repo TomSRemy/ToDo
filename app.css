@@ -732,7 +732,7 @@
   .pq-inst{ border-left:2px solid var(--accent-dim); padding-left:10px; margin-top:4px; }
   /* several installations: one card each, its own colour, its name in the header (stays visible while scrolling) */
   .pq-inst.many{ border:1px solid var(--bd); border-left:4px solid var(--inst-c); border-radius:10px; padding:0 14px 12px; margin:16px 0; background:color-mix(in srgb, var(--inst-c) 4%, var(--panel)); }
-  .pq-inst.many > .pq-sec-h{ position:sticky; top:0; z-index:2; margin:0 -14px 6px; padding:10px 14px; border-bottom:1px solid var(--bd-soft); border-radius:9px 9px 0 0; background:color-mix(in srgb, var(--inst-c) 10%, var(--panel)); font:600 13px var(--font-ui); color:var(--tx1); text-transform:none; letter-spacing:0; }
+  .pq-inst.many > .pq-sec-h{ position:sticky; top:-4px; box-shadow:0 -6px 0 0 var(--panel); z-index:2; margin:0 -14px 6px; padding:10px 14px; border-bottom:1px solid var(--bd-soft); border-radius:9px 9px 0 0; background:color-mix(in srgb, var(--inst-c) 10%, var(--panel)); font:600 13px var(--font-ui); color:var(--tx1); text-transform:none; letter-spacing:0; }
   .pq-inst-n{ display:inline-flex; align-items:center; justify-content:center; width:22px; height:22px; border-radius:50%; background:var(--inst-c); color:#04070C; font:700 12px var(--font-ui); flex-shrink:0; }
   .pq-inst-name{ overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .pq-grid{ display:grid; grid-template-columns:repeat(auto-fill,minmax(170px,1fr)); gap:8px 12px; }
