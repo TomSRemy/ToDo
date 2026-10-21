@@ -3144,21 +3144,39 @@
   function pqDecodeQP(s){ return s.replace(/=\r?\n/g,'').replace(/(=[0-9A-F]{2})+/gi, m=>{ try{ return decodeURIComponent(m.replace(/=/g,'%')); }catch(e){ return m; } }); }
   function pqHtmlToText(h){ const d=document.createElement('div'); d.innerHTML=h.replace(/<(br|\/p|\/div|\/tr|\/li)[^>]*>/gi,'\n$&'); d.querySelectorAll('style,script').forEach(n=>n.remove()); return d.textContent.replace(/\n{3,}/g,'\n\n'); }
   function pqDecodeMimeWords(s){ return s.replace(/=\?([^?]+)\?([bq])\?([^?]*)\?=/gi,(m,cs,enc,txt)=>{ try{ if(enc.toLowerCase()==='b') return decodeURIComponent(escape(atob(txt))); return pqDecodeQP(txt.replace(/_/g,' ')); }catch(e){ return txt; } }); }
+  // .eml (saved from the new Outlook, Outlook on the web, Gmail…): text, sender, subject and the attached files
+  // (Excel of the producer…), including those of a mail forwarded as an attachment.
+  function pqEmlFileName(ph){
+    const h=ph.replace(/\r?\n[ \t]+/g,' ');
+    const star=/filename\*=(?:([\w-]+)'[^']*')?([^;\r\n]+)/i.exec(h);
+    if(star){ try{ return decodeURIComponent(star[2].trim().replace(/^"|"$/g,'')); }catch(e){ return star[2].trim(); } }
+    const m=/(?:filename|name)\s*=\s*"([^"]+)"/i.exec(h) || /(?:filename|name)\s*=\s*([^;\s]+)/i.exec(h);
+    return m?pqDecodeMimeWords(m[1].trim()):'';
+  }
+  function pqB64Bytes(s){ const bin=atob(s.replace(/[^A-Za-z0-9+/=]/g,'')); const u=new Uint8Array(bin.length); for(let i=0;i<bin.length;i++) u[i]=bin.charCodeAt(i); return u; }
   function parseEml(raw){
-    const split=raw.search(/\r?\n\r?\n/); const head=raw.slice(0,split).replace(/\r?\n[ \t]+/g,' '); const rest=raw.slice(split).trim();
+    const split=raw.search(/\r?\n\r?\n/); const head=raw.slice(0,split<0?raw.length:split).replace(/\r?\n[ \t]+/g,' '); const rest=split<0?'':raw.slice(split).trim();
     const hdr=n=>{ const m=new RegExp('^'+n+':\\s*(.*)$','im').exec(head); return m?pqDecodeMimeWords(m[1].trim()):''; };
-    let text='', html='';
+    let text='', html=''; const attachments=[], forwarded=[];
     const bm=/boundary="?([^";\r\n]+)"?/i.exec(head+'\n'+rest.slice(0,2000));
-    const decodePart=(ph, body)=>{ const enc=(/content-transfer-encoding:\s*([\w-]+)/i.exec(ph)||[])[1]||''; if(/base64/i.test(enc)){ try{ return decodeURIComponent(escape(atob(body.replace(/\s/g,'')))); }catch(e){ try{ return atob(body.replace(/\s/g,'')); }catch(e2){ return ''; } } } if(/quoted/i.test(enc)) return pqDecodeQP(body); return body; };
+    const decodePart=(ph, body)=>{ const enc=(/content-transfer-encoding:\s*([\w-]+)/i.exec(ph)||[])[1]||''; if(/base64/i.test(enc)){ try{ return decodeURIComponent(escape(atob(body.replace(/\s/g,'')))); }catch(e){ return ''; } } if(/quoted-printable/i.test(enc)) return pqDecodeQP(body); return body; };
     if(bm){
       rest.split('--'+bm[1]).forEach(part=>{
-        const i=part.search(/\r?\n\r?\n/); if(i<0) return; const ph=part.slice(0,i), pb=part.slice(i).trim();
-        if(/boundary=/i.test(ph)){ const inner=parseEml(ph+'\n\n'+pb); if(!text) text=inner.body; return; }
+        const i=part.search(/\r?\n\r?\n/); if(i<0) return; const ph=part.slice(0,i).replace(/^\s+/,''), pb=part.slice(i).trim();
+        const name=pqEmlFileName(ph), isAttach=/content-disposition:\s*attachment/i.test(ph) || (!!name && !/content-type:\s*text\/(plain|html)/i.test(ph));
+        if(/content-type:\s*message\/rfc822/i.test(ph)){ const inner=parseEml(decodePart(ph,pb)); forwarded.push(inner); attachments.push(...inner.attachments); return; }
+        if(/boundary=/i.test(ph)){ const inner=parseEml(ph+'\n\n'+pb); if(!text) text=inner.body; attachments.push(...inner.attachments); return; }   // inner.body already carries its forwarded mails
+        if(isAttach && name){
+          try{ attachments.push({ name, data:/base64/i.test(ph)?pqB64Bytes(pb):new TextEncoder().encode(decodePart(ph,pb)) }); }catch(e){}
+          return;
+        }
         if(/content-type:\s*text\/plain/i.test(ph) && !text) text=decodePart(ph,pb);
         else if(/content-type:\s*text\/html/i.test(ph) && !html) html=decodePart(ph,pb);
       });
     } else { const body=decodePart(head,rest); if(/content-type:\s*text\/html/i.test(head)) html=body; else text=body; }
-    return { from:hdr('From'), subject:hdr('Subject'), body:text||pqHtmlToText(html) };
+    let body=text||pqHtmlToText(html);
+    forwarded.forEach(f=>{ body+='\n\n-------- Mail joint --------\nDe : '+f.from+'\nObjet : '+f.subject+'\n\n'+f.body; });
+    return { from:hdr('From'), subject:hdr('Subject'), body, attachments, forwarded };
   }
   function pqUtf16(u8){ let s=''; for(let i=0;i+1<u8.length;i+=2) s+=String.fromCharCode(u8[i]|(u8[i+1]<<8)); return s.replace(/\u0000+$/,''); }
   function parseMsg(buf){
@@ -3187,7 +3205,13 @@
         texts.push('De : '+m.from+'\nObjet : '+m.subject+'\n\n'+m.body);
         for(const a of m.attachments){ if(/\.(xlsx|xlsm|xls)$/i.test(a.name)){ try{ installs.push(...pqXlsxToInstallations(XLSX.read(a.data,{type:'array',cellDates:true}))); names.push(a.name); }catch(e){} } }
       }
-      else if(/\.eml$/.test(n)){ const m=parseEml(await f.text()); texts.push('De : '+m.from+'\nObjet : '+m.subject+'\n\n'+m.body); }
+      else if(/\.eml$/.test(n)){
+        const m=parseEml(await f.text());
+        texts.push('De : '+m.from+'\nObjet : '+m.subject+'\n\n'+m.body);
+        const xl=m.attachments.filter(a=>/\.(xlsx|xlsm|xls)$/i.test(a.name));
+        if(xl.length) await loadXlsxLib();
+        for(const a of xl){ try{ installs.push(...pqXlsxToInstallations(XLSX.read(a.data,{type:'array',cellDates:true}))); names.push(a.name); }catch(e){ console.error('attachment unreadable', a.name, e); } }
+      }
       else texts.push(await f.text());
     }
     return { text:texts.join('\n\n'), installs, names };

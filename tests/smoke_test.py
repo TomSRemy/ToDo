@@ -706,6 +706,19 @@ with sync_playwright() as p:
     page.set_input_files("#pq-file", str(tpl)); page.wait_for_function("document.getElementById('pq-files-info').textContent.includes('installation')", timeout=20000)
     got = [page.input_value(s_) for s_ in ("#pq-0-centrale", "#pq-0-kwc", "#pq-0-spv", "#pq-0-siret", "#pq-0-p90", "#pq-0-dept")]
     check(got == ["CS Bram", "4986.93", "BRAM SOLAIRE SAS", "123 456 789 00012", "6100", "11 - Aude"], f"Selfee template read into the form ({got})")
+    # a mail saved as .eml (new Outlook, Outlook web): its text and its attached Excel, also inside a forwarded mail
+    from email.message import EmailMessage
+    inner = EmailMessage(); inner["From"] = "Jean Martin <j.martin@exemple-solaire.fr>"; inner["Subject"] = "Nos centrales"
+    inner.set_content("Bonjour,\nVoici la liste de nos centrales.\nJean MARTIN\nGérant\n06 10 20 30 40")
+    inner.add_attachment(xlsx.read_bytes(), maintype="application", subtype="vnd.openxmlformats-officedocument.spreadsheetml.sheet", filename="Caractéristiques centrales.xlsx")
+    outer = EmailMessage(); outer["From"] = "Paul Collègue <paul@exemple-agregateur.fr>"; outer["Subject"] = "TR: Nos centrales"
+    outer.set_content("Pour info, à qualifier.")
+    outer.add_attachment(inner)
+    eml = pathlib.Path(tempfile.mkdtemp()) / "mail.eml"; eml.write_bytes(bytes(outer))
+    page.click("#pq-cancel-btn"); page.click("#opp-add-btn"); page.fill("#pq1-company", "SCEA Z"); page.click("#pq-next-btn")
+    page.set_input_files("#pq-file", str(eml)); page.wait_for_function("document.getElementById('pq-files-info').textContent.includes('installation')", timeout=20000)
+    check(page.input_value("#pq-0-centrale") == "Les Vignes" and page.input_value("#pq-1-kwc") == "1850" and "Caractéristiques centrales.xlsx" in page.inner_text("#pq-files-info"),
+          "a .eml's attached Excel is read, even in a forwarded mail (accented file name kept)")
     check(not errors, f"no page errors ({errors})")
     page.close()
 
