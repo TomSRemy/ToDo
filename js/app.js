@@ -1453,7 +1453,7 @@
   function renderTodayWatch(weekTasks){
     const box=$('today-watch'); if(!box) return; box.innerHTML='';
     const block=(title,count,rows,hint)=>{ if(!rows.length) return; const s=document.createElement('section'); s.className='tw-block';
-      const h=document.createElement('div'); h.className='tw-h'; h.innerHTML='<span></span><b></b>'; h.querySelector('span').textContent=title; h.querySelector('b').textContent=count; s.appendChild(h);
+      const h=makeGroupHeader(title+' · '+count); h.classList.add('tw-h'); s.appendChild(h);
       if(hint){ const p=document.createElement('div'); p.className='tw-hint'; p.textContent=hint; s.appendChild(p); }
       rows.forEach(r=>s.appendChild(r)); box.appendChild(s); };
     const row=(title,sub,val,fn,cls)=>{ const r=document.createElement('button'); r.type='button'; r.className='tw-row'+(cls?' '+cls:''); r.onclick=fn;
