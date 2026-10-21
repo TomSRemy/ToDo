@@ -56,6 +56,12 @@ def new_page(browser, seed=None, **ctx):
 PEEK = "(k=>(window.storage&&window.storage.peek)?window.storage.peek(k):localStorage.getItem('todo_'+k))"
 
 
+def postit_edit(page):
+    """The post-it shows its lines as a checklist; a click on a line's text edits it (cursor at the end of that line)."""
+    if page.is_visible("#postit-list"): page.locator("#postit-list .pi-text").last.click()
+    else: postit_edit(page)
+
+
 def stored(page, key):
     page.wait_for_function("!!window.storage")
     page.evaluate("async () => { await window.storage.ready; }")
@@ -231,13 +237,13 @@ with sync_playwright() as p:
     page.goto(URL)
     check(page.is_visible("#postit"), "post-it open by default on desktop")
     check(page.input_value("#postit-text") == "Demain : Rappeler Sophie", "old multi-post-it notes folded into the post-it")
-    page.click("#postit-text"); page.keyboard.press("End")
+    postit_edit(page); page.keyboard.press("End")
     page.keyboard.type("\nEnvoyer offre PPA\nidée : webinar ACC")
     # the note is saved after a short pause in typing: wait for the save itself, not a fixed delay
     page.wait_for_function(f"({PEEK}('todo-widget-notes')||'').includes('webinar ACC')", timeout=10000)
     page.reload()
     check(page.input_value("#postit-text") == "Demain : Rappeler Sophie\nEnvoyer offre PPA\nidée : webinar ACC", "post-it text persists after reload")
-    page.click("#postit-text")
+    postit_edit(page)
     page.evaluate("const t=document.getElementById('postit-text'); const i=t.value.indexOf('Envoyer'); t.setSelectionRange(i+3,i+3);")
     page.click("#postit-to-task"); page.wait_for_timeout(300)
     tk = [t for t in stored(page, "todo-widget-tasks") if t["title"] == "Envoyer offre PPA"]
@@ -556,6 +562,22 @@ with sync_playwright() as p:
     check(not errors, f"no page errors ({errors})")
     page.close()
 
+    # --- Post-it: a checklist by default (tick, struck through, kept in the text); click a line to edit
+    page, errors = new_page(browser, {"todo_todo-widget-notes": json.dumps([{"id": "scratchpad", "text": "Appeler Paul\nEnvoyer offre", "createdAt": 1, "updatedAt": 1, "deleted": False}])},
+                            viewport={"width": 1300, "height": 850})
+    page.goto(URL); page.wait_for_selector("#postit-list .pi-row")
+    check(page.locator("#postit-list .pi-row input[type=checkbox]").count() == 2 and not page.is_visible("#postit-text"), "post-it: each line shown with a box to tick")
+    page.locator("#postit-list .pi-row", has_text="Appeler Paul").locator("input").check()
+    page.wait_for_function(f"({PEEK}('todo-widget-notes')||'').includes('✓ Appeler Paul')", timeout=5000)
+    check(page.locator("#postit-list .pi-row.done").count() == 1, "post-it: a ticked line is struck through and saved")
+    page.locator("#postit-list .pi-text", has_text="Envoyer offre").click()
+    check(page.is_visible("#postit-text") and page.evaluate("document.activeElement.id") == "postit-text", "post-it: clicking a line edits the text")
+    page.keyboard.type(" PPA"); page.locator("#postit-bar").click(); page.wait_for_timeout(200)
+    check([t.strip() for t in page.eval_on_selector_all("#postit-list .pi-text", "els=>els.map(e=>e.textContent)")] == ["Appeler Paul", "Envoyer offre PPA"],
+          "post-it: back to the checklist after editing")
+    check(not errors, f"no page errors ({errors})")
+    page.close()
+
     # --- Sync pill: state visible everywhere, token problems explained
     page, errors = new_page(browser, viewport={"width": 1300, "height": 800})
     page.goto(URL); page.wait_for_timeout(300)
@@ -590,7 +612,7 @@ with sync_playwright() as p:
     mock_github(page, files)
     page.goto(URL); page.wait_for_timeout(800)
     check(page.input_value("#postit-text") == "écrit sur le téléphone", "post-it pulled from the other device")
-    page.click("#postit-text"); page.keyboard.press("End"); page.keyboard.type(" + PC")
+    postit_edit(page); page.keyboard.press("End"); page.keyboard.type(" + PC")
     page.wait_for_timeout(4500)
     check(files["notes.json"][0]["text"] == "écrit sur le téléphone + PC", "post-it edit pushed")
     page.close()

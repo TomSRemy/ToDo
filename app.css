@@ -1230,3 +1230,16 @@ details.req-compare:not([open]) .req-compare-h::before{ transform:rotate(-90deg)
 .req-line-name{ flex-wrap:nowrap; min-width:0; overflow:hidden; }
 .req-line-name b{ flex-shrink:0; }
 .req-line-name span{ white-space:nowrap; overflow:hidden; text-overflow:ellipsis; min-width:0; }
+
+/* post-it as a checklist */
+#postit-text.as-list{ display:none; }
+.postit-list{ flex:1; overflow-y:auto; padding:4px 14px 14px; display:flex; flex-direction:column; }
+.postit-list[hidden]{ display:none; }
+.pi-row{ display:flex; gap:9px; align-items:flex-start; font-size:13.5px; line-height:1.6; color:var(--tx1); padding:1px 0; }
+.pi-row input{ margin:5px 0 0; width:15px; height:15px; flex-shrink:0; accent-color:var(--note-accent); cursor:pointer; }
+.pi-text{ flex:1; min-width:0; white-space:pre-wrap; overflow-wrap:anywhere; cursor:text; }
+.pi-row.done .pi-text{ text-decoration:line-through; color:var(--tx3); }
+.pi-gap{ height:10px; flex-shrink:0; }
+.pi-add{ align-self:flex-start; margin-top:6px; background:none; border:none; color:var(--tx3); font:500 12px var(--font-ui); cursor:pointer; padding:2px 0; }
+.pi-add:hover{ color:var(--note-accent); }
+@media (max-width: 760px){ .pi-row{ font-size:15px; } }

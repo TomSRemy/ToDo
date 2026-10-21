@@ -1463,7 +1463,7 @@
       postitTextEl.value=txt;
       if(focused){ const c=Math.min(pos, txt.length); postitTextEl.setSelectionRange(c,c); }
     }
-    updatePostitTab();
+    updatePostitTab(); renderPostitList();
   }
   function setPostitOpen(open, focus){
     if(!postitEl) return;
@@ -1471,7 +1471,40 @@
     postitEl.classList.toggle('hidden', !open);
     postitTabEl.classList.toggle('hidden', open);
     try{ localStorage.setItem('postit-open', open?'1':'0'); }catch(e){}
-    if(open){ clampPostit(); if(focus) setTimeout(()=>{ postitTextEl.focus(); const l=postitTextEl.value.length; postitTextEl.setSelectionRange(l,l); },0); }
+    if(open){ clampPostit(); if(focus) setTimeout(()=>{ postitShowEditor(); postitTextEl.focus(); const l=postitTextEl.value.length; postitTextEl.setSelectionRange(l,l); },0); }
+  }
+  // ---------- Post-it as a list: each line is a bullet to tick (✓ in front of the line, struck through);
+  // a click on a line's text, or « + Ajouter une ligne », edits the note as plain text (same text, same sync) ----------
+  const PI_DONE=/^✓\s?/;
+  function postitShowEditor(){ const box=$('postit-list'); if(box) box.hidden=true; postitTextEl.classList.remove('as-list'); }
+  function renderPostitList(){
+    const box=$('postit-list'); if(!box || !postitTextEl) return;
+    const txt=postitTextEl.value, show=document.activeElement!==postitTextEl && txt.trim()!=='';
+    box.hidden=!show; postitTextEl.classList.toggle('as-list', show);
+    if(!show) return;
+    box.innerHTML='';
+    txt.split('\n').forEach((line,i)=>{
+      if(!line.trim()){ const g=document.createElement('div'); g.className='pi-gap'; box.appendChild(g); return; }
+      const done=PI_DONE.test(line), label=line.replace(PI_DONE,'');
+      const r=document.createElement('div'); r.className='pi-row'+(done?' done':'');
+      const cb=document.createElement('input'); cb.type='checkbox'; cb.checked=done; cb.setAttribute('aria-label',(done?'Décocher : ':'Cocher : ')+label);
+      cb.onchange=()=>postitToggleLine(i, cb.checked);
+      const t=document.createElement('span'); t.className='pi-text'; t.textContent=label; t.title='Cliquer pour modifier'; t.onclick=()=>postitEditAt(i);
+      r.append(cb,t); box.appendChild(r);
+    });
+    const add=document.createElement('button'); add.type='button'; add.className='pi-add'; add.textContent='+ Ajouter une ligne'; add.onclick=()=>postitEditAt(-1); box.appendChild(add);
+  }
+  function postitToggleLine(i, done){
+    const L=postitTextEl.value.split('\n'); if(L[i]==null) return;
+    L[i]=done?'✓ '+L[i].replace(PI_DONE,''):L[i].replace(PI_DONE,'');
+    postitTextEl.value=L.join('\n'); postitDirty=true; flushPostit(); renderPostitList();
+  }
+  function postitEditAt(i){
+    postitShowEditor();
+    let v=postitTextEl.value, pos=v.length;
+    if(i>=0) pos=v.split('\n').slice(0,i+1).join('\n').length;
+    else if(v && !v.endsWith('\n')){ postitTextEl.value=v+'\n'; pos=v.length+1; }
+    postitTextEl.focus(); postitTextEl.setSelectionRange(pos,pos);
   }
   function openPostit(focus){ setPostitOpen(true, focus); }
   function clampPostit(){
@@ -1486,7 +1519,7 @@
     const start=ta.selectionStart, end=ta.selectionEnd;
     const ls=v.lastIndexOf('\n', start-1)+1;
     let le=v.indexOf('\n', (end>start && v[end-1]==='\n') ? end-1 : end); if(le===-1) le=v.length;
-    const lines=v.slice(ls, le).split('\n').map(l=>l.replace(/^\s*(?:[-*•]|demain\s*:)\s*/i,'').trim()).filter(Boolean);
+    const lines=v.slice(ls, le).split('\n').map(l=>l.replace(PI_DONE,'').replace(/^\s*(?:[-*•]|demain\s*:)\s*/i,'').trim()).filter(Boolean);
     if(!lines.length){ flashPostitSaved('mets le curseur sur une ligne'); ta.focus(); return; }
     const due=tomorrowISO();
     lines.forEach(l=>createTask({ title:l.slice(0,140), urgency:'haute', status:'a_faire', due }));
@@ -1507,7 +1540,8 @@
     setPostitOpen(open===null ? window.innerWidth>760 : open==='1', false);
 
     postitTextEl.addEventListener('input', ()=>{ postitDirty=true; clearTimeout(postitSaveTimer); postitSaveTimer=setTimeout(flushPostit, 600); });
-    postitTextEl.addEventListener('blur', flushPostit);
+    postitTextEl.addEventListener('blur', ()=>{ flushPostit(); setTimeout(renderPostitList, 0); });
+    postitTextEl.addEventListener('focus', postitShowEditor);
     postitTextEl.addEventListener('keydown', e=>{ if(e.key==='Escape'){ e.stopPropagation(); setPostitOpen(false); } });
     $('postit-min').onclick=()=>setPostitOpen(false);
     postitTabEl.onclick=()=>setPostitOpen(true, true);
