@@ -1416,3 +1416,4 @@ select.req-in{ cursor:pointer; }
 .req-sec-h:hover{ color:var(--tx1); }
 tbody.req-sec.folded tr:not(.req-sub){ display:none; }
 tbody.req-sec.folded .req-sec-h::before{ transform:rotate(-90deg); }
+.pq-toall.go.clear{ background:var(--panel-2); color:var(--accent); }

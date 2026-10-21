@@ -3995,12 +3995,11 @@
     }
     if(f.k==='fin' && scope!=='s'){ const y=new Date().getFullYear();
       extra='<div class="pq-dchips">'+[1,2,3].map(n=>'<button type="button" data-dset="fin" data-v="31/12/'+(y+n)+'" data-s="'+scope+'" title="Fin le 31 décembre '+(y+n)+'">31/12/'+String(y+n).slice(2)+'</button>').join('')+'</div>'; }
-    if(f.k==='duree' && scope!=='s') extra='<div class="pq-dchips">'+[1,2,3,5].map(n=>'<button type="button" data-dset="duree" data-v="'+n+'" data-s="'+scope+'" title="'+n+' an'+(n>1?'s':'')+'">'+n+'a</button>').join('')+'</div>';
     let toAll='';
     if(scope!=='s' && pqState.installs.length>1 && f.type!=='computed' && !['centrale','kwc','mwh','p90','productible'].includes(f.k)){   // a plant's own name and figures are never copied
-      const has=v!=null && v!=='' && v!==false, differs=has && pqState.installs.some((x,j)=>j!==+scope && String(x[f.k]==null?'':x[f.k])!==String(v));
-      toAll='<button type="button" class="pq-toall'+(!has?' off':differs?' go':'')+'" data-toall="'+f.k+'" data-s="'+scope+'"'+(!has?' tabindex="-1" aria-hidden="true"':'')
-        +' title="'+(differs?'Mettre cette valeur sur toutes les installations'+(['debut','fin','duree'].includes(f.k)?' (début, durée et fin)':''):'Toutes les installations ont déjà cette valeur')+'" aria-label="'+(differs?'Appliquer à toutes les installations':'Déjà sur toutes les installations')+'">'
+      const has=v!=null && v!=='' && v!==false, differs=pqState.installs.some((x,j)=>j!==+scope && String(x[f.k]==null||x[f.k]===false?'':x[f.k])!==String(has?v:''));
+      toAll='<button type="button" class="pq-toall'+(!has && !differs?' off':differs?' go':'')+(!has && differs?' clear':'')+'" data-toall="'+f.k+'" data-s="'+scope+'"'+(!has && !differs?' tabindex="-1" aria-hidden="true"':'')
+        +' title="'+(!differs?'Toutes les installations ont déjà cette valeur':has?'Mettre cette valeur sur toutes les installations':'Vider ce champ sur toutes les installations')+'" aria-label="'+(!differs?'Déjà sur toutes les installations':has?'Appliquer à toutes les installations':'Vider sur toutes les installations')+'">'
         +(has && !differs?'<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 8.5l2.5 2.5L12 5.5"/></svg>':'<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 8h9M8.5 4.5L12 8l-3.5 3.5"/></svg>')+'</button>';
     }
     // the round « → toutes » sits inside the field, on its right
@@ -4011,20 +4010,17 @@
   // « mars 2027 » / « 2027 » become dd/mm/yyyy; a computed date shows in green and can still be typed over.
   function pqFullDate(s){ const p=pqMonthYear(s); if(!p) return ''; const d=new Date(p.y, (p.m||1)-1, p.d||1); return pqPad(d.getDate())+'/'+pqPad(d.getMonth()+1)+'/'+d.getFullYear(); }
   const pqDateOf=s=>{ const p=pqMonthYear(s); return p?new Date(p.y,(p.m||1)-1,p.d||1):null; };
-  const pqFmtD=d=>pqPad(d.getDate())+'/'+pqPad(d.getMonth()+1)+'/'+d.getFullYear();
   function pqLinkDates(i, changed){
+    // start and end give the duration; the duration never moves a date (typed alone, it stays as typed)
     const st=pqState, inst=st.installs[i]; if(!inst) return;
     ['debut','fin'].forEach(k=>{ if(inst[k] && k===changed){ const f=pqFullDate(inst[k]); if(f) inst[k]=f; } });
-    // the last value changed decides: start or duration moved → end follows; end moved → duration follows (else start)
-    const set=(k,v)=>{ inst[k]=v; st.auto.add(i+'.'+k); st.touched.delete(i+'.'+k); };
-    const d=pqDateOf(inst.debut), f=pqDateOf(inst.fin), n=parseFloat(String(inst.duree||'').replace(',','.'));
-    const endFrom=()=>{ const e=new Date(d); e.setFullYear(e.getFullYear()+Math.floor(n)); e.setMonth(e.getMonth()+Math.round((n%1)*12)); e.setDate(e.getDate()-1); set('fin', pqFmtD(e)); };
-    const durFrom=()=>{ const yrs=Math.round(((f-d)/864e5+1)/365.25*2)/2; set('duree', String(yrs).replace('.',',')); };
-    const startFrom=()=>{ const s=new Date(f); s.setDate(s.getDate()+1); s.setFullYear(s.getFullYear()-Math.floor(n)); s.setMonth(s.getMonth()-Math.round((n%1)*12)); set('debut', pqFmtD(s)); };
-    if(changed==='fin'){ if(d && f && f>d) durFrom(); else if(f && n>0) startFrom(); }
-    else if(changed==='duree'){ if(d && n>0) endFrom(); else if(f && n>0) startFrom(); }
-    else { if(d && n>0) endFrom(); else if(d && f && f>d) durFrom(); }
+    const d=pqDateOf(inst.debut), f=pqDateOf(inst.fin);
+    if(changed!=='duree' && d && f && f>d){
+      const yrs=Math.round(((f-d)/864e5+1)/365.25*2)/2;
+      inst.duree=String(yrs).replace('.',','); st.auto.add(i+'.duree'); st.touched.delete(i+'.duree');
+    }
   }
+
 
   // ---------- Power, P50 volume and specific yield: any two give the third ----------
   // P50 (MWh) = kWc × productible (kWh/kWc) / 1000. Only an empty or already computed box is filled (green, can be typed over);
@@ -4664,7 +4660,9 @@
       inp.addEventListener('change', ()=>{
         const o=opportunities.find(x=>x.id===inp.dataset.id); if(!o) return;
         let v=inp.value.trim();
-        if(inp.dataset.k){ if(['debut','fin'].includes(inp.dataset.k) && v){ const f=pqFullDate(v); if(f) v=f; } o[inp.dataset.k]=v; }
+        if(inp.dataset.k){ if(['debut','fin'].includes(inp.dataset.k) && v){ const f=pqFullDate(v); if(f) v=f; } o[inp.dataset.k]=v;
+          // start and end give the duration (the duration never moves a date)
+          if(['debut','fin'].includes(inp.dataset.k)){ const d=pqDateOf(o.debut), e=pqDateOf(o.fin); if(d && e && e>d){ o.duree=String(Math.round(((e-d)/864e5+1)/365.25*2)/2).replace('.',','); const dc=sc.querySelector('.req-in[data-id="'+o.id+'"][data-k="duree"]'); if(dc) dc.value=o.duree; } } }
         else caractSet(o, inp.dataset.l, v);
         touchCrm(o); saveCrm(); renderPipeline();
         const td=inp.closest('td'); td.classList.remove('empty','none'); if(!v) td.classList.add(td.querySelector('[placeholder="à compléter"]')?'empty':'none');
@@ -6090,11 +6088,19 @@
       // one field of one installation onto all the others (dates go as a set: start, duration, end);
       // values already filled differently are only replaced after asking
       e.preventDefault();
-      const st=pqState, from=st.installs[+ta.dataset.s], k=ta.dataset.toall, keys=['debut','fin','duree'].includes(k)?['debut','duree','fin']:(k==='dept'?['dept','region']:[k]);
+      const st=pqState, from=st.installs[+ta.dataset.s], k=ta.dataset.toall, keys=k==='dept'?['dept','region']:[k];
       const filled=v=>v!=null && String(v).trim()!=='';
       const clash=st.installs.map((x,i)=>({x,i})).filter(({x})=>x!==from && keys.some(kk=>filled(x[kk]) && String(x[kk])!==String(from[kk]??'')));
-      const apply=onlyEmpty=>{ st.installs.forEach((x,i)=>{ if(x===from) return; keys.forEach(kk=>{ if(onlyEmpty && filled(x[kk])) return; x[kk]=from[kk]; if(filled(from[kk])){ st.touched.add(i+'.'+kk); st.auto.delete(i+'.'+kk); } }); }); pqRerenderKeepFocus(); flashPqToAll(k); };
+      const apply=onlyEmpty=>{ st.installs.forEach((x,i)=>{ if(x===from) return; keys.forEach(kk=>{ if(onlyEmpty && filled(x[kk])) return; x[kk]=filled(from[kk])?from[kk]:''; st.touched.add(i+'.'+kk); st.auto.delete(i+'.'+kk); if(st.derived) st.derived.delete(i+'.'+kk); });
+        if(['debut','fin'].includes(k)) pqLinkDates(i, k); }); pqRerenderKeepFocus(); flashPqToAll(k); };
       const label=(PQ_FIELDS.find(f=>f.k===k)||PQ_EXTRA_FIELDS.find(f=>f.k===k)||{}).label||k;
+      if(!keys.some(kk=>filled(from[kk]))){
+        const others=st.installs.filter(x=>x!==from && keys.some(kk=>filled(x[kk])));
+        if(!others.length) return;
+        askChoice('Vider ce champ partout ?', '« '+label+' » est vide ici : '+(others.length>1?'les '+others.length+' autres installations qui l\u2019ont rempli seront vidées':'l\u2019autre installation qui l\u2019a rempli sera vidée')+' ('+others.slice(0,4).map(x=>(x.centrale||'?')+' : '+keys.map(kk=>x[kk]).filter(filled).join(', ')).join(' ; ')+(others.length>4?'…':'')+').',
+          [{ label:'Vider partout', value:'all' }]).then(v=>{ if(v) apply(false); });
+        return;
+      }
       if(!clash.length){
         const shown=keys.map(kk=>from[kk]).filter(filled).join(', '), n=st.installs.length-1;
         askChoice('Appliquer à toutes les installations ?', '« '+label+' » : '+shown+' → sur '+(n>1?'les '+n+' autres installations':'l\u2019autre installation')+'.',
@@ -6115,10 +6121,9 @@
       // every installation: its own commissioning date as start (with the duration shown here), or the same dates as this one
       const st=pqState, from=st.installs[+da.dataset.s];
       st.installs.forEach((x,i)=>{
-        if(da.dataset.dall==='mes'){ const m=pqFullDate(x.mesEff||x.mesPrev); if(!m) return; x.debut=m; if(!x.duree && from.duree) x.duree=from.duree; }
-        else ['debut','duree','fin'].forEach(k=>{ if(from[k]) x[k]=from[k]; });
-        ['debut','duree'].forEach(k=>{ if(x[k]){ st.touched.add(i+'.'+k); st.auto.delete(i+'.'+k); } });
-        if(da.dataset.dall==='mes' || !from.fin){ st.auto.add(i+'.fin'); st.touched.delete(i+'.fin'); }
+        if(da.dataset.dall==='mes'){ const m=pqFullDate(x.mesEff||x.mesPrev); if(!m) return; x.debut=m; }
+        else ['debut','fin'].forEach(k=>{ if(from[k]) x[k]=from[k]; });
+        st.touched.add(i+'.debut'); st.auto.delete(i+'.debut');
         pqLinkDates(i, 'debut');
       });
       pqRerenderKeepFocus(); return;
