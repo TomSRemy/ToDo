@@ -1929,6 +1929,7 @@
     updateContactsSortUI();
   }
   function renderContactsList(){
+    renderDupesBanner();
     const list=$('contacts-list');
     list.innerHTML='';
     contactRowCounter=1;
@@ -3769,6 +3770,85 @@
       +'<label class="pq-count-ok"><input type="checkbox" id="pq-count-ok"'+(st.countConfirmed===c.n?' checked':'')+'> J\u2019ai vérifié : '+c.n+' installation'+(c.n>1?'s':'')+'</label></div>';
   }
   // Step 2 « Changer de contact principal »: the step-1 people and the client's contacts
+  // ---------- Duplicate contacts: same mail, same phone, or same name in the same company → proposed for merging ----------
+  function contactDupKeys(c){
+    const keys=[];
+    if(c.email) keys.push('m:'+c.email.trim().toLowerCase());
+    [c.phone1,c.phone2].filter(Boolean).forEach(p=>{ const d=String(p).replace(/\D/g,'').replace(/^33/,'0'); if(d.length>=9) keys.push('t:'+d.slice(-9)); });
+    if(c.lastName && c.company) keys.push('n:'+pqFold(c.firstName+' '+c.lastName+' '+c.company).replace(/\s+/g,' ').trim());
+    return keys;
+  }
+  const notDup=(a,b)=>(a.notDupOf||[]).includes(b.id) || (b.notDupOf||[]).includes(a.id);
+  function contactDupGroups(){
+    const list=activeContacts(), byKey=new Map(), parent=new Map(list.map(c=>[c.id,c.id]));
+    const find=x=>{ while(parent.get(x)!==x){ parent.set(x, parent.get(parent.get(x))); x=parent.get(x); } return x; };
+    list.forEach(c=>contactDupKeys(c).forEach(k=>{ const o=byKey.get(k); if(!o) byKey.set(k,c); else if(!notDup(o,c)) parent.set(find(c.id), find(o.id)); }));
+    const groups=new Map(); list.forEach(c=>{ const r=find(c.id); (groups.get(r)||groups.set(r,[]).get(r)).push(c); });
+    return [...groups.values()].filter(g=>g.length>1).map(g=>g.sort((a,b)=>(b.updatedAt||0)-(a.updatedAt||0)));
+  }
+  const CT_MERGE_FIELDS=[['firstName','Prénom'],['lastName','Nom'],['role','Fonction'],['company','Société'],['email','Mail'],['phone1','Tél. 1'],['phone2','Tél. 2'],['comment','Commentaire']];
+  function renderDupesBanner(){
+    const el=$('ct-dupes-banner'); if(!el) return;
+    const g=contactDupGroups();
+    if(!g.length){ el.hidden=true; el.innerHTML=''; return; }
+    el.hidden=false;
+    el.innerHTML='<span></span><button type="button" class="pq-link">Vérifier et fusionner</button>';
+    el.querySelector('span').textContent=g.length+' contact'+(g.length>1?'s':'')+' en double possible'+(g.length>1?'s':'')+' : '+g.slice(0,3).map(x=>x.map(c=>[c.firstName,c.lastName].filter(Boolean).join(' ')).join(' / ')).join(' ; ')+(g.length>3?'…':'');
+    el.querySelector('button').onclick=()=>openContactMerge();
+  }
+  function openContactMerge(onlyIds){
+    let groups=contactDupGroups(); if(onlyIds) groups=groups.filter(g=>g.some(c=>onlyIds.includes(c.id)));
+    const body=$('ct-merge-body'); body.innerHTML='';
+    if(!groups.length){ body.innerHTML='<p class="modal-hint">Plus aucun doublon.</p>'; $('ct-merge-overlay').classList.remove('hidden'); return; }
+    groups.forEach((g,gi)=>{
+      const s=document.createElement('section'); s.className='ctm-group';
+      const why=[...new Set(g.flatMap(contactDupKeys).filter(k=>g.filter(c=>contactDupKeys(c).includes(k)).length>1).map(k=>k[0]))].map(t=>t==='m'?'même mail':t==='t'?'même téléphone':'même nom').join(', ');
+      s.innerHTML='<div class="ctm-h"></div><div class="ctm-table"></div><div class="ctm-actions"><button type="button" class="ctm-merge">Fusionner en une seule fiche</button><button type="button" class="ghost-btn ctm-not">Ce sont deux personnes différentes</button></div>';
+      s.querySelector('.ctm-h').textContent=g.map(c=>[c.firstName,c.lastName].filter(Boolean).join(' ')||c.email).join(' / ')+' — '+why;
+      const t=s.querySelector('.ctm-table');
+      CT_MERGE_FIELDS.forEach(([k,l])=>{
+        const vals=[...new Set(g.map(c=>String(c[k]||'').trim()).filter(Boolean))];
+        if(!vals.length) return;
+        const r=document.createElement('div'); r.className='ctm-row';
+        const lab=document.createElement('span'); lab.className='ctm-l'; lab.textContent=l; r.appendChild(lab);
+        const opts=document.createElement('div'); opts.className='ctm-opts';
+        if(vals.length===1){ const b=document.createElement('b'); b.textContent=vals[0]; opts.appendChild(b); }
+        else vals.forEach((v,vi)=>{ const lb=document.createElement('label'); lb.className='ctm-opt'; const i=document.createElement('input'); i.type='radio'; i.name='ctm-'+gi+'-'+k; i.value=v; i.checked=vi===0; lb.append(i, document.createTextNode(' '+v)); opts.appendChild(lb); });
+        r.appendChild(opts); t.appendChild(r);
+      });
+      s.querySelector('.ctm-merge').onclick=()=>{
+        const pick={}; CT_MERGE_FIELDS.forEach(([k])=>{ const ch=s.querySelector('input[name="ctm-'+gi+'-'+k+'"]:checked'); pick[k]=ch?ch.value:(g.map(c=>c[k]).find(v=>v&&String(v).trim())||''); });
+        mergeContacts(g, pick); openContactMerge(onlyIds);
+      };
+      s.querySelector('.ctm-not').onclick=()=>{ g.forEach(c=>{ c.notDupOf=[...new Set((c.notDupOf||[]).concat(g.filter(x=>x!==c).map(x=>x.id)))]; touchCrm(c); }); saveCrm(); renderContacts(); openContactMerge(onlyIds); };
+      body.appendChild(s);
+    });
+    $('ct-merge-overlay').classList.remove('hidden');
+  }
+  // one contact kept (the most recently updated), the others removed; opportunities and meetings follow
+  function mergeContacts(group, pick){
+    const keep=group[0], gone=group.slice(1), goneIds=new Set(gone.map(c=>c.id));
+    const names=new Set(group.map(c=>pqFold([c.firstName,c.lastName].filter(Boolean).join(' '))));
+    const mails=new Set(group.map(c=>(c.email||'').toLowerCase()).filter(Boolean));
+    CT_MERGE_FIELDS.forEach(([k])=>{ keep[k]=pick[k]||''; });
+    keep.relevance=Math.max(...group.map(c=>c.relevance||0)); touchCrm(keep);
+    gone.forEach(c=>{ c.deleted=true; c.mergedInto=keep.id; touchCrm(c); });
+    meetings.forEach(m=>{ if(goneIds.has(m.contactId)){ m.contactId=keep.id; touchCrm(m); } });
+    opportunities.forEach(o=>{
+      let ch=false;
+      if(o.otherContactIds && o.otherContactIds.some(id=>goneIds.has(id))){ o.otherContactIds=[...new Set(o.otherContactIds.map(id=>goneIds.has(id)?keep.id:id))]; ch=true; }
+      // the main contact (Pipe columns) is one of them: its name and mail follow the kept card
+      const isMain=(o.mail && mails.has(o.mail.toLowerCase())) || names.has(pqFold([o.prenom,o.nom].filter(Boolean).join(' ')));
+      if(isMain){ o.prenom=keep.firstName; o.nom=(keep.lastName||'').toUpperCase(); if(keep.email) o.mail=keep.email; ch=true;
+        if(o.otherContactIds){ o.otherContactIds=o.otherContactIds.filter(id=>id!==keep.id); if(!o.otherContactIds.length) delete o.otherContactIds; } }
+      if(ch) touchCrm(o);
+    });
+    saveCrm(); renderContacts(); renderPipeline();
+    if(!$('opp-detail-overlay').classList.contains('hidden') && viewingOppId){ const v=opportunities.find(x=>x.id===viewingOppId); if(v) (v.kind==='request'?openRequestDetail:openOppDetail)(v.id); }   // the open sheet shows the merged card
+    showBridgeMsg('Fiches fusionnées : '+[keep.firstName,keep.lastName].filter(Boolean).join(' ')+'.', true);
+  }
+  $('ct-merge-close').onclick=()=>$('ct-merge-overlay').classList.add('hidden');
+  $('ct-merge-overlay').addEventListener('click', e=>{ if(e.target.id==='ct-merge-overlay') $('ct-merge-overlay').classList.add('hidden'); });
   const contactV=c=>({ prenom:c.firstName||'', nom:(c.lastName||'').toUpperCase(), qualite:c.role||'', tel:[c.phone1,c.phone2].filter(Boolean).join(' / '), mail:(c.email||'').toLowerCase() });
   function pqContactOptions(){
     const st=pqState, opts=[], seen=new Set();
@@ -4243,6 +4323,11 @@
     if(mainName||o.tel||o.mail) contactRows.push({ node:person(mainName, o.qualite, phones(o.tel), o.mail, true) });
     else contactRows.push(['Contact principal','']);
     others.forEach(c=>contactRows.push({ node:person([c.firstName,c.lastName].filter(Boolean).join(' '), c.role, [c.phone1,c.phone2].filter(Boolean), c.email, false) }));
+    { const people=contacts.filter(c=>!c.deleted && ((mainMail && (c.email||'').toLowerCase()===mainMail) || (o.otherContactIds||[]).includes(c.id)));
+      const dup=contactDupGroups().find(g=>g.filter(c=>people.includes(c)).length>1 || (g.some(c=>people.includes(c)) && g.some(c=>mainMail && (c.email||'').toLowerCase()===mainMail) && g.length>1));
+      if(dup){ const n=document.createElement('div'); n.className='os-dup'; n.innerHTML='<span></span><button type="button" class="pq-link">Fusionner</button>';
+        n.querySelector('span').textContent=dup.map(c=>[c.firstName,c.lastName].filter(Boolean).join(' ')).join(' et ')+' semblent être la même personne.';
+        n.querySelector('button').onclick=()=>openContactMerge(dup.map(c=>c.id)); contactRows.push({ node:n }); } }
     card('Contacts', contactRows, 'os-contacts');
     const relanceLate=o.relance && o.relance<toISO(new Date());
     card('Suivi', [['Chargé',o.charge],['Origine',[o.origine, o.ca&&o.ca!=='N/A'?o.ca:''].filter(Boolean).join(' · ')],['Entrée pipe',fr(o.dateEntree)],

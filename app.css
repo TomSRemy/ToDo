@@ -1177,3 +1177,19 @@
 .req-tab .k{ font:400 12px var(--font-ui); margin-left:auto; white-space:nowrap; }
 .req-tab:hover{ background:var(--panel-2); }
 .req-tab.on{ background:var(--accent-dim); box-shadow:inset 3px 0 0 var(--accent); }
+
+/* duplicate contacts */
+.ct-dupes-banner{ display:flex; flex-wrap:wrap; gap:8px 14px; align-items:center; margin:10px 16px 0; padding:9px 12px; border:1px solid #C9A55A; border-radius:8px; background:rgba(201,165,90,.1); font-size:12.5px; color:var(--tx1); }
+.ct-dupes-banner[hidden]{ display:none; }
+.os-dup{ margin-top:8px; display:flex; flex-wrap:wrap; gap:6px 12px; align-items:center; font-size:12px; color:#E5C77F; }
+.ctm-group{ border-top:1px solid var(--bd-soft); padding:12px 0; display:flex; flex-direction:column; gap:8px; }
+.ctm-h{ font-weight:600; font-size:13.5px; color:var(--tx1); }
+.ctm-table{ display:flex; flex-direction:column; }
+.ctm-row{ display:grid; grid-template-columns:110px minmax(0,1fr); gap:10px; padding:5px 0; border-bottom:1px solid var(--bd-soft); font-size:13px; align-items:baseline; }
+.ctm-l{ color:var(--tx3); font-size:12.5px; }
+.ctm-opts{ display:flex; flex-wrap:wrap; gap:4px 16px; color:var(--tx1); }
+.ctm-opts b{ font-weight:500; }
+.ctm-opt{ display:inline-flex; gap:6px; align-items:center; cursor:pointer; }
+.ctm-actions{ display:flex; gap:8px; flex-wrap:wrap; }
+.ctm-merge{ background:var(--accent); color:#06231C; border:none; border-radius:6px; padding:7px 14px; font:600 12.5px var(--font-ui); cursor:pointer; }
+#ct-merge-overlay{ z-index:20060; }   /* above the sheet it is opened from */

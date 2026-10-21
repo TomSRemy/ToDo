@@ -431,6 +431,37 @@ with sync_playwright() as p:
     check(not errors, f"no page errors ({errors})")
     page.close()
 
+    # --- Duplicate contacts: offered for merging, links follow the kept card
+    dup_cts = [{"id": "d1", "firstName": "Louis", "lastName": "Catroux", "role": "", "company": "GPX", "email": "l.catroux@exemple.fr", "phone1": "07 00 00 96 58",
+                "phone2": "", "relevance": 0, "comment": "", "createdAt": 1, "updatedAt": 1, "deleted": False},
+               {"id": "d2", "firstName": "Louise", "lastName": "Catroux", "role": "Chargée d'affaires", "company": "GPX", "email": "L.Catroux@exemple.fr",
+                "phone1": "07 00 00 96 58", "phone2": "02 00 00 00 11", "relevance": 0, "comment": "", "createdAt": 1, "updatedAt": 5, "deleted": False},
+               {"id": "d3", "firstName": "Paul", "lastName": "Autre", "role": "", "company": "GPX", "email": "p.autre@exemple.fr", "phone1": "", "phone2": "",
+                "relevance": 0, "comment": "", "createdAt": 1, "updatedAt": 1, "deleted": False}]
+    dup_opp = [{"id": "do", "kind": "installation", "company": "GPX", "centrale": "Toit", "title": "Toit", "prenom": "Louise", "nom": "CATROUX", "mail": "l.catroux@exemple.fr",
+                "otherContactIds": ["d1", "d3"], "stage": "collecte", "createdAt": 1, "updatedAt": 1, "deleted": False}]
+    dup_mt = [{"id": "m1", "contactId": "d1", "label": "Salon", "date": "2026-10-01", "createdAt": 1, "updatedAt": 1, "deleted": False}]
+    page, errors = new_page(browser, {"todo_todo-widget-contacts": json.dumps(dup_cts), "todo_todo-widget-opportunities": json.dumps(dup_opp),
+                                      "todo_todo-widget-meetings": json.dumps(dup_mt)}, viewport={"width": 1300, "height": 900})
+    page.goto(URL); page.click('[data-tab="pipeline"]'); page.click(".pipe-card")
+    check(page.is_visible("#opp-detail-body .os-dup") and "même personne" in page.inner_text("#opp-detail-body .os-dup"), "duplicates: the sheet offers to merge the same person")
+    page.click("#opp-detail-body .os-dup button")
+    rows = page.inner_text("#ct-merge-body")
+    check(page.is_visible("#ct-merge-overlay") and "même mail" in rows and "Louise" in rows and "Louis" in rows and "Paul" not in rows, "duplicates: the merge window shows the two cards and why")
+    check(page.is_checked("input[name='ctm-0-firstName'][value='Louise']"), "duplicates: the most recent value is chosen by default")
+    page.click("#ct-merge-body .ctm-merge")
+    live = [c for c in stored(page, "todo-widget-contacts") if not c.get("deleted")]
+    o = stored(page, "todo-widget-opportunities")[0]
+    mt = stored(page, "todo-widget-meetings")[0]
+    check(len(live) == 2 and any(c["firstName"] == "Louise" and c["phone2"] == "02 00 00 00 11" for c in live) and o["otherContactIds"] == ["d3"] and mt["contactId"] == "d2",
+          f"duplicates: one card kept, the opportunity and the meeting follow it ({[c['firstName'] for c in live]}, {o.get('otherContactIds')}, {mt['contactId']})")
+    page.click("#ct-merge-overlay .modal-x")
+    check(not page.is_visible("#opp-detail-body .os-dup"), "duplicates: the sheet no longer warns once merged")
+    page.click("#opp-detail-overlay .modal-x"); page.click('[data-tab="contacts"]')
+    check(page.is_hidden("#ct-dupes-banner"), "duplicates: no banner left once merged")
+    check(not errors, f"no page errors ({errors})")
+    page.close()
+
     # --- Sync pill: state visible everywhere, token problems explained
     page, errors = new_page(browser, viewport={"width": 1300, "height": 800})
     page.goto(URL); page.wait_for_timeout(300)
