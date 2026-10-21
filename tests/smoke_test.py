@@ -1081,8 +1081,8 @@ with sync_playwright() as p:
     check(len(t) == 1 and t[0]["status"] == "en_attente" and "Relancer" in t[0]["title"], "a follow-up task « en attente » to chase the producer")
     page.locator(".pipe-req-card", has_text="W1").locator(".pipe-card-title").first.click()
     page.click("#opp-detail-actions >> text=Offre acceptée (2)"); page.click("#stage-advance-confirm")
-    page.wait_for_selector(".celebrate-won", timeout=2000)
-    check(page.locator(".celebrate-won .confetti").count() > 20 and "Offre acceptée" in page.inner_text(".celebrate-won") and page.locator(".celebrate").count() == 1,
+    page.wait_for_selector(".celebrate-won", timeout=2000); page.wait_for_timeout(700)
+    check(page.locator(".celebrate-won .confetti, .celebrate-won .c3-conf").count() > 20 and "Offre acceptée" in page.inner_text(".celebrate-won") and page.locator(".celebrate").count() == 1,
           "offer accepted: one confetti animation for the whole request")
     check(all(o["stage"] == "kyc" for o in stored(page, "todo-widget-opportunities") if o.get("requestId") == "r8"), "accepted: the installations move to KYC")
     page.locator('[data-phase="contrat"] .pipe-card').first.click()   # the animation never blocks a click
@@ -1093,12 +1093,14 @@ with sync_playwright() as p:
     page.wait_for_selector(".celebrate-lost", timeout=2000)
     check("Offre perdue" in page.inner_text(".celebrate-lost") and next(o for o in stored(page, "todo-widget-opportunities") if o["id"] == "solo")["stage"] == "perdu",
           "offer refused: lost, with its own animation")
-    seq = page.evaluate("""(()=>{ const out={}; ['won','signed','lost'].forEach(k=>{ out[k]=[]; for(let i=0;i<12;i++){ window.todoCelebrate(k, {sub:'x'}); out[k].push(document.querySelector('.celebrate').dataset.variant); } }); return out; })()""")
-    check(all(len(set(v)) == 3 and all(a_ != b_ for a_, b_ in zip(v, v[1:])) for v in seq.values()),
-          f"animations: three per moment, drawn at random, never the same twice in a row ({seq['signed'][:6]})")
-    shown = page.evaluate("""(()=>{ const r=[]; [['won','panel'],['won','turbine'],['won','battery'],['signed','gun'],['signed','gong'],['signed','champagne'],['lost','umbrella'],['lost','nowind'],['lost','plane']].forEach(([k,v])=>{
+    seq = page.evaluate("""(()=>{ const out={}; ['won','signed','lost'].forEach(k=>{ out[k]=[]; for(let i=0;i<30;i++){ window.todoCelebrate(k, {sub:'x'}); out[k].push(document.querySelector('.celebrate').dataset.variant); } }); return out; })()""")
+    check(all(len(set(v)) >= 4 and all(a_ != b_ for a_, b_ in zip(v, v[1:])) for v in seq.values()),
+          f"animations: drawn and 3D ones per moment, drawn at random, never the same twice in a row ({seq['signed'][:6]})")
+    shown = page.evaluate("""(()=>{ const r=[]; [['won','panel'],['won','turbine'],['won','battery'],['won','trophy'],['won','rocket'],['won','battery3d'],['signed','gun'],['signed','gong'],['signed','champagne'],['signed','gun3d'],['signed','champagne3d'],['lost','umbrella'],['lost','nowind'],['lost','plane'],['lost','umbrella3d'],['lost','nowind3d'],['lost','plane3d']].forEach(([k,v])=>{
       window.todoCelebrate(k, {sub:'x'}, v); const el=document.querySelector('.celebrate'); r.push(el.dataset.variant===v && el.getBoundingClientRect().width===innerWidth && !!el.querySelector('.cx-msg b').textContent); }); return r; })()""")
-    check(all(shown), f"animations: the nine play full screen with their message ({shown})")
+    check(all(shown), f"animations: the seventeen play full screen with their message ({shown})")
+    imgs = page.evaluate("""new Promise(r=>{ window.todoCelebrate('lost', {sub:'x'}, 'umbrella3d'); setTimeout(()=>r([...document.querySelectorAll('.celebrate img')].map(i=>i.complete && i.naturalWidth>0)), 1600); })""")
+    check(len(imgs) >= 2 and all(imgs), f"animations: the 3D images ship with the app and load ({imgs})")
     page.evaluate("document.querySelectorAll('.celebrate').forEach(n=>n.remove())")
     check(not errors, f"no page errors ({errors})")
     page.close()

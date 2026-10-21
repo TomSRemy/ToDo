@@ -1396,6 +1396,7 @@ details.req-compare:not([open]) .req-compare-h::before{ transform:rotate(-90deg)
   display:flex; align-items:center; justify-content:center; font:800 15px var(--font-ui); font-style:normal; color:#E9FFF3; will-change:transform; }
 .cx-bill::before, .cx-bill::after{ content:''; position:absolute; top:50%; width:8px; height:8px; margin-top:-4px; border-radius:50%; border:1.5px solid #9EE6C0; }
 .cx-bill::before{ left:5px; } .cx-bill::after{ right:5px; }
+.cx-billimg{ background:none; border:none; box-shadow:none; width:64px; height:64px; object-fit:contain; } .cx-billimg::before, .cx-billimg::after{ display:none; }
 /* shared full-screen effects */
 .cx-flashall{ position:absolute; inset:0; opacity:0; animation:cx-flashall .8s ease-out; }
 @keyframes cx-flashall{ 0%{ opacity:1; } 100%{ opacity:0; } }
@@ -1463,6 +1464,12 @@ details.req-compare:not([open]) .req-compare-h::before{ transform:rotate(-90deg)
 .celebrate.cxv-champagne.cx-play .cx-msg{ animation-delay:2s; }
 .celebrate.cxv-plane.cx-play .cx-msg{ animation-delay:3.2s; }
 .celebrate.cxv-nowind.cx-play .cx-msg{ animation-delay:.9s; }
+.c3-img{ position:absolute; left:0; top:0; display:block; object-fit:contain; filter:drop-shadow(0 10px 18px rgba(0,0,0,.45)); will-change:transform; }
+.c3-conf{ position:absolute; left:0; top:0; border-radius:2px; }
+.c3-smoke{ position:absolute; left:0; top:0; width:40px; height:40px; border-radius:50%; background:radial-gradient(circle, rgba(220,226,234,.9), rgba(220,226,234,0) 70%); }
+.c3-pct{ position:absolute; transform:translate(-50%,-100%); font:900 34px var(--font-ui); color:#14D3A9; text-shadow:0 3px 12px rgba(0,0,0,.6); font-style:normal; }
+.c3-tchin{ position:absolute; transform:translate(-50%,-100%); font:900 40px var(--font-ui); color:#FFE066; -webkit-text-stroke:1.5px #7A5A10; font-style:normal; animation:cx-tchin3 .5s cubic-bezier(.3,1.7,.5,1); }
+@keyframes cx-tchin3{ from{ transform:translate(-50%,-100%) scale(.3); } to{ transform:translate(-50%,-100%) scale(1); } }
 
 /* Pipeline · meeting view: one line per installation, grouped by phase, to share with the pricing team */
 #pipeline-board.pipe-meet{ display:flex; flex-direction:column; gap:10px; padding:14px 16px 30px; width:100%; min-width:0; box-sizing:border-box; overflow:visible; }
