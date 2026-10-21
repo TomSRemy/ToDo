@@ -325,6 +325,29 @@ with sync_playwright() as p:
     check(not errors, f"no page errors ({errors})")
     page.close()
 
+    # --- Réseau: every connection between companies, contacts, installations, tasks, meetings
+    page, errors = new_page(browser, cs_seed if False else {
+        "todo_todo-widget-tasks": json.dumps([task("n1", "Relancer pour le CR", client="Solaris")]),
+        "todo_todo-widget-contacts": json.dumps([{"id": "nc1", "firstName": "Paul", "lastName": "Durand", "company": "Solaris", "email": "p@solaris.fr", "createdAt": 1, "updatedAt": 1, "deleted": False},
+                                                 {"id": "nc2", "firstName": "Marie", "lastName": "Leroy", "company": "Ventus", "email": "m@ventus.fr", "createdAt": 1, "updatedAt": 1, "deleted": False}]),
+        "todo_todo-widget-meetings": json.dumps([{"id": "nm1", "contactId": "nc1", "label": "Salon", "date": TODAY.isoformat(), "createdAt": 1, "updatedAt": 1, "deleted": False}]),
+        "todo_todo-widget-opportunities": json.dumps([{"id": "no1", "kind": "installation", "company": "Solaris", "centrale": "Toit Durand", "title": "Toit Durand", "stage": "collecte", "mail": "p@solaris.fr", "createdAt": 1, "updatedAt": 1, "deleted": False}])},
+        viewport={"width": 1300, "height": 850})
+    page.goto(URL); page.click('[data-tab="network"]'); page.wait_for_timeout(600)
+    st = page.evaluate("window.todoNetworkState()")
+    check(st and st["nodes"] == 7 and st["edges"] >= 6, f"network: companies, contacts, installation, task and meeting as nodes, linked ({st})")
+    types = page.eval_on_selector_all(".nw-type", "els=>els.map(e=>e.textContent.replace(/\\s+/g,' ').trim())")
+    check(any(x.startswith("Sociétés 2") for x in types) and any(x.startswith("RDV") for x in types), f"network: one filter per kind, with counts ({types})")
+    page.fill(".nw-search input", "toit"); page.press(".nw-search input", "Enter"); page.wait_for_timeout(300)
+    side = page.inner_text(".nw-side")
+    check("Toit Durand" in side and "Paul Durand" in side and "Solaris" in side, "network: finding a node shows its links (company and contact via the mail)")
+    page.click(".nw-side .nw-open"); page.wait_for_timeout(300)
+    check(page.is_visible("#opp-detail-overlay") and "Toit Durand" in page.inner_text("#opp-detail-title"), "network: « Ouvrir la fiche » opens the installation")
+    page.click("#opp-detail-actions >> text=Voir dans le réseau"); page.wait_for_timeout(500)
+    check(page.is_visible("#tab-network") and page.evaluate("window.todoNetworkState().selected") == "op:no1", "network: « Voir dans le réseau » from a sheet focuses its node")
+    check(not errors, f"no page errors ({errors})")
+    page.close()
+
     # --- Company sheet: contacts, pipeline, tasks, what is coming up and the history of one client
     now_ms = int(datetime.datetime.now().timestamp() * 1000)
     late_day = (TODAY - datetime.timedelta(days=2)).isoformat()

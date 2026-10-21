@@ -1,4 +1,4 @@
-const CACHE = 'todo-pwa-v15';
+const CACHE = 'todo-pwa-v16';
 // Excel / Outlook reader, loaded on demand by the app: kept for offline use
 const XLSX_URL = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
 const ASSETS = [
@@ -8,6 +8,7 @@ const ASSETS = [
   './app.css',
   './js/storage.js',
   './js/celebrate.js',
+  './js/network.js',
   './js/app.js',
   './mobile.html',
   './manifest-lite.json',

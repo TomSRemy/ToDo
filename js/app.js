@@ -2433,6 +2433,7 @@
       const com=document.createElement('div'); com.className='contact-detail-comment'; com.textContent=c.comment;
       card.appendChild(com);
     }
+    { const nb=document.createElement('button'); nb.type='button'; nb.className='pq-link contact-net-link'; nb.textContent='Voir dans le réseau'; nb.onclick=()=>openInNetwork('ct:'+c.id); card.appendChild(nb); }
 
     // linked activity: meetings, opportunities and open tasks tied to the same company
     const contactMeetings=meetings.filter(m=>m.contactId===c.id && !m.deleted).sort((a,b)=>(b.date||'').localeCompare(a.date||''));
@@ -4658,6 +4659,7 @@
         actions.appendChild(oppActionBtn('Abandonner', ()=>exitOpp(o,'abandonne'), 'ghost-btn danger-btn'));
       }
     }
+    actions.appendChild(oppActionBtn('Voir dans le réseau', ()=>{ closeOppDetail(); openInNetwork('op:'+o.id); }, 'ghost-btn'));
     actions.appendChild(oppActionBtn('Supprimer', ()=>{ if(!confirm('Supprimer cette fiche du pipeline ?')) return; o.deleted=true; touchCrm(o); saveCrm(); closeOppDetail(); renderPipeline(); }, 'ghost-btn danger-btn'));
     actions.appendChild(oppActionBtn('Fermer', closeOppDetail, 'ghost-btn lite-keep'));
     $('opp-detail-overlay').classList.remove('hidden');
@@ -5021,6 +5023,7 @@
     excelButtons(actions, list);
     actions.appendChild(oppActionBtn('Copier lignes Pipe', e=>copyPipeLines(list.filter(o=>!isExited(o)), e.target), 'ghost-btn'));
     actions.appendChild(oppActionBtn('Copier lignes BDD', e=>copyToClipboard(list.map(bddRow).join('\n'), e.target), 'ghost-btn'));
+    actions.appendChild(oppActionBtn('Voir dans le réseau', ()=>{ closeOppDetail(); openInNetwork('rq:'+reqId); }, 'ghost-btn'));
     actions.appendChild(oppActionBtn('Fermer', closeOppDetail, 'ghost-btn lite-keep'));
     $('opp-detail-overlay').classList.remove('hidden');
   }
@@ -5739,7 +5742,7 @@
   }
 
   const tabContacts=$('tab-contacts'), tabPipeline=$('tab-pipeline'), tabParc=$('tab-parc');
-  tabs.forEach(el=>{ el.onclick=()=>{ tabs.forEach(t=>t.classList.remove('active')); el.classList.add('active'); const tgt=el.dataset.tab; tabToday.classList.toggle('hidden',tgt!=='today'); tabTasks.classList.toggle('hidden',tgt!=='tasks'); tabInbox.classList.toggle('hidden',tgt!=='inbox'); tabArchive.classList.toggle('hidden',tgt!=='archive'); tabLists.classList.toggle('hidden',tgt!=='lists'); tabContacts.classList.toggle('hidden',tgt!=='contacts'); tabPipeline.classList.toggle('hidden',tgt!=='pipeline'); tabParc.classList.toggle('hidden',tgt!=='parc'); if(tgt==='parc'){ renderParc(); $('parc-bridge-btn').classList.toggle('hidden', !bridgeConfigured()); renderParcSource(); if(bridgeConfigured() && parcSource().auto && (!parcData || Date.now()-(parcData.importedAt||0)>600000)) importParcFromBridge(true); } if(tgt==='today')renderToday(); if(tgt==='archive')renderArchive(); if(tgt==='contacts'){ refreshContactsTypeFilter(); renderContacts(); fetchContactInbox(); } if(tgt==='pipeline')renderPipeline(); if(tgt==='lists'){ if(bridgeConfigured()) bridgeCheck(); else renderBridgeStatus(); renderLists(); renderStats(); renderConflicts(); $('sync-owner').value=syncConfig.owner||''; $('sync-repo').value=syncConfig.repo||''; if(syncConfig.enabled) setSyncStatus('Synchro active'); } if(tgt==='inbox')fetchInbox(); }; });
+  tabs.forEach(el=>{ el.onclick=()=>{ tabs.forEach(t=>t.classList.remove('active')); el.classList.add('active'); const tgt=el.dataset.tab; tabToday.classList.toggle('hidden',tgt!=='today'); tabTasks.classList.toggle('hidden',tgt!=='tasks'); tabInbox.classList.toggle('hidden',tgt!=='inbox'); tabArchive.classList.toggle('hidden',tgt!=='archive'); tabLists.classList.toggle('hidden',tgt!=='lists'); tabContacts.classList.toggle('hidden',tgt!=='contacts'); tabPipeline.classList.toggle('hidden',tgt!=='pipeline'); tabParc.classList.toggle('hidden',tgt!=='parc'); $('tab-network').classList.toggle('hidden',tgt!=='network'); if(tgt==='network') showNetwork(); if(tgt==='parc'){ renderParc(); $('parc-bridge-btn').classList.toggle('hidden', !bridgeConfigured()); renderParcSource(); if(bridgeConfigured() && parcSource().auto && (!parcData || Date.now()-(parcData.importedAt||0)>600000)) importParcFromBridge(true); } if(tgt==='today')renderToday(); if(tgt==='archive')renderArchive(); if(tgt==='contacts'){ refreshContactsTypeFilter(); renderContacts(); fetchContactInbox(); } if(tgt==='pipeline')renderPipeline(); if(tgt==='lists'){ if(bridgeConfigured()) bridgeCheck(); else renderBridgeStatus(); renderLists(); renderStats(); renderConflicts(); $('sync-owner').value=syncConfig.owner||''; $('sync-repo').value=syncConfig.repo||''; if(syncConfig.enabled) setSyncStatus('Synchro active'); } if(tgt==='inbox')fetchInbox(); }; });
 
   $('submit-task').onclick=addTask;
   addSection.addEventListener('keydown', e=>{ if(e.key==='Enter' && e.target.tagName!=='TEXTAREA'){ e.preventDefault(); addTask(); } });
@@ -6978,6 +6981,53 @@
   }
   // all the company names the app knows, from every module
   function openCompany(name){ openCompanySheet(name); }
+  // ---------- Réseau: every connection between everything, as a graph (js/network.js draws it) ----------
+  let networkView=null, networkFocusNext=null;
+  function networkData(){
+    const nodes=[], edges=[], seen=new Set();
+    const node=(id, type, label, sub, open)=>{ if(seen.has(id)) return id; seen.add(id); nodes.push({ id, type, label:String(label||'(sans nom)'), sub:sub||'', open }); return id; };
+    const coId=name=>{ name=String(name||'').trim(); if(!name) return null; const id='co:'+pqFold(name).replace(/[^a-z0-9]/g,''); if(id==='co:') return null;
+      const nC=activeContacts().filter(c=>pqFold(c.company)===pqFold(name)).length;
+      return node(id, 'company', name, nC?nC+' contact'+(nC>1?'s':''):'Société', ()=>openCompany(name)); };
+    const link=(a,b)=>{ if(a && b) edges.push([a,b]); };
+    allCompanyNames().forEach(coId);
+    const byMail=new Map();
+    activeContacts().forEach(c=>{ const name=[c.firstName,c.lastName].filter(Boolean).join(' ')||c.email||'(sans nom)';
+      const id=node('ct:'+c.id, 'contact', name, [c.role,c.company].filter(Boolean).join(' · '), ()=>openContactEverywhere(c.id));
+      link(id, coId(c.company)); if(c.email) byMail.set(String(c.email).toLowerCase(), id); });
+    const live=opportunities.filter(o=>!o.deleted);
+    live.filter(o=>o.kind==='request').forEach(r=>{ const n=live.filter(o=>o.requestId===r.id).length; if(!n) return;
+      link(node('rq:'+r.id, 'request', 'Demande · '+(r.company||''), n+' installation'+(n>1?'s':''), ()=>{ gsTab('pipeline'); setTimeout(()=>openRequestDetail(r.id),30); }), coId(r.company)); });
+    live.filter(o=>o.kind!=='request' && o.stage!=='converti').forEach(o=>{
+      const pre=o.kind==='prequal', id=node('op:'+o.id, pre?'prequal':'installation', pre?o.company+' (pré-qualif)':oppName(o), [o.company, stageLabel(o.stage), fmtKwc(o.kwc)].filter(Boolean).join(' · '), ()=>{ gsTab('pipeline'); setTimeout(()=>openOppDetail(o.id),30); });
+      link(id, coId(o.company)); if(o.producteur && pqFold(o.producteur)!==pqFold(o.company)) link(id, coId(o.producteur));
+      if(o.requestId && seen.has('rq:'+o.requestId)) link(id, 'rq:'+o.requestId);
+      if(o.mail && byMail.has(String(o.mail).toLowerCase())) link(id, byMail.get(String(o.mail).toLowerCase()));
+      (o.extraContacts||[]).forEach(x=>{ if(x && x.mail && byMail.has(String(x.mail).toLowerCase())) link(id, byMail.get(String(x.mail).toLowerCase())); }); });
+    tasks.filter(t=>!t.deleted && !t.archived).forEach(t=>{
+      const id=node('tk:'+t.id, 'task', t.title, [t.client, t.due?'pour le '+pqIsoToFr(t.due):''].filter(Boolean).join(' · '), ()=>openTaskEverywhere(t.id));
+      link(id, coId(t.client));
+      if(t.opportunityId){ if(seen.has('op:'+t.opportunityId)) link(id, 'op:'+t.opportunityId); else if(seen.has('rq:'+t.opportunityId)) link(id, 'rq:'+t.opportunityId); }
+      if(t.project) link(id, node('pj:'+pqFold(t.project), 'project', t.project, 'Projet', ()=>{ gsTab('tasks'); }));
+      (window.todoLinksOf?window.todoLinksOf(t.title+' '+(t.description||'')):[]).forEach(target=>link(id, target)); });
+    meetings.filter(m=>!m.deleted).forEach(m=>{ if(!seen.has('ct:'+m.contactId)) return; link(node('mt:'+m.id, 'meeting', m.label||'RDV', m.date?pqIsoToFr(m.date):'', ()=>openContactEverywhere(m.contactId)), 'ct:'+m.contactId); });
+    if(parcData===null) loadParc();
+    if(parcData && parcData.items) parcData.items.forEach((p,i)=>{ const id=node('pc:'+i, 'contract', p.inst||p.prod||'(contrat)', [p.statut, p.fin?'fin '+pqIsoToFr(p.fin):'', p.kwc?fmtKwc(p.kwc):''].filter(Boolean).join(' · '), ()=>openParcItem(p));
+      link(id, coId(p.prod)); if(p.dev && pqFold(p.dev)!==pqFold(p.prod)) link(id, coId(p.dev)); });
+    (window.todoNoteLinks?window.todoNoteLinks():[]).forEach(([label, sub, targets, open], i)=>{ const id=node('nt:'+i, 'note', label, sub, open); targets.forEach(tg=>link(id, tg)); });
+    return { nodes, edges };
+  }
+  function showNetwork(){
+    if(!window.todoNetwork) return;
+    if(!networkView) networkView=window.todoNetwork.mount($('network-root'), networkData);
+    else networkView.refresh();
+    if(networkFocusNext){ const id=networkFocusNext; networkFocusNext=null; setTimeout(()=>networkView.focus(id), 250); }
+  }
+  // « Voir dans le réseau » from a sheet
+  function openInNetwork(id){ networkFocusNext=id; gsTab('network'); }
+  window.todoOpenInNetwork=openInNetwork;
+  window.todoNetworkState=()=>networkView?networkView._state():null;
+  window.todoExtraCommands=(window.todoExtraCommands||[]).concat([{ t:'Ouvrir le réseau', k:'graphe reseau connexions liens neuronal', go:()=>gsTab('network') }]);
 
   // ---------- Company sheet: everything about one client on one screen, with its history ----------
   const sameCo=(a,b)=>!!a && !!b && pqFold(a).trim()===pqFold(b).trim();
@@ -7047,6 +7097,7 @@
   $('co-sheet-close').onclick=closeCompanySheet;
   $('co-sheet-overlay').addEventListener('click', e=>{ if(e.target.id==='co-sheet-overlay') closeCompanySheet(); });
   $('co-sheet-edit').onclick=()=>{ const n=coSheetName; closeCompanySheet(); if(n) openCompanyEditForm(n); };
+  $('co-sheet-net').onclick=()=>{ const n=coSheetName; closeCompanySheet(); if(n) openInNetwork('co:'+pqFold(n).replace(/[^a-z0-9]/g,'')); };
   document.addEventListener('keydown', e=>{ if(e.key==='Escape' && coSheetName){ e.stopPropagation(); closeCompanySheet(); } }, true);
   function allCompanyNames(){
     const m=new Map(); const add=n=>{ n=String(n||'').trim(); if(n && !m.has(pqFold(n))) m.set(pqFold(n), n); };
