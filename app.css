@@ -1411,40 +1411,43 @@ details.req-compare:not([open]) .req-compare-h::before{ transform:rotate(-90deg)
 .cx-bang, .cx-pop{ transform:scale(0); } .cx-bang{ transform-origin:219px 58px; } .cx-pop{ transform-origin:194px 62px; }
 .cx-play .cx-bang{ animation:cx-bang 1.6s .64s cubic-bezier(.3,1.7,.5,1) forwards; } .cx-play .cx-pop{ animation:cx-bang 1.2s .9s cubic-bezier(.3,1.7,.5,1) forwards; }
 @keyframes cx-bang{ 0%{ transform:scale(0) rotate(-30deg); } 18%{ transform:scale(1.25) rotate(6deg); } 30%{ transform:scale(1) rotate(-4deg); } 42%{ transform:scale(1.08) rotate(3deg); } 80%{ transform:scale(1) rotate(0); opacity:1; } 100%{ transform:scale(1.1); opacity:0; } }
-/* signed 3: the bottle with a face jiggles, « POP ! », a little fountain, then two glasses « Tchin ! » */
-.cx-bottle{ transform-origin:130px 226px; } .cx-play .cx-bottle{ animation:cx-jiggle .1s 8 linear, cx-brecoil .45s .9s ease-out, cx-bout .5s 1.5s ease-in forwards; }
-@keyframes cx-jiggle{ 0%,100%{ transform:rotate(0); } 25%{ transform:rotate(-5deg) translateY(-2px); } 75%{ transform:rotate(5deg); } }
-@keyframes cx-brecoil{ 0%{ transform:translateY(8px) scaleY(.93); } 60%{ transform:translateY(-6px) scaleY(1.04); } 100%{ transform:none; } }
-@keyframes cx-bout{ to{ transform:translateY(40px) scale(.7); opacity:0; } }
-.cx-bwow{ opacity:0; } .cx-play .cx-bsmile{ animation:cx-hide .01s .9s forwards; } .cx-play .cx-bwow{ animation:cx-show .05s .9s forwards; }
-.cx-play .cx-cork{ animation:cx-cork .9s .9s cubic-bezier(.2,.7,.4,1) forwards; } @keyframes cx-cork{ to{ transform:translate(40px,-150px) rotate(540deg); opacity:0; } }
-.cx-foam circle{ opacity:0; transform-box:fill-box; transform-origin:center; } .cx-play .cx-foam circle{ animation:cx-foam .9s calc(.92s + var(--d)) ease-out forwards; }
-@keyframes cx-foam{ 0%{ opacity:1; transform:translate(0,0) scale(.4); } 60%{ opacity:1; } 100%{ opacity:0; transform:translate(var(--x),var(--y)) scale(1.2); } }
+/* signed 3: champagne, smooth: the bottle rocks, pops, a foam fountain; it glides away, two flutes clink, bubbles rise */
+.cx-bottle{ transform-origin:130px 228px; }
+.cx-play .cx-bottle{ animation:cx-rock .85s cubic-bezier(.45,0,.55,1), cx-brecoil .55s .85s cubic-bezier(.2,.8,.3,1), cx-bout .8s 1.4s cubic-bezier(.4,0,.2,1) forwards; }
+@keyframes cx-rock{ 0%{ transform:rotate(0); } 25%{ transform:rotate(-6deg); } 55%{ transform:rotate(5deg); } 80%{ transform:rotate(-2deg); } 100%{ transform:rotate(0); } }
+@keyframes cx-brecoil{ 0%{ transform:translateY(6px) scaleY(.96); } 100%{ transform:none; } }
+@keyframes cx-bout{ from{ transform:none; opacity:1; } to{ transform:translateY(30px) scale(.75); opacity:0; } }
+.cx-bwow{ opacity:0; } .cx-play .cx-bsmile{ animation:cx-fadeout .15s .85s forwards; } .cx-play .cx-bwow{ animation:cx-fadein .15s .85s forwards; }
+@keyframes cx-fadeout{ to{ opacity:0; } } @keyframes cx-fadein{ to{ opacity:1; } }
+.cx-play .cx-cork{ animation:cx-cork 1.1s .85s cubic-bezier(.15,.7,.3,1) forwards; }
+@keyframes cx-cork{ 0%{ transform:none; opacity:1; } 55%{ transform:translate(26px,-110px) rotate(320deg); opacity:1; } 100%{ transform:translate(46px,-170px) rotate(560deg); opacity:0; } }
+.cx-foam circle{ opacity:0; transform-box:fill-box; transform-origin:center; }
+.cx-play .cx-foam circle{ animation:cx-foam 1.3s calc(.88s + var(--d)) cubic-bezier(.2,.7,.4,1) forwards; }
+@keyframes cx-foam{ 0%{ opacity:0; transform:translate(0,0) scale(.3); } 12%{ opacity:1; } 70%{ opacity:.9; transform:translate(var(--x),var(--y)) scale(1.1); } 100%{ opacity:0; transform:translate(calc(var(--x) * 1.2),calc(var(--y) * .7)) scale(.8); } }
 .cx-flute{ opacity:0; } .cx-fl{ transform-origin:65px 184px; } .cx-fr{ transform-origin:195px 184px; }
-.cx-play .cx-fl{ animation:cx-flL .8s 1.5s cubic-bezier(.3,1.3,.5,1) forwards; } .cx-play .cx-fr{ animation:cx-flR .8s 1.5s cubic-bezier(.3,1.3,.5,1) forwards; }
-@keyframes cx-flL{ 0%{ opacity:0; transform:translateX(-60px) rotate(-10deg); } 50%{ opacity:1; transform:translateX(40px) rotate(16deg); } 70%{ transform:translateX(34px) rotate(10deg); } 100%{ opacity:1; transform:translateX(36px) rotate(12deg); } }
-@keyframes cx-flR{ 0%{ opacity:0; transform:translateX(60px) rotate(10deg); } 50%{ opacity:1; transform:translateX(-40px) rotate(-16deg); } 70%{ transform:translateX(-34px) rotate(-10deg); } 100%{ opacity:1; transform:translateX(-36px) rotate(-12deg); } }
+.cx-play .cx-fl{ animation:cx-flL 1s 1.45s cubic-bezier(.22,.9,.3,1) forwards; } .cx-play .cx-fr{ animation:cx-flR 1s 1.45s cubic-bezier(.22,.9,.3,1) forwards; }
+@keyframes cx-flL{ 0%{ opacity:0; transform:translateX(-50px) rotate(-6deg); } 40%{ opacity:1; } 62%{ transform:translateX(37px) rotate(13deg); } 100%{ opacity:1; transform:translateX(35px) rotate(11deg); } }
+@keyframes cx-flR{ 0%{ opacity:0; transform:translateX(50px) rotate(6deg); } 40%{ opacity:1; } 62%{ transform:translateX(-37px) rotate(-13deg); } 100%{ opacity:1; transform:translateX(-35px) rotate(-11deg); } }
+.cx-fbub circle{ opacity:0; transform-box:fill-box; } .cx-play .cx-fbub circle{ animation:cx-fbub 1.1s calc(2.1s + var(--d)) ease-out infinite; }
+@keyframes cx-fbub{ 0%{ opacity:0; transform:translateY(0); } 20%{ opacity:.9; } 100%{ opacity:0; transform:translateY(-20px); } }
 .celebrate .cx-clink, .celebrate .cx-tchin{ transform-box:fill-box; transform-origin:center; opacity:0; }
-.cx-play .cx-clink{ animation:cx-clink .7s 1.9s ease-out; } @keyframes cx-clink{ 0%{ opacity:1; transform:scale(.3) rotate(0); } 100%{ opacity:0; transform:scale(2.6) rotate(90deg); } }
-.cx-play .cx-tchin{ animation:cx-tchin .45s 1.95s cubic-bezier(.3,1.7,.5,1) forwards; } @keyframes cx-tchin{ from{ opacity:0; transform:scale(.3); } to{ opacity:1; transform:scale(1); } }
+.cx-play .cx-clink{ animation:cx-clink .9s 2.05s cubic-bezier(.2,.7,.3,1); } @keyframes cx-clink{ 0%{ opacity:0; transform:scale(.2) rotate(0); } 25%{ opacity:1; } 100%{ opacity:0; transform:scale(2.2) rotate(80deg); } }
+.cx-play .cx-tchin{ animation:cx-tchin .6s 2.1s cubic-bezier(.2,.9,.3,1.2) forwards; } @keyframes cx-tchin{ from{ opacity:0; transform:translateY(8px) scale(.6); } to{ opacity:1; transform:none; } }
 /* lost 1: the grumpy cloud rains on the panel; umbrella, smile, hop, rainbow */
 .cx-cloud{ transform:translateX(-170px); } .cx-play .cx-cloud{ animation:cx-in .7s ease-out forwards, cx-cloudout .8s 2.3s ease-in forwards; }
 @keyframes cx-in{ to{ transform:none; } } @keyframes cx-cloudout{ from{ transform:none; } to{ transform:translateX(260px); opacity:0; } }
 .cx-rain line{ opacity:0; } .cx-play .cx-rain line{ animation:cx-rain .55s linear infinite; animation-delay:var(--d); }
 @keyframes cx-rain{ 0%{ opacity:0; transform:translateY(-10px); } 20%{ opacity:.8; } 100%{ opacity:0; transform:translateY(60px); } }
-.cx-shiver{ transform-origin:130px 200px; } .cx-play .cx-shiver{ animation:cx-shiver .08s 15 linear; } @keyframes cx-shiver{ 0%,100%{ transform:none; } 50%{ transform:translateX(2.5px); } }
+.cx-play .cx-shiver{ animation:cx-shiver .08s 15 linear; } @keyframes cx-shiver{ 0%,100%{ transform:translate(0,24px); } 50%{ transform:translate(2.5px,24px); } }
 .cx-hop{ transform-origin:130px 228px; } .cx-play .cx-hop{ animation:cx-hop .5s 1.75s ease-out 2; } @keyframes cx-hop{ 0%,100%{ transform:none; } 40%{ transform:translateY(-22px) scaleY(1.03); } 80%{ transform:translateY(0) scaleY(.96); } }
-.cx-umb{ transform-origin:130px 112px; transform:scale(0); } .cx-play .cx-umb{ animation:cx-umb .45s 1.25s cubic-bezier(.3,1.6,.5,1) forwards; } @keyframes cx-umb{ to{ transform:scale(1); } }
+.cx-umb{ transform-origin:130px 98px; transform:scale(0); } .cx-play .cx-umb{ animation:cx-umb .45s 1.25s cubic-bezier(.3,1.6,.5,1) forwards; } @keyframes cx-umb{ to{ transform:scale(1); } }
 .celebrate .cx-tear{ transform-box:fill-box; } .cx-play .cx-tear{ animation:cx-tear .9s .3s ease-in, cx-hide .01s 1.25s forwards; } @keyframes cx-tear{ 0%{ transform:none; } 100%{ transform:translateY(16px); opacity:0; } }
 .cx-play .cx-sad{ animation:cx-hide .01s 1.45s forwards; } .cx-happy{ opacity:0; } .cx-play .cx-happy{ animation:cx-show .2s 1.45s forwards; }
 .cx-rainbow path{ stroke-dasharray:100; stroke-dashoffset:100; opacity:0; } .cx-play .cx-rainbow path{ animation:cx-draw .9s 2.35s ease-out forwards; } @keyframes cx-draw{ 0%{ opacity:.9; } 100%{ opacity:.9; stroke-dashoffset:0; } }
 /* lost 2: no wind; the turbine looks around and blows on its blades; tumbleweed; crickets */
-.cx-play .cx-slow{ animation:cx-slow 2s cubic-bezier(.1,.6,.3,1) forwards, cx-twitch .7s 2.9s ease-out; }
+.cx-play .cx-slow{ animation:cx-slow 2.4s cubic-bezier(.1,.6,.3,1) forwards; }
+.cx-sag{ transform-origin:130px 214px; } .cx-play .cx-sag{ animation:cx-sag 1s 2.3s cubic-bezier(.4,0,.2,1) forwards; } @keyframes cx-sag{ 40%{ transform:rotate(-2.5deg); } 70%{ transform:rotate(1deg); } 100%{ transform:rotate(-1.5deg); } }
 @keyframes cx-slow{ from{ transform:rotate(0); } to{ transform:rotate(720deg); } } @keyframes cx-twitch{ 0%{ transform:rotate(720deg); } 40%{ transform:rotate(752deg); } 100%{ transform:rotate(720deg); } }
-.cx-play .cx-teyes{ animation:cx-look 1s 1.6s ease-in-out; } @keyframes cx-look{ 25%{ transform:translateX(-3px); } 60%{ transform:translateX(3px); } 100%{ transform:none; } }
-.cx-play .cx-tmouth{ animation:cx-hide .01s 2.55s forwards, cx-show .01s 3.3s forwards; }
-.cx-puffcheeks, .cx-blow{ opacity:0; } .cx-play .cx-puffcheeks{ animation:cx-puff2 .8s 2.55s; } @keyframes cx-puff2{ 0%,100%{ opacity:1; } }
-.cx-blow path{ stroke-dasharray:4 6; } .cx-play .cx-blow{ animation:cx-blow .55s 2.75s ease-out; } @keyframes cx-blow{ 0%{ opacity:0; transform:translate(0,0); } 30%{ opacity:1; } 100%{ opacity:0; transform:translate(6px,-10px); } }
 .celebrate .cx-tumble{ transform-box:fill-box; transform-origin:center; opacity:0; } .cx-play .cx-tumble{ animation:cx-tumble 2.6s .9s linear forwards; }
 @keyframes cx-tumble{ 0%{ opacity:1; transform:translate(-40px,0) rotate(0); } 25%{ transform:translate(30px,-14px) rotate(260deg); } 50%{ transform:translate(90px,0) rotate(520deg); } 75%{ transform:translate(150px,-8px) rotate(780deg); } 100%{ opacity:1; transform:translate(220px,0) rotate(1040deg); } }
 .cx-cri{ opacity:0; } .cx-play .cx-cri.c1{ animation:cx-cri 1.1s 2s ease-in-out; } .cx-play .cx-cri.c2{ animation:cx-cri 1.1s 2.6s ease-in-out; }
@@ -1457,7 +1460,7 @@ details.req-compare:not([open]) .req-compare-h::before{ transform:rotate(-90deg)
 @keyframes cx-fly{ 0%{ offset-distance:0%; opacity:1; } 100%{ offset-distance:100%; opacity:1; } }
 .cx-bin{ transform-origin:210px 214px; } .cx-play .cx-bin{ animation:cx-binwob .5s 2.1s ease-out; } @keyframes cx-binwob{ 30%{ transform:rotate(-6deg); } 65%{ transform:rotate(4deg); } 100%{ transform:none; } }
 .celebrate .cx-swish{ transform-box:fill-box; transform-origin:center; opacity:0; } .cx-play .cx-swish{ animation:cx-tchin .45s 2.15s cubic-bezier(.3,1.7,.5,1) forwards, cx-hide .4s 3.4s forwards; }
-.celebrate.cxv-champagne.cx-play .cx-msg{ animation-delay:2.1s; }
+.celebrate.cxv-champagne.cx-play .cx-msg{ animation-delay:2.3s; }
 .celebrate.cxv-plane.cx-play .cx-msg{ animation-delay:2.6s; }
 .celebrate.cxv-nowind.cx-play .cx-msg{ animation-delay:1.2s; }
 

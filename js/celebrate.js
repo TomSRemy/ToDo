@@ -9,7 +9,7 @@
   const MSG={
     panel:'Offre acceptée ! 😎', turbine:'Offre acceptée ! 🚁', battery:'Offre acceptée ! ⚡ 100 %',
     gun:'Contrat signé ! 💶', gong:'Contrat signé ! 🔔', champagne:'Contrat signé ! 🥂',
-    umbrella:'Offre perdue · on rebondit ☂️', nowind:'Offre perdue · pas de vent cette fois 🍃', plane:'Offre perdue · la suivante décolle ✈️'
+    umbrella:'Offre perdue', nowind:'Offre perdue', plane:'Offre perdue'
   };
   const BLADE='<path d="M130 78c-4-20-2-48 3-60c4 14 3 40-3 60z"/>';
   const blades=cls=>'<g class="'+cls+'">'+BLADE+BLADE.replace('/>',' transform="rotate(120 130 78)"/>')+BLADE.replace('/>',' transform="rotate(240 130 78)"/>')+'<circle cx="130" cy="78" r="6" fill="#B7C3D0"/></g>';
@@ -45,42 +45,40 @@
       +'<g class="cx-mallet"><path d="M236 226L176 150" stroke="#7A4E2A" stroke-width="6" stroke-linecap="round"/><ellipse cx="172" cy="145" rx="13" ry="15" fill="#B33A2E" transform="rotate(-38 172 145)"/></g>'
       +'<g class="cx-bang"><path d="M214 30l9 14l15-6l-4 15l15 6l-14 8l7 14l-16-3l-3 16l-11-12l-12 10l-1-16l-16-1l11-12l-9-13l16 1z" fill="#FFD23F" stroke="#E2463A" stroke-width="3" stroke-linejoin="round"/>'
       +'<text x="219" y="66" text-anchor="middle" font-family="Impact,\'Arial Black\',system-ui,sans-serif" font-weight="900" font-size="15" fill="#E2463A" transform="rotate(-12 219 62)">GONG!</text></g>',
-    // signed 3: the bottle has a face; it jiggles, the cork pops (« POP ! »), a little fountain, then two glasses « Tchin ! »
-    champagne:'<g class="cx-foam" fill="#FFF6D0">'+[[-34,-70,0],[-14,-92,.05],[6,-100,.1],[26,-86,.02],[40,-62,.08],[-26,-50,.12],[16,-60,.15],[-6,-78,.18],[34,-40,.2],[-40,-30,.06]].map(([x,y,d])=>'<circle cx="130" cy="72" r="'+(4+Math.abs(x)%5)+'" style="--x:'+x+'px;--y:'+y+'px;--d:'+d+'s"/>').join('')+'</g>'
+    // signed 3: the bottle rocks, the cork pops (« POP ! »), a fountain of foam; it glides away and two flutes clink, bubbles rising
+    champagne:'<g class="cx-foam" fill="#FFF6D0">'+[[-30,-64,0],[-12,-86,.04],[6,-96,.08],[22,-80,.02],[36,-58,.06],[-22,-44,.1],[14,-52,.12],[-4,-72,.14],[30,-36,.16],[-36,-28,.05],[0,-108,.11],[18,-100,.17]].map(([x,y,d])=>'<circle cx="130" cy="64" r="'+(3+Math.abs(x)%4)+'" style="--x:'+x+'px;--y:'+y+'px;--d:'+d+'s"/>').join('')+'</g>'
       +'<g class="cx-bottle"><path d="M118 230h24a9 9 0 0 0 9-9V128c0-16-9-24-11-33V68h-20v27c-2 9-11 17-11 33v93a9 9 0 0 0 9 9z" fill="#1F5A3A" stroke="#0F2E1E" stroke-width="2.5"/>'
       +'<path d="M124 132v74" stroke="#3E8A5E" stroke-width="5" stroke-linecap="round" opacity=".6"/><rect x="119" y="62" width="22" height="16" rx="3" fill="#E8C547"/>'
       +'<rect x="112" y="178" width="36" height="34" rx="3" fill="#F2E6C2"/><text x="130" y="199" text-anchor="middle" font-family="system-ui,sans-serif" font-weight="800" font-size="10" fill="#7A5A10">SIGNÉ</text>'
-      +'<g class="cx-beyes" fill="#E8EEF5"><circle cx="122" cy="146" r="4"/><circle cx="138" cy="146" r="4"/><circle cx="123" cy="147" r="2" fill="#0F2E1E"/><circle cx="139" cy="147" r="2" fill="#0F2E1E"/></g>'
-      +'<path class="cx-bsmile" d="M122 158q8 8 16 0" stroke="#E8EEF5" stroke-width="2.5" fill="none" stroke-linecap="round"/><ellipse class="cx-bwow" cx="130" cy="160" rx="5" ry="6" fill="#0F2E1E" stroke="#E8EEF5" stroke-width="2"/></g>'
+      +'<g fill="#E8EEF5"><circle cx="122" cy="146" r="4"/><circle cx="138" cy="146" r="4"/><circle cx="123" cy="147" r="2" fill="#0F2E1E"/><circle cx="139" cy="147" r="2" fill="#0F2E1E"/></g>'
+      +'<path class="cx-bsmile" d="M122 158q8 8 16 0" stroke="#E8EEF5" stroke-width="2.5" fill="none" stroke-linecap="round"/><ellipse class="cx-bwow" cx="130" cy="160" rx="4.5" ry="5.5" fill="#0F2E1E" stroke="#E8EEF5" stroke-width="2"/></g>'
       +'<g class="cx-cork"><rect x="122" y="46" width="16" height="18" rx="5" fill="#C9955A" stroke="#8A5E30" stroke-width="1.5"/></g>'
       +'<g class="cx-pop"><path d="M190 40l7 10l12-4l-3 12l12 5l-11 6l5 11l-12-2l-3 12l-8-9l-10 8l-1-12l-12-1l8-9l-7-10l12 1z" fill="#FFD23F" stroke="#E2463A" stroke-width="2.5" stroke-linejoin="round"/>'
       +'<text x="194" y="69" text-anchor="middle" font-family="Impact,\'Arial Black\',system-ui,sans-serif" font-weight="900" font-size="13" fill="#E2463A" transform="rotate(10 194 64)">POP!</text></g>'
-      +'<g class="cx-flute cx-fl"><path d="M50 96h30l-5 44q-10 8-20 0z" fill="rgba(255,236,160,.25)" stroke="#E8EEF5" stroke-width="2.5"/><path d="M54 114h22l-3 24q-8 6-16 0z" fill="#F2C94C"/><path d="M65 140v42M54 184h22" stroke="#E8EEF5" stroke-width="3" stroke-linecap="round"/></g>'
-      +'<g class="cx-flute cx-fr"><path d="M180 96h30l-5 44q-10 8-20 0z" fill="rgba(255,236,160,.25)" stroke="#E8EEF5" stroke-width="2.5"/><path d="M184 114h22l-3 24q-8 6-16 0z" fill="#F2C94C"/><path d="M195 140v42M184 184h22" stroke="#E8EEF5" stroke-width="3" stroke-linecap="round"/></g>'
+      +'<g class="cx-flute cx-fl"><path d="M50 96h30l-5 44q-10 8-20 0z" fill="rgba(255,236,160,.25)" stroke="#E8EEF5" stroke-width="2.5"/><path d="M54 114h22l-3 24q-8 6-16 0z" fill="#F2C94C"/>'
+      +'<g class="cx-fbub" fill="#FFF6D0"><circle cx="60" cy="134" r="1.6" style="--d:0s"/><circle cx="66" cy="136" r="1.3" style="--d:.35s"/><circle cx="70" cy="132" r="1.5" style="--d:.7s"/></g><path d="M65 140v42M54 184h22" stroke="#E8EEF5" stroke-width="3" stroke-linecap="round"/></g>'
+      +'<g class="cx-flute cx-fr"><path d="M180 96h30l-5 44q-10 8-20 0z" fill="rgba(255,236,160,.25)" stroke="#E8EEF5" stroke-width="2.5"/><path d="M184 114h22l-3 24q-8 6-16 0z" fill="#F2C94C"/>'
+      +'<g class="cx-fbub" fill="#FFF6D0"><circle cx="190" cy="134" r="1.5" style="--d:.2s"/><circle cx="196" cy="136" r="1.3" style="--d:.55s"/><circle cx="200" cy="132" r="1.6" style="--d:.9s"/></g><path d="M195 140v42M184 184h22" stroke="#E8EEF5" stroke-width="3" stroke-linecap="round"/></g>'
       +'<g class="cx-clink" fill="#FFE066"><path d="M130 66l4 11l11 4l-11 4l-4 11l-4-11l-11-4l11-4z"/></g>'
       +'<text class="cx-tchin" x="130" y="52" text-anchor="middle" font-family="system-ui,sans-serif" font-weight="900" font-size="20" fill="#FFE066" stroke="#7A5A10" stroke-width="1">Tchin !</text>',
-    // lost 1: a grumpy cloud rains on the panel; it opens its umbrella, smiles, hops; a rainbow
+    // lost 1: a grumpy cloud rains on the solar panel (the same one as « offer accepted »); it opens its umbrella, smiles, hops; a rainbow
     umbrella:'<g class="cx-rainbow" fill="none" stroke-width="6" stroke-linecap="round">'
-      +['#ED6965','#F2A541','#FFE066','#14D3A9','#7DD3FC','#8B7FB5'].map((c,i)=>'<path d="M'+(26+i*6)+' 214A'+(104-i*6)+' '+(104-i*6)+' 0 0 1 '+(234-i*6)+' 214" stroke="'+c+'" pathLength="100"/>').join('')+'</g>'
+      +['#ED6965','#F2A541','#FFE066','#14D3A9','#7DD3FC','#8B7FB5'].map((c,i)=>'<path d="M'+(22+i*6)+' 226A'+(108-i*6)+' '+(108-i*6)+' 0 0 1 '+(238-i*6)+' 226" stroke="'+c+'" pathLength="100"/>').join('')+'</g>'
       +'<g class="cx-cloud"><g class="cx-rain" stroke="#8FB4D9" stroke-width="2" stroke-linecap="round">'
-      +[[92,0],[104,.25],[116,.1],[128,.35],[140,.15],[152,.45],[164,.28],[110,.5],[146,.05],[170,.4]].map(([x,d])=>'<line x1="'+x+'" y1="72" x2="'+(x-4)+'" y2="86" style="--d:'+d+'s"/>').join('')+'</g>'
-      +'<path d="M84 66a20 20 0 0 1 8-38a28 28 0 0 1 52-6a22 22 0 0 1 34 18a14 14 0 0 1-4 26z" fill="#5E6B7A"/>'
-      +'<path d="M112 38l10 5M150 38l-10 5" stroke="#2C3540" stroke-width="3" stroke-linecap="round"/><circle cx="118" cy="48" r="3" fill="#2C3540"/><circle cx="144" cy="48" r="3" fill="#2C3540"/><path d="M122 60q9-6 18 0" stroke="#2C3540" stroke-width="3" fill="none" stroke-linecap="round"/></g>'
-      +'<g class="cx-hop"><g class="cx-umb"><path d="M84 112a46 34 0 0 1 92 0q-7.6-6-15.3 0q-7.7-6-15.4 0q-7.7-6-15.3 0q-7.7-6-15.4 0q-7.6-6-15.3 0z" fill="#14D3A9"/><path d="M130 112v40q0 8 8 8" stroke="#DDE5EE" stroke-width="3" fill="none" stroke-linecap="round"/></g>'
-      +'<g class="cx-shiver"><path d="M116 206l-6 22h-8M144 206l6 22h8" stroke="#5B7A99" stroke-width="5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>'
-      +'<rect x="80" y="146" width="100" height="62" rx="5" fill="#1E3A5F" stroke="#7FA9D6" stroke-width="3"/><path d="M113 146v62M147 146v62M80 177h100" stroke="#7FA9D6" stroke-width="2"/>'
-      +'<circle cx="114" cy="166" r="3.5" fill="#DDE5EE"/><circle cx="146" cy="166" r="3.5" fill="#DDE5EE"/><path class="cx-tear" d="M110 172q-3 6 0 8q3-2 0-8z" fill="#7DD3FC"/>'
-      +'<path class="cx-sad" d="M118 194q12-9 24 0" stroke="#DDE5EE" stroke-width="3" fill="none" stroke-linecap="round"/><path class="cx-happy" d="M114 186q16 14 32 0" stroke="#DDE5EE" stroke-width="3" fill="none" stroke-linecap="round"/></g></g>',
-    // lost 2: no wind; the turbine looks around, blows on its own blades; a tumbleweed; crickets
-    nowind:'<path d="M118 84l-8 130h40l-8-130z" fill="#C9D3DE"/><rect x="116" y="70" width="28" height="16" rx="6" fill="#B7C3D0"/><g fill="#DDE5EE">'+blades('cx-slow')+'</g>'
-      +'<g class="cx-teyes" fill="#2C3A4A"><circle cx="123" cy="132" r="3.2"/><circle cx="137" cy="132" r="3.2"/></g>'
-      +'<path class="cx-tmouth" d="M124 150q6-4 12 0" stroke="#2C3A4A" stroke-width="2.5" fill="none" stroke-linecap="round"/>'
-      +'<g class="cx-puffcheeks"><circle cx="121" cy="148" r="6" fill="#F28C6B" opacity=".6"/><circle cx="139" cy="148" r="6" fill="#F28C6B" opacity=".6"/><ellipse cx="130" cy="150" rx="3" ry="2.5" fill="#2C3A4A"/></g>'
-      +'<g class="cx-blow" stroke="#9AA8B8" stroke-width="2" fill="none" stroke-linecap="round"><path d="M136 150q14-12 10-40"/><path d="M138 152q20-14 18-52"/><path d="M134 148q8-10 4-30"/></g>'
-      +'<g class="cx-tumble" stroke="#B08A58" stroke-width="1.8" fill="none"><circle cx="40" cy="200" r="13"/><path d="M29 194q11 6 22 0M31 206q9-10 18 0M40 187q-6 13 0 26M34 190q12 12 12 20"/></g>'
-      +'<text class="cx-cri c1" x="196" y="190" font-family="system-ui,sans-serif" font-style="italic" font-weight="600" font-size="12" fill="#9AA8B8">cri…</text>'
-      +'<text class="cx-cri c2" x="210" y="172" font-family="system-ui,sans-serif" font-style="italic" font-weight="600" font-size="12" fill="#9AA8B8">cri…</text>'
-      +'<path d="M20 214h220" stroke="#2C3A4A" stroke-width="3" stroke-linecap="round"/>',
+      +[[92,0],[104,.25],[116,.1],[128,.35],[140,.15],[152,.45],[164,.28],[110,.5],[146,.05],[170,.4]].map(([x,d])=>'<line x1="'+x+'" y1="50" x2="'+(x-4)+'" y2="64" style="--d:'+d+'s"/>').join('')+'</g>'
+      +'<path d="M84 44a20 20 0 0 1 8-38a28 28 0 0 1 52-6a22 22 0 0 1 34 18a14 14 0 0 1-4 26z" fill="#5E6B7A"/>'
+      +'<path d="M112 16l10 5M150 16l-10 5" stroke="#2C3540" stroke-width="3" stroke-linecap="round"/><circle cx="118" cy="26" r="3" fill="#2C3540"/><circle cx="144" cy="26" r="3" fill="#2C3540"/><path d="M122 38q9-6 18 0" stroke="#2C3540" stroke-width="3" fill="none" stroke-linecap="round"/></g>'
+      +'<g class="cx-hop"><g class="cx-umb"><path d="M78 98a52 36 0 0 1 104 0q-8.7-6-17.3 0q-8.7-6-17.4 0q-8.6-6-17.3 0q-8.7-6-17.4 0q-8.6-6-17.3 0q-8.7-6-17.3 0z" fill="#14D3A9"/><path d="M130 98v12" stroke="#DDE5EE" stroke-width="3" stroke-linecap="round"/></g>'
+      +'<g class="cx-shiver" transform="translate(0 24)"><path d="M118 168l-10 38h-10" stroke="#5B7A99" stroke-width="5" fill="none" stroke-linecap="round" stroke-linejoin="round"/><path d="M142 168l10 38h10" stroke="#5B7A99" stroke-width="5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>'
+      +'<rect x="70" y="80" width="120" height="90" rx="6" fill="#1E3A5F" stroke="#7FA9D6" stroke-width="3"/><path d="M110 80v90M150 80v90M70 110h120M70 140h120" stroke="#7FA9D6" stroke-width="2"/>'
+      +'<circle cx="104" cy="104" r="4" fill="#E8EEF5"/><circle cx="156" cy="104" r="4" fill="#E8EEF5"/><path class="cx-tear" d="M100 112q-3 6 0 8q3-2 0-8z" fill="#7DD3FC"/>'
+      +'<path class="cx-sad" d="M108 156q22-14 44 0" stroke="#E8EEF5" stroke-width="3" fill="none" stroke-linecap="round"/><path class="cx-happy" d="M100 152q30 14 60 0" stroke="#E8EEF5" stroke-width="3" fill="none" stroke-linecap="round"/></g></g>',
+    // lost 2: no wind: the same turbine as « offer accepted » slows down and stops; a tumbleweed; crickets
+    nowind:'<g class="cx-sag"><path d="M126 82l-6 132h20l-6-132z" fill="#DDE5EE"/><rect x="120" y="70" width="22" height="14" rx="5" fill="#C9D3DE"/><g fill="#F2F6FA">'+blades('cx-slow')+'</g></g>'
+      +'<g class="cx-tumble" stroke="#B08A58" stroke-width="1.8" fill="none"><circle cx="40" cy="201" r="13"/><path d="M29 195q11 6 22 0M31 207q9-10 18 0M40 188q-6 13 0 26M34 191q12 12 12 20"/></g>'
+      +'<text class="cx-cri c1" x="176" y="190" font-family="system-ui,sans-serif" font-style="italic" font-weight="600" font-size="12" fill="#9AA8B8">cri…</text>'
+      +'<text class="cx-cri c2" x="192" y="172" font-family="system-ui,sans-serif" font-style="italic" font-weight="600" font-size="12" fill="#9AA8B8">cri…</text>'
+      +'<path d="M30 214h200" stroke="#2C3A4A" stroke-width="3" stroke-linecap="round"/>',
     // lost 3: the paper plane loops and nosedives into the bin; a new one takes off
     plane:'<g class="cx-bin"><path d="M190 168h40l-5 46h-30z" fill="#2C3A4A" stroke="#9AA8B8" stroke-width="2"/><path d="M186 165h48" stroke="#9AA8B8" stroke-width="4" stroke-linecap="round"/><path d="M202 176l1 30M210 176v30M218 176l-1 30" stroke="#5E6B7A" stroke-width="2" stroke-linecap="round"/></g>'
       +'<g class="cx-swish"><text x="210" y="150" text-anchor="middle" font-family="Impact,\'Arial Black\',system-ui,sans-serif" font-weight="900" font-size="16" fill="#FFD23F" stroke="#E2463A" stroke-width="1">Swish !</text></g>'
