@@ -1527,3 +1527,16 @@ html.lite body.postit-open #task-list, html.lite body.postit-open .tab-panel{ pa
 html.lite .task-check, html.lite .subtask-arrow, html.lite .contact-meta button, html.lite .ct-dupes-banner .pq-link{ position:relative; }
 html.lite .task-check::after, html.lite .subtask-arrow::after, html.lite .contact-meta button::after, html.lite .ct-dupes-banner .pq-link::after{ content:''; position:absolute; inset:-8px; }
 html.lite .pipe-col.empty{ width:100%; }
+
+/* saved views: a small menu and the active view as a chip */
+.views-btn{ flex-shrink:0; background:none; border:1px solid var(--bd); color:var(--tx2); border-radius:999px; font:600 11px var(--font-mono); text-transform:uppercase; letter-spacing:.3px; padding:4px 10px; cursor:pointer; }
+.views-btn:hover{ color:var(--tx1); border-color:var(--tx3); }
+.view-chip{ flex-shrink:0; display:inline-flex; align-items:center; gap:6px; padding:3px 4px 3px 10px; border-radius:999px; background:var(--accent-dim); color:var(--accent); border:1px solid var(--accent); font:600 11.5px var(--font-ui); white-space:nowrap; }
+.view-chip[hidden]{ display:none; }
+.view-chip button{ background:none; border:none; color:inherit; font-size:15px; line-height:1; cursor:pointer; padding:0 4px; }
+.views-menu{ position:fixed; z-index:20500; min-width:240px; background:var(--panel); border:1px solid var(--bd); border-radius:10px; box-shadow:0 14px 40px rgba(0,0,0,.45); padding:6px; display:flex; flex-direction:column; }
+.views-h{ font:500 9.5px var(--font-mono); text-transform:uppercase; letter-spacing:.5px; color:var(--tx3); padding:8px 8px 4px; }
+.views-item{ display:flex; align-items:center; justify-content:space-between; gap:8px; text-align:left; background:none; border:none; color:var(--tx1); font:400 13px var(--font-ui); padding:7px 8px; border-radius:6px; cursor:pointer; }
+.views-item:hover{ background:var(--panel-2); }
+.views-item.save{ color:var(--accent); border-top:1px solid var(--bd-soft); margin-top:4px; border-radius:0 0 6px 6px; }
+.views-del{ color:var(--tx3); padding:0 4px; } .views-del:hover{ color:var(--crit); }

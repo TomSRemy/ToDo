@@ -300,6 +300,20 @@ with sync_playwright() as p:
     if page.is_visible("#opp-detail-overlay"): page.click("#opp-detail-actions >> text=Fermer")
     page.keyboard.press("Control+k"); page.keyboard.type("Appeler le notaire"); page.keyboard.press("Enter"); page.wait_for_timeout(200)
     check(any(t["title"] == "Appeler le notaire" for t in stored(page, "todo-widget-tasks")), "search: Enter without choosing still creates the task (old Ctrl+K habit)")
+    # saved views: ready-made ones and the user's own
+    page.keyboard.press("Escape"); page.click('[data-tab="tasks"]')
+    page.click("#tasks-views-btn"); page.click(".views-menu .views-item >> text=Sans date")
+    nodate = len([x for x in stored(page, "todo-widget-tasks") if not x.get("archived") and not x.get("deleted") and not x.get("due")])
+    check(page.is_visible("#tasks-view-chip") and "Sans date" in page.inner_text("#tasks-view-chip") and page.locator("#task-list .task-line").count() == nodate,
+          f"views: « Sans date » filters the tasks and shows as a chip ({nodate})")
+    page.click("#tasks-view-chip button")
+    check(not page.is_visible("#tasks-view-chip") and page.locator("#task-list .task-line").count() >= 1, "views: the chip's × goes back to the normal list")
+    page.once("dialog", lambda d: d.accept("Mes urgences"))
+    page.click("#tasks-views-btn"); page.click(".views-menu .views-item.save")
+    check([v["name"] for v in page.evaluate("JSON.parse(localStorage.getItem('saved-views-tasks')||'[]')")] == ["Mes urgences"], "views: the current view can be saved under a name")
+    page.click('[data-tab="pipeline"]'); page.click("#pipe-views-btn"); page.click(".views-menu .views-item >> text=Dossiers sans tâche")
+    check("Dossiers sans tâche" in page.inner_text("#pipe-view-chip") and page.locator("#pipeline-board .pipe-card").count() >= 1, "views: pipeline « dossiers sans tâche »")
+    page.click("#pipe-view-chip button")
     # command palette: Ctrl+P, every action from the keyboard
     page.keyboard.press("Control+p")
     check(page.is_visible("#gs-overlay") and page.input_value("#gs-input") == ">" and page.locator("#gs-results .gs-item").count() > 15, "palette: Ctrl+P lists the commands")

@@ -793,6 +793,7 @@
   }
   function filteredTasks(){
     let list=activeTasks().filter(matchesSearch);
+    if(savedViewState.tasks && savedViewState.tasks.pred) list=list.filter(savedViewState.tasks.pred);
     if(currentFilter==='critique') list=list.filter(t=>t.urgency==='critique');
     else if(currentFilter==='haute') list=list.filter(t=>t.urgency==='haute'||t.urgency==='critique');
     return sortedTasks(list);
@@ -800,6 +801,7 @@
   function listForCurrentView(){
     if(currentView==='bloc'){
       let list=activeTasks().filter(matchesSearch);
+      if(savedViewState.tasks && savedViewState.tasks.pred) list=list.filter(savedViewState.tasks.pred);
       if(currentFilter==='critique') list=list.filter(t=>t.urgency==='critique');
       else if(currentFilter==='haute') list=list.filter(t=>t.urgency==='haute'||t.urgency==='critique');
       return sortedTasks(list);
@@ -3594,8 +3596,10 @@
   }
   function meetData(q){
     const on=meetPhasesOn();
+    const vp=savedViewState.pipeline && savedViewState.pipeline.pred;
     const live=opportunities.filter(o=>!o.deleted && o.kind==='installation' && !isExited(o))
-      .filter(o=>!q || pqFold([o.company,o.producteur,o.centrale,o.title,o.dept].join(' ')).includes(q));
+      .filter(o=>!q || pqFold([o.company,o.producteur,o.centrale,o.title,o.dept].join(' ')).includes(q))
+      .filter(o=>!vp || vp(o));
     return MEET_PHASES.filter(p=>on.includes(p.key)).map(p=>{
       const list=live.filter(o=>oppPhase(o)===p.key).sort((a,b)=>stageIndex(b.stage)-stageIndex(a.stage) || (pqToDate(a.mesEff||a.mesPrev)||9e15)-(pqToDate(b.mesEff||b.mesPrev)||9e15) || (a.company||'').localeCompare(b.company||'','fr'));
       const kwc=list.reduce((t,o)=>t+(pqNum(String(o.kwc||''))||0),0), mwh=list.reduce((t,o)=>t+(pqNum(String(o.mwh||''))||0),0);
@@ -3664,6 +3668,77 @@
     wrap.querySelectorAll('tr[data-id]').forEach(tr=>{ tr.onclick=()=>openOppDetail(tr.dataset.id); });
     board.appendChild(wrap);
   }
+  // ---------- saved views (tasks and pipeline): ready-made ones, and the user's own (filters + view + search) ----------
+  // Kept on this device. A view only filters what is shown; nothing is changed in the data.
+  const savedViewState={ tasks:null, pipeline:null };
+  const dayMs=864e5, todayStart=()=>{ const d=new Date(); d.setHours(0,0,0,0); return d; };
+  const dueDays=t=>t.due?Math.round((new Date(t.due+'T00:00:00')-todayStart())/dayMs):null;
+  const oppOpenTask=o=>tasks.some(t=>!t.deleted && !t.archived && (t.opportunityId===o.id || (o.requestId && t.opportunityId===o.requestId) || (o.taskId && t.id===o.taskId)));
+  const PRESET_VIEWS={
+    tasks:[
+      { id:'late', name:'En retard', pred:t=>{ const d=dueDays(t); return d!==null && d<0; } },
+      { id:'week', name:'Cette semaine', pred:t=>{ const d=dueDays(t); return d!==null && d<=7; }, view:'date' },
+      { id:'waiting', name:'En attente des autres', pred:t=>t.status==='en_attente' },
+      { id:'nodate', name:'Sans date', pred:t=>!t.due },
+      { id:'byclient', name:'Par client', view:'client' }
+    ],
+    pipeline:[
+      { id:'offer15', name:'Offres en attente depuis 15 j', pred:o=>o.stage==='offre_attente' && Date.now()-lastMove(o)>=15*dayMs },
+      { id:'notask', name:'Dossiers sans tâche', pred:o=>!isExited(o) && o.kind==='installation' && !oppOpenTask(o) },
+      { id:'mes6', name:'MES dans les 6 mois', pred:o=>{ const d=pqToDate(o.mesEff||o.mesPrev); return !!d && d>=todayStart() && d-todayStart()<=183*dayMs; } },
+      { id:'mine', name:'Mes dossiers', pred:o=>{ let me=''; try{ me=localStorage.getItem('qualif-charge')||''; }catch(e){} return !me || o.charge===me; } }
+    ]
+  };
+  function userViews(scope){ try{ return JSON.parse(localStorage.getItem('saved-views-'+scope)||'[]'); }catch(e){ return []; } }
+  function storeUserViews(scope, list){ try{ localStorage.setItem('saved-views-'+scope, JSON.stringify(list)); }catch(e){} }
+  function currentViewSnapshot(scope){
+    const st=savedViewState[scope];
+    if(scope==='tasks') return { filter:currentFilter, view:currentView, q:searchQuery||'', preset:st&&st.preset||null };
+    return { q:$('opp-search').value||'', meet:pipeMeet, dash:pipeDash, preset:st&&st.preset||null };
+  }
+  function applySavedView(scope, v){
+    const preset=v.preset?PRESET_VIEWS[scope].find(p=>p.id===v.preset):(v.id && PRESET_VIEWS[scope].find(p=>p.id===v.id));
+    savedViewState[scope]={ name:v.name, pred:preset&&preset.pred||null, preset:preset?preset.id:null };
+    if(scope==='tasks'){
+      gsTab('tasks');
+      if(v.filter){ currentFilter=v.filter; document.querySelectorAll('#filters .filter-chip').forEach(c=>c.classList.toggle('active', c.dataset.filter===v.filter)); }
+      const view=v.view||(preset&&preset.view);
+      if(view){ const b=document.querySelector('#view-switch [data-view="'+view+'"]'); if(b) b.click(); }
+      if(v.q!=null){ const si=$('search-input'); if(si){ si.value=v.q; si.dispatchEvent(new Event('input')); } }
+      render();
+    } else {
+      gsTab('pipeline');
+      if(v.q!=null) $('opp-search').value=v.q;
+      if(v.meet!=null){ pipeMeet=!!v.meet; pipeDash=!!v.dash&&!v.meet; }
+      renderPipeline();
+    }
+    paintViewChip(scope);
+  }
+  function clearSavedView(scope){ savedViewState[scope]=null; paintViewChip(scope); if(scope==='tasks') render(); else renderPipeline(); }
+  function paintViewChip(scope){
+    const chip=$(scope==='tasks'?'tasks-view-chip':'pipe-view-chip'); if(!chip) return;
+    const st=savedViewState[scope]; chip.hidden=!st; if(!st) return;
+    chip.innerHTML=''; const t=document.createElement('span'); t.textContent=st.name; const x=document.createElement('button'); x.type='button'; x.textContent='×'; x.title='Revenir à l’affichage normal'; x.setAttribute('aria-label','Quitter la vue');
+    x.onclick=()=>clearSavedView(scope); chip.append(t, x);
+  }
+  function openViewsMenu(scope, btn){
+    document.querySelectorAll('.views-menu').forEach(m=>m.remove());
+    const m=document.createElement('div'); m.className='views-menu'; m.setAttribute('role','menu');
+    const item=(label, fn, cls)=>{ const b=document.createElement('button'); b.type='button'; b.className='views-item'+(cls?' '+cls:''); b.setAttribute('role','menuitem'); b.textContent=label; b.onclick=()=>{ m.remove(); fn(); }; m.appendChild(b); return b; };
+    const head=t=>{ const h=document.createElement('div'); h.className='views-h'; h.textContent=t; m.appendChild(h); };
+    head('Vues prêtes'); PRESET_VIEWS[scope].forEach(p=>item(p.name, ()=>applySavedView(scope, { id:p.id, name:p.name, preset:p.id })));
+    const mine=userViews(scope);
+    if(mine.length){ head('Mes vues'); mine.forEach((v,i)=>{ const b=item(v.name, ()=>applySavedView(scope, v)); const del=document.createElement('span'); del.className='views-del'; del.textContent='×'; del.title='Supprimer cette vue';
+      del.onclick=e=>{ e.stopPropagation(); const l=userViews(scope); l.splice(i,1); storeUserViews(scope,l); m.remove(); openViewsMenu(scope, btn); }; b.appendChild(del); }); }
+    item('+ Enregistrer la vue actuelle…', ()=>{ const name=prompt('Nom de la vue (filtres, affichage et recherche actuels) :', savedViewState[scope]?savedViewState[scope].name:''); if(!name||!name.trim()) return;
+      const l=userViews(scope).filter(v=>v.name!==name.trim()); l.push(Object.assign({ name:name.trim() }, currentViewSnapshot(scope))); storeUserViews(scope,l); savedViewState[scope]=Object.assign({}, savedViewState[scope]||{}, { name:name.trim() }); paintViewChip(scope); }, 'save');
+    document.body.appendChild(m);
+    const r=btn.getBoundingClientRect(); m.style.left=Math.min(r.left, innerWidth-m.offsetWidth-8)+'px'; m.style.top=(r.bottom+4)+'px';
+    setTimeout(()=>document.addEventListener('click', function close(e){ if(!m.contains(e.target)){ m.remove(); document.removeEventListener('click', close, true); } }, true), 0);
+  }
+  window.todoExtraCommands=(window.todoExtraCommands||[]).concat(
+    PRESET_VIEWS.tasks.map(p=>({ t:'Vue tâches : '+p.name, k:'vue filtre taches', go:()=>applySavedView('tasks',{ id:p.id, name:p.name, preset:p.id }) })),
+    PRESET_VIEWS.pipeline.map(p=>({ t:'Vue pipeline : '+p.name, k:'vue filtre pipeline', go:()=>applySavedView('pipeline',{ id:p.id, name:p.name, preset:p.id }) })));
   function renderPipeline(){
     if(normalizeOpps()) saveCrmLocalOnly();
     const board=$('pipeline-board');
@@ -3674,8 +3749,10 @@
     if(pipeDash){ renderPipeDash(board); return; }
     const q=pqFold($('opp-search').value.trim());
     if(pipeMeet){ renderPipeMeet(board, q); return; }
+    const vp=savedViewState.pipeline && savedViewState.pipeline.pred;
     const items=opportunities.filter(o=>!o.deleted && o.kind!=='request' && o.stage!=='converti')
-      .filter(o=>!q || pqFold([o.company,o.centrale,o.title,o.prenom,o.nom,o.dept].join(' ')).includes(q));
+      .filter(o=>!q || pqFold([o.company,o.centrale,o.title,o.prenom,o.nom,o.dept].join(' ')).includes(q))
+      .filter(o=>!vp || vp(o));
     const live=items.filter(o=>!isExited(o)), exited=items.filter(isExited);
     $('pipe-exited-toggle').textContent=pipeShowExited?'Masquer les sorties':('Sorties ('+exited.length+')');
     PIPE_PHASES.forEach(ph=>{
@@ -6036,6 +6113,8 @@
   $('prequal-cancel-btn').onclick=closePrequalForm;
   $('pipe-exited-toggle').onclick=()=>{ pipeShowExited=!pipeShowExited; renderPipeline(); };
   $('pipe-dash-toggle').onclick=()=>{ pipeDash=!pipeDash; if(pipeDash) pipeMeet=false; renderPipeline(); };
+  $('tasks-views-btn').onclick=e=>{ e.stopPropagation(); openViewsMenu('tasks', e.currentTarget); };
+  $('pipe-views-btn').onclick=e=>{ e.stopPropagation(); openViewsMenu('pipeline', e.currentTarget); };
   $('pipe-meet-toggle').onclick=()=>{ pipeMeet=!pipeMeet; if(pipeMeet) pipeDash=false; renderPipeline(); };
   $('pq-save-btn').onclick=saveOpp;
   $('pq-next-btn').onclick=pqNext;
