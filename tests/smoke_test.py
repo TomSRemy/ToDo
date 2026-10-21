@@ -424,10 +424,16 @@ with sync_playwright() as p:
     page, errors = new_page(browser, {"todo_todo-widget-opportunities": json.dumps(two)}, viewport={"width": 1300, "height": 900})
     page.goto(URL); page.click('[data-tab="pipeline"]'); page.locator(".pipe-req-name", has_text="ALPHA PV1").click()
     tabs = page.eval_on_selector_all("#opp-detail-body .req-tab", "els=>els.map(e=>e.innerText.replace(/\\s+/g,' ').trim())")
-    check(tabs == ["Installation 1 ALPHA PV1 299 kWc · VILLE-SUR-EXEMPLE", "Installation 2 BETA PV1 211 kWc · 49 - Maine-et-Loire"] and "ALPHA PV1" in page.inner_text("#opp-detail-title"),
+    check(tabs == ["Installation 1 ALPHA PV1 299 kWc · 358 MWh · MES 20/07/2027 · VILLE-SUR-EXEMPLE", "Installation 2 BETA PV1 211 kWc · 49 - Maine-et-Loire"] and "ALPHA PV1" in page.inner_text("#opp-detail-title"),
           f"request: both installations shown as tabs in the sheet ({tabs})")
     table = page.inner_text("#opp-detail-body .req-compare")
     check("358 MWh" in table and "à compléter" in table and "3 cases à compléter" in table, "request: side-by-side check, empty cells to complete flagged")
+    page.click("#opp-detail-body .req-compare-h")
+    check(not page.is_visible("#opp-detail-body .req-table"), "request: the side-by-side table folds with a click on its title")
+    page.locator("#opp-detail-body .req-tab", has_text="BETA PV1").click()
+    check(not page.is_visible("#opp-detail-body .req-table"), "request: folded stays folded on the next sheet")
+    page.click("#opp-detail-body .req-compare-h")
+    page.locator("#opp-detail-body .req-tab", has_text="ALPHA PV1").click()
     page.locator("#opp-detail-body .req-tab", has_text="BETA PV1").click()
     check("BETA PV1" in page.inner_text("#opp-detail-title") and page.locator("#opp-detail-body .req-tab.on").inner_text().startswith("Installation 2"), "request: a tab opens the other installation")
     check(not errors, f"no page errors ({errors})")

@@ -4258,21 +4258,31 @@
     if(k==='mwh' || k==='p90'){ const n=pqNum(String(v)); return isNaN(n)?String(v):n.toLocaleString('fr-FR')+' MWh'; }
     return String(v);
   }
+  // short description of an installation for its line: power · volume · commissioning · town (postal code) · type
+  function instLineInfo(x){
+    const mwh=x.mwh?Number(pqNum(String(x.mwh))).toLocaleString('fr-FR')+' MWh':'';
+    const place=x.commune?x.commune+(x.cp?' ('+x.cp+')':''):(x.dept||'');
+    return [fmtKwc(x.kwc), mwh, x.mesPrev||x.mesEff?'MES '+(x.mesEff||x.mesPrev):'', place, x.install].filter(Boolean).join(' · ');
+  }
   function buildRequestTabs(list, currentId){
     const t=document.createElement('div'); t.className='req-tabs'; t.setAttribute('role','tablist');
     list.forEach((x,i)=>{
       const b=document.createElement('button'); b.type='button'; b.className='req-tab'+(x.id===currentId?' on':''); b.setAttribute('role','tab'); b.setAttribute('aria-selected', String(x.id===currentId));
       b.innerHTML='<span class="n"></span><b></b><span class="k"></span>';
-      b.querySelector('.n').textContent='Installation '+(i+1); b.querySelector('b').textContent=oppName(x); b.querySelector('.k').textContent=[fmtKwc(x.kwc), x.commune||x.dept].filter(Boolean).join(' · ');
+      b.querySelector('.n').textContent='Installation '+(i+1); b.querySelector('b').textContent=oppName(x); b.querySelector('.k').textContent=instLineInfo(x);
       b.onclick=()=>{ if(x.id!==currentId) openOppDetail(x.id); };
       t.appendChild(b);
     });
     return t;
   }
   function buildRequestCompare(list, currentId){
-    const wrap=document.createElement('div'); wrap.className='req-compare';
+    // folds away with a click on its title; open or closed is remembered on this device
+    const wrap=document.createElement('details'); wrap.className='req-compare';
+    let open=true; try{ open=localStorage.getItem('req-compare-open')!=='0'; }catch(e){}
+    wrap.open=open;
+    wrap.addEventListener('toggle', ()=>{ try{ localStorage.setItem('req-compare-open', wrap.open?'1':'0'); }catch(e){} });
     const missing=list.reduce((s,x)=>s+['centrale','kwc','mwh','mesPrev','dept','commune'].filter(k=>!reqCompareValue(x,k)).length,0);
-    wrap.innerHTML='<div class="opp-phase-h">Vérifier les '+list.length+' installations côte à côte'+(missing?' <span class="req-miss">'+missing+' case'+(missing>1?'s':'')+' à compléter</span>':'')+'</div>';
+    wrap.innerHTML='<summary class="opp-phase-h req-compare-h">Vérifier les '+list.length+' installations côte à côte'+(missing?' <span class="req-miss">'+missing+' case'+(missing>1?'s':'')+' à compléter</span>':'')+'</summary>';
     const keys=REQ_COMPARE_KEYS.filter(k=>['centrale','kwc','mwh','mesPrev','dept','commune'].includes(k) || list.some(x=>reqCompareValue(x,k)));
     const sc=document.createElement('div'); sc.className='req-compare-scroll';
     let t='<table class="req-table"><thead><tr><th></th>'+list.map((x,i)=>'<th class="'+(x.id===currentId?'cur':'')+'"><button type="button" class="req-col" data-id="'+escapeHtml(x.id)+'">Installation '+(i+1)+'</button></th>').join('')+'</tr></thead><tbody>';
@@ -4427,7 +4437,7 @@
     const ul=document.createElement('div'); ul.className='opp-req-list';
     list.forEach(o=>{
       const r=document.createElement('div'); r.className='pipe-req-line';
-      const n=document.createElement('span'); n.className='pipe-req-name'; n.textContent=oppName(o)+(o.kwc?' · '+fmtKwc(o.kwc):'');
+      const n=document.createElement('span'); n.className='pipe-req-name req-line-name'; n.innerHTML='<b></b><span></span>'; n.firstChild.textContent=oppName(o); n.lastChild.textContent=instLineInfo(o);
       n.onclick=()=>openOppDetail(o.id);
       r.appendChild(n); r.appendChild(stageChip(o));
       const rm=document.createElement('button'); rm.type='button'; rm.className='pq-link'; rm.textContent='Retirer';
