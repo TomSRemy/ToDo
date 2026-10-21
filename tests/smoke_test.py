@@ -632,6 +632,25 @@ with sync_playwright() as p:
     check(not errors, f"no page errors ({errors})")
     page.close()
 
+    # --- Undo / redo of actions: several steps back with Ctrl+Z, Ctrl+Shift+Z to redo
+    page, errors = new_page(browser, {"todo_todo-widget-tasks": json.dumps([task("u1", "Première"), task("u2", "Deuxième")])}, viewport={"width": 1300, "height": 800})
+    page.goto(URL); page.click('[data-tab="tasks"]'); page.wait_for_timeout(300)
+    page.locator("#task-list .task-line", has_text="Première").locator(".task-check").first.click(); page.wait_for_timeout(900)
+    page.fill("#quick-add-input", "Troisième"); page.press("#quick-add-input", "Enter"); page.wait_for_timeout(900)
+    page.locator("body").click(position={"x": 600, "y": 700}); page.keyboard.press("Control+z"); page.wait_for_timeout(200)
+    t = {x["title"]: x for x in stored(page, "todo-widget-tasks")}
+    check(t["Troisième"]["deleted"] is True and t["Première"]["archived"] is True and "Annulé" in page.inner_text("#bridge-msg"), "undo: Ctrl+Z cancels the last action (the added task)")
+    page.keyboard.press("Control+z"); page.wait_for_timeout(200)
+    t = {x["title"]: x for x in stored(page, "todo-widget-tasks")}
+    check(t["Première"]["archived"] is False, "undo: a second Ctrl+Z goes one more step back (validation cancelled)")
+    page.keyboard.press("Control+Shift+z"); page.wait_for_timeout(200)
+    t = {x["title"]: x for x in stored(page, "todo-widget-tasks")}
+    check(t["Première"]["archived"] is True and t["Troisième"]["deleted"] is True, "undo: Ctrl+Shift+Z redoes")
+    page.focus("#quick-add-input"); page.keyboard.type("abc"); page.keyboard.press("Control+z")
+    check(len(stored(page, "todo-widget-tasks")) == 3 and t["Première"]["archived"] is True, "undo: inside a text field, Ctrl+Z only undoes the typing")
+    check(not errors, f"no page errors ({errors})")
+    page.close()
+
     # --- Sync pill: state visible everywhere, token problems explained
     page, errors = new_page(browser, viewport={"width": 1300, "height": 800})
     page.goto(URL); page.wait_for_timeout(300)

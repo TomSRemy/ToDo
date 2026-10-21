@@ -107,10 +107,69 @@
     fetchContactInbox();
     setInterval(fetchContactInbox, 5 * 60 * 1000);
     checkDailyDigestNotification();
+    undoRebase();   // the state as loaded is the starting point of the undo history
     if(syncConfig.enabled){ syncPull(); syncPullCrm(); syncPullNotes(); syncPullParc(); setInterval(syncPull, 5 * 60 * 1000); setInterval(syncPullCrm, 5 * 60 * 1000); setInterval(syncPullNotes, 5 * 60 * 1000); setInterval(syncPullParc, 5 * 60 * 1000); }
   }
   async function saveTasksLocalOnly(){ try{ await window.storage.set(TASKS_KEY,JSON.stringify(tasks),false); }catch(e){ console.error(e); } }
-  async function saveTasks(){ await saveTasksLocalOnly(); scheduleSyncPush(); }
+  // ---------- Undo / redo (Ctrl+Z / Ctrl+Maj+Z): every saved action is a step, several steps back ----------
+  // A step keeps, for each task, contact, company, meeting, opportunity or note that changed, its version before and after.
+  // Changes coming from the sync or from another tab are not steps (they are not this person's actions here).
+  const UNDO_LISTS=[['task',()=>tasks,'tâche'],['company',()=>companies,'société'],['contact',()=>contacts,'contact'],['meeting',()=>meetings,'rendez-vous'],['opportunity',()=>opportunities,'opportunité'],['note',()=>notes,'note']];
+  let undoBase=null, undoStack=[], redoStack=[], undoTimer=null, undoApplying=false;
+  function undoSnapshot(){ const m=new Map(); UNDO_LISTS.forEach(([t,get])=>(get()||[]).forEach(x=>{ if(x && x.id) m.set(t+':'+x.id, JSON.stringify(x)); })); return m; }
+  function undoRebase(){ clearTimeout(undoTimer); undoBase=undoSnapshot(); }
+  function undoCommit(){
+    clearTimeout(undoTimer);
+    if(!undoBase || undoApplying) return;
+    const now=undoSnapshot(), changes=[];
+    now.forEach((v,k)=>{ const b=undoBase.get(k); if(b!==v) changes.push({ key:k, before:b==null?null:b, after:v }); });
+    undoBase.forEach((v,k)=>{ if(!now.has(k)) changes.push({ key:k, before:v, after:null }); });
+    undoBase=now;
+    if(!changes.length) return;
+    undoStack.push({ at:Date.now(), changes }); if(undoStack.length>60) undoStack.shift();
+    redoStack=[];
+  }
+  function undoSchedule(){ if(undoApplying || !undoBase) return; clearTimeout(undoTimer); undoTimer=setTimeout(undoCommit, 700); }   // a burst of saves (typing) is one step
+  function undoDescribe(step){
+    const byType={}; step.changes.forEach(c=>{ const t=c.key.split(':')[0]; byType[t]=(byType[t]||0)+1; });
+    if(step.changes.length===1){ const c=step.changes[0], t=c.key.split(':')[0], o=JSON.parse(c.after||c.before), lab=(UNDO_LISTS.find(x=>x[0]===t)||[])[2]||t;
+      const name=o.title||o.centrale||o.name||[o.firstName,o.lastName].filter(Boolean).join(' ')||o.label||(o.text||'').slice(0,30); return lab+(name?' « '+name+' »':''); }
+    return Object.entries(byType).map(([t,n])=>n+' '+((UNDO_LISTS.find(x=>x[0]===t)||[])[2]||t)+(n>1?'s':'')).join(', ');
+  }
+  function undoApply(step, side){
+    undoApplying=true;
+    step.changes.forEach(c=>{
+      const [t,id]=c.key.split(/:(.+)/), entry=UNDO_LISTS.find(x=>x[0]===t), list=entry[1](), i=list.findIndex(x=>x.id===id), val=side==='before'?c.before:c.after;
+      if(val==null){ if(i>=0){ list[i].deleted=true; list[i].updatedAt=Date.now(); } return; }   // did not exist: removed (as a deletion, so the sync follows)
+      const o=JSON.parse(val); o.updatedAt=Date.now();   // newer than any copy elsewhere, so the sync keeps it
+      if(i>=0) list[i]=o; else list.push(o);
+    });
+    undoApplying=false;
+    undoBase=undoSnapshot();
+    saveTasks(); saveCrm(); saveNotes(); undoBase=undoSnapshot();
+    try{ render(); renderArchive(); renderLists(); renderToday(); renderContacts(); renderPipeline(); renderNotes(); }catch(e){}
+    if(!$('opp-detail-overlay').classList.contains('hidden') && viewingOppId){ const v=opportunities.find(x=>x.id===viewingOppId); if(v && !v.deleted) (v.kind==='request'?openRequestDetail:openOppDetail)(v.id); else closeOppDetail(); }
+  }
+  function undoLast(){
+    undoCommit();
+    const step=undoStack.pop(); if(!step){ showBridgeMsg('Rien à annuler.', true); return; }
+    undoApply(step, 'before'); redoStack.push(step);
+    showBridgeMsg('Annulé : '+undoDescribe(step)+'. Ctrl+Maj+Z pour rétablir'+(undoStack.length?' · encore '+undoStack.length+' étape'+(undoStack.length>1?'s':'')+' à annuler':'')+'.', true);
+  }
+  function redoLast(){
+    const step=redoStack.pop(); if(!step){ showBridgeMsg('Rien à rétablir.', true); return; }
+    undoApply(step, 'after'); undoStack.push(step);
+    showBridgeMsg('Rétabli : '+undoDescribe(step)+'.', true);
+  }
+  document.addEventListener('keydown', e=>{
+    if(!(e.ctrlKey||e.metaKey) || e.altKey) return;
+    const k=e.key.toLowerCase(); if(k!=='z' && k!=='y') return;
+    const t=e.target, typing=t && (t.isContentEditable || /^(TEXTAREA|SELECT)$/.test(t.tagName) || (t.tagName==='INPUT' && !/^(checkbox|radio|button|submit)$/i.test(t.type)));
+    if(typing) return;   // inside a field: the browser's own undo of the typing
+    e.preventDefault();
+    if(k==='y' || e.shiftKey) redoLast(); else undoLast();
+  }, true);
+  async function saveTasks(){ undoSchedule(); await saveTasksLocalOnly(); scheduleSyncPush(); }
 
   async function saveCrmLocalOnly(){
     try{
@@ -119,7 +178,7 @@
         .map(([k,v])=>window.storage.set(k,JSON.stringify(v),false)));
     }catch(e){ console.error(e); }
   }
-  async function saveCrm(){ await saveCrmLocalOnly(); scheduleCrmSyncPush(); }
+  async function saveCrm(){ undoSchedule(); await saveCrmLocalOnly(); scheduleCrmSyncPush(); }
   function touchCrm(o){
     o.updatedAt=Date.now();
     if(o && o.stage && (o.kind==='installation'||o.kind==='prequal'||o.kind==='request')){
@@ -382,7 +441,7 @@
       if(data.status===404){ await syncPushNow(); return; }
       if(!data.ok){ setSyncStatus('Erreur de synchro (lecture)'); return; }
       const remoteTasks=data.json;
-      tasks=threeWayMerge('task', tasks, remoteTasks, tasksBaseSnapshot);
+      undoCommit(); tasks=threeWayMerge('task', tasks, remoteTasks, tasksBaseSnapshot); undoRebase();
       // The base is what is actually on the server — not the merged result,
       // which may still hold local edits that were never pushed (e.g. app
       // closed within the 3s push debounce). Those get pushed now instead of
@@ -410,7 +469,7 @@
       if(getData.ok){
         sha=getData.sha;
         const remoteTasks=getData.json;
-        tasks=threeWayMerge('task', tasks, remoteTasks, tasksBaseSnapshot);
+        undoCommit(); tasks=threeWayMerge('task', tasks, remoteTasks, tasksBaseSnapshot); undoRebase();
         await saveTasksLocalOnly();
         refreshAllViews();
       }
@@ -457,7 +516,7 @@
       if(!data.ok) return;
       const remote=data.json;
       const merged=mergeCrmBundle({companies,contacts,meetings,opportunities}, remote);
-      companies=merged.companies; contacts=merged.contacts; meetings=merged.meetings; opportunities=merged.opportunities;
+      undoCommit(); companies=merged.companies; contacts=merged.contacts; meetings=merged.meetings; opportunities=merged.opportunities; undoRebase();
       lastKnownCrmSha=data.sha;
       // Base = server state, not merged state (see syncPull).
       crmBaseSnapshot={ companies:(remote.companies||[]).map(c=>({...c})), contacts:(remote.contacts||[]).map(c=>({...c})), meetings:(remote.meetings||[]).map(m=>({...m})), opportunities:(remote.opportunities||[]).map(o=>({...o})) };
@@ -480,7 +539,7 @@
         sha=getData.sha;
         const remote=getData.json;
         const merged=mergeCrmBundle({companies,contacts,meetings,opportunities}, remote);
-        companies=merged.companies; contacts=merged.contacts; meetings=merged.meetings; opportunities=merged.opportunities;
+        undoCommit(); companies=merged.companies; contacts=merged.contacts; meetings=merged.meetings; opportunities=merged.opportunities; undoRebase();
         await saveCrmLocalOnly();
         if(typeof renderCrm==='function') renderCrm();
       }
@@ -506,7 +565,7 @@
     }catch(e){ console.error('crm sync push failed', e); syncNote(null); }
   }
   async function saveNotesLocalOnly(){ try{ await window.storage.set(NOTES_KEY,JSON.stringify(notes),false); }catch(e){ console.error(e); } }
-  async function saveNotes(){ await saveNotesLocalOnly(); scheduleNotesSyncPush(); }
+  async function saveNotes(){ undoSchedule(); await saveNotesLocalOnly(); scheduleNotesSyncPush(); }
   async function saveNotesBase(){ try{ await window.storage.set('sync-notes-base', JSON.stringify(notesBaseSnapshot), false); }catch(e){} }
   async function syncPullNotes(){
     if(!syncConfig.enabled) return;
@@ -516,7 +575,7 @@
       if(data.status===404){ await syncPushNotesNow(); return; }
       if(!data.ok) return;
       const remote=data.json;
-      notes=threeWayMerge('note', notes, remote, notesBaseSnapshot);
+      undoCommit(); notes=threeWayMerge('note', notes, remote, notesBaseSnapshot); undoRebase();
       consolidateNotes();
       notesBaseSnapshot=remote.map(n=>({...n}));
       lastKnownNotesSha=data.sha;
@@ -544,6 +603,7 @@
     const k=e.key.slice(5);
     // a data key written straight into localStorage by an older page: the store merges it and tells us the result
     if(e.storageArea===localStorage && window.storage.isManaged && window.storage.isManaged(k)) return;
+    undoCommit();   // what came from another tab is not an action of this one: not undone here
     try{
       const v=JSON.parse(e.newValue);
       if(k===TASKS_KEY){ tasks=v; refreshAllViews(); }
@@ -556,6 +616,7 @@
       else if(k==='sync-crm-base') crmBaseSnapshot=v;
       else if(k==='sync-notes-base') notesBaseSnapshot=v;
     }catch(err){}
+    undoRebase();
   });
   window.addEventListener('pagehide', flushPendingSync);
   // ---------- Portefeuille through the private data repo (data/parc.json): loaded on the computer, read on the phone ----------
@@ -616,7 +677,7 @@
       if(getData.ok){
         sha=getData.sha;
         const remote=getData.json;
-        notes=threeWayMerge('note', notes, remote, notesBaseSnapshot);
+        undoCommit(); notes=threeWayMerge('note', notes, remote, notesBaseSnapshot); undoRebase();
         consolidateNotes();
         await saveNotesLocalOnly();
         renderNotes();
