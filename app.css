@@ -1348,23 +1348,85 @@ details.req-compare:not([open]) .req-compare-h::before{ transform:rotate(-90deg)
 .req-table td.none{ color:var(--tx3); }
 .req-table tbody th[scope="row"]{ white-space:normal; min-width:160px; max-width:260px; }
 
-/* won / signed / lost: a short animation over the page, never in the way of a click */
-.celebrate{ position:fixed; inset:0; z-index:30000; pointer-events:none; overflow:hidden; display:flex; align-items:center; justify-content:center; transition:opacity .5s ease; }
+/* won / signed / lost (js/celebrate.js): three of each at random, over the page, never in the way of a click */
+.celebrate{ position:fixed; inset:0; z-index:30000; pointer-events:none; overflow:hidden; transition:opacity .5s ease; background:radial-gradient(circle at 50% 45%, rgba(4,7,12,.45), rgba(4,7,12,0) 60%); }
 .celebrate.out{ opacity:0; }
-.celebrate .confetti{ position:absolute; top:-20px; border-radius:2px; opacity:.95; animation:confetti-fall linear forwards; }
-@keyframes confetti-fall{ 0%{ transform:translate(0,0) rotate(0); } 100%{ transform:translate(var(--dx,0),105vh) rotate(var(--rot,360deg)); opacity:.8; } }
-.celebrate .drop{ position:absolute; top:-40px; width:2px; height:28px; border-radius:2px; opacity:.55; animation:drop-fall ease-in forwards; }
-@keyframes drop-fall{ 0%{ transform:translateY(0); opacity:0; } 15%{ opacity:.55; } 100%{ transform:translateY(105vh); opacity:0; } }
-.celebrate-card{ position:relative; display:flex; flex-direction:column; align-items:center; gap:4px; padding:22px 34px; border-radius:16px; background:var(--panel); color:var(--tx1); border:1px solid var(--bd); box-shadow:0 18px 50px rgba(0,0,0,.35); text-align:center; animation:celebrate-pop .55s cubic-bezier(.2,1.4,.4,1) both; }
-.celebrate-card b{ font-size:20px; }
-.celebrate-card span{ font-size:13px; color:var(--tx2); }
-.celebrate-card .celebrate-sub{ font-size:12px; }
-.celebrate-ico{ display:flex; align-items:center; justify-content:center; width:46px; height:46px; border-radius:50%; font-size:24px !important; font-weight:700; color:#fff !important; background:#14D3A9; margin-bottom:6px; }
-.celebrate-signed .celebrate-ico{ background:linear-gradient(135deg,#14D3A9,#1A7B8C); }
-.celebrate-lost .celebrate-ico{ background:#8B93A7; }
-.celebrate-lost .celebrate-card{ animation:celebrate-sink .7s ease both; }
-@keyframes celebrate-pop{ 0%{ transform:scale(.6); opacity:0; } 100%{ transform:scale(1); opacity:1; } }
-@keyframes celebrate-sink{ 0%{ transform:translateY(-14px); opacity:0; } 60%{ transform:translateY(4px); opacity:1; } 100%{ transform:translateY(0); opacity:1; } }
+.celebrate .cx-fx{ position:absolute; inset:0; overflow:hidden; }
+.celebrate .cx-art{ position:absolute; left:50%; top:50%; width:min(56vmin,420px); height:min(52vmin,390px); transform:translate(-50%,-58%); overflow:visible; }
+.celebrate .cx-msg{ position:absolute; left:50%; bottom:13vh; transform:translateX(-50%); display:flex; flex-direction:column; align-items:center; gap:3px; padding:12px 26px; border-radius:14px;
+  background:var(--panel); border:1px solid var(--bd); box-shadow:0 18px 50px rgba(0,0,0,.35); text-align:center; white-space:nowrap; opacity:0; }
+.celebrate .cx-msg b{ font-size:20px; color:var(--tx1); }
+.celebrate .cx-msg span{ font-size:12.5px; color:var(--tx2); }
+.celebrate.cx-play .cx-msg{ animation:cx-msg .5s 1.3s cubic-bezier(.2,1.4,.4,1) forwards; }
+.celebrate.cxv-gun.cx-play .cx-msg{ animation-delay:.4s; }
+.celebrate.cx-less .cx-art, .celebrate.cx-less .cx-planes{ display:none; }
+.celebrate.cx-less.cx-play .cx-msg{ animation:none; opacity:1; bottom:40vh; }
+@keyframes cx-msg{ from{ opacity:0; transform:translate(-50%,10px) scale(.9); } to{ opacity:1; transform:translate(-50%,0); } }
+.celebrate .confetti{ position:absolute; top:-20px; border-radius:2px; opacity:0; animation:confetti-fall linear forwards; }
+@keyframes confetti-fall{ 0%{ opacity:.95; transform:translate(0,0) rotate(0); } 100%{ opacity:.8; transform:translate(var(--dx,0),105vh) rotate(var(--rot,360deg)); } }
+.celebrate [class^="cx-"], .celebrate [class*=" cx-"]{ transform-box:view-box; }
+/* offer accepted 1: the dancing solar panel */
+.cx-body{ transform-origin:130px 190px; } .cx-play .cx-body{ animation:cx-dance .5s ease-in-out 5 alternate; }
+@keyframes cx-dance{ 0%{ transform:rotate(-9deg); } 50%{ transform:rotate(0) translateY(-10px); } 100%{ transform:rotate(9deg); } }
+.cx-leg-l{ transform-origin:118px 168px; } .cx-leg-r{ transform-origin:142px 168px; }
+.cx-play .cx-leg-l{ animation:cx-legL .5s ease-in-out 5 alternate; } .cx-play .cx-leg-r{ animation:cx-legR .5s ease-in-out 5 alternate; }
+@keyframes cx-legL{ from{ transform:rotate(14deg); } to{ transform:rotate(-6deg); } } @keyframes cx-legR{ from{ transform:rotate(6deg); } to{ transform:rotate(-14deg); } }
+.cx-glasses{ transform:translateY(-60px); opacity:0; } .cx-play .cx-glasses{ animation:cx-shades .45s .25s cubic-bezier(.3,1.6,.5,1) forwards; }
+@keyframes cx-shades{ to{ transform:none; opacity:1; } }
+.celebrate .cx-eye{ transform-box:fill-box; transform-origin:center; } .cx-play .cx-wink{ animation:cx-wink .35s 1.1s 2; } @keyframes cx-wink{ 50%{ transform:scaleY(.1); } }
+.cx-rays{ transform-origin:212px 46px; } .cx-play .cx-rays{ animation:cx-spin 3s linear; } @keyframes cx-spin{ to{ transform:rotate(180deg); } }
+/* offer accepted 2: the turbine takes off (whole turns: it stops with a blade straight up) */
+.cx-lift{ transform-origin:130px 220px; } .cx-play .cx-lift{ animation:cx-lift 2.6s ease-in-out forwards; }
+@keyframes cx-lift{ 0%,40%{ transform:none; } 60%{ transform:translateY(-34px) rotate(-3deg); } 75%{ transform:translateY(-40px) rotate(3deg); } 92%{ transform:translateY(2px); } 100%{ transform:none; } }
+.cx-whirl, .cx-slow{ transform-origin:130px 78px; }
+.cx-play .cx-whirl{ animation:cx-whirl 2.6s cubic-bezier(.55,0,.35,1) forwards; } @keyframes cx-whirl{ 70%{ transform:rotate(2160deg); } 100%{ transform:rotate(2520deg); } }
+.celebrate .cx-dust, .celebrate .cx-check, .celebrate .cx-spark, .celebrate .cx-puff, .celebrate .cx-tumble{ transform-box:fill-box; transform-origin:center; opacity:0; }
+.cx-play .cx-dust{ animation:cx-dust .9s 1.1s ease-out; } @keyframes cx-dust{ 0%{ opacity:.7; transform:scale(.4); } 100%{ opacity:0; transform:scale(1.6); } }
+.cx-play .cx-check{ animation:cx-pop .4s 2.2s cubic-bezier(.3,1.6,.5,1) forwards; } @keyframes cx-pop{ from{ opacity:0; transform:scale(.3); } to{ opacity:1; transform:scale(1); } }
+/* offer accepted 3: lightning charges the battery */
+.cx-bolt{ transform:translateY(-120px); opacity:0; } .cx-play .cx-bolt{ animation:cx-strike .35s .1s ease-in forwards, cx-flash .25s .45s 2; }
+@keyframes cx-strike{ to{ transform:none; opacity:1; } } @keyframes cx-flash{ 50%{ opacity:.2; } }
+.celebrate .cx-fill{ transform-box:fill-box; transform-origin:left center; transform:scaleX(0); } .cx-play .cx-fill{ animation:cx-charge 1s .55s cubic-bezier(.2,.8,.3,1) forwards; } @keyframes cx-charge{ to{ transform:scaleX(1); } }
+.cx-play .cx-spark{ animation:cx-sparkle .6s 1.5s ease-out forwards; } @keyframes cx-sparkle{ 0%{ opacity:1; transform:scale(.2); } 100%{ opacity:0; transform:scale(1.8); } }
+.cx-pct{ font:700 22px var(--font-ui); fill:#04070C; }
+/* signed 1: the money gun, bottom-left corner */
+.cx-gun{ position:absolute; left:14px; bottom:24px; width:190px; transform-origin:22% 78%; z-index:2; }
+.cx-gun svg{ display:block; width:100%; height:auto; filter:drop-shadow(0 4px 8px rgba(0,0,0,.45)); }
+.cx-bill{ position:absolute; left:0; top:0; width:62px; height:32px; border-radius:4px; background:linear-gradient(135deg,#2E9E6A,#1F7A50); border:2px solid #9EE6C0; box-shadow:0 2px 6px rgba(0,0,0,.35);
+  display:flex; align-items:center; justify-content:center; font:800 15px var(--font-ui); font-style:normal; color:#E9FFF3; will-change:transform; }
+.cx-bill::before, .cx-bill::after{ content:''; position:absolute; top:50%; width:8px; height:8px; margin-top:-4px; border-radius:50%; border:1.5px solid #9EE6C0; }
+.cx-bill::before{ left:5px; } .cx-bill::after{ right:5px; }
+/* signed 2: the gong */
+.cx-gong{ transform-origin:130px 52px; } .cx-play .cx-gong{ animation:cx-gong 1.6s .62s ease-out; }
+@keyframes cx-gong{ 6%{ transform:rotate(-7deg) scale(1.04); } 16%{ transform:rotate(5deg); } 28%{ transform:rotate(-3.5deg); } 42%{ transform:rotate(2deg); } 60%{ transform:rotate(-1deg); } 100%{ transform:none; } }
+.cx-mallet{ transform-origin:236px 226px; transform:rotate(38deg); } .cx-play .cx-mallet{ animation:cx-mallet 1.4s ease-in-out forwards; }
+@keyframes cx-mallet{ 0%{ transform:rotate(38deg); } 30%{ transform:rotate(52deg); } 44%{ transform:rotate(-4deg); } 58%{ transform:rotate(14deg); } 100%{ transform:rotate(38deg); } }
+.cx-gflash{ opacity:0; } .cx-play .cx-gflash{ animation:cx-gflash .7s .62s ease-out; } @keyframes cx-gflash{ 0%{ opacity:.85; } 100%{ opacity:0; } }
+.cx-wave{ position:absolute; left:50%; top:44%; width:40px; height:40px; margin:-20px 0 0 -20px; border-radius:50%; border:3px solid #E8C547; opacity:0; animation:cx-wave 1.6s ease-out forwards; }
+@keyframes cx-wave{ 0%{ opacity:.9; width:40px; height:40px; margin:-20px 0 0 -20px; } 100%{ opacity:0; width:220vmax; height:220vmax; margin:-110vmax 0 0 -110vmax; } }
+/* signed 3: champagne */
+.cx-bottle{ transform-origin:110px 200px; transform:rotate(28deg); } .cx-play .cx-bottle{ animation:cx-shake .09s 6 linear, cx-recoil .5s .62s ease-out; }
+@keyframes cx-shake{ 0%,100%{ transform:rotate(28deg); } 50%{ transform:rotate(22deg) translateX(-2px); } } @keyframes cx-recoil{ 0%{ transform:rotate(34deg) translate(-4px,4px); } 100%{ transform:rotate(28deg); } }
+.cx-play .cx-cork{ animation:cx-cork 1.1s .55s cubic-bezier(.2,.7,.4,1) forwards; } @keyframes cx-cork{ to{ transform:translate(150px,-260px) rotate(720deg); opacity:0; } }
+.cx-bubble{ position:absolute; left:0; top:0; border-radius:50%; background:radial-gradient(circle at 35% 35%, #FFF8D6, #E8C547 60%, rgba(232,197,71,.2)); will-change:transform; }
+/* lost 1: the rain cloud and the umbrella */
+.cx-cloud{ transform:translateX(-170px); } .cx-play .cx-cloud{ animation:cx-in .8s ease-out forwards; } @keyframes cx-in{ to{ transform:none; } }
+.cx-rain line{ opacity:0; } .cx-play .cx-rain line{ animation:cx-rain .55s linear infinite; animation-delay:var(--d); }
+@keyframes cx-rain{ 0%{ opacity:0; transform:translateY(-10px); } 20%{ opacity:.8; } 100%{ opacity:0; transform:translateY(46px); } }
+.cx-umb{ transform-origin:130px 112px; transform:scale(0); } .cx-play .cx-umb{ animation:cx-umb .45s 1.2s cubic-bezier(.3,1.6,.5,1) forwards; } @keyframes cx-umb{ to{ transform:scale(1); } }
+.cx-play .cx-sad{ animation:cx-hide .01s 1.5s forwards; } .cx-happy{ opacity:0; } .cx-play .cx-happy{ animation:cx-show .2s 1.5s forwards; }
+@keyframes cx-hide{ to{ opacity:0; } } @keyframes cx-show{ to{ opacity:1; } }
+/* lost 2: no wind */
+.cx-play .cx-slow{ animation:cx-slow 2.6s cubic-bezier(.1,.6,.3,1) forwards; } @keyframes cx-slow{ to{ transform:rotate(720deg); } }
+.cx-play .cx-tumble{ animation:cx-tumble 2.6s 1.2s linear forwards; }
+@keyframes cx-tumble{ 0%{ opacity:1; transform:translate(-120px,0) rotate(0); } 25%{ transform:translate(-50px,-14px) rotate(260deg); } 50%{ transform:translate(20px,0) rotate(520deg); } 75%{ transform:translate(90px,-8px) rotate(780deg); } 100%{ opacity:1; transform:translate(170px,0) rotate(1040deg); } }
+/* lost 3: the paper plane nosedives, a new one takes off */
+.cx-planes{ position:absolute; left:50%; top:50%; width:260px; height:240px; transform-origin:center; }
+.cx-plane{ position:absolute; left:0; top:0; width:34px; height:22px; offset-rotate:auto; opacity:0; } .cx-plane svg{ display:block; width:100%; height:100%; }
+.cx-play .cx-p1{ offset-path:path('M-30 70 C 40 40, 90 40, 120 60 S 150 110, 120 110 S 100 70, 140 80 S 175 150, 182 204'); animation:cx-fly 2s ease-in forwards, cx-hide .3s 2.6s forwards; }
+.cx-play .cx-p2{ offset-path:path('M40 206 C 90 200, 150 140, 300 30'); animation:cx-fly 1.4s 2.3s ease-in forwards; }
+@keyframes cx-fly{ 0%{ offset-distance:0%; opacity:1; } 100%{ offset-distance:100%; opacity:1; } }
+.cx-play .cx-puff{ animation:cx-dust .8s 2s ease-out; }
 
 /* Pipeline · meeting view: one line per installation, grouped by phase, to share with the pricing team */
 #pipeline-board.pipe-meet{ display:flex; flex-direction:column; gap:10px; padding:14px 16px 30px; width:100%; min-width:0; box-sizing:border-box; overflow:visible; }

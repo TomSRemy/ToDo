@@ -4757,28 +4757,8 @@
     celebrateTimer=setTimeout(()=>{ const q=celebrateQueue; celebrateQueue=null; playCelebration(q.kind, q.list); }, 60);
   }
   function playCelebration(kind, list){
-    document.querySelectorAll('.celebrate').forEach(n=>n.remove());
-    const fx=document.createElement('div'); fx.className='celebrate celebrate-'+kind; fx.setAttribute('aria-live','polite');
     const n=list.length, sub=n>1?n+' installations'+(list[0]&&list[0].company?' · '+list[0].company:''):(list[0]?oppName(list[0]):'');
-    const msg={ won:['Offre acceptée !','Direction KYC et contrat'], signed:['Contrat signé !','Place à l\u2019onboarding'], lost:['Offre perdue','On rebondit sur la suivante'] }[kind];
-    const card=document.createElement('div'); card.className='celebrate-card';
-    card.innerHTML='<span class="celebrate-ico">'+(kind==='lost'?'\u2193':'\u2713')+'</span><b>'+escapeHtml(msg[0])+'</b><span>'+escapeHtml(sub||msg[1])+'</span>'+(sub?'<span class="celebrate-sub">'+escapeHtml(msg[1])+'</span>':'');
-    const less=window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    if(!less){
-      const colors=kind==='lost'?['#8B93A7','#A9B0C0','#6E7689']:['#14D3A9','#FFFD82','#ED6965','#7DD3FC','#8B7FB5','#CA6702'];
-      const count=kind==='lost'?26:(kind==='signed'?110:80);
-      for(let i=0;i<count;i++){
-        const p=document.createElement('i'); p.className=kind==='lost'?'drop':'confetti';
-        p.style.left=(Math.random()*100)+'vw'; p.style.background=colors[i%colors.length];
-        p.style.animationDelay=(Math.random()*(kind==='lost'?0.9:0.5))+'s';
-        p.style.animationDuration=(kind==='lost'?1.1+Math.random()*0.8:1.8+Math.random()*1.4)+'s';
-        if(kind!=='lost'){ p.style.setProperty('--dx',(Math.random()*160-80)+'px'); p.style.setProperty('--rot',(Math.random()*900-450)+'deg'); p.style.width=(6+Math.random()*6)+'px'; p.style.height=(8+Math.random()*8)+'px'; }
-        fx.appendChild(p);
-      }
-    }
-    fx.appendChild(card); document.body.appendChild(fx);
-    setTimeout(()=>fx.classList.add('out'), kind==='lost'?2000:2600);
-    setTimeout(()=>fx.remove(), kind==='lost'?2500:3200);
+    if(window.todoCelebrate) window.todoCelebrate(kind, { sub });   // js/celebrate.js: three animations of each kind, at random
   }
   // Moving into a stage records the dates the BDD needs.
   // the opportunity in one line: installations · power · technology · volume

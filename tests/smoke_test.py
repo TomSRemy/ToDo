@@ -1093,6 +1093,13 @@ with sync_playwright() as p:
     page.wait_for_selector(".celebrate-lost", timeout=2000)
     check("Offre perdue" in page.inner_text(".celebrate-lost") and next(o for o in stored(page, "todo-widget-opportunities") if o["id"] == "solo")["stage"] == "perdu",
           "offer refused: lost, with its own animation")
+    seq = page.evaluate("""(()=>{ const out={}; ['won','signed','lost'].forEach(k=>{ out[k]=[]; for(let i=0;i<12;i++){ window.todoCelebrate(k, {sub:'x'}); out[k].push(document.querySelector('.celebrate').dataset.variant); } }); return out; })()""")
+    check(all(len(set(v)) == 3 and all(a_ != b_ for a_, b_ in zip(v, v[1:])) for v in seq.values()),
+          f"animations: three per moment, drawn at random, never the same twice in a row ({seq['signed'][:6]})")
+    shown = page.evaluate("""(()=>{ const r=[]; [['won','panel'],['won','turbine'],['won','battery'],['signed','gun'],['signed','gong'],['signed','champagne'],['lost','umbrella'],['lost','nowind'],['lost','plane']].forEach(([k,v])=>{
+      window.todoCelebrate(k, {sub:'x'}, v); const el=document.querySelector('.celebrate'); r.push(el.dataset.variant===v && el.getBoundingClientRect().width===innerWidth && !!el.querySelector('.cx-msg b').textContent); }); return r; })()""")
+    check(all(shown), f"animations: the nine play full screen with their message ({shown})")
+    page.evaluate("document.querySelectorAll('.celebrate').forEach(n=>n.remove())")
     check(not errors, f"no page errors ({errors})")
     page.close()
 
