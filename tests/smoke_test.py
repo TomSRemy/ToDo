@@ -1319,7 +1319,7 @@ Responsable technique
         h = {"Access-Control-Allow-Origin": "*", "Content-Type": "application/json"}
         if request.url.endswith("/status"):
             ok = request.headers.get("x-bridge-token") == "k1"
-            return route.fulfill(status=200, headers=h, body=json.dumps({"ok": True, "version": "1.1", "authorized": ok, "pipe": {"name": "Pipe.xlsx", "found": True}, "bdd": {"name": "Suivi.xlsx", "found": True}}))
+            return route.fulfill(status=200, headers=h, body=json.dumps({"ok": True, "version": "1.2", "authorized": ok, "pipe": {"name": "Pipe.xlsx", "found": True}, "bdd": {"name": "Suivi.xlsx", "found": True}}))
         sent.append((request.url.rsplit("/", 2)[-2], json.loads(request.post_data)))
         return route.fulfill(status=200, headers=h, body=json.dumps({"ok": True, "results": [{"ok": True, "action": "ajoutée", "row": 12}]}))
     inst = [{"id": "i1", "kind": "installation", "company": "SCEA", "producteur": "SCEA", "centrale": "Les Vignes", "title": "Les Vignes", "stage": "demande_prix",
@@ -1347,7 +1347,7 @@ Responsable technique
             return route.fulfill(status=204, headers={"Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "*", "Access-Control-Allow-Methods": "*"})
         h = {"Access-Control-Allow-Origin": "*", "Content-Type": "application/json"}
         if request.url.endswith("/status"):
-            return route.fulfill(status=200, headers=h, body=json.dumps({"ok": True, "version": "1.1", "authorized": True, "pipe": {"name": "Pipe.xlsx", "found": True}, "bdd": {"name": "Suivi.xlsx", "found": True}}))
+            return route.fulfill(status=200, headers=h, body=json.dumps({"ok": True, "version": "1.2", "authorized": True, "pipe": {"name": "Pipe.xlsx", "found": True}, "bdd": {"name": "Suivi.xlsx", "found": True}}))
         body = json.loads(request.post_data); sent2.append(body)
         if len(sent2) == 1:
             res = {"ok": True, "action": "mise à jour", "row": 12, "key": "SCEA / Les Vignes", "cells": 2, "written": [3, 22], "mine": [0, 3, 22],
@@ -1373,6 +1373,7 @@ Responsable technique
     page.wait_for_timeout(300)
     second = sent2[1]["rows"][0] if len(sent2) > 1 else {}
     o = stored(page, "todo-widget-opportunities")[0]
+    check(second.get("seen") == {"35": "Vu au salon (Marie)"}, "shared Excel: the value seen is sent with the choice (replaced only if still there)")
     check(second.get("force") == {"35": "merge"} and second.get("target") == 12 and o["excelKeep"]["pipe"] == {"30": "Perdu"},
           f"shared Excel: merge sent for the comment, the kept status remembered ({second.get('force')}, {o.get('excelKeep')})")
     check(o["excelPrev"]["pipe"][3] == {"d": "2026-10-12"} and o["excelPrev"]["pipe"][35] == "Relancer lundi" and o["excelPrev"]["pipe"][30] is None,
@@ -1386,7 +1387,7 @@ Responsable technique
             return route.fulfill(status=204, headers={"Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "*", "Access-Control-Allow-Methods": "*"})
         h = {"Access-Control-Allow-Origin": "*", "Content-Type": "application/json"}
         if request.url.endswith("/status"):
-            return route.fulfill(status=200, headers=h, body=json.dumps({"ok": True, "version": "1.0", "authorized": True, "pipe": {"name": "Pipe.xlsx", "found": True}, "bdd": {"name": "Suivi.xlsx", "found": True}}))
+            return route.fulfill(status=200, headers=h, body=json.dumps({"ok": True, "version": "1.1", "authorized": True, "pipe": {"name": "Pipe.xlsx", "found": True}, "bdd": {"name": "Suivi.xlsx", "found": True}}))
         posts.append(request.url); return route.fulfill(status=200, headers=h, body=json.dumps({"ok": True, "results": []}))
     page, errors = new_page(browser, {"todo_todo-widget-opportunities": json.dumps(inst), "todo_bridge-config": json.dumps({"port": 8765, "token": "k1"})})
     page.route("http://127.0.0.1:8765/**", old_bridge)

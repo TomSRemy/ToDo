@@ -5038,11 +5038,12 @@
     if(res && res.fileWasClosed) msg+=' Le fichier n’était pas ouvert dans Excel : ouvre-le avant d’envoyer pour que tes cases se fusionnent en direct avec celles des collègues.';
     return msg;
   }
-  // 1.1 = the bridge that never overwrites a colleague's cell; an older one is refused (it could)
-  const bridgeUpToDate=info=>{ const v=String(info&&info.version||'0').split('.').map(Number); return v[0]>1 || (v[0]===1 && (v[1]||0)>=1); };
+  // 1.2 = the bridge that never overwrites a colleague's cell, checks the business code and the line again right before
+  // writing, and keeps a journal of every cell; an older one is refused
+  const bridgeUpToDate=info=>{ const v=String(info&&info.version||'0').split('.').map(Number); return v[0]>1 || (v[0]===1 && (v[1]||0)>=2); };
   async function xlSend(kind, list, rows){
     if(!bridgeState.info || Date.now()-bridgeState.checkedAt>60000) await bridgeCheck();
-    if(bridgeState.ok && !bridgeUpToDate(bridgeState.info)) throw new Error('Ton pont Excel est une ancienne version, qui peut écraser les cases modifiées par tes collègues : rien n\u2019a été envoyé. Dans Réf. & data → Pont Excel, télécharge pont-excel.ps1, remplace l\u2019ancien fichier et relance le pont.');
+    if(bridgeState.ok && !bridgeUpToDate(bridgeState.info)) throw new Error('Ton pont Excel est une ancienne version, moins protégée que la nouvelle : rien n\u2019a été envoyé. Dans Réf. & data → Pont Excel, télécharge pont-excel.ps1, remplace l\u2019ancien fichier et relance le pont.');
     const res=await bridgeCall('POST','/'+kind+'/upsert',{ rows }, 30000);
     const results=res.results||[], pending=[];
     results.forEach((r,i)=>{ const o=list[i]; xlRemember(kind, o, rows[i].values, r); if(r.ok && ((r.conflicts&&r.conflicts.length) || r.question)) pending.push({ o, r }); });
@@ -5075,10 +5076,14 @@
       if(p.r.question){
         const q=p.r.question, intro=document.createElement('p'); intro.className='xr-intro';
         intro.textContent=q.type==='duplicate'?'Plusieurs lignes ouvertes ont ce producteur et cette centrale. Rien n’a été écrit : laquelle mettre à jour ?'
+          :q.type==='other-contract'?'La ligne de cette centrale porte un autre code affaire ('+(q.rows[0]&&q.rows[0].code||'')+' ; l’appli envoie '+(q.code||'')+') : c’est peut-être un autre contrat. Rien n’a été écrit.'
           :'Cette centrale a une ligne close récemment. Rien n’a été écrit : nouvelle ligne ou reprendre l’ancienne ?';
         s.appendChild(intro);
+        const desc=r=>[r.statut,r.date,r.code].filter(Boolean).join(' · ');
         const opts=q.type==='duplicate'
-          ? [...q.rows.map(r=>[String(r.row),'Ligne '+r.row+(r.statut?' · '+r.statut:'')+(r.date?' · '+r.date:'')]), ['new','Nouvelle ligne'], ['skip','Ne rien écrire']]
+          ? [...q.rows.map(r=>[String(r.row),'Ligne '+r.row+(desc(r)?' · '+desc(r):'')]), ['new','Nouvelle ligne'], ['skip','Ne rien écrire']]
+          : q.type==='other-contract'
+          ? [['new','Nouvelle ligne pour ce contrat (l’autre reste telle quelle)'], ...q.rows.map(r=>[String(r.row),'C’est la même affaire : compléter la ligne '+r.row+' (cases vides seulement, le reste te sera demandé)']), ['skip','Ne rien écrire']]
           : [['new','Nouvelle ligne (l’ancienne reste telle quelle)'], ...q.rows.map(r=>[String(r.row),'Reprendre la ligne '+r.row+' ('+[r.statut,r.date].filter(Boolean).join(', ')+')']), ['skip','Ne rien écrire']];
         const def=q.type==='duplicate'?'skip':'new';
         opts.forEach(([v,l])=>{ const lab=document.createElement('label'); lab.className='xr-opt'; const i=document.createElement('input'); i.type='radio'; i.name='xq-'+idx; i.value=v; i.checked=v===def; lab.append(i, document.createTextNode(' '+l)); s.appendChild(lab); });
@@ -5101,16 +5106,16 @@
     $('xl-review-apply').onclick=async ()=>{
       const list=[], rows=[];
       pending.forEach((p,idx)=>{
-        const force={}, o=p.o;
+        const force={}, seen={}, o=p.o;
         (p.r.conflicts||[]).forEach(c=>{
           const v=$('xr-'+idx+'-'+c.i).value;
           if(v==='keep'){ o.excelKeep=o.excelKeep||{}; o.excelKeep[kind]=Object.assign({}, o.excelKeep[kind]||{}, { [c.i]:c.excel }); touchCrm(o); }
-          else force[c.i]=v;
+          else { force[c.i]=v; seen[c.i]=c.excel; }   // the bridge replaces only if the cell still holds what was shown here
         });
         let target=null;
         if(p.r.question){ const ch=document.querySelector('input[name="xq-'+idx+'"]:checked'); const v=ch?ch.value:'skip'; if(v==='skip') return; target=v==='new'?'new':+v; }
         else if(!Object.keys(force).length) return;
-        list.push(o); rows.push(xlRowFor(kind, o, Object.assign({ force }, target!=null?{ target }:{}, p.r.row && !p.r.question?{ target:p.r.row }:{})));
+        list.push(o); rows.push(xlRowFor(kind, o, Object.assign({ force, seen }, target!=null?{ target }:{}, p.r.row && !p.r.question?{ target:p.r.row }:{})));
       });
       saveCrm(); closeXlReview();
       if(!rows.length){ showBridgeMsg('Rien de plus à écrire : l’Excel garde ses valeurs.', true); return; }

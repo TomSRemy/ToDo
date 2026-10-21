@@ -14,8 +14,14 @@
    - dans une ligne : une case vide est remplie ; une case qui contient encore ce que l'app y avait écrit est mise à jour ;
      une case changée par quelqu'un d'autre est gardée et signalée (l'app propose Garder / Remplacer / Fusionner pour
      les commentaires) ; rien n'est jamais vidé ; une cellule qui contient une formule n'est jamais écrasée ;
+   - « Remplacer » n'agit que si la case contient toujours la valeur que tu as vue dans l'app ;
+   - BDD : le code affaire (Ref_Watt.ee) départage les lignes d'une même centrale ; une ligne qui porte un autre code
+     (autre contrat, saisi par quelqu'un d'autre) n'est jamais mise à jour sans ton accord ;
+   - juste avant chaque écriture, la ligne est relue : si le tableau a bougé (tri, insertion par un collègue),
+     rien n'est écrit sur cette ligne ;
    - une ligne n'est réutilisée que si elle est entièrement vide ;
-   - avant la première écriture, une copie du fichier est gardée dans « Sauvegardes pont » (les 3 dernières).
+   - avant la première écriture, une copie du fichier est gardée dans « Sauvegardes pont » (les 3 dernières),
+     et chaque case écrite est notée dans « Sauvegardes pont/journal-pont.csv » avec son ancienne valeur (jamais effacé).
 
   Lancement : double-clic sur « Lancer-pont-excel.bat ». Au premier lancement, choisir les deux fichiers Excel
   et recopier la clé affichée dans l'app (Réf. & data → Pont Excel).
@@ -24,7 +30,7 @@
 param([int]$Port = 8765, [switch]$Reconfigurer, [switch]$Mock)
 
 $ErrorActionPreference = 'Stop'
-$Version = '1.1'
+$Version = '1.2'
 $Here = Split-Path -Parent $MyInvocation.MyCommand.Path
 $ConfigPath = Join-Path $Here 'pont-excel-config.json'
 $AllowedOrigins = @('https://tomsremy.github.io', 'null', 'http://localhost:8000', 'http://127.0.0.1:8000')
@@ -109,6 +115,7 @@ function New-ComAdapter($kind) {
   $a.Column = { param($a, $c) $n = $a.lo.ListRows.Count; $out = New-Object object[] ($n + 1); if ($n -gt 0) { $v = $a.lo.ListColumns.Item($c).DataBodyRange.Value2; if ($n -eq 1) { $out[1] = $v } else { for ($r = 1; $r -le $n; $r++) { $out[$r] = $v[$r, 1] } } }; ,$out }
   $a.HasFormula = { param($a, $r, $c) [bool](& $a.Cell $a $r $c).HasFormula }
   $a.Set = { param($a, $r, $c, $v) $cell = (& $a.Cell $a $r $c); if ($v -is [datetime]) { $cell.Value = $v } else { $cell.Value2 = $v } }
+  $a.BeforeWrite = { param($a) }
   $a.AddRow = { param($a) $null = $a.lo.ListRows.Add(); $a.lo.ListRows.Count }
   $a.ExcelRow = { param($a, $r) $a.lo.DataBodyRange.Row + $r - 1 }
   $a.RowEmpty = { param($a, $r) $v = $a.lo.ListRows.Item($r).Range.Value2; if ($v -is [array]) { foreach ($x in $v) { if (-not (Is-Blank $x)) { return $false } }; return $true }; return (Is-Blank $v) }
@@ -124,7 +131,7 @@ function New-MockAdapter($kind) {
   if (-not $script:mockTables.ContainsKey($kind)) {
     $n = if ($kind -eq 'pipe') { 37 } else { 91 }
     $h = @(); for ($i = 1; $i -le $n; $i++) { $h += "Col$i" }
-    if ($kind -eq 'pipe') { $h[6] = 'Nom Producteur'; $h[19] = 'Nom Centrale' } else { $h[31] = 'Nom_prod'; $h[33] = 'Nom_Installation_prod'; $h[29] = 'Renouvellement' }
+    if ($kind -eq 'pipe') { $h[6] = 'Nom Producteur'; $h[19] = 'Nom Centrale' } else { $h[31] = 'Nom_prod'; $h[33] = 'Nom_Installation_prod'; $h[29] = 'Renouvellement'; $h[7] = 'Ref_Watt.ee' }
     $script:mockTables[$kind] = @{ headers = $h; rows = New-Object System.Collections.ArrayList; formulas = @{} }
     if ($kind -eq 'bdd') { $script:mockTables[$kind].formulas[30] = $true }   # column AD holds a formula
   }
@@ -135,6 +142,8 @@ function New-MockAdapter($kind) {
   $a.Column = { param($a, $c) $n = $a.t.rows.Count; $out = New-Object object[] ($n + 1); for ($r = 1; $r -le $n; $r++) { $out[$r] = $a.t.rows[$r - 1][$c - 1] }; ,$out }
   $a.HasFormula = { param($a, $r, $c) [bool]$a.t.formulas[$c] }
   $a.Set = { param($a, $r, $c, $v) $a.t.rows[$r - 1][$c - 1] = $v }
+  # test only: a colleague inserts a line at the top just before the bridge writes
+  $a.BeforeWrite = { param($a) if ($a.t.shiftOnWrite) { $a.t.shiftOnWrite = $false; $a.t.rows.Insert(0, (New-Object object[] $a.t.headers.Count)) } }
   $a.AddRow = { param($a) $null = $a.t.rows.Add((New-Object object[] $a.t.headers.Count)); $a.t.rows.Count }
   $a.ExcelRow = { param($a, $r) $r + 1 }
   $a.RowEmpty = { param($a, $r) foreach ($v in $a.t.rows[$r - 1]) { if (-not (Is-Blank $v)) { return $false } }; return $true }
@@ -202,6 +211,20 @@ function Ensure-Backup($a, $state) {
   $state.backup = [IO.Path]::GetFileName((& $a.Backup $a $BackupDir (Get-Date -Format 'yyyyMMdd-HHmmss')))
   Get-ChildItem -Path $BackupDir -Filter (& $a.BackupPattern $a) | Sort-Object LastWriteTime -Descending | Select-Object -Skip $KeepBackups | Remove-Item -Force -ErrorAction SilentlyContinue
 }
+$JournalPath = Join-Path $BackupDir 'journal-pont.csv'
+function Csv-Field($v) { '"' + ((Show-Value $v) -replace '"', '""' -replace "`r?`n", ' / ') + '"' }
+function Write-Journal($a, $kind, $r, $c, $key, $old, $new, $why) {
+  if (-not (Test-Path $BackupDir)) { $null = New-Item -ItemType Directory -Path $BackupDir }
+  if (-not (Test-Path $JournalPath)) { [IO.File]::WriteAllText($JournalPath, "Date;Fichier;Ligne;Colonne;Centrale;Ancienne valeur;Nouvelle valeur;Pourquoi`r`n", (New-Object Text.UTF8Encoding $true)) }
+  $line = (@((Get-Date -Format 'dd/MM/yyyy HH:mm:ss'), $Kinds[$kind].label, (& $a.ExcelRow $a $r), $a.Headers[$c - 1], $key, $old, $new, $why) | ForEach-Object { Csv-Field $_ }) -join ';'
+  [IO.File]::AppendAllText($JournalPath, $line + "`r`n", (New-Object Text.UTF8Encoding $true))
+}
+# the row still holds this plant (and, when given, this business code): checked again right before writing
+function Row-Still($a, $r, $keyCols, $keyVals) {
+  if ($r -lt 1 -or $r -gt (& $a.RowCount $a)) { return $false }
+  for ($j = 0; $j -lt $keyCols.Count; $j++) { if ((Norm (& $a.Get $a $r $keyCols[$j])) -ne $keyVals[$j]) { return $false } }
+  return $true
+}
 function Upsert-Rows($kind, $rows) {
   $a = New-Adapter $kind
   $state = @{ backup = $null }
@@ -215,6 +238,8 @@ function Upsert-Rows($kind, $rows) {
     $statusCol = if ($kind -eq 'pipe') { Find-Col $a @('stade', 'stadepipe', 'statut') @('stade') @() } else { Find-Col $a @('statut') @('statut') @() }
     $dateCol = Find-Col $a @() @('dateentree', 'datedentree', 'dateentre') @('entree')
     if ($dateCol -eq 0) { $dateCol = Find-Col $a @('annee') @() @() }
+    # BDD: business code (Ref_Watt.ee), a second key that tells two contracts of the same plant apart
+    $codeCol = if ($kind -eq 'bdd') { Find-Col $a @('refwattee', 'codeaffaire', 'refwatee') @('refwatt', 'codeaffaire') @() } else { 0 }
     $off = $a.FirstCol - 1
     $results = New-Object System.Collections.ArrayList
     foreach ($row in $rows) {
@@ -224,10 +249,15 @@ function Upsert-Rows($kind, $rows) {
       $prev = if ($isObj -and $row.prev) { @($row.prev) } else { @() }
       $keep = if ($isObj) { $row.keep } else { $null }
       $force = if ($isObj) { $row.force } else { $null }
+      $seen = if ($isObj) { $row.seen } else { $null }
       $won = $isObj -and [bool]$row.won
       $target0 = if ($isObj) { $row.target } else { $null }
       $keyVals = @(); foreach ($kc in $keyCols) { $keyVals += (Norm $vals[$kc + $off - 1]) }
       $keyText = (@($vals[$keyCols[0] + $off - 1], $vals[$keyCols[1] + $off - 1]) -join ' / ')
+      $newCode = if ($codeCol) { Norm $vals[$codeCol + $off - 1] } else { '' }
+      $prevCode = if ($codeCol -and ($codeCol + $off - 1) -lt $prev.Count) { Norm $prev[$codeCol + $off - 1] } else { '' }
+      # a row's code is « ours » when empty, the code sent now, or the code the app wrote there last time
+      $codeOk = { param($r) if (-not $codeCol) { return $true }; $rc = Norm (& $a.Get $a $r $codeCol); return ($rc -eq '' -or $rc -eq $newCode -or ($prevCode -ne '' -and $rc -eq $prevCode)) }
       if (($keyVals | Where-Object { $_ -eq '' }).Count -gt 0) { [void]$results.Add(@{ ok = $false; key = $keyText; message = 'Clé incomplète (producteur ou centrale vide) : ligne ignorée.' }); continue }
       $n = & $a.RowCount $a
       $cols = @(); foreach ($kc in $keyCols) { $cols += ,(& $a.Column $a $kc) }
@@ -237,7 +267,8 @@ function Upsert-Rows($kind, $rows) {
         if ((($cur -join '|') -eq ($keyVals -join '|'))) { $found += $r }
       }
       $info = { param($r) $st = if ($statusCol) { & $a.Get $a $r $statusCol } else { $null }; $dt = if ($dateCol) { To-Date (& $a.Get $a $r $dateCol) } else { $null }
-        @{ row = (& $a.ExcelRow $a $r); statut = (Show-Value $st); date = $(if ($dt) { $dt.ToString('dd/MM/yyyy') } else { '' }); closed = ($ClosedStatus -contains (Norm $st)); won = ((Norm $st) -eq 'gagne'); dt = $dt; r = $r } }
+        @{ row = (& $a.ExcelRow $a $r); statut = (Show-Value $st); date = $(if ($dt) { $dt.ToString('dd/MM/yyyy') } else { '' }); closed = ($ClosedStatus -contains (Norm $st)); won = ((Norm $st) -eq 'gagne'); dt = $dt; r = $r;
+           code = $(if ($codeCol) { Show-Value (& $a.Get $a $r $codeCol) } else { '' }); codeOk = (& $codeOk $r) } }
       $target = 0; $isNew = $false; $note = ''; $question = $null
       if ($target0) {
         if ([string]$target0 -eq 'new') { $isNew = $true; $note = 'Nouvelle ligne, comme demandé.' }
@@ -249,8 +280,13 @@ function Upsert-Rows($kind, $rows) {
       } else {
         $infos = @(); foreach ($r in $found) { $infos += (& $info $r) }
         $usable = @($infos | Where-Object { -not $_.closed -and (-not $_.won -or $won) })
+        # several open lines: the one with this business code wins
+        if ($usable.Count -gt 1 -and $newCode -ne '') { $same = @($usable | Where-Object { $_.code -ne '' -and $_.codeOk }); if ($same.Count -eq 1) { $usable = $same } }
         if ($usable.Count -gt 1) {
-          $question = @{ type = 'duplicate'; rows = @($usable | ForEach-Object { @{ row = $_.row; statut = $_.statut; date = $_.date } }) }
+          $question = @{ type = 'duplicate'; rows = @($usable | ForEach-Object { @{ row = $_.row; statut = $_.statut; date = $_.date; code = $_.code } }) }
+        } elseif ($usable.Count -eq 1 -and -not $usable[0].codeOk) {
+          # the only open line carries another business code (another contract, written by someone else): ask
+          $question = @{ type = 'other-contract'; code = (Show-Value $vals[$codeCol + $off - 1]); rows = @($usable | ForEach-Object { @{ row = $_.row; statut = $_.statut; date = $_.date; code = $_.code } }) }
         } elseif ($usable.Count -eq 1) {
           $target = $usable[0].r
         } else {
@@ -281,7 +317,10 @@ function Upsert-Rows($kind, $rows) {
         } else { Ensure-Backup $a $state; $target = & $a.AddRow $a }
       }
       $written = New-Object System.Collections.ArrayList; $mine = New-Object System.Collections.ArrayList; $conflicts = New-Object System.Collections.ArrayList
-      for ($i = 0; $i -lt $vals.Count; $i++) {
+      $rowCodeOk = $isNew -or (& $codeOk $target)
+      $moved = $false
+      $order = @(); foreach ($kc in $keyCols) { $order += ($kc + $off - 1) }; for ($x = 0; $x -lt $vals.Count; $x++) { if ($order -notcontains $x) { $order += $x } }
+      foreach ($i in $order) {
         $c = $i + 1 - $off
         if ($c -lt 1 -or $c -gt $a.Headers.Count) { continue }
         $v = Convert-Cell $vals[$i]
@@ -295,15 +334,32 @@ function Upsert-Rows($kind, $rows) {
           $f = [string](Get-Prop $force $i)
           $k = Get-Prop $keep $i
           $p = if ($i -lt $prev.Count) { Convert-Cell $prev[$i] } else { $null }
-          if ($f -eq 'replace') { $toWrite = $v }
-          elseif ($f -eq 'merge' -and (Is-CommentCol $a $c)) { $es = Show-Value $e; $vs = Show-Value $v; $toWrite = $(if ($es.Contains($vs)) { $es } else { $es + "`n" + $vs + ' (' + (Get-Date -Format 'dd/MM/yyyy') + ')' }) }
+          $sv = Get-Prop $seen $i
+          $stillSeen = ($null -eq $sv) -or (Same-Value $e (Convert-Cell $sv))   # « Remplacer » only replaces the value the user saw
+          if ($f -eq 'replace' -and $stillSeen) { $toWrite = $v }
+          elseif ($f -eq 'merge' -and $stillSeen -and (Is-CommentCol $a $c)) { $es = Show-Value $e; $vs = Show-Value $v; $toWrite = $(if ($es.Contains($vs)) { $es } else { $es + "`n" + $vs + ' (' + (Get-Date -Format 'dd/MM/yyyy') + ')' }) }
           elseif ($null -ne $k -and (Same-Value $e (Convert-Cell $k))) { continue }   # already chosen: keep the Excel value
-          elseif ($null -ne $p -and (Same-Value $e $p)) { $toWrite = $v }           # still what the app wrote last time: nobody else changed it
+          elseif ($rowCodeOk -and $null -ne $p -and (Same-Value $e $p)) { $toWrite = $v }   # still what the app wrote last time (on a line of this contract)
           else { [void]$conflicts.Add(@{ i = $i; header = $a.Headers[$c - 1]; excel = (Show-Value $e); app = (Show-Value $v); comment = (Is-CommentCol $a $c) }); continue }
         }
         Ensure-Backup $a $state
+        & $a.BeforeWrite $a
+        # read the line again: a colleague may have sorted or inserted lines since it was found
+        if ($isNew) {
+          # a new line: still empty before the first cell, then still holding the cells written so far
+          if ($written.Count -eq 0) { if (-not (& $a.RowEmpty $a $target)) { $moved = $true; break } }
+          else { foreach ($w in $written) { if (-not (Same-Value (& $a.Get $a $target ($w + 1 - $off)) (Convert-Cell $vals[$w]))) { $moved = $true } }; if ($moved) { break } }
+        } elseif (-not (Row-Still $a $target $keyCols $keyVals)) { $moved = $true; break }
+        $old = & $a.Get $a $target $c
+        if (-not (Same-Value $old $e)) { $moved = $true; break }   # the cell changed under our feet
         & $a.Set $a $target $c $toWrite
+        Write-Journal $a $kind $target $c $keyText $old $toWrite $(if (Is-Blank $old) { 'case vide remplie' } elseif ($f -eq 'replace') { 'Remplacer (choisi dans l''app)' } elseif ($f -eq 'merge') { 'Fusionner (choisi dans l''app)' } else { 'valeur écrite par l''app, inchangée depuis' })
         [void]$written.Add($i); [void]$mine.Add($i)
+      }
+      if ($moved) {
+        [void]$results.Add(@{ ok = $false; key = $keyText; message = $(if ($written.Count) { "Le tableau a bougé pendant l'écriture (tri ou insertion par un collègue) : arrêt après " + $written.Count + " case(s), notées dans le journal. Renvoie l'affaire." } else { "Le tableau a bougé (tri ou insertion par un collègue) : rien n'a été écrit sur cette ligne. Renvoie l'affaire." }); written = @($written); mine = @($mine) })
+        Write-Info ("$($Kinds[$kind].label) : tableau modifié pendant l'envoi, ligne arrêtée (" + $keyText + ')') 'Yellow'
+        continue
       }
       if (-not $isNew -and $written.Count -eq 0 -and $conflicts.Count -eq 0) { $action = 'aucun changement' }
       [void]$results.Add(@{ ok = $true; action = $action; row = (& $a.ExcelRow $a $target); cells = $written.Count; key = $keyText; note = $note; written = @($written); mine = @($mine); conflicts = @($conflicts) })
@@ -401,6 +457,7 @@ function Handle($req) {
     foreach ($r in @($data.rows)) { $line = New-Object object[] $t.headers.Count; $vals = @($r); for ($i = 0; $i -lt $vals.Count -and $i -lt $line.Count; $i++) { $line[$i] = $vals[$i] }; [void]$t.rows.Add($line) }
     $t.formulas = @{}; foreach ($f in @($data.formulas)) { if ($null -ne $f) { $t.formulas[[int]$f] = $true } }
     $t.closed = [bool]$data.closed
+    $t.shiftOnWrite = [bool]$data.shiftOnWrite
     return @(200, @{ ok = $true })
   }
   if ($Mock -and $req.method -eq 'GET' -and $req.path -match '^/mock/dump/(pipe|bdd)$') {

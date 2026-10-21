@@ -156,6 +156,47 @@ try:
     r = send(row(["SOLARIS", "Toit Durand", "En attente", 61], target=3))["results"][0]
     check(dump()[1][2] == "En préparation" and dump()[1][3] == "61" and r["row"] == 3, "the chosen duplicate is completed")
 
+    # 9. BDD: the business code (Ref_Watt.ee) tells two contracts of one plant apart
+    HB = ["Ref_Watt.ee", "Nom_prod", "Nom_Installation_prod", "Statut", "Date entrée BDD", "Commentaire", "P50"]
+    def bseed(rows, **kw):
+        call("POST", "/mock/seed/bdd", dict({"headers": HB, "rows": rows, "formulas": []}, **kw))
+    bdump = lambda: call("GET", "/mock/dump/bdd")["rows"]
+    bsend = lambda *rows: call("POST", "/bdd/upsert", {"rows": list(rows)})
+    bseed([["2729 - SOLARIS_Toit - A", "SOLARIS", "Toit", "En attente", "", "", ""], ["2830 - SOLARIS_Toit - A", "SOLARIS", "Toit", "En préparation", "", "", ""]])
+    r = bsend(row(["2830 - SOLARIS_Toit - A", "SOLARIS", "Toit", "En préparation", None, None, 400]))["results"][0]
+    d = bdump()
+    check(r["action"] == "mise à jour" and d[1][6] == "400" and d[0][6] == "", "two open lines of one plant: the business code picks the right one, no question")
+    bseed([["2126 - URBA_158_C213 - A", "SOLARIS", "Toit", "En attente", "", "", ""]])
+    r = bsend(row(["2729 - SOLARIS_Toit - A", "SOLARIS", "Toit", "En préparation", None, None, 400]))["results"][0]
+    check(r["action"] == "en attente" and r["question"]["type"] == "other-contract" and bdump()[0] == ["2126 - URBA_158_C213 - A", "SOLARIS", "Toit", "En attente", "", "", ""],
+          "the only line carries another contract's code: nothing written, the app asks")
+    bseed([["2729 - SOLARIS_Toit - A", "SOLARIS", "Toit", "En préparation", "", "", 300]])
+    r = bsend(row(["27(06)30 - SOLARIS_Toit - A", "SOLARIS", "Toit", "En attente", None, None, 400], prev=["2729 - SOLARIS_Toit - A", "SOLARIS", "Toit", "En préparation", None, None, 300]))["results"][0]
+    check(bdump()[0][0] == "27(06)30 - SOLARIS_Toit - A" and bdump()[0][3] == "En attente" and not r["conflicts"], "the app's own code follows its new dates on its own line")
+    bseed([["", "SOLARIS", "Toit", "En préparation", "", "", ""]])
+    bsend(row(["2729 - SOLARIS_Toit - A", "SOLARIS", "Toit", "En préparation"]))
+    check(bdump()[0][0] == "2729 - SOLARIS_Toit - A", "an empty code is filled")
+    # 10. « Remplacer » only replaces the value the user saw
+    bseed([["2729 - SOLARIS_Toit - A", "SOLARIS", "Toit", "En attente", "", "Vu par Marie", ""]])
+    r = bsend(row(["2729 - SOLARIS_Toit - A", "SOLARIS", "Toit", "En attente", None, "Relancer"], force={"5": "replace"}, seen={"5": "Ancien texte"}))["results"][0]
+    check(bdump()[0][5] == "Vu par Marie" and [c["header"] for c in r["conflicts"]] == ["Commentaire"], "the cell changed since it was shown: not replaced, asked again")
+    r = bsend(row(["2729 - SOLARIS_Toit - A", "SOLARIS", "Toit", "En attente", None, "Relancer"], force={"5": "replace"}, seen={"5": "Vu par Marie"}))["results"][0]
+    check(bdump()[0][5] == "Relancer", "the value seen is still there: replaced")
+    # 11. a colleague inserts a line while the bridge writes: nothing lands on the wrong line
+    bseed([["2729 - SOLARIS_Toit - A", "SOLARIS", "Toit", "En préparation", "", "", ""]], shiftOnWrite=True)
+    r = bsend(row(["2729 - SOLARIS_Toit - A", "SOLARIS", "Toit", "En préparation", None, "Note", 400]))["results"][0]
+    d = bdump()
+    check(not r["ok"] and "bougé" in r["message"] and d[0] == [""] * 7 and d[1] == ["2729 - SOLARIS_Toit - A", "SOLARIS", "Toit", "En préparation", "", "", ""],
+          "table moved during the write: nothing written, the app is told")
+    bseed([["2126 - Autre - A", "AUTRE", "Hangar", "Gagné", "", "", ""]], shiftOnWrite=True)
+    r = bsend(row(["2729 - SOLARIS_Toit - A", "SOLARIS", "Toit", "En préparation", None, None, 400]))["results"][0]
+    d = bdump()
+    check(not r["ok"] and d[1] == ["2126 - Autre - A", "AUTRE", "Hangar", "Gagné", "", "", ""] and all(x == "" for x in d[0]), "new line + moved table: the colleague's line is not touched")
+    # 12. every written cell is in the journal, with its old value
+    j = (work / "Sauvegardes pont" / "journal-pont.csv").read_text(encoding="utf-8-sig")
+    check(j.startswith("Date;Fichier;Ligne;Colonne") and '"Vu par Marie";"Relancer";"Remplacer (choisi dans l\'app)"' in j and '"2729 - SOLARIS_Toit - A";"27(06)30 - SOLARIS_Toit - A"' in j,
+          "journal: each written cell with its old value and the reason")
+
     # older app (plain lists) still works
     seed([])
     r = send(["SOLARIS", "Vieux format", "En préparation", 10])["results"][0]
