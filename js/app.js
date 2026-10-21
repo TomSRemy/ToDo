@@ -4078,7 +4078,7 @@
       const head=document.createElement('div'); head.className='opp-sheet-head';
       head.appendChild(stageChip(o));
       const meta=document.createElement('span'); meta.className='opp-sheet-meta';
-      meta.textContent=[fmtKwc(o.kwc), o.mwh?Number(pqNum(o.mwh)).toLocaleString('fr-FR')+' MWh/an':'', o.install, o.dept].filter(Boolean).join(' · ');
+      meta.textContent=[o.install, o.contrat].filter(Boolean).join(' · ');   // the figures are in the sheet just below
       head.appendChild(meta);
       const siblings=o.requestId?requestInstalls(o.requestId):[];
       if(siblings.length>1) box.appendChild(buildRequestTabs(siblings, o.id));
@@ -4182,29 +4182,60 @@
     sc.querySelectorAll('.req-col').forEach(b=>{ b.onclick=()=>openOppDetail(b.dataset.id); });
     return wrap;
   }
+  // Installation sheet: the key figures first, then Centrale / Contacts / Suivi with only what is filled in;
+  // what is missing is listed in one line per block. Phones and mails copy on click.
   function buildInstallSheet(o){
     const fr=v=>/^\d{4}-\d{2}-\d{2}$/.test(v||'')?pqIsoToFr(v):(v||'');
-    const contact=[o.prenom,(o.nom||'').replace(/^(M\.|Mme)\s+/i,'')].filter(Boolean).join(' ');
-    const groups=[
-      ['Centrale', [['Nom',oppName(o)],['Type',o.install],['Contrat',o.contrat],['Puissance',fmtKwc(o.kwc)],['Volume annuel',o.mwh?Number(pqNum(o.mwh)).toLocaleString('fr-FR')+' MWh':''],['Productible',o.kwc&&o.mwh?Math.round(pqNum(o.mwh)*1000/pqNum(o.kwc))+' kWh/kWc':''],['MES prévisionnelle',o.mesPrev],['MES effective',o.mesEff],['Début',o.debut],['Fin',o.fin],['Durée',o.duree?o.duree+' ans':''],['Département',o.dept],['Région',o.region],['Commune',[o.commune,o.cp].filter(Boolean).join(' ')],['P90',o.p90?Number(pqNum(o.p90)).toLocaleString('fr-FR')+' MWh':''],['SPV',[o.spv,o.siret].filter(Boolean).join(' · ')],['Particularités',o.particularites,true]]],
-      ['Producteur et contact', [['Producteur',o.producteur||o.company],['Type de marché',o.marche],['Contact',contact],['Qualité',o.qualite],['Téléphone',o.tel,false,true],['Mail',o.mail,false,true],['Autres contacts',(o.otherContactIds||[]).map(id=>contacts.find(c=>c.id===id)).filter(Boolean).map(c=>[c.firstName,c.lastName].filter(Boolean).join(' ')+(c.role?' ('+c.role+')':'')+(c.phone1?' · '+c.phone1:'')).join(' ; '),true]]],
-      ['Suivi', [['Chargé',o.charge],['Origine',o.origine],['Crédit Agricole',o.ca&&o.ca!=='N/A'?o.ca:''],['Entrée pipe',fr(o.dateEntree)],['RDV 1',fr(o.rdv1)+(o.rdv1&&o.cr1?' · CR':'')],['RDV 2',fr(o.rdv2)+(o.rdv2&&o.cr2?' · CR':'')],['Go',fr(o.goDate)],['1ère offre',[fr(o.dateOffre),o.nature].filter(Boolean).join(' · ')],['Signature',fr(o.signDate)],['Prochaine action',[o.action,o.relance?'le '+fr(o.relance):''].filter(Boolean).join(' ')],['Stade Pipe',pipeStade(o)],['Statut BDD',bddStatut(o)]]]
-    ];
-    const wrap=document.createElement('div'); wrap.className='opp-sheet';
-    groups.forEach(([title,rows])=>{
-      const g=document.createElement('div'); g.className='opp-sheet-group';
-      const h=document.createElement('div'); h.className='opp-phase-h'; h.textContent=title; g.appendChild(h);
-      const grid=document.createElement('div'); grid.className='opp-info';
-      rows.forEach(([k,val,wide,copy])=>{
-        const r=document.createElement('div'); if(wide) r.className='wide';
-        const l=document.createElement('span'); l.textContent=k; r.appendChild(l);
-        const b=document.createElement('b'); b.textContent=val||'—'; if(!val) b.className='empty';
-        if(copy && val){ b.className='copyable'; b.title='Copier'; b.onclick=()=>copyToClipboard(val, b); }
-        r.appendChild(b); grid.appendChild(r);
+    const mwh=v=>v?Number(pqNum(v)).toLocaleString('fr-FR')+' MWh':'';
+    const phones=s=>String(s||'').split(/\s*\/\s*|\n|;/).map(x=>x.trim()).filter(Boolean);
+    const wrap=document.createElement('div'); wrap.className='os';
+    // key figures
+    const facts=document.createElement('div'); facts.className='os-facts';
+    [['Puissance',fmtKwc(o.kwc)],['Volume annuel',mwh(o.mwh)],['Mise en service',o.mesEff?o.mesEff+' (effective)':o.mesPrev],['Lieu',o.commune?o.commune+' ('+(o.cp||(o.dept||'').split(' ')[0])+')':(o.dept||'')]]
+      .forEach(([l,v])=>{ const d=document.createElement('div'); d.className='os-fact'+(v?'':' empty'); d.innerHTML='<span></span><b></b>'; d.firstChild.textContent=l; d.lastChild.textContent=v||'à compléter'; facts.appendChild(d); });
+    wrap.appendChild(facts);
+    const grid=document.createElement('div'); grid.className='os-grid'; wrap.appendChild(grid);
+    const copyVal=(b,val)=>{ b.classList.add('copy'); b.title='Copier'; b.tabIndex=0; b.setAttribute('role','button'); b.onclick=()=>copyToClipboard(val, b); };
+    const card=(title, rows, cls)=>{
+      const c=document.createElement('section'); c.className='os-card'+(cls?' '+cls:'');
+      const h=document.createElement('h4'); h.textContent=title; c.appendChild(h);
+      const missing=[];
+      rows.forEach(r=>{
+        if(r.node){ c.appendChild(r.node); return; }
+        const [label,val,opt]=r; if(!val){ if(!(opt&&opt.optional)) missing.push(label); return; }
+        const row=document.createElement('div'); row.className='os-row'+(opt&&opt.wide?' wide':'');
+        const l=document.createElement('span'); l.textContent=label; const b=document.createElement('b'); b.textContent=val;
+        if(opt&&opt.copy) copyVal(b, val);
+        if(opt&&opt.late) b.classList.add('late');
+        row.append(l,b); c.appendChild(row);
       });
-      g.appendChild(grid); wrap.appendChild(g);
-    });
-    if(o.commentaires){ const c=document.createElement('div'); c.className='opp-sheet-group'; c.innerHTML='<div class="opp-phase-h">Commentaires</div>'; const p=document.createElement('p'); p.className='opp-sheet-comment'; p.textContent=o.commentaires; c.appendChild(p); wrap.appendChild(c); }
+      if(missing.length){ const m=document.createElement('p'); m.className='os-missing'; m.textContent='Non renseigné : '+missing.join(', '); c.appendChild(m); }
+      grid.appendChild(c); return c;
+    };
+    card('Centrale', [['Nom',oppName(o)],['Type',o.install],['Contrat',o.contrat],['Productible',o.kwc&&o.mwh?Math.round(pqNum(o.mwh)*1000/pqNum(o.kwc))+' kWh/kWc':''],
+      ['P90',mwh(o.p90)],['MES prévisionnelle',o.mesEff?o.mesPrev:'',{optional:true}],['Début → fin',[o.debut,o.fin].filter(Boolean).join(' → ')+(o.duree?' ('+o.duree+' ans)':'')],
+      ['Région',o.region],['SPV',o.spv],['SIRET',o.siret,{copy:true}],['Particularités',o.particularites,{wide:true}]]);
+    // contacts: the main one, then the others, each with Tél. 1 / Tél. 2 / mail
+    const person=(name, role, tels, mail, main)=>{
+      const p=document.createElement('div'); p.className='os-person'+(main?' main':'');
+      const h=document.createElement('div'); h.className='os-person-h'; h.innerHTML='<b></b><span></span>'; h.firstChild.textContent=name||'(sans nom)'; h.lastChild.textContent=[main?'contact principal':'',role].filter(Boolean).join(' · '); p.appendChild(h);
+      const lines=[['Tél. 1',tels[0]],['Tél. 2',tels[1]],['Mail',mail]];
+      lines.forEach(([l,v])=>{ const r=document.createElement('div'); r.className='os-row'; const a=document.createElement('span'); a.textContent=l; const b=document.createElement('b'); b.textContent=v||'—'; if(v) copyVal(b,v); else b.classList.add('none'); r.append(a,b); p.appendChild(r); });
+      return p;
+    };
+    const mainName=[o.prenom,(o.nom||'').replace(/^(M\.|Mme)\s+/i,'')].filter(Boolean).join(' ');
+    const others=(o.otherContactIds||[]).map(id=>contacts.find(c=>c.id===id)).filter(Boolean);
+    const contactRows=[['Producteur',[o.producteur||o.company, o.marche].filter(Boolean).join(' · ')]];
+    if(mainName||o.tel||o.mail) contactRows.push({ node:person(mainName, o.qualite, phones(o.tel), o.mail, true) });
+    else contactRows.push(['Contact principal','']);
+    others.forEach(c=>contactRows.push({ node:person([c.firstName,c.lastName].filter(Boolean).join(' '), c.role, [c.phone1,c.phone2].filter(Boolean), c.email, false) }));
+    card('Contacts', contactRows, 'os-contacts');
+    const relanceLate=o.relance && o.relance<toISO(new Date());
+    card('Suivi', [['Chargé',o.charge],['Origine',[o.origine, o.ca&&o.ca!=='N/A'?o.ca:''].filter(Boolean).join(' · ')],['Entrée pipe',fr(o.dateEntree)],
+      ['RDV',[o.rdv1?fr(o.rdv1)+(o.cr1?' (CR)':''):'', o.rdv2?fr(o.rdv2)+(o.cr2?' (CR)':''):''].filter(Boolean).join(' · '),{optional:true}],['Go',fr(o.goDate),{optional:true}],
+      ['1ère offre',[fr(o.dateOffre),o.nature].filter(Boolean).join(' · '),{optional:true}],['Signature',fr(o.signDate),{optional:true}],
+      ['Prochaine action',[o.action,o.relance?'le '+fr(o.relance):''].filter(Boolean).join(' '),{late:relanceLate}],['Stade Pipe',pipeStade(o)],['Statut BDD',bddStatut(o)],
+      ['Commentaires',o.commentaires,{wide:true,optional:true}]], 'os-suivi');
     return wrap;
   }
   function exitOpp(o, kind){

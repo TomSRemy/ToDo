@@ -1087,7 +1087,7 @@
 /* close cross at the top right of every window (stays in view while the window scrolls) */
 .modal-box{ position:relative; }
 .modal-x-wrap{ position:sticky; top:0; height:0; z-index:6; }
-.modal-x{ position:absolute; top:-8px; right:-8px; width:30px; height:30px; display:grid; place-items:center; background:var(--panel); border:1px solid var(--bd); border-radius:6px; color:var(--tx2); font-size:13px; line-height:1; cursor:pointer; }
+.modal-x{ position:absolute; top:-1px; right:-8px; width:30px; height:30px; display:grid; place-items:center; background:var(--panel); border:1px solid var(--bd); border-radius:6px; color:var(--tx2); font-size:13px; line-height:1; cursor:pointer; }
 .modal-x:hover{ color:var(--tx1); border-color:var(--tx3); background:var(--panel-3); }
 .modal-box > h3, .modal-box > .pq-head, .modal-box > .opp-detail-head{ padding-right:34px; }
 #guide-close{ display:none; }   /* replaced by the cross */
@@ -1110,7 +1110,41 @@
 .req-table thead th{ background:var(--panel-3); font:500 10.5px var(--font-mono); text-transform:uppercase; letter-spacing:.05em; color:var(--tx3); white-space:nowrap; }
 .req-table tbody th{ font-weight:500; color:var(--tx3); white-space:nowrap; width:1%; }
 .req-table td{ color:var(--tx1); }
-.req-table td.cur, .req-table thead th.cur{ background:var(--accent-dim); }
+.req-table thead th.cur{ color:var(--accent); box-shadow:inset 0 -2px 0 var(--accent); }
+.req-table td.cur{ background:var(--panel-2); }
 .req-table td.empty{ color:#E5B54F; font-style:italic; }
 .req-col{ background:none; border:none; padding:0; color:inherit; font:inherit; text-transform:inherit; letter-spacing:inherit; cursor:pointer; }
 .req-col:hover{ color:var(--accent); }
+
+/* installation sheet: key figures, then Centrale / Contacts / Suivi, only what is filled in */
+.os{ display:flex; flex-direction:column; gap:12px; margin-top:4px; }
+.os-facts{ display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); border:1px solid var(--bd); border-radius:8px; background:var(--panel-2); }
+.os-fact{ padding:10px 14px; display:flex; flex-direction:column; gap:2px; min-width:0; }
+.os-fact + .os-fact{ border-left:1px solid var(--bd-soft); }
+.os-fact span{ font-size:11.5px; color:var(--tx3); }
+.os-fact b{ font:500 16px/1.3 var(--font-ui); color:var(--tx1); overflow-wrap:anywhere; }
+.os-fact.empty b{ font-size:12.5px; font-style:italic; font-weight:400; color:#E5B54F; }
+.os-grid{ display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:12px; align-items:start; }
+.os-suivi{ grid-column:1 / -1; }
+.os-card{ border:1px solid var(--bd); border-radius:8px; padding:12px 14px; display:flex; flex-direction:column; gap:2px; min-width:0; }
+.os-card h4{ margin:0 0 6px; font:500 10.5px var(--font-mono); text-transform:uppercase; letter-spacing:.07em; color:var(--tx3); }
+.os-suivi{ display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); column-gap:24px; }
+.os-suivi h4, .os-suivi .os-missing, .os-suivi .os-row.wide{ grid-column:1 / -1; }
+.os-row{ display:grid; grid-template-columns:120px minmax(0,1fr); gap:10px; padding:4px 0; border-bottom:1px solid var(--bd-soft); font-size:13px; align-items:baseline; }
+.os-row:last-of-type{ border-bottom:none; }
+.os-row span{ color:var(--tx3); font-size:12px; }
+.os-row b{ color:var(--tx1); font-weight:500; overflow-wrap:anywhere; white-space:pre-wrap; }
+.os-row b.copy{ cursor:pointer; }
+.os-row b.copy:hover, .os-row b.copy:focus-visible{ color:var(--accent); }
+.os-row b.none{ color:var(--tx3); font-weight:400; }
+.os-row b.late{ color:var(--crit); }
+.os-person{ margin-top:6px; padding:8px 10px; border-radius:6px; background:var(--panel-2); display:flex; flex-direction:column; }
+.os-person.main{ box-shadow:inset 3px 0 0 var(--accent); }
+.os-person-h{ display:flex; flex-wrap:wrap; gap:4px 10px; align-items:baseline; margin-bottom:2px; }
+.os-person-h b{ font-size:13.5px; color:var(--tx1); font-weight:600; }
+.os-person-h span{ font-size:11.5px; color:var(--tx3); }
+.os-person .os-row{ grid-template-columns:52px minmax(0,1fr); }
+.os-missing{ margin:6px 0 0; font-size:11.5px; color:var(--tx3); line-height:1.45; }
+@media (max-width:760px){ .os-facts{ grid-template-columns:repeat(2,minmax(0,1fr)); } .os-fact:nth-child(3){ border-left:none; } .os-fact:nth-child(n+3){ border-top:1px solid var(--bd-soft); } .os-grid, .os-suivi{ grid-template-columns:1fr; } }
+.opp-detail-head{ min-height:30px; } .opp-detail-head h3{ margin-top:4px; }   /* title, « Modifier la fiche » and the cross on one line */
+.opp-detail-edit{ height:30px; padding:0 12px; }
