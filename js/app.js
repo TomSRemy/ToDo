@@ -6153,6 +6153,7 @@
   document.addEventListener('click',e=>{ if(snoozePopover.style.display==='flex'&&!snoozePopover.contains(e.target))closeSnoozePopover(); });
 
   document.addEventListener('keydown',e=>{
+    if((e.ctrlKey||e.metaKey)&&!e.shiftKey&&e.key.toLowerCase()==='p' && !window.TODO_WIDGET){ e.preventDefault(); if($('gs-overlay').hidden) gsOpen('>'); else gsClose(); return; }   // command palette
     if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='k'){ e.preventDefault(); if(window.TODO_WIDGET){ if(!window.TODO_PIP && !document.documentElement.classList.contains('widget-open')){ window.__widgetToggle(); return; } quickAddInput.focus(); return; } if($('gs-overlay').hidden) gsOpen(); else gsClose(); return; }
     if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='f'){ e.preventDefault(); searchInput.focus(); return; }
     if(e.key==='Escape'){ if(snoozePopover.style.display==='flex'){ closeSnoozePopover(); return; } if(editingId){ editingId=null; render(); return; } if(document.activeElement&&document.activeElement.id==='f-title'){ closeAddForm(); return; } if(document.activeElement===quickAddInput){ quickAddInput.blur(); return; } if(document.activeElement===searchInput&&searchQuery){ searchInput.value=''; searchQuery=''; searchClear.classList.remove('show'); render(); return; } return; }
@@ -6994,11 +6995,54 @@
       if(pc.length) groups.push(['Portefeuille',pc]); }
     return groups;
   }
+  // ---------- command palette (Ctrl+P, or « > » in the search): every action from the keyboard ----------
+  const clickEl=(id, tab)=>()=>{ if(tab) gsTab(tab); setTimeout(()=>{ const b=$(id); if(b) b.click(); }, tab?40:0); };
+  function gsCommands(){
+    const go=t=>()=>gsTab(t);
+    const list=[
+      { t:'Nouvelle tâche', k:'ajouter creer tache', go:()=>{ gsTab('tasks'); setTimeout(()=>quickAddInput.focus(),40); } },
+      { t:'Tâche complète (formulaire)', k:'nouvelle tache formulaire detail', go:clickEl('quick-add-more','tasks') },
+      { t:'Nouvelle opportunité', k:'pipeline ajouter installation demande', go:clickEl('opp-add-btn','pipeline') },
+      { t:'Nouvelle pré-qualif', k:'prequalif prospect', go:clickEl('prequal-add-btn','pipeline') },
+      { t:'Nouveau contact', k:'ajouter contact personne', go:clickEl('contact-add-btn','contacts') },
+      { t:'Coller une signature de mail', k:'contact signature', go:clickEl('sig-paste-btn','contacts') },
+      { t:'Vue réunion du pipeline', k:'reunion pricing partager', go:()=>{ gsTab('pipeline'); setTimeout(()=>{ if(!pipeMeet){ pipeMeet=true; pipeDash=false; renderPipeline(); } },40); } },
+      { t:'Tableau de bord du pipeline', k:'dashboard stats', go:()=>{ gsTab('pipeline'); setTimeout(()=>{ if(!pipeDash){ pipeDash=true; pipeMeet=false; renderPipeline(); } },40); } },
+      { t:'Ouvrir la note (post-it)', k:'postit calepin note', go:()=>openPostit(true) },
+      { t:'Exporter les contacts (Excel)', k:'export xlsx contacts', go:clickEl('contact-export-btn','contacts') },
+      { t:'Importer des contacts (Excel)', k:'import xlsx contacts', go:clickEl('contact-import-btn','contacts') },
+      { t:'Contacts vers le téléphone (.vcf)', k:'vcf telephone export', go:clickEl('vcf-btn','contacts') },
+      { t:'Sauvegarde complète (JSON)', k:'export sauvegarde backup json', go:clickEl('export-btn','lists') },
+      { t:'Synchroniser maintenant', k:'sync github synchro', go:clickEl('sync-now-btn','lists') },
+      { t:'Annuler (Ctrl+Z)', k:'undo retour arriere', go:()=>undoLast() },
+      { t:'Rétablir (Ctrl+Maj+Z)', k:'redo refaire', go:()=>redoLast() },
+      { t:'Mode d’emploi', k:'aide guide help', go:clickEl('help-btn') }
+    ];
+    [['today','Aujourd’hui'],['tasks','Tâches'],['inbox','Boîte mail'],['archive','Archive'],['contacts','Contacts'],['pipeline','Pipeline'],['parc','Portefeuille'],['lists','Réf. & data']]
+      .forEach(([tab,label])=>{ if(document.querySelector('.tab[data-tab="'+tab+'"]')) list.push({ t:'Aller à : '+label, k:'onglet ouvrir '+tab, go:go(tab) }); });
+    (window.todoExtraCommands||[]).forEach(c=>list.push(c));   // added by other parts (saved views, network…)
+    return list;
+  }
+  function gsCommandHits(q){
+    const words=pqFold(q).split(/\s+/).filter(Boolean), all=gsCommands();
+    return (words.length?all.filter(c=>{ const s=pqFold(c.t+' '+(c.k||'')); return words.every(w=>s.includes(w)); }):all)
+      .map(c=>({ ic:'›', title:c.t, sub:c.sub||'', go:c.go }));
+  }
   let gsList=[], gsActive=0;
   function gsRender(){
-    const q=$('gs-input').value.trim(), box=$('gs-results'); box.innerHTML=''; gsList=[];
-    if(!q){ box.innerHTML='<div class="gs-empty">Tape un nom, une société, une centrale, un département…<br>Entrée sans choisir : crée la tâche.</div>'; return; }
+    const raw=$('gs-input').value, q=raw.trim(), box=$('gs-results'); box.innerHTML=''; gsList=[];
+    const add0=(it)=>{ const i=gsList.length; gsList.push(it); const b=document.createElement('button'); b.type='button'; b.className='gs-item'; b.setAttribute('role','option'); b.id='gs-opt-'+i;
+      b.innerHTML='<span class="gs-ic"></span><span class="gs-t"><b></b><span></span></span><span class="gs-r"></span>';
+      b.querySelector('.gs-ic').textContent=it.ic; b.querySelector('b').textContent=it.title; b.querySelector('.gs-t span').textContent=it.sub||'';
+      b.onmousemove=()=>{ if(gsActive!==i){ gsActive=i; gsPaint(); } }; b.onclick=()=>gsGo(i); box.appendChild(b); };
+    if(q.startsWith('>')){   // commands only
+      const hits=gsCommandHits(q.slice(1)); const g=document.createElement('div'); g.className='gs-group'; g.textContent='Commandes'; box.appendChild(g);
+      hits.forEach(add0); if(!hits.length){ const e=document.createElement('div'); e.className='gs-empty'; e.textContent='Aucune commande.'; box.appendChild(e); }
+      gsActive=0; gsPaint(); return;
+    }
+    if(!q){ box.innerHTML='<div class="gs-empty">Tape un nom, une société, une centrale, un département…<br>Entrée sans choisir : crée la tâche. « &gt; » au début (ou Ctrl+P) : les commandes.</div>'; return; }
     const groups=gsSearch(q);
+    const cmds=gsCommandHits(q).slice(0,3); if(cmds.length) groups.push(['Commandes',cmds]);
     const add=(it,cls)=>{ const i=gsList.length; gsList.push(it); const b=document.createElement('button'); b.type='button'; b.className='gs-item'+(cls?' '+cls:''); b.setAttribute('role','option'); b.id='gs-opt-'+i;
       b.innerHTML='<span class="gs-ic"></span><span class="gs-t"><b></b><span></span></span><span class="gs-r"></span>';
       b.querySelector('.gs-ic').textContent=it.ic; b.querySelector('b').textContent=it.title; b.querySelector('.gs-t span').textContent=it.sub||''; b.querySelector('.gs-r').textContent=it.right||'';
@@ -7010,7 +7054,8 @@
   }
   function gsPaint(){ document.querySelectorAll('#gs-results .gs-item').forEach((b,i)=>b.classList.toggle('on', i===gsActive)); $('gs-input').setAttribute('aria-activedescendant','gs-opt-'+gsActive); const on=$('gs-opt-'+gsActive); if(on) on.scrollIntoView({ block:'nearest' }); }
   function gsGo(i){ const it=gsList[i]; if(!it) return; gsClose(); it.go(); }
-  function gsOpen(){ $('gs-overlay').hidden=false; const inp=$('gs-input'); inp.value=''; gsRender(); inp.focus(); }
+  function gsOpen(prefix){ $('gs-overlay').hidden=false; const inp=$('gs-input'); inp.value=prefix||''; gsRender(); inp.focus(); }
+  window.todoCommandPalette=()=>gsOpen('>');
   function gsClose(){ $('gs-overlay').hidden=true; }
   $('gs-input').addEventListener('input', gsRender);
   $('gs-input').addEventListener('keydown', e=>{
@@ -7020,7 +7065,7 @@
     else if(e.key==='Escape'){ e.preventDefault(); e.stopPropagation(); gsClose(); }
   });
   $('gs-overlay').addEventListener('click', e=>{ if(e.target.id==='gs-overlay') gsClose(); });
-  $('gs-open-btn').onclick=gsOpen; $('gs-open-lite').onclick=gsOpen;
+  $('gs-open-btn').onclick=()=>gsOpen(); $('gs-open-lite').onclick=()=>gsOpen();
 
   // ---------- widget mode: the tasks tab in a floating panel opened from a draggable bubble ----------
   function widgetOpenFull(url){

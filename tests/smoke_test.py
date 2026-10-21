@@ -300,6 +300,14 @@ with sync_playwright() as p:
     if page.is_visible("#opp-detail-overlay"): page.click("#opp-detail-actions >> text=Fermer")
     page.keyboard.press("Control+k"); page.keyboard.type("Appeler le notaire"); page.keyboard.press("Enter"); page.wait_for_timeout(200)
     check(any(t["title"] == "Appeler le notaire" for t in stored(page, "todo-widget-tasks")), "search: Enter without choosing still creates the task (old Ctrl+K habit)")
+    # command palette: Ctrl+P, every action from the keyboard
+    page.keyboard.press("Control+p")
+    check(page.is_visible("#gs-overlay") and page.input_value("#gs-input") == ">" and page.locator("#gs-results .gs-item").count() > 15, "palette: Ctrl+P lists the commands")
+    page.keyboard.type("reunion"); page.keyboard.press("Enter"); page.wait_for_timeout(300)
+    check(page.is_visible("#tab-pipeline") and page.locator(".meet-table, .meet-head").count() > 0, "palette: « vue réunion » opens the pipeline's meeting view")
+    page.keyboard.press("Control+k"); page.keyboard.type("nouveau contact")
+    check("commandes" in page.inner_text("#gs-results").lower() and "Nouveau contact" in page.inner_text("#gs-results"), "palette: commands also come up in the normal search")
+    page.keyboard.press("Escape")
     check(not errors, f"no page errors ({errors})")
     page.close()
 
