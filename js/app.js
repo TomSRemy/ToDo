@@ -25,6 +25,7 @@
     {key:'demande_prix',label:'Demande de prix',phase:'offre',who:'Com',task:'Envoyer la demande de pricing',bdd:'En préparation'},
     {key:'pricing_indicatif',label:'Pricing indicatif',phase:'offre',who:'Ops',task:'Pricing indicatif',bdd:'En préparation'},
     {key:'offre_remise',label:'Offre à remettre',phase:'offre',who:'Com',task:'Remettre l\u2019offre au producteur',bdd:'En préparation'},
+    {key:'offre_attente',label:'Retour sur l\u2019offre',phase:'offre',who:'Client',task:'Relancer le producteur sur l\u2019offre',bdd:'En attente'},
     {key:'kyc',label:'KYC + solvabilité',phase:'contrat',who:'Jur',task:'KYC et solvabilité',bdd:'En attente'},
     {key:'negociation',label:'Négociation',phase:'contrat',who:'Com',task:'Négocier le contrat',bdd:'En attente'},
     {key:'pricing_ferme',label:'Pricing ferme',phase:'contrat',who:'Ops',task:'Pricing ferme',bdd:'En attente'},
@@ -4415,6 +4416,9 @@
         if(o.stage==='qualif_en_cours'){
           actions.appendChild(oppActionBtn('Go', ()=>{ closeOppDetail(); offerStageAdvance([o], 'demande_prix'); }));
           actions.appendChild(oppActionBtn('No Go', ()=>exitOpp(o,'no_go'), 'ghost-btn'));
+        } else if(o.stage==='offre_attente'){
+          actions.appendChild(oppActionBtn('Offre acceptée', ()=>{ closeOppDetail(); offerStageAdvance([o], 'kyc'); }));
+          actions.appendChild(oppActionBtn('Offre refusée', ()=>loseOpps([o]), 'ghost-btn'));
         } else if(cur>=0 && cur<OPP_STAGES.length-1){
           actions.appendChild(oppActionBtn('Étape suivante', ()=>{ closeOppDetail(); offerStageAdvance([o]); }));
         }
@@ -4429,7 +4433,7 @@
         o.requestId=reqId; touchCrm(o); saveCrm(); renderPipeline(); openRequestDetail(reqId);
       }, 'ghost-btn'));
       if(!isExited(o)){
-        if(stageIndex(o.stage)>=stageIndex('demande_prix')){ actions.appendChild(oppActionBtn('Perdu', ()=>exitOpp(o,'perdu'), 'ghost-btn danger-btn')); }
+        if(stageIndex(o.stage)>=stageIndex('demande_prix') && o.stage!=='offre_attente'){ actions.appendChild(oppActionBtn('Perdu', ()=>loseOpps([o]), 'ghost-btn danger-btn')); }
         actions.appendChild(oppActionBtn('Abandonner', ()=>exitOpp(o,'abandonne'), 'ghost-btn danger-btn'));
       }
     }
@@ -4554,6 +4558,48 @@
     o.stageBeforeExit=o.stage; o.stage=kind; o.lostAt=Date.now(); touchCrm(o); saveCrm();
     closeOppDetail(); renderPipeline();
   }
+  // a lost deal (one installation or a whole request at once), with its little animation
+  function loseOpps(list){
+    if(!list.length) return;
+    const what=list.length>1?list.length+' installations ('+list[0].company+')':'« '+oppName(list[0])+' »';
+    if(!confirm(what+' : offre perdue ?')) return;
+    list.forEach(o=>{ o.stageBeforeExit=o.stage; o.stage='perdu'; o.lostAt=Date.now(); touchCrm(o); });
+    saveCrm(); closeOppDetail(); renderPipeline();
+    celebrate('lost', list);
+  }
+  // Won / signed / lost: a short animation over the page (never blocks a click, skipped if the device asks for less motion).
+  // Moves made together (a whole request) show one animation.
+  let celebrateTimer=null, celebrateQueue=null;
+  function celebrate(kind, list){
+    const rank={ lost:0, won:1, signed:2 };
+    if(!celebrateQueue || rank[kind]>rank[celebrateQueue.kind]) celebrateQueue={ kind, list:list||[] };
+    clearTimeout(celebrateTimer);
+    celebrateTimer=setTimeout(()=>{ const q=celebrateQueue; celebrateQueue=null; playCelebration(q.kind, q.list); }, 60);
+  }
+  function playCelebration(kind, list){
+    document.querySelectorAll('.celebrate').forEach(n=>n.remove());
+    const fx=document.createElement('div'); fx.className='celebrate celebrate-'+kind; fx.setAttribute('aria-live','polite');
+    const n=list.length, sub=n>1?n+' installations'+(list[0]&&list[0].company?' · '+list[0].company:''):(list[0]?oppName(list[0]):'');
+    const msg={ won:['Offre acceptée !','Direction KYC et contrat'], signed:['Contrat signé !','Place à l\u2019onboarding'], lost:['Offre perdue','On rebondit sur la suivante'] }[kind];
+    const card=document.createElement('div'); card.className='celebrate-card';
+    card.innerHTML='<span class="celebrate-ico">'+(kind==='lost'?'\u2193':'\u2713')+'</span><b>'+escapeHtml(msg[0])+'</b><span>'+escapeHtml(sub||msg[1])+'</span>'+(sub?'<span class="celebrate-sub">'+escapeHtml(msg[1])+'</span>':'');
+    const less=window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if(!less){
+      const colors=kind==='lost'?['#8B93A7','#A9B0C0','#6E7689']:['#14D3A9','#FFFD82','#ED6965','#7DD3FC','#8B7FB5','#CA6702'];
+      const count=kind==='lost'?26:(kind==='signed'?110:80);
+      for(let i=0;i<count;i++){
+        const p=document.createElement('i'); p.className=kind==='lost'?'drop':'confetti';
+        p.style.left=(Math.random()*100)+'vw'; p.style.background=colors[i%colors.length];
+        p.style.animationDelay=(Math.random()*(kind==='lost'?0.9:0.5))+'s';
+        p.style.animationDuration=(kind==='lost'?1.1+Math.random()*0.8:1.8+Math.random()*1.4)+'s';
+        if(kind!=='lost'){ p.style.setProperty('--dx',(Math.random()*160-80)+'px'); p.style.setProperty('--rot',(Math.random()*900-450)+'deg'); p.style.width=(6+Math.random()*6)+'px'; p.style.height=(8+Math.random()*8)+'px'; }
+        fx.appendChild(p);
+      }
+    }
+    fx.appendChild(card); document.body.appendChild(fx);
+    setTimeout(()=>fx.classList.add('out'), kind==='lost'?2000:2600);
+    setTimeout(()=>fx.remove(), kind==='lost'?2500:3200);
+  }
   // Moving into a stage records the dates the BDD needs.
   // the opportunity in one line: installations · power · technology · volume
   function oppSummary(list){
@@ -4589,6 +4635,9 @@
     if(next>=stageIndex('demande_prix') && !o.goDate){ o.goDate=today; o.qualification=true; }
     if(prev<=stageIndex('offre_remise') && next>stageIndex('offre_remise') && !o.dateOffre) o.dateOffre=today;
     if(prev<=stageIndex('signature') && next>stageIndex('signature') && !o.signDate) o.signDate=today;
+    // the offer accepted (into the contract phase), then the contract signed: a little celebration
+    if(prev>=0 && prev<stageIndex('kyc') && next>=stageIndex('kyc')) celebrate(next>stageIndex('signature')?'signed':'won', [o]);
+    else if(prev>=0 && prev<=stageIndex('signature') && next>stageIndex('signature')) celebrate('signed', [o]);
     o.stage=key; touchCrm(o); saveCrm(); renderPipeline();
   }
 
@@ -4716,7 +4765,12 @@
     const live=list.filter(o=>!isExited(o));
     if(live.length){
       const same=live.every(o=>o.stage===live[0].stage);
-      actions.appendChild(oppActionBtn(same?'Tout passer à l\u2019étape suivante':'Avancer chaque installation', ()=>{ closeOppDetail(); offerStageAdvance(live, live.every(o=>o.stage==='qualif_en_cours')?'demande_prix':null); }));
+      const waiting=live.filter(o=>o.stage==='offre_attente');
+      if(waiting.length){
+        actions.appendChild(oppActionBtn('Offre acceptée'+(waiting.length>1?' ('+waiting.length+')':''), ()=>{ closeOppDetail(); offerStageAdvance(waiting, 'kyc'); }));
+        actions.appendChild(oppActionBtn('Offre refusée'+(waiting.length>1?' ('+waiting.length+')':''), ()=>loseOpps(waiting), 'ghost-btn'));
+      }
+      if(!same || !waiting.length) actions.appendChild(oppActionBtn(same?'Tout passer à l\u2019étape suivante':'Avancer chaque installation', ()=>{ closeOppDetail(); offerStageAdvance(live, live.every(o=>o.stage==='qualif_en_cours')?'demande_prix':null); }));
     }
     actions.appendChild(oppActionBtn('Copier l\u2019objet', e=>copyToClipboard(ml.subject, e.target), 'ghost-btn'));
     actions.appendChild(oppActionBtn('Copier le mail', e=>copyToClipboard(ml.body, e.target), 'ghost-btn'));

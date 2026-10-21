@@ -1312,3 +1312,21 @@ details.req-compare:not([open]) .req-compare-h::before{ transform:rotate(-90deg)
 .req-table tr.req-sub th{ background:var(--panel-3); font:500 10.5px var(--font-mono); text-transform:uppercase; letter-spacing:.05em; color:var(--tx3); padding:7px 10px; }
 .req-table td.none{ color:var(--tx3); }
 .req-table tbody th[scope="row"]{ white-space:normal; min-width:160px; max-width:260px; }
+
+/* won / signed / lost: a short animation over the page, never in the way of a click */
+.celebrate{ position:fixed; inset:0; z-index:30000; pointer-events:none; overflow:hidden; display:flex; align-items:center; justify-content:center; transition:opacity .5s ease; }
+.celebrate.out{ opacity:0; }
+.celebrate .confetti{ position:absolute; top:-20px; border-radius:2px; opacity:.95; animation:confetti-fall linear forwards; }
+@keyframes confetti-fall{ 0%{ transform:translate(0,0) rotate(0); } 100%{ transform:translate(var(--dx,0),105vh) rotate(var(--rot,360deg)); opacity:.8; } }
+.celebrate .drop{ position:absolute; top:-40px; width:2px; height:28px; border-radius:2px; opacity:.55; animation:drop-fall ease-in forwards; }
+@keyframes drop-fall{ 0%{ transform:translateY(0); opacity:0; } 15%{ opacity:.55; } 100%{ transform:translateY(105vh); opacity:0; } }
+.celebrate-card{ position:relative; display:flex; flex-direction:column; align-items:center; gap:4px; padding:22px 34px; border-radius:16px; background:var(--panel); color:var(--tx1); border:1px solid var(--bd); box-shadow:0 18px 50px rgba(0,0,0,.35); text-align:center; animation:celebrate-pop .55s cubic-bezier(.2,1.4,.4,1) both; }
+.celebrate-card b{ font-size:20px; }
+.celebrate-card span{ font-size:13px; color:var(--tx2); }
+.celebrate-card .celebrate-sub{ font-size:12px; }
+.celebrate-ico{ display:flex; align-items:center; justify-content:center; width:46px; height:46px; border-radius:50%; font-size:24px !important; font-weight:700; color:#fff !important; background:#14D3A9; margin-bottom:6px; }
+.celebrate-signed .celebrate-ico{ background:linear-gradient(135deg,#14D3A9,#1A7B8C); }
+.celebrate-lost .celebrate-ico{ background:#8B93A7; }
+.celebrate-lost .celebrate-card{ animation:celebrate-sink .7s ease both; }
+@keyframes celebrate-pop{ 0%{ transform:scale(.6); opacity:0; } 100%{ transform:scale(1); opacity:1; } }
+@keyframes celebrate-sink{ 0%{ transform:translateY(-14px); opacity:0; } 60%{ transform:translateY(4px); opacity:1; } 100%{ transform:translateY(0); opacity:1; } }

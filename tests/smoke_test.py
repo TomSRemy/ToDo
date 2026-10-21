@@ -959,6 +959,38 @@ with sync_playwright() as p:
     check(not errors, f"no page errors ({errors})")
     page.close()
 
+    # --- Pipeline: offer sent → waiting for the producer's answer; accepted (celebration) or refused (lost, its own animation)
+    wait = [{"id": "r8", "kind": "request", "company": "SEM", "title": "Demande de pricing", "createdAt": 1, "updatedAt": 1, "deleted": False}] + [
+            {"id": k, "kind": "installation", "company": "SEM", "centrale": k.upper(), "title": k.upper(), "stage": "offre_remise", "requestId": "r8",
+             "createdAt": 1, "updatedAt": 1, "deleted": False} for k in ("w1", "w2")] + [
+            {"id": "solo", "kind": "installation", "company": "ZEN", "centrale": "SOLO", "title": "SOLO", "stage": "offre_attente", "createdAt": 1, "updatedAt": 1, "deleted": False}]
+    page, errors = new_page(browser, {"todo_todo-widget-opportunities": json.dumps(wait)})
+    page.goto(URL); page.click('[data-tab="pipeline"]')
+    page.locator(".pipe-req-name", has_text="W1").click(); page.click("#opp-detail-body .opp-back")
+    page.click("#opp-detail-actions >> text=Tout passer à l\u2019étape suivante")
+    check("Retour sur l\u2019offre" in page.inner_text("#stage-advance-text"), "after « offre à remettre » comes the wait for the producer's answer")
+    page.click("#stage-advance-confirm")
+    st = {o["id"]: o.get("stage") for o in stored(page, "todo-widget-opportunities")}
+    check(st["w1"] == st["w2"] == "offre_attente", f"both installations wait for the answer ({st})")
+    t = [t for t in stored(page, "todo-widget-tasks") if t.get("opportunityId") == "r8"]
+    check(len(t) == 1 and t[0]["status"] == "en_attente" and "Relancer" in t[0]["title"], "a follow-up task « en attente » to chase the producer")
+    page.locator(".pipe-req-card", has_text="W1").locator(".pipe-card-title").first.click()
+    page.click("#opp-detail-actions >> text=Offre acceptée (2)"); page.click("#stage-advance-confirm")
+    page.wait_for_selector(".celebrate-won", timeout=2000)
+    check(page.locator(".celebrate-won .confetti").count() > 20 and "Offre acceptée" in page.inner_text(".celebrate-won") and page.locator(".celebrate").count() == 1,
+          "offer accepted: one confetti animation for the whole request")
+    check(all(o["stage"] == "kyc" for o in stored(page, "todo-widget-opportunities") if o.get("requestId") == "r8"), "accepted: the installations move to KYC")
+    page.locator('[data-phase="contrat"] .pipe-card').first.click()   # the animation never blocks a click
+    page.click("#opp-detail-actions >> text=Fermer")
+    page.wait_for_selector(".celebrate", state="detached", timeout=5000)
+    page.once("dialog", lambda d: d.accept())
+    page.locator(".pipe-card", has_text="SOLO").first.click(); page.click("#opp-detail-actions >> text=Offre refusée")
+    page.wait_for_selector(".celebrate-lost", timeout=2000)
+    check("Offre perdue" in page.inner_text(".celebrate-lost") and next(o for o in stored(page, "todo-widget-opportunities") if o["id"] == "solo")["stage"] == "perdu",
+          "offer refused: lost, with its own animation")
+    check(not errors, f"no page errors ({errors})")
+    page.close()
+
     # --- Pipeline: a mail listing several plants gives one installation each; quotes in a mail never reach the HTML
     page, errors = new_page(browser)
     page.goto(URL); page.click('[data-tab="pipeline"]'); page.click("#opp-add-btn"); page.fill("#pq1-company", "HELIO OUEST SAS"); page.click("#pq-next-btn")
