@@ -434,6 +434,8 @@ with sync_playwright() as p:
           f"request: both installations shown as tabs in the sheet ({tabs})")
     table = page.inner_text("#opp-detail-body .req-compare")
     check("358 MWh" in table and "à compléter" in table and "3 cases à compléter" in table, "request: side-by-side check, empty cells to complete flagged")
+    check("caractéristiques centrales" in table.lower() and page.locator("#opp-detail-body .req-table td.none").count() > 10,
+          "request: the table also lists every line of the plant characteristics file")
     page.click("#opp-detail-body .req-compare-h")
     check(not page.is_visible("#opp-detail-body .req-table"), "request: the side-by-side table folds with a click on its title")
     page.locator("#opp-detail-body .req-tab", has_text="BETA PV1").click()
@@ -596,6 +598,8 @@ with sync_playwright() as p:
     page.fill("#pq-0-duree", "5"); page.locator("#pq-0-duree").dispatch_event("change")
     page.click("#pq-form button[data-toall='duree'][data-s='0']")
     page.click("#pq-form button[data-dall='mes'][data-s='0']")
+    check(page.is_visible("#choice-overlay"), "dates: asks before replacing start dates already filled")
+    page.click("#choice-btns >> text=Remplacer")
     got = [[page.input_value(f"#pq-{i}-{k}") for k in ("debut", "duree", "fin")] for i in range(3)]
     check(got[0] == ["20/07/2027", "5", "19/07/2032"] and got[1] == ["01/03/2028", "5", "28/02/2033"] and got[2] == ["01/01/2028", "5", "31/12/2032"],
           f"dates: same duration for all, then each plant at its own commissioning date ({got})")
@@ -631,6 +635,32 @@ with sync_playwright() as p:
           "request sheet: the pencil opens the form with that installation first, the others below")
     check(not errors, f"no page errors ({errors})")
     page.close()
+
+    # --- Copy for the Pipe: one line per installation or one line for all; « → toutes » asks before replacing
+    cp_opps = [{"id": "rqc", "kind": "request", "company": "COPY", "title": "Demande de pricing", "createdAt": 1, "updatedAt": 1, "deleted": False}] + \
+              [{"id": f"c{i}", "kind": "installation", "company": "COPY", "producteur": "COPY", "centrale": f"Toit {i}", "title": f"Toit {i}", "kwc": str(100 * i), "mwh": str(120 * i),
+                "contrat": "AO CRE" if i == 2 else "", "requestId": "rqc", "stage": "collecte", "createdAt": 1, "updatedAt": 1, "deleted": False} for i in (1, 2)]
+    ctx = browser.new_context(viewport={"width": 1300, "height": 900}, permissions=["clipboard-read", "clipboard-write"])
+    page = ctx.new_page(); errors = []; page.on("pageerror", lambda e: errors.append(str(e)))
+    page.route("**/fonts.g*/**", lambda r: r.abort())
+    page.add_init_script("if(!sessionStorage.getItem('seeded')){ localStorage.setItem('todo_todo-widget-opportunities', " + json.dumps(json.dumps(cp_opps)) + "); sessionStorage.setItem('seeded','1'); }")
+    page.goto(URL); page.click('[data-tab="pipeline"]'); page.locator(".pipe-req-card .pipe-card-title").first.click()
+    page.click("#opp-detail-actions >> text=Copier lignes Pipe")
+    check(page.is_visible("#choice-overlay") and "2 installations" in page.inner_text("#choice-text"), "pipe copy: asks one line per installation or one for all")
+    page.click("#choice-btns >> text=Une seule ligne pour toutes"); page.wait_for_timeout(200)
+    clip = page.evaluate("navigator.clipboard.readText()")
+    check(clip.count("\n") == 0 and "Toit 1 + Toit 2" in clip and "\t300\t" in clip.replace(",", "."), f"pipe copy: one line, names joined, powers added ({clip[:80]!r})")
+    page.click("#opp-detail-actions >> text=Copier lignes Pipe"); page.click("#choice-btns >> text=Une ligne par installation"); page.wait_for_timeout(200)
+    check(page.evaluate("navigator.clipboard.readText()").count("\n") == 1, "pipe copy: or one line each")
+    page.click("#opp-detail-edit")
+    page.select_option("#pq-0-contrat", "PPA Spot"); page.click("#pq-form button[data-toall='contrat'][data-s='0']")
+    check(page.is_visible("#choice-overlay") and "AO CRE" in page.inner_text("#choice-text"), "« → toutes »: asks before replacing a value already filled")
+    page.click("#choice-btns >> text=Seulement les champs vides")
+    check(page.input_value("#pq-1-contrat") == "AO CRE", "« → toutes »: « only empty fields » keeps the existing value")
+    page.click("#pq-form button[data-toall='contrat'][data-s='0']"); page.click("#choice-btns >> text=Remplacer partout")
+    check(page.input_value("#pq-1-contrat") == "PPA Spot", "« → toutes »: « replace everywhere » replaces it")
+    check(not errors, f"no page errors ({errors})")
+    ctx.close()
 
     # --- Undo / redo of actions: several steps back with Ctrl+Z, Ctrl+Shift+Z to redo
     page, errors = new_page(browser, {"todo_todo-widget-tasks": json.dumps([task("u1", "Première"), task("u2", "Deuxième")])}, viewport={"width": 1300, "height": 800})
@@ -796,6 +826,7 @@ with sync_playwright() as p:
     page.click(".pipe-req-card .pipe-card-title")
     check("Codes affaire" in page.input_value("#opp-mail-body") and "27(06)" in page.input_value("#opp-mail-body"), "pricing mail with business codes")
     page.click("#opp-detail-actions >> text=Copier lignes Pipe")
+    page.click("#choice-btns >> text=Une ligne par installation")
     rows = page.evaluate("navigator.clipboard.readText()").split("\n")
     check(len(rows) == 2 and all(len(r.split("\t")) == 37 for r in rows), "Pipe rows: one per installation, 37 columns")
     page.click("#opp-detail-actions >> text=Fermer")

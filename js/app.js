@@ -1903,6 +1903,35 @@
       return true;
     }catch(e){ return false; }
   }
+  // A question with a few answers (no browser pop-up): resolves with the chosen value, or null (Annuler, ✕, Échap)
+  function askChoice(title, text, choices){
+    return new Promise(res=>{
+      const ov=$('choice-overlay'), box=$('choice-btns');
+      $('choice-title').textContent=title; $('choice-text').textContent=text; box.innerHTML='';
+      const done=v=>{ ov.classList.add('hidden'); document.removeEventListener('keydown', esc, true); res(v); };
+      const esc=e=>{ if(e.key==='Escape'){ e.stopPropagation(); done(null); } };
+      choices.concat([{ label:'Annuler', value:null, ghost:true }]).forEach(c=>{ const b=document.createElement('button'); b.type='button'; b.textContent=c.label; if(c.ghost) b.className='ghost-btn'; b.onclick=e=>{ if(c.run) c.run(e); done(c.value); }; box.appendChild(b); });
+      document.addEventListener('keydown', esc, true);
+      ov.classList.remove('hidden'); setTimeout(()=>{ const f=box.querySelector('button'); if(f) f.focus(); }, 0);
+    });
+  }
+  // Pipe lines of several installations: one line each, or a single line for all (powers and volumes added up)
+  function pipeRowsFor(list, mode){
+    if(mode!=='one' || list.length<2) return list.map(pipeRow).join('\n');
+    const num=k=>list.reduce((s,x)=>s+(pqNum(String(x[k]||''))||0),0), first=list[0];
+    const names=list.map(oppName), mes=list.map(x=>({ m:x.mesPrev, d:pqDateOf(x.mesPrev) })).filter(x=>x.d).sort((a,b)=>a.d-b.d);
+    const depts=[...new Set(list.map(x=>x.dept).filter(Boolean))];
+    const one=Object.assign({}, first, { centrale:names.length<=3?names.join(' + '):names.length+' centrales ('+names[0]+'…)', kwc:String(Math.round(num('kwc')*100)/100), mwh:num('mwh')?String(Math.round(num('mwh'))):'',
+      p90:num('p90')?String(Math.round(num('p90'))):'', mesPrev:mes.length?mes[0].m:first.mesPrev, dept:depts.length===1?depts[0]:first.dept });
+    return pipeRow(one);
+  }
+  async function copyPipeLines(list, btn){
+    if(list.length<2){ copyToClipboard(list.map(pipeRow).join('\n'), btn); return; }
+    await askChoice('Copier pour le Pipe', list.length+' installations : une ligne chacune, ou une seule ligne qui les regroupe (puissances et volumes additionnés) ?', [
+      { label:'Une ligne par installation ('+list.length+')', value:'each', run:()=>copyToClipboard(pipeRowsFor(list,'each'), btn) },
+      { label:'Une seule ligne pour toutes', value:'one', run:()=>copyToClipboard(pipeRowsFor(list,'one'), btn) }
+    ]);
+  }
   function copyToClipboard(text, feedbackEl){
     const showFeedback=()=>{
       if(!feedbackEl) return;
@@ -4392,7 +4421,7 @@
       }
       excelButtons(actions, [o]);
       actions.appendChild(oppActionBtn('Fichier caractéristiques (.xlsx)', e=>downloadCaract(o.requestId?requestInstalls(o.requestId).filter(x=>!isExited(x)):[o], e.target), 'ghost-btn'));
-      actions.appendChild(oppActionBtn('Copier ligne Pipe', e=>copyToClipboard(pipeRow(o), e.target), 'ghost-btn'));
+      actions.appendChild(oppActionBtn('Copier ligne Pipe', e=>copyPipeLines(o.requestId?requestInstalls(o.requestId).filter(x=>!isExited(x)):[o], e.target), 'ghost-btn'));
       if(o.goDate || stageIndex(o.stage)>=stageIndex('demande_prix')) actions.appendChild(oppActionBtn('Copier ligne BDD', e=>copyToClipboard(bddRow(o), e.target), 'ghost-btn'));
       if(!o.requestId && !isExited(o)) actions.appendChild(oppActionBtn('Demande de pricing', ()=>{
         const reqId=newOppId('req');
@@ -4447,6 +4476,12 @@
     const sc=document.createElement('div'); sc.className='req-compare-scroll';
     let t='<table class="req-table"><thead><tr><th></th>'+list.map((x,i)=>'<th class="'+(x.id===currentId?'cur':'')+'"><button type="button" class="req-col" data-id="'+escapeHtml(x.id)+'">Installation '+(i+1)+'</button></th>').join('')+'</tr></thead><tbody>';
     keys.forEach(k=>{ t+='<tr><th scope="row">'+escapeHtml(pqFieldLabel(k))+'</th>'+list.map(x=>{ const v=reqCompareValue(x,k); return '<td class="'+(x.id===currentId?'cur ':'')+(v?'':'empty')+'">'+(v?escapeHtml(v):'à compléter')+'</td>'; }).join('')+'</tr>'; });
+    // then every other line of the « Caractéristiques Centrales » sheet (the producer's file, kept with each installation)
+    const shown=new Set(['nominstallation','nomspv','siretspv','departement','commune','datedemiseenserviceeffectiveouprevisionnelle','puissanceinstalleekwc','p50annuelindicatifmwhan','p90annuelindicatifmwhan']);
+    const extra=CARACT_ROWS.filter(l=>!shown.has(caractKey(l)));
+    t+='<tr class="req-sub"><th colspan="'+(list.length+1)+'">Caractéristiques centrales</th></tr>';
+    extra.forEach(l=>{ const vals=list.map(x=>caractValue(x,l));
+      t+='<tr><th scope="row">'+escapeHtml(l)+'</th>'+vals.map((v,i)=>'<td class="'+(list[i].id===currentId?'cur ':'')+(v===''?'none':'')+'">'+(v===''?'—':escapeHtml(String(v)))+'</td>').join('')+'</tr>'; });
     t+='</tbody></table>';
     sc.innerHTML=t; wrap.appendChild(sc);
     sc.querySelectorAll('.req-col').forEach(b=>{ b.onclick=()=>openOppDetail(b.dataset.id); });
@@ -4687,7 +4722,7 @@
     actions.appendChild(oppActionBtn('Copier le mail', e=>copyToClipboard(ml.body, e.target), 'ghost-btn'));
     actions.appendChild(oppActionBtn('Fichier caractéristiques (.xlsx)', e=>downloadCaract(list.filter(o=>!isExited(o)), e.target), 'ghost-btn'));
     excelButtons(actions, list);
-    actions.appendChild(oppActionBtn('Copier lignes Pipe', e=>copyToClipboard(list.map(pipeRow).join('\n'), e.target), 'ghost-btn'));
+    actions.appendChild(oppActionBtn('Copier lignes Pipe', e=>copyPipeLines(list.filter(o=>!isExited(o)), e.target), 'ghost-btn'));
     actions.appendChild(oppActionBtn('Copier lignes BDD', e=>copyToClipboard(list.map(bddRow).join('\n'), e.target), 'ghost-btn'));
     actions.appendChild(oppActionBtn('Fermer', closeOppDetail, 'ghost-btn lite-keep'));
     $('opp-detail-overlay').classList.remove('hidden');
@@ -5769,13 +5804,26 @@
   $('pq-form').addEventListener('click', e=>{
     if(!pqState) return;
     const ta=e.target.closest('[data-toall]'); if(ta){
-      // one field of one installation onto all the others (dates go as a set: start, duration, end)
+      // one field of one installation onto all the others (dates go as a set: start, duration, end);
+      // values already filled differently are only replaced after asking
       e.preventDefault();
       const st=pqState, from=st.installs[+ta.dataset.s], k=ta.dataset.toall, keys=['debut','fin','duree'].includes(k)?['debut','duree','fin']:(k==='dept'?['dept','region']:[k]);
-      st.installs.forEach((x,i)=>{ if(x===from) return; keys.forEach(kk=>{ x[kk]=from[kk]; if(from[kk]!=null && from[kk]!==''){ st.touched.add(i+'.'+kk); st.auto.delete(i+'.'+kk); } }); });
-      pqRerenderKeepFocus(); flashPqToAll(ta.dataset.toall); return;
+      const filled=v=>v!=null && String(v).trim()!=='';
+      const clash=st.installs.map((x,i)=>({x,i})).filter(({x})=>x!==from && keys.some(kk=>filled(x[kk]) && String(x[kk])!==String(from[kk]??'')));
+      const apply=onlyEmpty=>{ st.installs.forEach((x,i)=>{ if(x===from) return; keys.forEach(kk=>{ if(onlyEmpty && filled(x[kk])) return; x[kk]=from[kk]; if(filled(from[kk])){ st.touched.add(i+'.'+kk); st.auto.delete(i+'.'+kk); } }); }); pqRerenderKeepFocus(); flashPqToAll(k); };
+      if(!clash.length){ apply(false); return; }
+      const label=(PQ_FIELDS.find(f=>f.k===k)||PQ_EXTRA_FIELDS.find(f=>f.k===k)||{}).label||k;
+      askChoice('Remplacer des valeurs déjà remplies ?', clash.length+' installation'+(clash.length>1?'s ont':' a')+' déjà une autre valeur pour « '+label+' » : '+clash.slice(0,4).map(({x,i})=>(x.centrale||'Installation '+(i+1))+' ('+keys.map(kk=>x[kk]).filter(filled).join(', ')+')').join(' ; ')+(clash.length>4?'…':'')+'.',
+        [{ label:'Remplacer partout', value:'all' }, { label:'Seulement les champs vides', value:'empty' }]).then(v=>{ if(v) apply(v==='empty'); });
+      return;
     }
-    const da=e.target.closest('[data-dall]'); if(da){
+    const da=e.target.closest('[data-dall]'); if(da && !da.dataset.ok){
+      // starts already typed differently are only replaced after asking
+      const st=pqState, typed=st.installs.filter(x=>x.debut && pqFullDate(x.mesEff||x.mesPrev) && x.debut!==pqFullDate(x.mesEff||x.mesPrev));
+      if(typed.length){ askChoice('Remplacer des dates de début déjà remplies ?', typed.length+' installation'+(typed.length>1?'s ont':' a')+' déjà une date de début différente de sa mise en service : '+typed.slice(0,4).map(x=>(x.centrale||'?')+' ('+x.debut+')').join(' ; ')+'.',
+        [{ label:'Remplacer', value:'all' }]).then(v=>{ if(v){ da.dataset.ok='1'; da.click(); delete da.dataset.ok; } }); return; }
+    }
+    if(da){
       // every installation: its own commissioning date as start (with the duration shown here), or the same dates as this one
       const st=pqState, from=st.installs[+da.dataset.s];
       st.installs.forEach((x,i)=>{
