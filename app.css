@@ -1249,3 +1249,10 @@ details.req-compare:not([open]) .req-compare-h::before{ transform:rotate(-90deg)
 .pq-dchips button{ font:500 11px var(--font-ui); color:var(--tx2); background:var(--panel-3); border:1px solid var(--bd); border-radius:999px; padding:2px 9px; cursor:pointer; }
 .pq-dchips button:hover{ color:var(--tx1); border-color:var(--tx3); }
 .pq-dchips button.all{ color:var(--accent); border-color:var(--accent); }
+
+/* stage of all the installations of a request, or of one */
+.stage-scope{ display:flex; flex-wrap:wrap; align-items:center; gap:6px; margin:12px 0 6px; font-size:12.5px; color:var(--tx3); }
+.stage-scope button{ font:500 12px var(--font-ui); color:var(--tx2); background:var(--panel-2); border:1px solid var(--bd); border-radius:999px; padding:3px 11px; cursor:pointer; }
+.stage-scope button.on{ color:var(--accent); border-color:var(--accent); background:var(--accent-dim); }
+.req-stage-all{ display:flex; flex-wrap:wrap; align-items:center; gap:10px; margin:12px 0 4px; font-size:13px; color:var(--tx2); }
+.req-stage-all select{ min-width:220px; }

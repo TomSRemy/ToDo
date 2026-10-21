@@ -4293,6 +4293,15 @@
         const l=document.createElement('button'); l.type='button'; l.className='pq-link'; l.textContent='Fait partie de : '+((req&&req.title)||'Demande de pricing')+' ('+requestInstalls(o.requestId).length+' installations)';
         l.onclick=()=>openRequestDetail(o.requestId); box.appendChild(l);
       }
+      // installations of one request usually move together: the stage applies to all of them, or to this one only
+      const batch=o.requestId?requestInstalls(o.requestId).filter(x=>!isExited(x)):[];
+      const many=batch.length>1 && !isExited(o);
+      if(many){
+        const sc=document.createElement('div'); sc.className='stage-scope'; sc.setAttribute('role','group'); sc.setAttribute('aria-label','Changer l\u2019étape de');
+        sc.innerHTML='<span>Changer l\u2019étape de</span>';
+        [[true,'Toutes les installations ('+batch.length+')'],[false,'Seulement celle-ci']].forEach(([v,l])=>{ const b=document.createElement('button'); b.type='button'; b.textContent=l; b.className=stageScopeAll===v?'on':''; b.setAttribute('aria-pressed', String(stageScopeAll===v)); b.onclick=()=>{ stageScopeAll=v; openOppDetail(o.id); }; sc.appendChild(b); });
+        box.appendChild(sc);
+      }
       const track=document.createElement('div'); track.className='opp-stage-track';
       const cur=stageIndex(o.stage);
       PIPE_PHASES.filter(p=>p.key!=='prequal').forEach(ph=>{
@@ -4303,8 +4312,13 @@
           const row=document.createElement('button'); row.type='button';
           row.className='opp-stage-step '+(isExited(o)?'upcoming':(i<cur?'done':(i===cur?'current':'upcoming')));
           row.innerHTML=escapeHtml(st.label)+(st.who!=='Com'?' <span class="pipe-who">'+st.who+'</span>':'');
-          row.title='Placer l\u2019installation à cette étape';
-          row.onclick=()=>{ if(o.stage===st.key) return; setOppStage(o, st.key); openOppDetail(o.id); };
+          row.title=many&&stageScopeAll?'Placer les '+batch.length+' installations à cette étape':'Placer l\u2019installation à cette étape';
+          row.onclick=()=>{
+            const targets=many&&stageScopeAll?batch:[o];
+            if(targets.every(x=>x.stage===st.key)) return;
+            targets.forEach(x=>{ if(x.stage!==st.key) setOppStage(x, st.key); });
+            openOppDetail(o.id);
+          };
           g.appendChild(row);
         });
         track.appendChild(g);
@@ -4463,6 +4477,7 @@
     closeOppDetail(); renderPipeline();
   }
   // Moving into a stage records the dates the BDD needs.
+  let stageScopeAll=true;   // a stage chosen in an installation's sheet applies to all the installations of its request
   function setOppStage(o, key){
     const prev=stageIndex(o.stage), next=stageIndex(key), today=toISO(new Date());
     if(next>=stageIndex('demande_prix') && !o.goDate){ o.goDate=today; o.qualification=true; }
@@ -4549,6 +4564,16 @@
       ul.appendChild(r);
     });
     box.appendChild(ul);
+    const liveReq=list.filter(o=>!isExited(o));
+    if(liveReq.length>1){
+      const row=document.createElement('div'); row.className='req-stage-all';
+      const lab=document.createElement('label'); lab.htmlFor='req-stage-all'; lab.textContent='Passer toutes les installations à l\u2019étape';
+      const sel=document.createElement('select'); sel.id='req-stage-all';
+      sel.innerHTML='<option value="">—</option>'+PIPE_PHASES.filter(p=>p.key!=='prequal').map(p=>'<optgroup label="'+escapeHtml(p.label)+'">'+OPP_STAGES.filter(s=>s.phase===p.key).map(s=>'<option value="'+s.key+'">'+escapeHtml(s.label)+'</option>').join('')+'</optgroup>').join('');
+      const same=liveReq.every(o=>o.stage===liveReq[0].stage); if(same) sel.value=liveReq[0].stage;
+      sel.onchange=()=>{ if(!sel.value) return; liveReq.forEach(o=>{ if(o.stage!==sel.value) setOppStage(o, sel.value); }); openRequestDetail(reqId); };
+      row.append(lab, sel); box.appendChild(row);
+    }
     if(list.length>1) box.appendChild(buildRequestCompare(list, null));
     const candidates=opportunities.filter(o=>!o.deleted && o.kind==='installation' && !o.requestId && o.company===req.company && !isExited(o));
     if(candidates.length){

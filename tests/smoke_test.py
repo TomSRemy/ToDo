@@ -602,6 +602,26 @@ with sync_playwright() as p:
     check(not errors, f"no page errors ({errors})")
     page.close()
 
+    # --- Stages in batch: all the installations of a request move together, or one by one on request
+    bt = [{"id": "rqb", "kind": "request", "company": "BATCH", "title": "Demande de pricing", "createdAt": 1, "updatedAt": 1, "deleted": False}] + \
+         [{"id": f"b{i}", "kind": "installation", "company": "BATCH", "centrale": f"Centrale {i}", "title": f"Centrale {i}", "requestId": "rqb", "stage": "collecte",
+           "createdAt": 1, "updatedAt": 1, "deleted": False} for i in range(1, 4)]
+    page, errors = new_page(browser, {"todo_todo-widget-opportunities": json.dumps(bt)}, viewport={"width": 1300, "height": 900})
+    page.goto(URL); page.click('[data-tab="pipeline"]'); page.locator(".pipe-req-name", has_text="Centrale 1").click()
+    check(page.locator("#opp-detail-body .stage-scope button.on").inner_text() == "Toutes les installations (3)", "batch: by default a stage applies to all the installations")
+    page.click("#opp-detail-body .opp-stage-step:has-text('Demande de prix')"); page.wait_for_timeout(200)
+    st_ = {o["id"]: o.get("stage") for o in stored(page, "todo-widget-opportunities")}
+    check(st_["b1"] == st_["b2"] == st_["b3"] == "demande_prix", f"batch: the three installations moved together ({st_})")
+    page.click("#opp-detail-body .stage-scope button:has-text('Seulement celle-ci')")
+    page.click("#opp-detail-body .opp-stage-step:has-text('Pricing indicatif')"); page.wait_for_timeout(200)
+    st_ = {o["id"]: o.get("stage") for o in stored(page, "todo-widget-opportunities")}
+    check(st_["b1"] == "pricing_indicatif" and st_["b2"] == st_["b3"] == "demande_prix", "batch: one by one is still possible")
+    page.click(".opp-back"); page.select_option("#req-stage-all", "negociation"); page.wait_for_timeout(200)
+    st_ = {o["id"]: o.get("stage") for o in stored(page, "todo-widget-opportunities")}
+    check(st_["b1"] == st_["b2"] == st_["b3"] == "negociation", "batch: from the request sheet, all installations to one stage")
+    check(not errors, f"no page errors ({errors})")
+    page.close()
+
     # --- Sync pill: state visible everywhere, token problems explained
     page, errors = new_page(browser, viewport={"width": 1300, "height": 800})
     page.goto(URL); page.wait_for_timeout(300)
