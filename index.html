@@ -620,14 +620,15 @@
       <p class="list-hint">Tes données sont enregistrées dans ce navigateur (et sur GitHub si la synchro est active). Si l'espace venait à manquer, un bandeau rouge te prévient aussitôt.</p>
       <div id="storage-gauge" class="storage-gauge"><span class="muted">Calcul…</span></div>
     </div>
-    <div class="list-manager" style="margin-top:22px;">
+    <div class="list-manager" style="margin-top:22px;" id="bridge-section">
       <h2>Pont Excel (ordinateur)</h2>
+      <p class="list-hint bridge-phone-note" id="bridge-phone-note" hidden>Sur téléphone ou tablette, rien n'est jamais écrit dans les fichiers Excel : le pont ne s'utilise que depuis l'ordinateur.</p>
       <p class="list-hint">Pour écrire directement dans tes fichiers Excel synchronisés avec SharePoint. Télécharge les deux fichiers dans un même dossier de l’ordinateur, double-clique sur le .bat, choisis le fichier Pipe puis le Suivi Agrégation, et recopie ici la clé affichée. Laisse la fenêtre ouverte pendant que tu travailles.</p>
-      <div class="data-actions" style="margin-bottom:8px;">
+      <div class="data-actions bridge-setup" style="margin-bottom:8px;">
         <a class="data-btn" href="bridge/Lancer-pont-excel.bat" download="Lancer-pont-excel.bat">Télécharger Lancer-pont-excel.bat</a>
         <a class="data-btn" href="bridge/pont-excel.ps1" download="pont-excel.ps1">Télécharger pont-excel.ps1</a>
       </div>
-      <div style="display:flex; flex-direction:column; gap:8px;">
+      <div class="bridge-setup" style="display:flex; flex-direction:column; gap:8px;">
         <input type="password" id="bridge-token" placeholder="Clé affichée dans la fenêtre du pont" autocomplete="off">
         <button class="data-btn" id="bridge-save-btn" style="width:100%;">Enregistrer et tester</button>
         <span id="bridge-status" class="bridge-status"></span>

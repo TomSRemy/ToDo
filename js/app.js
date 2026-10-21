@@ -4218,8 +4218,13 @@
   let bridgeCfg={ port:8765, token:'' }, bridgeState={ ok:false, authorized:false, checkedAt:0, info:null };
   try{ const r=localStorage.getItem('todo_bridge-config'); if(r) bridgeCfg=Object.assign(bridgeCfg, JSON.parse(r)); }catch(e){}
   function saveBridgeCfg(){ try{ localStorage.setItem('todo_bridge-config', JSON.stringify(bridgeCfg)); }catch(e){} }
-  const bridgeConfigured=()=>!!bridgeCfg.token;
+  // Writing into the Excel files is for the computer only: on a phone or tablet (phone version, or the full
+  // version opened there) the bridge is off whatever is stored — no button, no call, no automatic refresh.
+  const ON_PHONE=!!window.TODO_LITE || /Android|iPhone|iPad|iPod|Mobile|Silk|Kindle/i.test(navigator.userAgent) || (/Macintosh/.test(navigator.userAgent) && navigator.maxTouchPoints>1);
+  const bridgeConfigured=()=>!ON_PHONE && !!bridgeCfg.token;
+  if(ON_PHONE){ document.documentElement.classList.add('no-bridge'); const n=$('bridge-phone-note'); if(n) n.hidden=false; }
   async function bridgeCall(method, path, body, timeoutMs){
+    if(ON_PHONE) throw new Error('Le pont Excel ne s\u2019utilise que depuis l\u2019ordinateur.');
     const ctl=new AbortController(); const t=setTimeout(()=>ctl.abort(), timeoutMs||8000);
     try{
       const res=await fetch('http://127.0.0.1:'+(bridgeCfg.port||8765)+path, { method, signal:ctl.signal, headers:Object.assign({ 'X-Bridge-Token':bridgeCfg.token||'' }, body?{ 'Content-Type':'application/json' }:{}), body:body?JSON.stringify(body):undefined });
@@ -4248,6 +4253,7 @@
     el.className='bridge-status on';
   }
   async function sendToExcel(kind, list, btn){
+    if(ON_PHONE) return;
     const label=btn?btn.textContent:'';
     if(btn){ btn.disabled=true; btn.textContent='Envoi…'; }
     try{
@@ -4272,8 +4278,8 @@
   // Buttons added to the installation sheet / pricing request when the bridge is set up on this browser
   function excelButtons(actions, list){
     if(!bridgeConfigured()) return;
-    actions.appendChild(oppActionBtn(list.length>1?'Envoyer au Pipe Excel ('+list.length+')':'Envoyer au Pipe Excel', e=>sendToExcel('pipe', list, e.target)));
-    if(list.some(o=>o.goDate || stageIndex(o.stage)>=stageIndex('demande_prix'))) actions.appendChild(oppActionBtn(list.length>1?'Envoyer à la BDD Excel ('+list.length+')':'Envoyer à la BDD Excel', e=>sendToExcel('bdd', list.filter(o=>o.goDate || stageIndex(o.stage)>=stageIndex('demande_prix')), e.target)));
+    if(!ON_PHONE) actions.appendChild(oppActionBtn(list.length>1?'Envoyer au Pipe Excel ('+list.length+')':'Envoyer au Pipe Excel', e=>sendToExcel('pipe', list, e.target)));
+    if(!ON_PHONE && list.some(o=>o.goDate || stageIndex(o.stage)>=stageIndex('demande_prix'))) actions.appendChild(oppActionBtn(list.length>1?'Envoyer à la BDD Excel ('+list.length+')':'Envoyer à la BDD Excel', e=>sendToExcel('bdd', list.filter(o=>o.goDate || stageIndex(o.stage)>=stageIndex('demande_prix')), e.target)));
   }
 
   function renderLists(){

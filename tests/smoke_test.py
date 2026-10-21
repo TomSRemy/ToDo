@@ -378,6 +378,22 @@ with sync_playwright() as p:
     check(not errors, f"no page errors ({errors})")
     page.close()
 
+    # --- Excel bridge: never from a phone, even on the full version with a key stored
+    ph_seed = {"todo_bridge-config": json.dumps({"port": 8765, "token": "k1"}),
+               "todo_todo-widget-opportunities": json.dumps([{"id": "x1", "kind": "installation", "company": "Solaris", "centrale": "Toit", "title": "Toit",
+                                                             "stage": "negociation", "createdAt": 1, "updatedAt": 1, "deleted": False}])}
+    calls = []
+    page, errors = new_page(browser, ph_seed, viewport={"width": 390, "height": 800}, is_mobile=True, has_touch=True,
+                            user_agent="Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1")
+    page.route("http://127.0.0.1:8765/**", lambda r: (calls.append(r.request.url), r.fulfill(status=200, body="{}")))
+    page.goto(URL); page.wait_for_timeout(500)
+    page.click('[data-tab="pipeline"]'); page.click(".pipe-card:has-text('Toit')")
+    acts = page.inner_text("#opp-detail-actions")
+    check("Envoyer" not in acts and not calls, f"bridge: no « send to Excel » on a phone, not even on the full version, and no call to the bridge ({calls})")
+    page.keyboard.press("Escape"); page.click('[data-tab="lists"]')
+    check(page.is_visible("#bridge-phone-note") and not page.is_visible("#bridge-token"), "bridge: Réf. & data says the bridge is for the computer only")
+    page.close()
+
     # --- Sync pill: state visible everywhere, token problems explained
     page, errors = new_page(browser, viewport={"width": 1300, "height": 800})
     page.goto(URL); page.wait_for_timeout(300)
