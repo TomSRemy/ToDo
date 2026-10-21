@@ -3535,7 +3535,9 @@
       PQ_SHARED_KEYS.forEach(k=>{ if(editing[k]!==undefined) pqState.shared[k]=editing[k]; });
       pqState.editOtherIds=(editing.otherContactIds||[]).slice();
       pqState.peopleList=[]; (editing.otherContactIds||[]).map(id=>contacts.find(c=>c.id===id)).filter(Boolean).forEach(c=>pqState.peopleList.push({ id:c.id, v:contactV(c), label:[c.firstName,c.lastName].filter(Boolean).join(' ')||c.email }));
-      const inst={}; PQ_CENTRALE_KEYS.forEach(k=>{ if(editing[k]!==undefined) inst[k]=editing[k]; }); pqState.installs=[inst];
+      // the installation being edited first, then the other installations of its pricing request (checked and corrected together)
+      const asInst=o=>{ const inst={ _oppId:o.id }; PQ_CENTRALE_KEYS.forEach(k=>{ if(o[k]!==undefined) inst[k]=o[k]; }); return inst; };
+      pqState.installs=[asInst(editing)].concat(editing.requestId?requestInstalls(editing.requestId).filter(x=>x.id!==editing.id).map(asInst):[]);
     }
     $('pq-title').textContent=editing?('Modifier — '+oppName(editing)):'Nouvelle opportunité';
     $('pq-mail').value=''; $('pq-files-info').textContent='';
@@ -3543,7 +3545,7 @@
     $('pq-drop-text').textContent=editing?'Pour compléter cette fiche : colle un mail ou dépose un .msg, un .eml ou l\u2019Excel du producteur. Seuls les champs vides seront remplis.':'Collez le mail, ou déposez ici un .msg, un .eml ou l\u2019Excel du producteur';
     if(editing){
       Object.keys(pqState.shared).forEach(k=>{ const v=pqState.shared[k]; if(v!==''&&v!=null&&v!==false) pqState.touched.add('s.'+k); });
-      Object.keys(pqState.installs[0]).forEach(k=>{ const v=pqState.installs[0][k]; if(v!==''&&v!=null) pqState.touched.add('0.'+k); });
+      pqState.installs.forEach((inst,i)=>Object.keys(inst).forEach(k=>{ const v=inst[k]; if(k!=='_oppId' && v!==''&&v!=null) pqState.touched.add(i+'.'+k); }));
     }
     $('pq-overlay').querySelector('.pq-box').classList.toggle('edit', !!editing);
     $('pq-start-stage').innerHTML=OPP_STAGES.map(s=>'<option value="'+s.key+'">'+escapeHtml(PIPE_PHASES.find(p=>p.key===s.phase).label+' · '+s.label)+'</option>').join('');
@@ -3735,8 +3737,9 @@
     let h=sec('prod','Producteur',true)+sec('contact','Contact principal',true).replace('Contact principal</div>','Contact principal'+pqContactSwitch()+'</div>')+pqCountBox();
     st.installs.forEach((inst,i)=>{
       const fs=PQ_FIELDS.filter(f=>f.sec==='centrale').concat(PQ_EXTRA_FIELDS);
-      h+='<div class="pq-sec pq-inst"><div class="pq-sec-h">'+(st.installs.length>1?'Installation '+(i+1):'Installation')
-        +(st.installs.length>1?'<button type="button" class="pq-link" data-remove="'+i+'">Retirer</button>':'')+'</div>'
+      const tag=!st.editId||st.installs.length<2?'':i===0?'<span class="pq-inst-tag">celle que tu modifies</span>':inst._oppId?'<span class="pq-inst-tag">déjà dans la demande</span>':'<span class="pq-inst-tag new">nouvelle : sera créée</span>';
+      h+='<div class="pq-sec pq-inst"><div class="pq-sec-h">'+(st.installs.length>1?'Installation '+(i+1):'Installation')+tag
+        +(st.installs.length>1 && !(st.editId && i===0)?'<button type="button" class="pq-link" data-remove="'+i+'">'+(st.editId && inst._oppId?'Ne pas modifier ici':'Retirer')+'</button>':'')+'</div>'
         +'<div class="pq-grid">'+fs.map(f=>pqFieldHtml(f,String(i),inst[f.k],st.auto.has(i+'.'+f.k))).join('')+'</div></div>';
     });
     if(!st.editId) h+='<div class="pq-add-inst"><button type="button" class="pq-link" id="pq-add-inst">+ Ajouter une installation</button>'+(st.installs.length>1?'<span class="pq-hint">Les '+st.installs.length+' installations seront regroupées dans une même demande de pricing.</span>':'')+'</div>';
@@ -3813,30 +3816,17 @@
       +(uniq.length?'<span class="pq-todo">À compléter : '+escapeHtml(uniq.join(', '))+'</span>':'<span class="pq-ok">Champs obligatoires remplis</span>');
   }
   // the plant of a workbook that is the installation being edited: name, SPV, power, postal code, département
-  function pqBestPlant(cur, list){
+  function pqPlantScore(cur, p){
     const n=v=>parcNorm(v||''), near=(a,b)=>{ const x=pqNum(String(a||'')), y=pqNum(String(b||'')); return x>0 && y>0 && Math.abs(x-y)/Math.max(x,y)<0.02; };
-    let best=0, top=0;
-    list.forEach((p,i)=>{
+    {
       let s=0;
       if(n(cur.centrale) && n(p.centrale) && (n(cur.centrale)===n(p.centrale) || n(cur.centrale).includes(n(p.centrale)) || n(p.centrale).includes(n(cur.centrale)))) s+=5;
       if(n(cur.spv) && n(cur.spv)===n(p.spv)) s+=4;
       if(near(cur.kwc, p.kwc)) s+=3;
       if(cur.cp && cur.cp===p.cp) s+=2;
-      if(cur.dept && cur.dept===p.dept) s+=1;
-      if(s>top){ top=s; best=i; }
-    });
-    return best;
-  }
-  function pqOthersBox(){
-    const box=$('pq-others'); if(!box) return;
-    const st=pqState, list=st&&st.xlsOthers;
-    if(!list || !list.length){ box.hidden=true; box.innerHTML=''; return; }
-    box.hidden=false;
-    box.innerHTML='<label class="pq-others-check"><input type="checkbox" id="pq-others-create"'+(st.createOthers?' checked':'')+'> <span></span></label><ul></ul>';
-    box.querySelector('span').textContent='L\u2019Excel contient aussi '+list.length+' autre'+(list.length>1?'s installations':' installation')+' : '+(list.length>1?'les':'la')+' créer dans la même demande en enregistrant';
-    const ul=box.querySelector('ul');
-    list.forEach(p=>{ const li=document.createElement('li'); li.textContent=[p.centrale||'(sans nom)', p.kwc?fmtKwc(p.kwc):'', [p.cp,p.commune].filter(Boolean).join(' ')||p.dept].filter(Boolean).join(' · '); ul.appendChild(li); });
-    $('pq-others-create').onchange=e=>{ st.createOthers=e.target.checked; };
+      if(cur.dept && cur.dept===p.dept && s>0) s+=1;   // the département alone does not tell two plants apart
+      return s;
+    }
   }
   function pqApply(parsed, xlsInstalls){
     const st=pqState; if(!st) return;
@@ -3848,14 +3838,35 @@
       if(PQ_CENTRALE_KEYS.includes(k)){ if(!st.touched.has('0.'+k)){ st.installs[0][k]=v; st.auto.add('0.'+k); } }
       else if(!st.touched.has('s.'+k)){ st.shared[k]=v; st.auto.add('s.'+k); }
     });
-    st.xlsOthers=null;
+    if(st.editId){
+      // a new reading replaces the installations it had added (kept: the ones of the pipeline)
+      const keep=[]; st.installs.forEach((x,i)=>{ if(!x._fromFile) keep.push(i); });
+      if(keep.length!==st.installs.length){
+        const remap=k=>{ const [s,f]=k.split('.'); if(s==='s') return k; const j=keep.indexOf(+s); return j<0?null:j+'.'+f; };
+        st.installs=keep.map(i=>st.installs[i]);
+        st.touched=new Set([...st.touched].map(remap).filter(Boolean)); st.auto=new Set([...st.auto].map(remap).filter(Boolean));
+      }
+    }
     if(xlsInstalls && xlsInstalls.length && st.editId){
-      // editing one installation: the plant of the file that matches it completes its empty fields; the others can be
-      // created in the same pricing request when saving
-      const cur=st.installs[0], best=pqBestPlant(cur, xlsInstalls), x=xlsInstalls[best];
-      Object.keys(x).forEach(k=>{ const has=cur[k]!=null && String(cur[k]).trim()!==''; if(!st.touched.has('0.'+k) && x[k] && (!has || st.auto.has('0.'+k))){ cur[k]=x[k]; st.auto.add('0.'+k); } });
-      const others=xlsInstalls.filter((_,i)=>i!==best);
-      if(others.length){ st.xlsOthers=others; if(st.createOthers==null) st.createOthers=true; }
+      // each plant of the file completes the installation it matches (name, SPV, power, postal code, département);
+      // the installation being edited takes the best remaining one; the others are added as new installations
+      const taken=new Set(), owner=new Map();
+      xlsInstalls.forEach((p,pi)=>{
+        let best=-1, top=0;
+        st.installs.forEach((cur,ci)=>{ if(owner.has(ci)) return; const s=pqPlantScore(cur,p); if(s>top){ top=s; best=ci; } });
+        if(best>=0){ owner.set(best,pi); taken.add(pi); }
+      });
+      if(!owner.has(0)){ const pi=xlsInstalls.findIndex((_,i)=>!taken.has(i)); if(pi>=0){ owner.set(0,pi); taken.add(pi); } }
+      owner.forEach((pi,ci)=>{
+        const cur=st.installs[ci], x=xlsInstalls[pi];
+        Object.keys(x).forEach(k=>{ const has=cur[k]!=null && String(cur[k]).trim()!==''; if(!st.touched.has(ci+'.'+k) && x[k] && !has){ cur[k]=x[k]; st.auto.add(ci+'.'+k); } });
+      });
+      xlsInstalls.forEach((x,pi)=>{
+        if(taken.has(pi)) return;
+        const base=st.installs[0], i=st.installs.length;
+        st.installs.push(Object.assign({ install:base.install, contrat:base.contrat }, x, { _fromFile:true }));
+        Object.keys(x).forEach(k=>st.auto.add(i+'.'+k));
+      });
     } else if(xlsInstalls && xlsInstalls.length){
       const base=Object.assign({}, st.installs[0]);
       st.installs=xlsInstalls.map((x,i)=>{
@@ -3865,7 +3876,7 @@
       });
     }
     if(st.shared.dateEntree) st.shared.annee=st.shared.dateEntree.slice(0,4);
-    pqRender(); pqOthersBox();
+    pqRender();
   }
   let pqParseTimer=null, pqLastFiles=null;
   // Copying a mail from Outlook's message list gives only its summary line ("De  Objet  Reçu  Taille…"), not its content
@@ -3897,7 +3908,7 @@
     let html='<div class="pq-detect-h">Ce que j\u2019ai trouvé</div><ul class="pq-detect-sum">';
     if(parsed.producteur) html+='<li><b>Producteur</b> '+escapeHtml(parsed.producteur)+'</li>';
     html+='<li><b>'+plants.length+' installation'+(plants.length>1?'s':'')+'</b>'+(plants.length?' : '+plants.map(p=>escapeHtml([p.centrale||'(sans nom)', p.kwc?fmtKwc(p.kwc):''].filter(Boolean).join(' '))).join(' · '):'')+'</li>';
-    html+='<li><b>'+people.length+' contact'+(people.length>1?'s':'')+'</b>'+(people.length?' — coche ceux à lier, ★ = contact principal':'')+'</li></ul>';
+    html+=people.length?'<li><b>'+people.length+' contact'+(people.length>1?'s':'')+'</b> — coche ceux à lier, ★ = contact principal</li></ul>':'<li>Aucun contact dans le document</li></ul>';
     box.innerHTML=html;
     if(people.length){
       const list=document.createElement('div'); list.className='pq-detect-people';
@@ -3983,20 +3994,22 @@
       const mc=ensureContact(v, company);
       const detIds=pqDetectedIds(company).filter(id=>!mc || id!==mc.id);
       if(detIds.length){ st.editOtherIds=[...new Set((st.editOtherIds||o.otherContactIds||[]).concat(detIds))]; }
-      if(st.xlsOthers && st.xlsOthers.length && st.createOthers){
-        if(!o.requestId){ const reqId=newOppId('req'); opportunities.push({ id:reqId, kind:'request', company, title:'Demande de pricing', createdAt:Date.now(), updatedAt:Date.now(), deleted:false }); o.requestId=reqId; touchCrm(o); }
-        st.xlsOthers.forEach((p,i)=>{
-          const x={ id:newOppId('opp'), kind:'installation', company, stage:o.stage, requestId:o.requestId, taskId:null, createdAt:Date.now(), updatedAt:Date.now(), deleted:false, lostAt:null };
+      // the other installations of the form: those of the pipeline are updated, the new ones created in the same request
+      const more=st.installs.slice(1);
+      if(more.length && !o.requestId){ const reqId=newOppId('req'); opportunities.push({ id:reqId, kind:'request', company, title:'Demande de pricing', createdAt:Date.now(), updatedAt:Date.now(), deleted:false }); o.requestId=reqId; touchCrm(o); }
+      more.forEach((inst,i)=>{
+        let x=inst._oppId?opportunities.find(y=>y.id===inst._oppId):null;
+        if(!x){
+          x={ id:newOppId('opp'), kind:'installation', company, stage:o.stage, requestId:o.requestId, taskId:null, createdAt:Date.now(), updatedAt:Date.now(), deleted:false, lostAt:null };
           PQ_SHARED_KEYS.forEach(k=>{ if(v[k]!==undefined) x[k]=v[k]; });
-          ['install','contrat','dept','region'].forEach(k=>{ if(o[k]) x[k]=o[k]; });
-          PQ_CENTRALE_KEYS.forEach(k=>{ if(p[k]!==undefined && p[k]!=='') x[k]=p[k]; });
-          if(!(x.centrale||'').trim()) x.centrale=producteur+' '+(i+2);
-          x.title=x.centrale;
           if(o.goDate) x.goDate=o.goDate;
           if(o.otherContactIds) x.otherContactIds=o.otherContactIds.slice();
           opportunities.push(x);
-        });
-      }
+        }
+        PQ_CENTRALE_KEYS.forEach(k=>{ if(inst[k]!==undefined) x[k]=inst[k]; });
+        if(!(x.centrale||'').trim()) x.centrale=producteur+' '+(i+2);
+        x.title=x.centrale; touchCrm(x);
+      });
       if(st.editOtherIds){ o.otherContactIds=[...new Set(st.editOtherIds.filter(id=>!mc || id!==mc.id))]; if(!o.otherContactIds.length) delete o.otherContactIds; touchCrm(o); }
       saveCrm(); closeOppForm(); renderPipeline(); render();
       openOppDetail(o.id);

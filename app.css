@@ -1159,3 +1159,11 @@
 .os-fact b{ font-size:15px; font-weight:500; }
 .os-fact.empty b{ font-size:13px; }
 .os-person .os-row{ padding:3px 0; }
+
+/* the opportunity form has no inner margin: its cross sits inside the header */
+.pq-box .modal-x{ top:14px; right:14px; }
+.modal-box > .pq-head{ padding-right:60px; }
+.pq-inst-tag{ margin-left:10px; font:500 10.5px var(--font-ui); text-transform:none; letter-spacing:0; color:var(--tx3); padding:2px 7px; border:1px solid var(--bd); border-radius:999px; }
+.pq-inst-tag.new{ color:var(--accent); border-color:var(--accent); }
+.pq-inst .pq-sec-h{ justify-content:flex-start; align-items:center; }
+.pq-inst .pq-sec-h .pq-link{ margin-left:auto; }

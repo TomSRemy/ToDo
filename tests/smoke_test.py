@@ -815,14 +815,25 @@ Responsable technique
     got = [page.input_value(s_) for s_ in ("#pq-0-centrale", "#pq-0-spv", "#pq-0-cp", "#pq-0-commune", "#pq-0-mesPrev")]
     check(got == ["ALPHA PV1", "ALPHA PV1", "49640", "VILLE-SUR-EXEMPLE", "20/07/2027"],
           f"edit + workbook: the matching plant (299 kWc) fills the form, SPV names it, postal code split, summer date right in Paris time ({got})")
-    check(page.is_visible("#pq-others") and "BETA PV1" in page.inner_text("#pq-others") and page.is_checked("#pq-others-create"),
-          "edit + workbook: the other plant is shown, to create in the same request")
+    heads = page.eval_on_selector_all("#pq-form .pq-inst .pq-sec-h", "els=>els.map(e=>e.innerText.replace(/\\s+/g,' ').trim())")
+    check(page.input_value("#pq-1-centrale") == "BETA PV1" and page.input_value("#pq-1-kwc") == "211.14" and page.input_value("#pq-1-mesPrev") == "20/07/2027"
+          and "nouvelle : sera créée" in heads[1] and "celle que tu modifies" in heads[0],
+          f"edit + workbook: the other plant shown right away in the form as Installation 2, to check ({heads})")
     page.click("#pq-save-btn"); page.wait_for_timeout(300)
     opps_now = [o for o in stored(page, "todo-widget-opportunities") if not o.get("deleted")]
     insts = sorted((o for o in opps_now if o["kind"] == "installation"), key=lambda o: o["kwc"])
     reqs = [o for o in opps_now if o["kind"] == "request"]
     check(len(insts) == 2 and len(reqs) == 1 and all(o["requestId"] == reqs[0]["id"] for o in insts) and insts[0]["centrale"] == "BETA PV1"
           and insts[0]["kwc"] == "211.14" and insts[0]["stage"] == "collecte", f"edit + workbook: the second plant created in the same request ({[o.get('centrale') for o in insts]})")
+    check(insts[1]["mesPrev"] == "20/07/2027" and insts[1]["mwh"] == "358", "edit + workbook: commissioning date and volume saved in the installation")
+    # editing again with the same workbook: both installations shown, matched, nothing created twice
+    page.wait_for_selector("#opp-detail-overlay:not(.hidden)"); page.click("#opp-detail-edit")   # the sheet reopens after saving
+    check(page.input_value("#pq-1-centrale") == "BETA PV1" and "déjà dans la demande" in page.inner_text("#pq-form"), "edit again: the request's other installation is in the form")
+    page.set_input_files("#pq-file", str(multi)); page.wait_for_function("document.getElementById('pq-files-info').textContent.includes('installation')", timeout=20000)
+    check(page.locator("#pq-form .pq-inst").count() == 2, "edit again: the workbook's plants match the existing installations (no third one)")
+    page.click("#pq-save-btn"); page.wait_for_timeout(300)
+    n_inst = len([o for o in stored(page, "todo-widget-opportunities") if o["kind"] == "installation" and not o.get("deleted")])
+    check(n_inst == 2, f"edit again: still two installations ({n_inst})")
     page, errors = new_page(browser)
     page.goto(URL); page.click('[data-tab="pipeline"]'); page.click("#opp-add-btn"); page.fill("#pq1-company", "SCEA Y"); page.click("#pq-next-btn")
     # a mail saved as .eml (new Outlook, Outlook web): its text and its attached Excel, also inside a forwarded mail
