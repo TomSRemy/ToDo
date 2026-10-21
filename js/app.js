@@ -3790,6 +3790,12 @@
       const l=userViews(scope).filter(v=>v.name!==name.trim()); l.push(Object.assign({ name:name.trim() }, currentViewSnapshot(scope))); storeUserViews(scope,l); savedViewState[scope]=Object.assign({}, savedViewState[scope]||{}, { name:name.trim() }); paintViewChip(scope); }, 'save');
     document.body.appendChild(m);
     const r=btn.getBoundingClientRect(); m.style.left=Math.min(r.left, innerWidth-m.offsetWidth-8)+'px'; m.style.top=(r.bottom+4)+'px';
+    // keyboard: arrows move, Escape closes and goes back to the button
+    const its=()=>[...m.querySelectorAll('.views-item')];
+    m.addEventListener('keydown', e=>{ const l=its(), i=l.indexOf(document.activeElement);
+      if(e.key==='ArrowDown'){ e.preventDefault(); (l[i+1]||l[0]).focus(); } else if(e.key==='ArrowUp'){ e.preventDefault(); (l[i-1]||l[l.length-1]).focus(); }
+      else if(e.key==='Escape'){ e.preventDefault(); e.stopPropagation(); m.remove(); btn.focus(); } });
+    const f=its()[0]; if(f) f.focus();
     setTimeout(()=>document.addEventListener('click', function close(e){ if(!m.contains(e.target)){ m.remove(); document.removeEventListener('click', close, true); } }, true), 0);
   }
   window.todoExtraCommands=(window.todoExtraCommands||[]).concat(
