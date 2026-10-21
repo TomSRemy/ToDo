@@ -176,9 +176,28 @@
       const v=o.vol||.1; g.gain.setValueAtTime(0,t); g.gain.linearRampToValueAtTime(v,t+(o.attack||.02)); g.gain.setValueAtTime(v,t+Math.max(.02,dur-(o.release||.1))); g.gain.linearRampToValueAtTime(0,t+dur);
       src.connect(f); f.connect(g); g.connect(a.destination); src.start(t); src.stop(t+dur); }catch(e){}
   }
+  // a short bossa nova (about 3 s at 160 bpm): nylon-guitar chords in the bossa rhythm, the bass, a shaker and a few rim clicks
+  function pluck(f, at, dur, vol){
+    try{ const a=ctx(), t=a.currentTime+at, o1=a.createOscillator(), o2=a.createOscillator(), g=a.createGain(), lp=a.createBiquadFilter();
+      o1.type='triangle'; o2.type='sine'; o1.frequency.value=f; o2.frequency.value=f*2.003; lp.type='lowpass'; lp.frequency.setValueAtTime(2600,t); lp.frequency.exponentialRampToValueAtTime(700,t+dur);
+      const g2=a.createGain(); g2.gain.value=.25; g.gain.setValueAtTime(0,t); g.gain.linearRampToValueAtTime(vol,t+.008); g.gain.exponentialRampToValueAtTime(.0001,t+dur);
+      o1.connect(lp); o2.connect(g2); g2.connect(lp); lp.connect(g); g.connect(a.destination); o1.start(t); o2.start(t); o1.stop(t+dur+.02); o2.stop(t+dur+.02); }catch(e){}
+  }
+  function bossaNova(){
+    const st=60/160/4;   // one sixteenth
+    const C=[261.6,329.6,392,493.9], Dm=[293.7,349.2,440,523.3], G7=[246.9,293.7,349.2,392], C9=[329.6,392,493.9,587.3];
+    const chord=(notes, step, dur)=>notes.forEach((f,i)=>pluck(f, step*st+i*.012, dur||.45, .07));   // a light strum
+    const bass=(f, step)=>pluck(f, step*st, .5, .16);
+    [0,3,6,10,13].forEach(k=>chord(C,k)); [[0,130.8],[6,98],[8,130.8],[14,98]].forEach(([k,f])=>bass(f,k));
+    [16,19].forEach(k=>chord(Dm,k)); [[16,146.8],[19,110]].forEach(([k,f])=>bass(f,k));
+    [22,25].forEach(k=>chord(G7,k)); [[22,98],[25,123.5]].forEach(([k,f])=>bass(f,k));
+    chord(C9, 28, 1.1); bass(130.8, 28); pluck(65.4, 28*st, 1.1, .07);
+    for(let k=0;k<28;k+=2) hiss(k*st, .035, { filter:'highpass', f:6500, vol:k%4===0?.022:.014, attack:.004, release:.03 });   // shaker
+    [0,3,6,10,12,16,19,22].forEach(k=>tone(1700, k*st, .025, { type:'square', vol:.018 }));   // rim clicks
+  }
   // one little sound per animation (synthesized, quiet)
   const SOUND={
-    panel(){ [523,659,784,1047].forEach((f,i)=>tone(f,.25+i*.11,.18,{ type:'triangle', vol:.1 })); tone(196,.75,.25,{ type:'sine', to:392, vol:.08 }); },   // a happy little tune, then « boing »
+    panel(){ bossaNova(); },   // a little bossa nova while it dances
     turbine(){ hiss(.9,1.4,{ f:300, fto:2400, q:.8, vol:.07, attack:.5, release:.3 }); tone(1568,2.2,.5,{ vol:.08 }); tone(2093,2.28,.5,{ vol:.06 }); },   // whoosh, then « ding »
     battery(){ hiss(.4,.12,{ filter:'highpass', f:2000, vol:.12, attack:.005, release:.08 }); tone(1800,.4,.15,{ type:'square', to:200, vol:.05 }); tone(300,.6,1,{ type:'triangle', to:950, vol:.06 }); tone(1319,1.6,.4,{ vol:.08 }); tone(1760,1.68,.5,{ vol:.07 }); },   // zap, charging, ding
     gun(){ tone(2637,.15,.5,{ vol:.07 }); tone(3136,.22,.6,{ vol:.06 }); hiss(.15,.08,{ filter:'highpass', f:4000, vol:.08, attack:.005, release:.06 }); for(let i=0;i<14;i++) hiss(.5+i*.13,.06,{ f:900+Math.random()*400, q:2, vol:.06, attack:.005, release:.05 }); },   // « ka-ching », then the shots
