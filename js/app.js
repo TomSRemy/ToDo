@@ -4758,10 +4758,8 @@
   }
   function playCelebration(kind, list){
     const n=list.length, sub=n>1?n+' installations'+(list[0]&&list[0].company?' · '+list[0].company:''):(list[0]?oppName(list[0]):'');
-    if(window.todoCelebrate) window.todoCelebrate(kind, { sub });   // js/celebrate.js: drawn and 3D animations of each kind, at random
+    if(window.todoCelebrate) window.todoCelebrate(kind, { sub });   // js/celebrate.js: three animations of each kind, at random
   }
-  // the 3D images of the animations, fetched once a little after opening (not on the phone view)
-  setTimeout(()=>{ if(!document.documentElement.classList.contains('lite') && window.todoCelebratePreload) window.todoCelebratePreload(); }, 6000);
   // Moving into a stage records the dates the BDD needs.
   // the opportunity in one line: installations · power · technology · volume
   function oppSummary(list){
