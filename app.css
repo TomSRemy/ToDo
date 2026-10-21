@@ -1091,3 +1091,26 @@
 .modal-x:hover{ color:var(--tx1); border-color:var(--tx3); background:var(--panel-3); }
 .modal-box > h3, .modal-box > .pq-head, .modal-box > .opp-detail-head{ padding-right:34px; }
 #guide-close{ display:none; }   /* replaced by the cross */
+
+/* installations of one pricing request: tabs and side-by-side check */
+.req-tabs{ display:flex; gap:6px; flex-wrap:wrap; margin:0 0 12px; }
+.req-tab{ display:flex; flex-direction:column; align-items:flex-start; gap:1px; padding:7px 12px; border:1px solid var(--bd); border-radius:8px; background:var(--panel-2); color:var(--tx2); cursor:pointer; text-align:left; font:inherit; min-width:0; max-width:240px; }
+.req-tab .n{ font:500 10px var(--font-mono); text-transform:uppercase; letter-spacing:.06em; color:var(--tx3); }
+.req-tab b{ font-weight:600; font-size:13px; color:var(--tx1); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:100%; }
+.req-tab .k{ font:500 11px var(--font-mono); color:var(--tx3); }
+.req-tab:hover{ border-color:var(--tx3); }
+.req-tab.on{ border-color:var(--accent); background:var(--accent-dim); }
+.req-tab.on .n{ color:var(--accent); }
+.req-compare{ margin:14px 0 6px; display:flex; flex-direction:column; gap:8px; }
+.req-miss{ margin-left:8px; color:#E5B54F; text-transform:none; letter-spacing:0; }
+.req-compare-scroll{ overflow-x:auto; border:1px solid var(--bd); border-radius:8px; }
+.req-table{ border-collapse:collapse; width:100%; font-size:12.5px; }
+.req-table th, .req-table td{ padding:6px 10px; border-bottom:1px solid var(--bd-soft); text-align:left; vertical-align:top; }
+.req-table tbody tr:last-child th, .req-table tbody tr:last-child td{ border-bottom:none; }
+.req-table thead th{ background:var(--panel-3); font:500 10.5px var(--font-mono); text-transform:uppercase; letter-spacing:.05em; color:var(--tx3); white-space:nowrap; }
+.req-table tbody th{ font-weight:500; color:var(--tx3); white-space:nowrap; width:1%; }
+.req-table td{ color:var(--tx1); }
+.req-table td.cur, .req-table thead th.cur{ background:var(--accent-dim); }
+.req-table td.empty{ color:#E5B54F; font-style:italic; }
+.req-col{ background:none; border:none; padding:0; color:inherit; font:inherit; text-transform:inherit; letter-spacing:inherit; cursor:pointer; }
+.req-col:hover{ color:var(--accent); }

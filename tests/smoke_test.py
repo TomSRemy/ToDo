@@ -413,6 +413,24 @@ with sync_playwright() as p:
     check(not errors, f"no page errors ({errors})")
     page.close()
 
+    # --- A pricing request with two installations: tabs and a side-by-side check in each sheet
+    two = [{"id": "rq", "kind": "request", "company": "GPX", "title": "Demande de pricing", "createdAt": 1, "updatedAt": 1, "deleted": False},
+           {"id": "t1", "kind": "installation", "company": "GPX", "centrale": "ALPHA PV1", "title": "ALPHA PV1", "kwc": "299", "mwh": "358", "mesPrev": "20/07/2027",
+            "dept": "49 - Maine-et-Loire", "commune": "VILLE-SUR-EXEMPLE", "requestId": "rq", "stage": "collecte", "createdAt": 1, "updatedAt": 1, "deleted": False},
+           {"id": "t2", "kind": "installation", "company": "GPX", "centrale": "BETA PV1", "title": "BETA PV1", "kwc": "211.14", "dept": "49 - Maine-et-Loire",
+            "requestId": "rq", "stage": "collecte", "createdAt": 1, "updatedAt": 1, "deleted": False}]
+    page, errors = new_page(browser, {"todo_todo-widget-opportunities": json.dumps(two)}, viewport={"width": 1300, "height": 900})
+    page.goto(URL); page.click('[data-tab="pipeline"]'); page.locator(".pipe-req-name", has_text="ALPHA PV1").click()
+    tabs = page.eval_on_selector_all("#opp-detail-body .req-tab", "els=>els.map(e=>e.innerText.replace(/\\s+/g,' ').trim())")
+    check(tabs == ["INSTALLATION 1 ALPHA PV1 299 kWc", "INSTALLATION 2 BETA PV1 211 kWc"] and "ALPHA PV1" in page.inner_text("#opp-detail-title"),
+          f"request: both installations shown as tabs in the sheet ({tabs})")
+    table = page.inner_text("#opp-detail-body .req-compare")
+    check("358 MWh" in table and "à compléter" in table and "3 cases à compléter" in table, "request: side-by-side check, empty cells to complete flagged")
+    page.locator("#opp-detail-body .req-tab", has_text="BETA PV1").click()
+    check("BETA PV1" in page.inner_text("#opp-detail-title") and page.locator("#opp-detail-body .req-tab.on").inner_text().startswith("INSTALLATION 2"), "request: a tab opens the other installation")
+    check(not errors, f"no page errors ({errors})")
+    page.close()
+
     # --- Sync pill: state visible everywhere, token problems explained
     page, errors = new_page(browser, viewport={"width": 1300, "height": 800})
     page.goto(URL); page.wait_for_timeout(300)

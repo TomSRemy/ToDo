@@ -4080,8 +4080,11 @@
       const meta=document.createElement('span'); meta.className='opp-sheet-meta';
       meta.textContent=[fmtKwc(o.kwc), o.mwh?Number(pqNum(o.mwh)).toLocaleString('fr-FR')+' MWh/an':'', o.install, o.dept].filter(Boolean).join(' · ');
       head.appendChild(meta);
+      const siblings=o.requestId?requestInstalls(o.requestId):[];
+      if(siblings.length>1) box.appendChild(buildRequestTabs(siblings, o.id));
       box.appendChild(head);
       box.appendChild(buildInstallSheet(o));
+      if(siblings.length>1) box.appendChild(buildRequestCompare(siblings, o.id));
       if(o.requestId){
         const req=opportunities.find(x=>x.id===o.requestId);
         const l=document.createElement('button'); l.type='button'; l.className='pq-link'; l.textContent='Fait partie de : '+((req&&req.title)||'Demande de pricing')+' ('+requestInstalls(o.requestId).length+' installations)';
@@ -4146,6 +4149,39 @@
   }
   function closeOppDetail(){ $('opp-detail-overlay').classList.add('hidden'); viewingOppId=null; }
   // Installation sheet: every column of the Pipe / BDD, grouped; empty values shown as "—" so gaps are visible.
+  // ---------- Installations of one pricing request: tabs to go from one to the other, and a table to check them side by side ----------
+  const REQ_COMPARE_KEYS=['centrale','kwc','mwh','p90','mesPrev','install','contrat','dept','region','commune','cp','spv','siret','debut','fin','duree','particularites'];
+  const pqFieldLabel=k=>{ const f=PQ_FIELDS.find(x=>x.k===k)||PQ_EXTRA_FIELDS.find(x=>x.k===k); return f?f.label:k; };
+  function reqCompareValue(o, k){
+    const v=o[k]; if(v==null || String(v).trim()==='') return '';
+    if(k==='kwc') return fmtKwc(v);
+    if(k==='mwh' || k==='p90'){ const n=pqNum(String(v)); return isNaN(n)?String(v):n.toLocaleString('fr-FR')+' MWh'; }
+    return String(v);
+  }
+  function buildRequestTabs(list, currentId){
+    const t=document.createElement('div'); t.className='req-tabs'; t.setAttribute('role','tablist');
+    list.forEach((x,i)=>{
+      const b=document.createElement('button'); b.type='button'; b.className='req-tab'+(x.id===currentId?' on':''); b.setAttribute('role','tab'); b.setAttribute('aria-selected', String(x.id===currentId));
+      b.innerHTML='<span class="n"></span><b></b><span class="k"></span>';
+      b.querySelector('.n').textContent='Installation '+(i+1); b.querySelector('b').textContent=oppName(x); b.querySelector('.k').textContent=fmtKwc(x.kwc)||'';
+      b.onclick=()=>{ if(x.id!==currentId) openOppDetail(x.id); };
+      t.appendChild(b);
+    });
+    return t;
+  }
+  function buildRequestCompare(list, currentId){
+    const wrap=document.createElement('div'); wrap.className='req-compare';
+    const missing=list.reduce((s,x)=>s+['centrale','kwc','mwh','mesPrev','dept','commune'].filter(k=>!reqCompareValue(x,k)).length,0);
+    wrap.innerHTML='<div class="opp-phase-h">Vérifier les '+list.length+' installations côte à côte'+(missing?' <span class="req-miss">'+missing+' case'+(missing>1?'s':'')+' à compléter</span>':'')+'</div>';
+    const keys=REQ_COMPARE_KEYS.filter(k=>['centrale','kwc','mwh','mesPrev','dept','commune'].includes(k) || list.some(x=>reqCompareValue(x,k)));
+    const sc=document.createElement('div'); sc.className='req-compare-scroll';
+    let t='<table class="req-table"><thead><tr><th></th>'+list.map((x,i)=>'<th class="'+(x.id===currentId?'cur':'')+'"><button type="button" class="req-col" data-id="'+escapeHtml(x.id)+'">Installation '+(i+1)+'</button></th>').join('')+'</tr></thead><tbody>';
+    keys.forEach(k=>{ t+='<tr><th scope="row">'+escapeHtml(pqFieldLabel(k))+'</th>'+list.map(x=>{ const v=reqCompareValue(x,k); return '<td class="'+(x.id===currentId?'cur ':'')+(v?'':'empty')+'">'+(v?escapeHtml(v):'à compléter')+'</td>'; }).join('')+'</tr>'; });
+    t+='</tbody></table>';
+    sc.innerHTML=t; wrap.appendChild(sc);
+    sc.querySelectorAll('.req-col').forEach(b=>{ b.onclick=()=>openOppDetail(b.dataset.id); });
+    return wrap;
+  }
   function buildInstallSheet(o){
     const fr=v=>/^\d{4}-\d{2}-\d{2}$/.test(v||'')?pqIsoToFr(v):(v||'');
     const contact=[o.prenom,(o.nom||'').replace(/^(M\.|Mme)\s+/i,'')].filter(Boolean).join(' ');
@@ -4263,6 +4299,7 @@
       ul.appendChild(r);
     });
     box.appendChild(ul);
+    if(list.length>1) box.appendChild(buildRequestCompare(list, null));
     const candidates=opportunities.filter(o=>!o.deleted && o.kind==='installation' && !o.requestId && o.company===req.company && !isExited(o));
     if(candidates.length){
       const sel=document.createElement('select'); sel.className='opp-req-add';
