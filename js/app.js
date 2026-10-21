@@ -774,8 +774,10 @@
     return hashColor(n, CLIENT_PALETTE);
   };
   const projectColor=n=>hashColor(n,PROJECT_PALETTE);
-  function fmtDateShort(d){ if(!d)return null; const dt=new Date(d+'T00:00:00'); return dt.toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit'}); }
-  function fmtDateTime(ts){ const dt=new Date(ts); return dt.toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit',year:'2-digit'})+' '+dt.toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'}); }
+  // date formats made once (toLocaleDateString builds a new formatter at every call: slow on long lists)
+  const DF_DM=new Intl.DateTimeFormat('fr-FR',{day:'2-digit',month:'2-digit'}), DF_DMY=new Intl.DateTimeFormat('fr-FR',{day:'2-digit',month:'2-digit',year:'2-digit'}), DF_HM=new Intl.DateTimeFormat('fr-FR',{hour:'2-digit',minute:'2-digit'});
+  function fmtDateShort(d){ if(!d)return null; return DF_DM.format(new Date(d+'T00:00:00')); }
+  function fmtDateTime(ts){ const dt=new Date(ts); return DF_DMY.format(dt)+' '+DF_HM.format(dt); }
   function dueStatus(due){ if(!due)return ''; const t=new Date();t.setHours(0,0,0,0); const d=new Date(due+'T00:00:00'); const diff=Math.round((d-t)/86400000); if(diff<0)return 'overdue'; if(diff<=2)return 'soon'; return ''; }
 
   function activeTasks(){ return tasks.filter(t=>!t.archived && !t.deleted); }
@@ -1683,7 +1685,11 @@
   }
 
   let archiveFilter='toutes';
+  let archiveDirty=false;
   function renderArchive(){
+    // drawn when it is shown (the tab click draws it again): validating a task stays quick with a long archive
+    if($('tab-archive').classList.contains('hidden')){ archiveDirty=true; return; }
+    archiveDirty=false;
     const list=$('archive-list');
     list.innerHTML='';
     const q=($('archive-search').value||'').trim().toLowerCase();
@@ -5829,7 +5835,8 @@
   reminderToggle.onclick=()=>{ const o=reminderRow.style.display==='flex'; reminderRow.style.display=o?'none':'flex'; if(!o)$('f-reminder').focus(); };
   recurToggle.onclick=()=>{ recurRow.style.display=recurRow.style.display==='flex'?'none':'flex'; };
 
-  searchInput.addEventListener('input',()=>{ searchQuery=searchInput.value.trim(); searchClear.classList.toggle('show',!!searchQuery); render(); });
+  let searchTimer=null;   // a short pause between keys before the list is drawn again
+  searchInput.addEventListener('input',()=>{ searchQuery=searchInput.value.trim(); searchClear.classList.toggle('show',!!searchQuery); clearTimeout(searchTimer); searchTimer=setTimeout(render, activeTasks().length>300?140:0); });
   searchClear.onclick=()=>{ searchInput.value=''; searchQuery=''; searchClear.classList.remove('show'); render(); searchInput.focus(); };
 
   filters.addEventListener('click',e=>{ const c=e.target.closest('.filter-chip'); if(!c)return; filters.querySelectorAll('.filter-chip').forEach(x=>x.classList.remove('active')); c.classList.add('active'); currentFilter=c.dataset.filter; render(); });

@@ -48,34 +48,45 @@
     }
     // ---- physics: springs on the links, repulsion between all visible nodes (grid-bucketed), a gentle pull to the centre
     function tick(){
-      const ok=visibleSet(), vis=nodes.filter(ok), cell=90, grid=new Map();
-      vis.forEach(n=>{ const k=Math.floor(n.p.x/cell)+','+Math.floor(n.p.y/cell); (grid.get(k)||grid.set(k,[]).get(k)).push(n); });
-      vis.forEach(n=>{ const gx=Math.floor(n.p.x/cell), gy=Math.floor(n.p.y/cell);
-        for(let dx=-2;dx<=2;dx++) for(let dy=-2;dy<=2;dy++){ const list=grid.get((gx+dx)+','+(gy+dy)); if(!list) continue;
-          list.forEach(m=>{ if(m===n) return; let x=n.p.x-m.p.x, y=n.p.y-m.p.y, d2=x*x+y*y; if(d2<1){ x=Math.random()-.5; y=Math.random()-.5; d2=.5; } if(d2>cell*cell*4) return;
-            const f=900/d2; n.p.vx+=x*f*.02*alpha; n.p.vy+=y*f*.02*alpha; }); } });
+      const ok=visibleSet(), vis=nodes.filter(ok), big=vis.length>900, cell=big?120:90, reach=big?1:2, grid=new Map();
+      const ox=Math.random()*cell, oy=Math.random()*cell, cx=n=>Math.floor((n.p.x+ox)/cell), cy=n=>Math.floor((n.p.y+oy)/cell);   // the grid moves at every step: no lines along its edges
+      vis.forEach(n=>{ const k=cx(n)+','+cy(n); (grid.get(k)||grid.set(k,[]).get(k)).push(n); });
+      // repulsion: one by one inside a cell (at most ~60 neighbours), and each nearby cell pushes as one mass from its centre
+      const mass=new Map(); grid.forEach((list,k)=>{ let x=0,y=0; list.forEach(m=>{ x+=m.p.x; y+=m.p.y; }); mass.set(k,{ x:x/list.length, y:y/list.length, n:list.length }); });
+      const push=(n,x,y,w)=>{ let d2=x*x+y*y; if(d2<1){ x=Math.random()-.5; y=Math.random()-.5; d2=.5; } if(d2>cell*cell*9) return; const f=900*w/d2*.02*alpha; n.p.vx+=x*f; n.p.vy+=y*f; };
+      vis.forEach(n=>{ const gx=cx(n), gy=cy(n), own=gx+','+gy, list=grid.get(own), step=Math.max(1, Math.floor(list.length/60));
+        for(let i=0;i<list.length;i+=step){ const m=list[i]; if(m!==n) push(n, n.p.x-m.p.x, n.p.y-m.p.y, step); }
+        for(let dx=-reach;dx<=reach;dx++) for(let dy=-reach;dy<=reach;dy++){ if(!dx && !dy) continue; const k=(gx+dx)+','+(gy+dy), l2=grid.get(k); if(!l2) continue;
+          if(l2.length<=12) l2.forEach(m=>push(n, n.p.x-m.p.x, n.p.y-m.p.y, 1)); else { const c=mass.get(k); push(n, n.p.x-c.x, n.p.y-c.y, c.n); } } });
       edges.forEach(([a,b])=>{ const A=byId.get(a), B=byId.get(b); if(!ok(A)||!ok(B)) return;
         const L=(A.type==='company'||B.type==='company')?60:40, x=B.p.x-A.p.x, y=B.p.y-A.p.y, d=Math.sqrt(x*x+y*y)||1, f=(d-L)/d*.06*alpha;
         A.p.vx+=x*f; A.p.vy+=y*f; B.p.vx-=x*f; B.p.vy-=y*f; });
       vis.forEach(n=>{ n.p.vx-=n.p.x*.0025*alpha; n.p.vy-=n.p.y*.0025*alpha; if(n===dragging) return; n.p.vx*=.82; n.p.vy*=.82; n.p.x+=n.p.vx; n.p.y+=n.p.vy; });
-      alpha*=.985;
+      alpha*=big?.97:.985;   // a big graph settles sooner
     }
     const toScreen=(x,y)=>[(x*view.k+view.x)+W/2, (y*view.k+view.y)+H/2];
     const toWorld=(sx,sy)=>[((sx-W/2)-view.x)/view.k, ((sy-H/2)-view.y)/view.k];
     function draw(){
       const ok=visibleSet(); ctx.setTransform(dpr,0,0,dpr,0,0); ctx.clearRect(0,0,W,H);
       const focus=hover||selected, near=focus?new Set([focus.id, ...(adj.get(focus.id)||[])]):null;
-      ctx.lineWidth=1;
-      edges.forEach(([a,b])=>{ const A=byId.get(a), B=byId.get(b); if(!ok(A)||!ok(B)) return; const on=near && near.has(a) && near.has(b) && (a===focus.id||b===focus.id);
-        ctx.strokeStyle=on?'rgba(20,211,169,.75)':(near?'rgba(140,160,180,.07)':'rgba(140,160,180,.22)'); const [x1,y1]=toScreen(A.p.x,A.p.y), [x2,y2]=toScreen(B.p.x,B.p.y);
-        ctx.beginPath(); ctx.moveTo(x1,y1); ctx.lineTo(x2,y2); ctx.stroke(); });
+      // links: one path per style (drawing them one by one is what makes a big graph slow)
+      ctx.lineWidth=1; const pNorm=new Path2D(), pOn=new Path2D();
+      edges.forEach(([a,b])=>{ const A=byId.get(a), B=byId.get(b); if(!ok(A)||!ok(B)) return; const on=near && (a===focus.id||b===focus.id);
+        const [x1,y1]=toScreen(A.p.x,A.p.y), [x2,y2]=toScreen(B.p.x,B.p.y); const p=on?pOn:pNorm; p.moveTo(x1,y1); p.lineTo(x2,y2); });
+      ctx.strokeStyle=near?'rgba(140,160,180,.07)':'rgba(140,160,180,.22)'; ctx.stroke(pNorm);
+      if(near){ ctx.strokeStyle='rgba(20,211,169,.75)'; ctx.stroke(pOn); }
+      // nodes: one path per colour and brightness
+      const groups=new Map(), labels=[];
       nodes.forEach(n=>{ if(!ok(n)) return; const [x,y]=toScreen(n.p.x,n.p.y), r=n.r*Math.max(.6,Math.min(1.6,view.k)); if(x<-30||y<-30||x>W+30||y>H+30) return;
-        const dim=(near && !near.has(n.id)) || (matches && !matches.has(n.id));
-        ctx.globalAlpha=dim?.18:1; ctx.fillStyle=(TYPES[n.type]||TYPES.task).color; ctx.beginPath(); ctx.arc(x,y,r,0,Math.PI*2); ctx.fill();
-        if(n===selected){ ctx.strokeStyle='#fff'; ctx.lineWidth=2; ctx.stroke(); ctx.lineWidth=1; }
+        const dim=(near && !near.has(n.id)) || (matches && !matches.has(n.id)), key=(TYPES[n.type]||TYPES.task).color+(dim?'|d':'');
+        let g=groups.get(key); if(!g){ g=new Path2D(); groups.set(key,g); } g.moveTo(x+r,y); g.arc(x,y,r,0,Math.PI*2);
         const showLabel=(n.type==='company' && view.k>.55) || view.k>1.6 || (near && near.has(n.id)) || (matches && matches.has(n.id));
-        if(showLabel && !dim){ ctx.font=(n.type==='company'?'600 ':'')+'11px system-ui, sans-serif'; ctx.fillStyle='rgba(232,238,245,.92)'; ctx.fillText(n.label.length>34?n.label.slice(0,33)+'…':n.label, x+r+3, y+4); }
-        ctx.globalAlpha=1; });
+        if(showLabel && !dim) labels.push([n,x,y,r]); });
+      groups.forEach((p,key)=>{ const [color,d]=key.split('|'); ctx.globalAlpha=d?.18:1; ctx.fillStyle=color; ctx.fill(p); });
+      ctx.globalAlpha=1;
+      if(selected && ok(selected)){ const [x,y]=toScreen(selected.p.x,selected.p.y), r=selected.r*Math.max(.6,Math.min(1.6,view.k)); ctx.strokeStyle='#fff'; ctx.lineWidth=2; ctx.beginPath(); ctx.arc(x,y,r,0,Math.PI*2); ctx.stroke(); ctx.lineWidth=1; }
+      ctx.fillStyle='rgba(232,238,245,.92)';
+      labels.forEach(([n,x,y,r])=>{ ctx.font=(n.type==='company'?'600 ':'')+'11px system-ui, sans-serif'; ctx.fillText(n.label.length>34?n.label.slice(0,33)+'…':n.label, x+r+3, y+4); });
     }
     function loop(){ raf=0; if(alpha>.02 || dragging) tick(); draw(); if(alpha>.02 || dragging) raf=requestAnimationFrame(loop); }
     function kick(){ if(!raf) raf=requestAnimationFrame(loop); }

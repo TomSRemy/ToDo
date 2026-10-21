@@ -1603,3 +1603,6 @@ body.postit-open .nw-side{ bottom:300px; }
 .dn-line::before{ content:'•'; position:absolute; left:2px; color:var(--tx3); }
 .dn-line.done{ color:var(--tx3); text-decoration:line-through; }
 .dn-empty{ color:var(--tx3); font-size:13px; margin:16px 0; }
+
+/* long lists: the lines out of sight are not laid out until they scroll into view */
+#task-list .task-line, #archive-list .task-line, #contacts-list .contact-row{ content-visibility:auto; contain-intrinsic-size:auto 44px; }
