@@ -388,6 +388,23 @@ with sync_playwright() as p:
     check(not errors, f"no page errors ({errors})")
     page.close()
 
+    # --- Recurring tasks: monthly keeps its day (31 jan → 28 feb → 31 mar), done late → the next one after today
+    ny = TODAY.year + 1
+    page, errors = new_page(browser, {"todo_todo-widget-tasks": json.dumps([
+        task("rm", "Rapport mensuel", due=f"{ny}-01-31", recur={"freq": "mensuel"}),
+        task("rd", "Relevé quotidien", due=(TODAY - datetime.timedelta(days=10)).isoformat(), recur={"freq": "quotidien"}),
+        task("rw", "Point hebdo", due=(TODAY - datetime.timedelta(days=3)).isoformat(), recur={"freq": "hebdo"})])}, viewport={"width": 1300, "height": 850})
+    page.goto(URL); page.click('[data-tab="tasks"]'); page.click('#filters [data-filter="toutes"]')
+    due = lambda tid: next(x for x in stored(page, "todo-widget-tasks") if x["id"] == tid)["due"]
+    for tid in ("rm", "rm", "rd", "rw"):
+        page.locator("#task-list .task-line", has_text={"rm": "Rapport mensuel", "rd": "Relevé quotidien", "rw": "Point hebdo"}[tid]).locator(".task-check").first.click(); page.wait_for_timeout(150)
+    check(due("rm") == f"{ny}-03-31", f"recurring: monthly 31 jan → end of feb → 31 mar ({due('rm')})")
+    check(due("rd") == (TODAY + datetime.timedelta(days=1)).isoformat(), f"recurring: a daily task done 10 days late comes back tomorrow ({due('rd')})")
+    rw = datetime.date.fromisoformat(due("rw"))
+    check(rw > TODAY and (rw - (TODAY - datetime.timedelta(days=3))).days % 7 == 0, f"recurring: a weekly task done late keeps its weekday, after today ({due('rw')})")
+    check(not errors, f"no page errors ({errors})")
+    page.close()
+
     # --- Company sheet: contacts, pipeline, tasks, what is coming up and the history of one client
     now_ms = int(datetime.datetime.now().timestamp() * 1000)
     late_day = (TODAY - datetime.timedelta(days=2)).isoformat()

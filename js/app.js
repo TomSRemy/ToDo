@@ -5613,9 +5613,10 @@
     if(headStats) headStats.textContent=open.length;
   }
 
-  function nextRecurDate(dateStr,freq){
+  // monthly: the same day of the month, kept even after a shorter month (31 jan → 28/29 feb → 31 mar)
+  function nextRecurDate(dateStr,freq,anchorDay){
     const d=new Date(dateStr+'T00:00:00');
-    if(freq==='mensuel') d.setMonth(d.getMonth()+1);
+    if(freq==='mensuel'){ const day=anchorDay||d.getDate(); d.setDate(1); d.setMonth(d.getMonth()+1); const last=new Date(d.getFullYear(), d.getMonth()+1, 0).getDate(); d.setDate(Math.min(day,last)); }
     else if(freq==='hebdo') d.setDate(d.getDate()+7);
     else d.setDate(d.getDate()+1);
     return toISO(d);
@@ -5623,8 +5624,10 @@
   function validateTask(id){
     const t=tasks.find(x=>x.id===id); if(!t)return;
     if(t.recur){
-      const base=t.due||toISO(new Date());
-      const nd=nextRecurDate(base,t.recur.freq);
+      const today=toISO(new Date()), base=t.due||today;
+      if(t.recur.freq==='mensuel' && !t.recur.day) t.recur.day=new Date(base+'T00:00:00').getDate();
+      let nd=nextRecurDate(base,t.recur.freq,t.recur.day);
+      if(base<today){ let guard=0; while(nd<=today && guard++<400) nd=nextRecurDate(nd,t.recur.freq,t.recur.day); }   // done late: the next one comes after today
       const within=!t.recur.until || nd<=t.recur.until;
       if(within){ t.due=nd; if(t.subtasks) t.subtasks.forEach(s=>s.done=false); t.status='a_faire'; touch(t); saveTasks(); render(); return; }
     }
