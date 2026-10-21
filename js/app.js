@@ -7157,7 +7157,7 @@
     if(!window.todoNetwork) return;
     if(!networkView) networkView=window.todoNetwork.mount($('network-root'), networkData);
     else networkView.refresh();
-    if(networkFocusNext){ const id=networkFocusNext; networkFocusNext=null; setTimeout(()=>networkView.focus(id), 250); }
+    if(networkFocusNext){ const id=networkFocusNext; networkFocusNext=null; setTimeout(()=>networkView.focus(id, { local:true }), 250); }
   }
   // « Voir dans le réseau » from a sheet
   function openInNetwork(id){ networkFocusNext=id; gsTab('network'); }

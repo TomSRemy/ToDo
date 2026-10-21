@@ -113,10 +113,12 @@
       const ob=side.querySelector('.nw-open'); if(ob) ob.onclick=()=>n.open();
       side.querySelectorAll('.nw-n').forEach(b=>b.onclick=()=>focus(b.dataset.id));
     }
-    function focus(id){
+    function focus(id, o){
       const n=byId.get(id); if(!n) return;
       if(hidden.has(n.type)){ hidden.delete(n.type); paintTypes(); }
-      selected=n; showSide(n); view.x=-n.p.x*view.k; view.y=-n.p.y*view.k; if(view.k<1) view.k=1.1; kick();
+      selected=n; showSide(n);
+      if(o && o.local){ localBox.checked=true; alpha=Math.max(alpha,.5); setTimeout(fit, 500); }   // from a sheet: its neighbourhood first
+      view.x=-n.p.x*view.k; view.y=-n.p.y*view.k; if(view.k<1) view.k=1.1; kick();
     }
     // ---- interactions
     canvas.addEventListener('wheel', e=>{ e.preventDefault(); const r=canvas.getBoundingClientRect(), sx=e.clientX-r.left, sy=e.clientY-r.top, [wx,wy]=toWorld(sx,sy);

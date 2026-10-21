@@ -361,7 +361,9 @@ with sync_playwright() as p:
     page.click(".nw-side .nw-open"); page.wait_for_timeout(300)
     check(page.is_visible("#opp-detail-overlay") and "Toit Durand" in page.inner_text("#opp-detail-title"), "network: « Ouvrir la fiche » opens the installation")
     page.click("#opp-detail-actions >> text=Voir dans le réseau"); page.wait_for_timeout(500)
-    check(page.is_visible("#tab-network") and page.evaluate("window.todoNetworkState().selected") == "op:no1", "network: « Voir dans le réseau » from a sheet focuses its node")
+    page.wait_for_timeout(300)
+    check(page.is_visible("#tab-network") and page.evaluate("window.todoNetworkState().selected") == "op:no1" and page.is_checked(".nw-local input")
+          and page.evaluate("window.todoNetworkState().visible") < page.evaluate("window.todoNetworkState().nodes"), "network: « Voir dans le réseau » from a sheet shows its neighbourhood")
     # [[links]]: typed in a task, proposed while typing, clickable, and « Mentionné dans » on the sheet
     page.click('[data-tab="tasks"]'); page.click("#quick-add-input"); page.keyboard.type("Rappeler [[pau")
     check(page.is_visible(".wl-ac") and "Paul Durand" in page.inner_text(".wl-ac"), "links: « [[ » proposes the matching contacts")
@@ -697,6 +699,22 @@ with sync_playwright() as p:
     check(txt == "Envoyer offre\nIdée PC\nIdée téléphone" or txt == "Envoyer offre\nIdée téléphone\nIdée PC",
           f"post-it: both devices' lines kept, the line deleted on the other device removed ({txt!r})")
     check(not [c for c in (stored(page, "sync-conflicts") or []) if c.get("entityType") == "note"], "post-it: no conflict reported, old ones cleared")
+    check(not errors, f"no page errors ({errors})")
+    page.close()
+
+    # --- Note of the day + sync: this device puts yesterday away while the other one added a line: both kept
+    yms = int((datetime.datetime.combine(TODAY - datetime.timedelta(days=1), datetime.time(17, 0))).timestamp() * 1000)
+    base_n = [{"id": "scratchpad", "text": "✓ Fait hier\nAppeler Paul", "createdAt": 1, "updatedAt": yms, "deleted": False}]
+    files = {"notes.json": [{"id": "scratchpad", "text": "✓ Fait hier\nAppeler Paul\nIdée téléphone", "createdAt": 1, "updatedAt": yms + 3600000, "deleted": False}],
+             "tasks.json": [], "crm.json": {"companies": [], "contacts": [], "meetings": [], "opportunities": []}}
+    page, errors = new_page(browser, dict(SYNC_ON, **{"todo_todo-widget-notes": json.dumps(base_n), "todo_sync-notes-base": json.dumps(base_n)}), viewport={"width": 1300, "height": 850})
+    mock_github(page, files); page.goto(URL)
+    page.wait_for_function("document.getElementById('postit-text').value.includes('Idée téléphone')", timeout=10000)
+    page.wait_for_timeout(4000)
+    yk = "day_" + (TODAY - datetime.timedelta(days=1)).isoformat()
+    srv = files["notes.json"][0]
+    check(page.input_value("#postit-text") == "Appeler Paul\nIdée téléphone" and srv.get("text") == "Appeler Paul\nIdée téléphone" and "Fait hier" in srv.get(yk, ""),
+          f"note of the day + sync: the other device's line kept, yesterday put away on both ({srv.get('text')!r}, {srv.get(yk)!r})")
     check(not errors, f"no page errors ({errors})")
     page.close()
 
