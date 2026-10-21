@@ -1212,3 +1212,8 @@ details.req-compare:not([open]) .req-compare-h::before{ transform:rotate(-90deg)
 .req-line-name b{ font-weight:600; color:var(--tx1); }
 .req-line-name span{ font-size:12px; color:var(--tx3); }
 .req-tab .k{ text-align:right; white-space:normal; }
+
+/* installation sheet: back to its pricing request, and to the client */
+.opp-nav{ display:flex; flex-wrap:wrap; gap:6px 18px; margin:-6px 0 10px; }
+.opp-nav .opp-co-link{ margin:0; }
+.opp-back{ font-weight:600; }

@@ -486,6 +486,42 @@ with sync_playwright() as p:
     check(not errors, f"no page errors ({errors})")
     page.close()
 
+    # --- « Caractéristiques Centrales » file generated with every line of the template, and a pricing mail with the figures
+    wb = openpyxl.Workbook(); ws = wb.active; ws.title = "Données"
+    for r in [["", "Centrale 1", "Centrale 2"], ["Nom Installation", "Les Pins", "Le Lac"], ["Nom SPV", "PINS SAS", "LAC SAS"], ["Adresse Installation", "LD Les Pins, 11380 Villeneuve", "LD Le Lac, 47110 Exemple"],
+              ["Département", "Aude (11)", "Lot-et-Garonne (47)"], ["Lattitude", "43.38", "44.39"], ["Longitude", "2.43", "0.55"], ["Nature Projet", "Centrale au sol", "Toiture"],
+              ["Première injection ", "Mars 2027", "Avril 2027"], ["Date de mise en service (effective ou prévisionnelle)", "Avril 2027", "Mai 2027"],
+              ["Puissance raccordement (kVA)", 4200, 3170], ["Puissance installée (kWc)", 4986.93, 4790.89], ["P50 annuel (indicatif) (MWh/an)", 6624.6, 6793],
+              ["P90 annuel (indicatif) (MWh/an)", 6203, 6315], ["Champ 1 : Orientation (° par rapport au sud)", "0° (plein sud)", "0° (plein sud)"], ["Champ 1 : Inclinaison (°)", 20, 20]]:
+        ws.append(r)
+    src = pathlib.Path(tempfile.mkdtemp()) / "carac_src.xlsx"; wb.save(src)
+    page, errors = new_page(browser, viewport={"width": 1300, "height": 900}, accept_downloads=True)
+    page.goto(URL); page.click('[data-tab="pipeline"]'); page.click("#opp-add-btn"); page.fill("#pq1-company", "EXEMPLE ENERGIES"); page.click("#pq-next-btn")
+    page.set_input_files("#pq-file", str(src)); page.wait_for_function("document.getElementById('pq-files-info').textContent.includes('installation')", timeout=20000)
+    page.click("#pq-save-btn"); page.wait_for_timeout(200)
+    if page.is_visible("#pq-count-ok"): page.check("#pq-count-ok"); page.click("#pq-save-btn"); page.wait_for_timeout(300)
+    page.keyboard.press("Escape"); page.wait_for_timeout(100)
+    for ov in ("#opp-detail-overlay", "#pq-overlay"):
+        if page.is_visible(ov + " .modal-x"): page.click(ov + " .modal-x")
+    page.locator(".pipe-req-card .pipe-card-title").first.click(); page.wait_for_timeout(200)
+    mail = page.input_value("#opp-mail-body")
+    check("Les Pins : P50 6 625 MWh/an / P90 6 203 MWh/an" in mail.replace("\u202f", " ") and "lat. 43.38 / long. 2.43" in mail and "Caractéristiques_Centrales_EXEMPLE ENERGIES.xlsx" in mail,
+          "pricing mail: the figures of each plant and the attached file's name")
+    with page.expect_download() as dl:
+        page.click("#opp-detail-actions >> text=Fichier caractéristiques (.xlsx)")
+    got_file = pathlib.Path(tempfile.mkdtemp()) / dl.value.suggested_filename; dl.value.save_as(got_file)
+    check(got_file.name.endswith("_Caractéristiques_Centrales_EXEMPLE ENERGIES.xlsx"), f"caract file: named like the usual files ({got_file.name})")
+    out = openpyxl.load_workbook(got_file)["Données"]
+    rows = {r[0].value: [c.value for c in r[1:]] for r in out.iter_rows(min_row=2)}
+    check(out.max_row == 49 and out["B1"].value == "Centrale 1" and out["C1"].value == "Centrale 2" and "Champ 4 : Fixe ou tracker" in rows,
+          f"caract file: every line of the template ({out.max_row} rows), one column per plant")
+    check(rows["Nom Installation"] == ["Les Pins", "Le Lac"] and rows["Latitude"] == ["43.38", "44.39"] and rows["Puissance raccordement (kVA)"] == [4200, 3170]
+          and rows["Première injection"] == ["Mars 2027", "Avril 2027"] and rows["Puissance installée (kWc)"] == [4986.93, 4790.89] and rows["Département"] == ["Aude (11)", "Lot-et-Garonne (47)"]
+          and rows["Champ 1 : Inclinaison (°)"] == [20, 20] and rows["Stockage"] == [None, None],
+          f"caract file: the app's values and every line of the producer's file ({rows.get('Latitude')}, {rows.get('Première injection')})")
+    check(not errors, f"no page errors ({errors})")
+    page.close()
+
     # --- Sync pill: state visible everywhere, token problems explained
     page, errors = new_page(browser, viewport={"width": 1300, "height": 800})
     page.goto(URL); page.wait_for_timeout(300)

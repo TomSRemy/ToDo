@@ -3145,7 +3145,13 @@
     Object.keys(inst).forEach(k=>{ if(k.charAt(0)==='_') delete inst[k]; });
     return inst;
   }
-  const xlFilled=list=>list.reduce((s,i)=>s+Object.keys(i).length,0);
+  const xlFilled=list=>list.reduce((s,i)=>s+Object.keys(i).filter(k=>k!=='caract').length,0);
+  // label → value of one plant, as written in the file (dates as dd/mm/yyyy)
+  function xlRaw(pairs){
+    const out={};
+    pairs.forEach(([l,v])=>{ if(typeof l!=='string' || !l.trim() || v==='' || v==null) return; out[l.trim()]=v instanceof Date?pqCellDate(v):(typeof v==='number'?v:String(v).trim()); });
+    return out;
+  }
   // layout « one column per plant »
   function xlVertical(rows){
     let best=[];
@@ -3162,6 +3168,7 @@
         if(filled<2) continue;
         const inst={ _labels:hits.map(h=>xlLabel(h.label)).join(' ') };
         hits.forEach(h=>xlSet(inst, h.def, h.label, rows[h.ri][j]));
+        inst.caract=xlRaw(rows.map(r=>[r[c], r[j]]));   // every line of the file, for the « Caractéristiques Centrales » sheet
         // a plant named in the column title ("Centrale du Moulin") when there is no name row
         if(!inst.centrale){ for(let r=first-1;r>=0;r--){ const t=rows[r][j]; if(typeof t==='string' && t.trim() && !/^(centrale|installation|projet|site|parc)\s*n?°?\s*\d+$/i.test(pqFold(t).trim())){ inst.centrale=t.trim(); break; } } }
         plants.push(xlFinish(inst));
@@ -3185,6 +3192,7 @@
         if(/^(total|sous-total|somme|moyenne|ensemble)\b/i.test(pqFold(firstCell))) continue;
         const inst={ _labels:cols.map(c=>xlLabel(c.label)).join(' ') };
         cols.forEach(c=>xlSet(inst, c.def, c.label, row[c.j]));
+        inst.caract=xlRaw(head.map((l,j)=>[l, row[j]]));
         if(!inst.centrale){ const nameCell=row.find((v,j)=>typeof v==='string' && v.trim() && !cols.some(c=>c.j===j)); if(nameCell) inst.centrale=nameCell.trim(); }
         if(Object.keys(inst).filter(k=>k.charAt(0)!=='_').length>=2) plants.push(xlFinish(inst));
       }
@@ -3544,7 +3552,7 @@
       pqState.editOtherIds=(editing.otherContactIds||[]).slice();
       pqState.peopleList=[]; (editing.otherContactIds||[]).map(id=>contacts.find(c=>c.id===id)).filter(Boolean).forEach(c=>pqState.peopleList.push({ id:c.id, v:contactV(c), label:[c.firstName,c.lastName].filter(Boolean).join(' ')||c.email }));
       // the installation being edited first, then the other installations of its pricing request (checked and corrected together)
-      const asInst=o=>{ const inst={ _oppId:o.id }; PQ_CENTRALE_KEYS.forEach(k=>{ if(o[k]!==undefined) inst[k]=o[k]; }); return inst; };
+      const asInst=o=>{ const inst={ _oppId:o.id }; PQ_CENTRALE_KEYS.forEach(k=>{ if(o[k]!==undefined) inst[k]=o[k]; }); if(o.caract) inst.caract=Object.assign({}, o.caract); return inst; };
       pqState.installs=[asInst(editing)].concat(editing.requestId?requestInstalls(editing.requestId).filter(x=>x.id!==editing.id).map(asInst):[]);
     }
     $('pq-title').textContent=editing?('Modifier — '+oppName(editing)):'Nouvelle opportunité';
@@ -3553,7 +3561,7 @@
     $('pq-drop-text').textContent=editing?'Pour compléter cette fiche : colle un mail ou dépose un .msg, un .eml ou l\u2019Excel du producteur. Seuls les champs vides seront remplis.':'Collez le mail, ou déposez ici un .msg, un .eml ou l\u2019Excel du producteur';
     if(editing){
       Object.keys(pqState.shared).forEach(k=>{ const v=pqState.shared[k]; if(v!==''&&v!=null&&v!==false) pqState.touched.add('s.'+k); });
-      pqState.installs.forEach((inst,i)=>Object.keys(inst).forEach(k=>{ const v=inst[k]; if(k!=='_oppId' && v!==''&&v!=null) pqState.touched.add(i+'.'+k); }));
+      pqState.installs.forEach((inst,i)=>Object.keys(inst).forEach(k=>{ const v=inst[k]; if(k!=='_oppId' && k!=='caract' && v!==''&&v!=null) pqState.touched.add(i+'.'+k); }));
     }
     $('pq-overlay').querySelector('.pq-box').classList.toggle('edit', !!editing);
     $('pq-start-stage').innerHTML=OPP_STAGES.map(s=>'<option value="'+s.key+'">'+escapeHtml(PIPE_PHASES.find(p=>p.key===s.phase).label+' · '+s.label)+'</option>').join('');
@@ -3946,7 +3954,8 @@
       if(!owner.has(0)){ const pi=xlsInstalls.findIndex((_,i)=>!taken.has(i)); if(pi>=0){ owner.set(0,pi); taken.add(pi); } }
       owner.forEach((pi,ci)=>{
         const cur=st.installs[ci], x=xlsInstalls[pi];
-        Object.keys(x).forEach(k=>{ const has=cur[k]!=null && String(cur[k]).trim()!==''; if(!st.touched.has(ci+'.'+k) && x[k] && !has){ cur[k]=x[k]; st.auto.add(ci+'.'+k); } });
+        if(x.caract) cur.caract=Object.assign({}, cur.caract||{}, x.caract);
+        Object.keys(x).forEach(k=>{ if(k==='caract') return; const has=cur[k]!=null && String(cur[k]).trim()!==''; if(!st.touched.has(ci+'.'+k) && x[k] && !has){ cur[k]=x[k]; st.auto.add(ci+'.'+k); } });
       });
       xlsInstalls.forEach((x,pi)=>{
         if(taken.has(pi)) return;
@@ -4074,7 +4083,7 @@
     if(st.editId){
       const o=opportunities.find(x=>x.id===st.editId); if(!o){ closeOppForm(); return; }
       const company=ensureCompany(producteur);
-      PQ_SHARED_KEYS.forEach(k=>{ o[k]=v[k]; }); PQ_CENTRALE_KEYS.forEach(k=>{ o[k]=st.installs[0][k]; });
+      PQ_SHARED_KEYS.forEach(k=>{ o[k]=v[k]; }); PQ_CENTRALE_KEYS.forEach(k=>{ o[k]=st.installs[0][k]; }); if(st.installs[0].caract) o.caract=st.installs[0].caract;
       o.company=company; o.title=o.centrale; touchCrm(o);
       // producer and contact columns are shared by the installations of a request
       if(o.requestId) requestInstalls(o.requestId).forEach(x=>{ if(x.id===o.id) return; PQ_SHARED_KEYS.filter(k=>!['action','relance','commentaires','rdv1','rdv2','cr1','cr2','dateOffre','nature','qualification'].includes(k)).forEach(k=>{ x[k]=v[k]; }); x.company=company; touchCrm(x); });
@@ -4093,7 +4102,7 @@
           if(o.otherContactIds) x.otherContactIds=o.otherContactIds.slice();
           opportunities.push(x);
         }
-        PQ_CENTRALE_KEYS.forEach(k=>{ if(inst[k]!==undefined) x[k]=inst[k]; });
+        PQ_CENTRALE_KEYS.forEach(k=>{ if(inst[k]!==undefined) x[k]=inst[k]; }); if(inst.caract) x.caract=inst.caract;
         if(!(x.centrale||'').trim()) x.centrale=producteur+' '+(i+2);
         x.title=x.centrale; touchCrm(x);
       });
@@ -4115,7 +4124,7 @@
     const created=st.installs.map(inst=>{
       const o={ id:newOppId('opp'), kind:'installation', company, title:inst.centrale, stage:startStage, requestId:reqId, taskId:null, createdAt:Date.now(), updatedAt:Date.now(), deleted:false, lostAt:null };
       PQ_SHARED_KEYS.forEach(k=>{ if(v[k]!==undefined) o[k]=v[k]; });
-      PQ_CENTRALE_KEYS.forEach(k=>{ if(inst[k]!==undefined) o[k]=inst[k]; });
+      PQ_CENTRALE_KEYS.forEach(k=>{ if(inst[k]!==undefined) o[k]=inst[k]; }); if(inst.caract) o.caract=inst.caract;
       if(stageIndex(startStage)>=stageIndex('demande_prix')) o.goDate=toISO(new Date());
       if(otherIds.length) o.otherContactIds=[...new Set(otherIds)];
       opportunities.push(o);
@@ -4164,7 +4173,13 @@
     const box=$('opp-detail-body'); box.innerHTML='';
     $('opp-detail-title').textContent=o.kind==='prequal'?o.company+' — pré-qualif':o.company+' — '+oppName(o);
     { const sb=suiviBadge(o, true); if(sb){ const line=document.createElement('div'); line.className='suivi-line'; line.appendChild(sb); const t=document.createElement('span'); t.textContent=sb.title; line.appendChild(t); box.appendChild(line); } }
-    if(o.company){ const l=document.createElement('button'); l.type='button'; l.className='opp-co-link'; l.textContent='Fiche '+o.company+' →'; l.onclick=()=>{ closeOppDetail(); openCompanySheet(o.company); }; box.appendChild(l); }
+    if(o.company || o.requestId){
+      const nav=document.createElement('div'); nav.className='opp-nav';
+      if(o.requestId && o.kind==='installation'){ const req=opportunities.find(x=>x.id===o.requestId), n=requestInstalls(o.requestId).length;
+        const r=document.createElement('button'); r.type='button'; r.className='opp-co-link opp-back'; r.textContent='← '+((req&&req.title)||'Demande de pricing')+' ('+n+' installation'+(n>1?'s':'')+')'; r.onclick=()=>openRequestDetail(o.requestId); nav.appendChild(r); }
+      if(o.company){ const l=document.createElement('button'); l.type='button'; l.className='opp-co-link'; l.textContent='Fiche '+o.company+' →'; l.onclick=()=>{ closeOppDetail(); openCompanySheet(o.company); }; nav.appendChild(l); }
+      box.appendChild(nav);
+    }
     const actions=$('opp-detail-actions'); actions.innerHTML='';
     // « Modifier la fiche » at the top right of the sheet, for an installation
     const edit=$('opp-detail-edit'); edit.hidden=o.kind!=='installation'; edit.onclick=()=>{ closeOppDetail(); openOppForm({ editId:o.id }); };
@@ -4231,6 +4246,7 @@
         }
       }
       excelButtons(actions, [o]);
+      actions.appendChild(oppActionBtn('Fichier caractéristiques (.xlsx)', e=>downloadCaract(o.requestId?requestInstalls(o.requestId).filter(x=>!isExited(x)):[o], e.target), 'ghost-btn'));
       actions.appendChild(oppActionBtn('Copier ligne Pipe', e=>copyToClipboard(pipeRow(o), e.target), 'ghost-btn'));
       if(o.goDate || stageIndex(o.stage)>=stageIndex('demande_prix')) actions.appendChild(oppActionBtn('Copier ligne BDD', e=>copyToClipboard(bddRow(o), e.target), 'ghost-btn'));
       if(!o.requestId && !isExited(o)) actions.appendChild(oppActionBtn('Demande de pricing', ()=>{
@@ -4339,7 +4355,7 @@
     const contactRows=[['Producteur',[o.producteur||o.company, o.marche].filter(Boolean).join(' · ')]];
     if(mainName||o.tel||o.mail) contactRows.push({ node:person(mainName, o.qualite, phones(o.tel), o.mail, true) });
     else contactRows.push(['Contact principal','']);
-    others.forEach(c=>contactRows.push({ node:person([c.firstName,c.lastName].filter(Boolean).join(' '), c.role, [c.phone1,c.phone2].filter(Boolean), c.email, false) }));
+    others.forEach(c=>contactRows.push({ node:person([c.firstName,c.lastName].filter(Boolean).join(' '), c.role, phones([c.phone1,c.phone2].filter(Boolean).join(' / ')), c.email, false) }));
     { const people=contacts.filter(c=>!c.deleted && ((mainMail && (c.email||'').toLowerCase()===mainMail) || (o.otherContactIds||[]).includes(c.id)));
       const dup=contactDupGroups().find(g=>g.filter(c=>people.includes(c)).length>1 || (g.some(c=>people.includes(c)) && g.some(c=>mainMail && (c.email||'').toLowerCase()===mainMail) && g.length>1));
       if(dup){ const n=document.createElement('div'); n.className='os-dup'; n.innerHTML='<span></span><button type="button" class="pq-link">Fusionner</button>';
@@ -4459,7 +4475,7 @@
     mailBox.innerHTML='<div class="opp-phase-h">Mail de demande de pricing</div>';
     const subj=document.createElement('input'); subj.readOnly=true; subj.value=ml.subject; subj.id='opp-mail-subject';
     const body=document.createElement('textarea'); body.readOnly=true; body.value=ml.body; body.rows=12; body.id='opp-mail-body';
-    const hint=document.createElement('p'); hint.className='modal-hint'; hint.textContent='La fiche « Caractéristiques Centrales » remplie et le brouillon Outlook (.eml) : donne la consultation du producteur à Claude avec ton skill de demande de pricing.';
+    const hint=document.createElement('p'); hint.className='modal-hint'; hint.textContent='Joins le fichier « Caractéristiques Centrales » créé par le bouton ci-dessous : toutes les lignes du modèle, remplies avec ce que l\u2019appli connaît (et tout ce que contenait l\u2019Excel du producteur).';
     mailBox.appendChild(subj); mailBox.appendChild(body); mailBox.appendChild(hint);
     box.appendChild(mailBox);
     const actions=$('opp-detail-actions'); actions.innerHTML='';
@@ -4470,6 +4486,7 @@
     }
     actions.appendChild(oppActionBtn('Copier l\u2019objet', e=>copyToClipboard(ml.subject, e.target), 'ghost-btn'));
     actions.appendChild(oppActionBtn('Copier le mail', e=>copyToClipboard(ml.body, e.target), 'ghost-btn'));
+    actions.appendChild(oppActionBtn('Fichier caractéristiques (.xlsx)', e=>downloadCaract(list.filter(o=>!isExited(o)), e.target), 'ghost-btn'));
     excelButtons(actions, list);
     actions.appendChild(oppActionBtn('Copier lignes Pipe', e=>copyToClipboard(list.map(pipeRow).join('\n'), e.target), 'ghost-btn'));
     actions.appendChild(oppActionBtn('Copier lignes BDD', e=>copyToClipboard(list.map(bddRow).join('\n'), e.target), 'ghost-btn'));
@@ -4496,6 +4513,50 @@
     const mkt=o.marche==='AC'?'AC':o.marche==='MD'?'MD':'MP';
     return aa+bb+' – '+oppName(o)+' – '+mkt+' – L1 – A';
   }
+  const CARACT_ROWS=['Nom Installation','Nom SPV','SIRET SPV','Adresse Installation','Département','Commune','Altitude','Latitude','Longitude','Nature Projet',"Type d'injection",
+    "Taux d'autoconsommation individuelle","Taux d'autoconsommation collective (sur Prod totale)",'Première injection','Date de mise en service (effective ou prévisionnelle)',
+    "Nombre d'Onduleurs",'Puissance unitaire Onduleurs (kVA)','Puissance raccordement (kVA)','Puissance installée (kWc)','Système de gestion des heures négatives','Stockage',
+    'P50 annuel (indicatif) (MWh/an)','P90 annuel (indicatif) (MWh/an)','Productible (P50) (kWh/kWc/an)']
+    .concat([1,2,3,4].flatMap(n=>['Champ '+n+' : Orientation (° par rapport au sud)','Champ '+n+' : Inclinaison (°)','Champ '+n+' : Puissance installée (kWc)',
+      'Champ '+n+' : P50 annuel (indicatif) (MWh/an)','Champ '+n+' : P90 annuel (indicatif) (MWh/an)','Champ '+n+' : Fixe ou tracker']));
+  const caractKey=l=>pqFold(l).replace(/lattitude/,'latitude').replace(/[^a-z0-9]/g,'');
+  function caractValue(o, label){
+    const num=v=>{ const n=pqNum(String(v==null?'':v)); return isNaN(n)?'':n; };
+    const k=caractKey(label), raw=o.caract||{};
+    const fromFile=()=>{ const hit=Object.keys(raw).find(l=>caractKey(l)===k); return hit!==undefined?raw[hit]:''; };
+    const dept=(o.dept||'').match(/^(\S+)\s+-\s+(.+)$/);
+    switch(k){
+      case caractKey('Nom Installation'): return oppName(o);
+      case caractKey('Nom SPV'): return o.spv||fromFile();
+      case caractKey('SIRET SPV'): return o.siret||fromFile();
+      case caractKey('Adresse Installation'): return fromFile()||[o.cp,o.commune].filter(Boolean).join(' ');
+      case caractKey('Département'): return dept?dept[2]+' ('+dept[1]+')':(o.dept||fromFile());
+      case caractKey('Commune'): return o.commune||fromFile();
+      case caractKey('Nature Projet'): return fromFile()||(/sol|toiture|ombri|hangar|agrivolt/i.test(o.particularites||'')?o.particularites:(o.install==='Eolien'?'Éolien terrestre':''));
+      case caractKey('Date de mise en service (effective ou prévisionnelle)'): return o.mesEff||o.mesPrev||fromFile();
+      case caractKey('Puissance installée (kWc)'): return num(o.kwc)||fromFile();
+      case caractKey('P50 annuel (indicatif) (MWh/an)'): return num(o.mwh)||fromFile();
+      case caractKey('P90 annuel (indicatif) (MWh/an)'): return num(o.p90)||fromFile();
+      case caractKey('Productible (P50) (kWh/kWc/an)'): { const f=fromFile(); if(f!=='') return f; const a=num(o.mwh), b=num(o.kwc); return a&&b?Math.round(a*1000/b*10)/10:''; }
+      default: return fromFile();
+    }
+  }
+  function caractFileName(list){
+    const d=new Date(), yymmdd=String(d.getFullYear()).slice(2)+pqPad(d.getMonth()+1)+pqPad(d.getDate());
+    const who=(list[0]&&(list[0].producteur||list[0].company)||'Producteur').replace(/[\\/:*?"<>|]/g,'').trim();
+    return yymmdd+'_Caractéristiques_Centrales_'+who+'.xlsx';
+  }
+  async function downloadCaract(list, btn){
+    try{
+      await loadXlsxLib();
+      const rows=[[''].concat(list.map((_,i)=>'Centrale '+(i+1)))].concat(CARACT_ROWS.map(l=>[l].concat(list.map(o=>caractValue(o,l)))));
+      const ws=XLSX.utils.aoa_to_sheet(rows);
+      ws['!cols']=[{ wch:52 }].concat(list.map(()=>({ wch:34 })));
+      const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'Données');
+      XLSX.writeFile(wb, caractFileName(list));
+      if(btn){ const t=btn.textContent; btn.textContent='✓ Fichier créé'; setTimeout(()=>{ btn.textContent=t; },2000); }
+    }catch(e){ console.error(e); showBridgeMsg('Fichier non créé : '+(e.message||e), false); }
+  }
   function pricingMail(req, list){
     const company=req.company;
     const nPv=list.filter(o=>/PV/.test(o.install||'')).length, nEol=list.filter(o=>/Eolien/.test(o.install||'')).length;
@@ -4507,13 +4568,18 @@
       'Bonjour à tous,','',
       'Ci-dessous une demande de pricing agrégation pour '+company+' : '+parts.join(' + ')+(mech?', '+mech:'')+'.',
       'Les prix demandés sont '+indicatif+'.',
-      'Vous trouverez ci-joint le fichier avec les caractéristiques des centrales que je continue de compléter avec le producteur (infos en jaune extrapolées).','',
+      'Vous trouverez ci-joint le fichier avec les caractéristiques des centrales ('+caractFileName(list)+') que je continue de compléter avec le producteur.','',
       'Codes affaire :'
     ].concat(list.map(o=>'- '+codeAffaire(o))).concat([
       '','Informations principales :',
-      '- Puissance installée : voir fichier joint.',
-      '- Production : voir fichier joint.',
-      '- Latitude/longitude : voir fichier joint.',
+      '- Puissance installée :'
+    ]).concat(list.map(o=>'   - '+oppName(o)+' : '+(fmtKwc(o.kwc)||'[À CONFIRMER]'))).concat([
+      '- Production (P50 / P90) :'
+    ]).concat(list.map(o=>{ const p50=caractValue(o,'P50 annuel (indicatif) (MWh/an)'), p90=caractValue(o,'P90 annuel (indicatif) (MWh/an)'), f=n=>Number(n).toLocaleString('fr-FR')+' MWh/an';
+      return '   - '+oppName(o)+' : '+(p50!==''?'P50 '+f(p50):'P50 [À CONFIRMER]')+(p90!==''?' / P90 '+f(p90):''); })).concat([
+      '- Localisation :'
+    ]).concat(list.map(o=>{ const lat=caractValue(o,'Latitude'), lon=caractValue(o,'Longitude'), place=[o.commune, o.dept].filter(Boolean).join(', ');
+      return '   - '+oppName(o)+' : '+([place, lat!==''&&lon!==''?'lat. '+lat+' / long. '+lon:''].filter(Boolean).join(' · ')||'voir fichier joint'); })).concat([
       '- Dates données par le producteur (première injection → MSI, phase de test entre les deux) :'
     ]).concat(list.map(o=>'   - '+oppName(o)+' : '+(o.mesPrev?'MSI '+o.mesPrev:'[À CONFIRMER]'))).concat([
       '- Durée : '+([...new Set(list.map(o=>o.fin?'fin '+o.fin:(o.duree?o.duree+' ans':'')).filter(Boolean))].join(' / ')||'[À CONFIRMER]'),
