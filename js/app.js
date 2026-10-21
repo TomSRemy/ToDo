@@ -4271,7 +4271,7 @@
     }
     const actions=$('opp-detail-actions'); actions.innerHTML='';
     // « Modifier la fiche » at the top right of the sheet, for an installation
-    const edit=$('opp-detail-edit'); edit.hidden=o.kind!=='installation'; edit.onclick=()=>{ closeOppDetail(); openOppForm({ editId:o.id }); };
+    const edit=$('opp-detail-edit'); edit.hidden=o.kind!=='installation'; edit.textContent='Modifier la fiche'; edit.onclick=()=>{ closeOppDetail(); openOppForm({ editId:o.id }); };
     if(o.kind==='prequal'){
       const p=document.createElement('p'); p.className='modal-hint'; p.textContent=(o.metAt?'Rencontré le '+pqIsoToFr(o.metAt)+'. ':'')+(o.note||'Pas de note.');
       box.appendChild(p);
@@ -4559,7 +4559,9 @@
     const list=requestInstalls(reqId);
     $('opp-detail-title').textContent=req.company+' — '+(req.title||'Demande de pricing');
     $('opp-detail-sum').textContent=oppSummary(requestInstalls(reqId).filter(x=>!isExited(x)));
-    $('opp-detail-edit').hidden=true;   // a pricing request: each installation has its own « Modifier la fiche »
+    // edit from the global view: the form shows all the installations of the request (this one first)
+    { const first=requestInstalls(reqId).filter(x=>!isExited(x))[0]||requestInstalls(reqId)[0]; const ed=$('opp-detail-edit');
+      ed.hidden=!first; ed.textContent='Modifier les fiches'; ed.onclick=()=>{ closeOppDetail(); openOppForm({ editId:first.id }); }; }
     const box=$('opp-detail-body'); box.innerHTML='';
     const liveReq=list.filter(o=>!isExited(o));
     // key figures, as on an installation's sheet
@@ -4580,6 +4582,10 @@
       r.querySelector('.n').textContent=String(i+1); r.querySelector('b').textContent=oppName(o); r.querySelector('.req-inst-name span').textContent=instLineInfo(o);
       r.querySelector('.req-inst-name').onclick=()=>openOppDetail(o.id);
       r.appendChild(stageChip(o));
+      const ed=document.createElement('button'); ed.type='button'; ed.className='req-inst-ed'; ed.title='Modifier'; ed.setAttribute('aria-label','Modifier '+oppName(o));
+      ed.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>';
+      ed.onclick=()=>{ closeOppDetail(); openOppForm({ editId:o.id }); };
+      r.appendChild(ed);
       const rm=document.createElement('button'); rm.type='button'; rm.className='req-inst-rm'; rm.title='Retirer de la demande (l\u2019installation reste dans le pipeline)'; rm.setAttribute('aria-label','Retirer '+oppName(o)+' de la demande'); rm.textContent='✕';
       rm.onclick=()=>{ o.requestId=null; touchCrm(o); saveCrm(); renderPipeline(); openRequestDetail(reqId); };
       r.appendChild(rm); card.appendChild(r);

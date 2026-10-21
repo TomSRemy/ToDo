@@ -621,8 +621,12 @@ with sync_playwright() as p:
     check("1" in page.inner_text("#opp-detail-body .opp-stage-step.current:has-text('Pricing indicatif') .stage-n") and page.locator("#opp-detail-body .req-inst").count() == 3,
           "request sheet: the same step track, with the number of installations at each step")
     page.click("#opp-detail-body .opp-stage-step:has-text('Négociation')"); page.wait_for_timeout(200)
+    check(page.inner_text("#opp-detail-edit") == "Modifier les fiches" and page.locator("#opp-detail-body .req-inst-ed").count() == 3, "request sheet: edit buttons in the global view")
     st_ = {o["id"]: o.get("stage") for o in stored(page, "todo-widget-opportunities")}
     check(st_["b1"] == st_["b2"] == st_["b3"] == "negociation", "batch: from the request sheet, all installations to one stage")
+    page.locator("#opp-detail-body .req-inst", has_text="Centrale 2").locator(".req-inst-ed").click()
+    check(page.is_visible("#pq-overlay") and page.input_value("#pq-0-centrale") == "Centrale 2" and page.locator("#pq-form .pq-inst").count() == 3,
+          "request sheet: the pencil opens the form with that installation first, the others below")
     check(not errors, f"no page errors ({errors})")
     page.close()
 
