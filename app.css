@@ -1148,3 +1148,14 @@
 @media (max-width:760px){ .os-facts{ grid-template-columns:repeat(2,minmax(0,1fr)); } .os-fact:nth-child(3){ border-left:none; } .os-fact:nth-child(n+3){ border-top:1px solid var(--bd-soft); } .os-grid, .os-suivi{ grid-template-columns:1fr; } }
 .opp-detail-head{ min-height:30px; } .opp-detail-head h3{ margin-top:4px; }   /* title, « Modifier la fiche » and the cross on one line */
 .opp-detail-edit{ height:30px; padding:0 12px; }
+
+/* installation sheet: one text size for labels and values (labels grey, values white), one size for the figures */
+.os{ font-size:13px; }
+.os-row, .os-row span, .os-row b, .os-person-h b, .os-card .os-row b.none{ font-size:13px; line-height:1.45; }
+.os-row span{ font-weight:400; }
+.os-row b, .os-person-h b{ font-weight:500; }
+.os-person-h b{ font-weight:600; }
+.os-person-h span, .os-missing, .os-fact span{ font-size:12px; }
+.os-fact b{ font-size:15px; font-weight:500; }
+.os-fact.empty b{ font-size:13px; }
+.os-person .os-row{ padding:3px 0; }
