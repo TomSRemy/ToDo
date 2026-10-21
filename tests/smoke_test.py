@@ -10,6 +10,7 @@ import base64
 import tempfile
 
 import openpyxl
+import re
 import datetime
 import json
 import pathlib
@@ -603,6 +604,18 @@ with sync_playwright() as p:
     check(not errors, f"no page errors ({errors})")
     page.close()
 
+    # --- Business code (GENE01-D1, agrégation): month only when the start is not 1 January / the end not 31 December
+    page, errors = new_page(browser); page.add_init_script("window.TODO_TEST_HOOKS=true;"); page.goto(URL)
+    codes = page.evaluate("""[
+      {producteur:'SOLARIS', centrale:'Toit Durand', debut:'01/01/2027', fin:'31/12/2029'},
+      {producteur:'SOLARIS', centrale:'Toit Durand', debut:'01/06/2027', fin:'31/08/2030'},
+      {company:'GAEC Martin', centrale:'Hangar 2', mesPrev:'15/02/2028', duree:'3'},
+      {producteur:'SOLARIS', centrale:'CS du Moulin'},
+      {producteur:'SOLARIS', centrale:'Ombrière', mesPrev:'2027', fin:'31/12/2030'}].map(o=>window.__todo.codeAffaire(Object.assign({kind:'installation'},o)))""")
+    check(codes == ["2729 - SOLARIS_Toit Durand - A", "27(06)30(08) - SOLARIS_Toit Durand - A", "28(02)31(02) - GAEC Martin_Hangar 2 - A", "[AA][BB] - SOLARIS_CS du Moulin - A", "2730 - SOLARIS_Ombrière - A"],
+          f"business code GENE01-D1 (agrégation): AA(MM)BB(MM) - Producteur_Centrale - A ({codes})")
+    page.close()
+
     # --- Contract dates: start + duration → end, start + end → duration, one-click choices
     page, errors = new_page(browser, viewport={"width": 1300, "height": 900})
     page.goto(URL); page.click('[data-tab="pipeline"]'); page.click("#opp-add-btn"); page.fill("#pq1-company", "SCEA DATES"); page.click("#pq-next-btn")
@@ -875,6 +888,7 @@ with sync_playwright() as p:
     page.click("#opp-detail-actions >> text=Copier ligne BDD")
     row = page.evaluate("navigator.clipboard.readText()").split("\t")
     check(len(row) == 91 and row[24] == "En préparation" and row[33] == "Le Moulin", "BDD row: 91 columns, status and plant")
+    check(re.match(r"^\[?\w*\]?[\w()\[\]]* - .+_Le Moulin - A$", row[7]) is not None, f"BDD row: business code in column H « Ref_Watt.ee » ({row[7]})")
     page.click("#opp-detail-actions >> text=Fermer")
     # pré-qualif → installation
     page.click("#prequal-add-btn"); page.fill("#prequal-company", "Ferme Dupont"); page.fill("#prequal-note", "Salon"); page.click("#prequal-save-btn")

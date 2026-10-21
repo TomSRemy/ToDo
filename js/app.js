@@ -4577,7 +4577,7 @@
     card('Suivi', [['Chargé',o.charge],['Origine',[o.origine, o.ca&&o.ca!=='N/A'?o.ca:''].filter(Boolean).join(' · ')],['Entrée pipe',fr(o.dateEntree)],
       ['RDV',[o.rdv1?fr(o.rdv1)+(o.cr1?' (CR)':''):'', o.rdv2?fr(o.rdv2)+(o.cr2?' (CR)':''):''].filter(Boolean).join(' · '),{optional:true}],['Go',fr(o.goDate),{optional:true}],
       ['1ère offre',[fr(o.dateOffre),o.nature].filter(Boolean).join(' · '),{optional:true}],['Signature',fr(o.signDate),{optional:true}],
-      ['Prochaine action',[o.action,o.relance?'le '+fr(o.relance):''].filter(Boolean).join(' '),{late:relanceLate}],['Stade Pipe',pipeStade(o)],['Statut BDD',bddStatut(o)],
+      ['Prochaine action',[o.action,o.relance?'le '+fr(o.relance):''].filter(Boolean).join(' '),{late:relanceLate}],['Stade Pipe',pipeStade(o)],['Statut BDD',bddStatut(o)],['Code affaire',codeAffaire(o)],
       ['Commentaires',o.commentaires,{wide:true,optional:true}]], 'os-suivi');
     return wrap;
   }
@@ -4817,17 +4817,20 @@
     if((m=/^(\d{4})$/.exec(t))) return { y:+m[1], m:null, d:null };
     return null;
   }
-  // Business code (procédure GENE01-D1): AA(MM)BB(MM) – Nom – XXY – LY – Z
+  // Business code (procédure GENE01-D1, agrégation): AA(MM)BB(MM) - Producteur_Centrale - A
+  //  AA = start of the contract (the commissioning date until the start date is known), (MM) when not 1 January;
+  //  BB = end of the contract, (MM) when not 31 December. No market (MP) nor lot (L1) in agrégation.
   function codeAffaire(o){
-    const start=pqMonthYear(o.mesPrev)||pqMonthYear(o.debut);
+    const start=pqMonthYear(o.debut)||pqMonthYear(o.mesEff)||pqMonthYear(o.mesPrev);
     let end=pqMonthYear(o.fin);
     // no end date but a duration: end = start + n years − 1 day (e.g. June 2027 + 3 years → May 2030)
-    const n=parseInt(o.duree,10);
-    if(!end && start && start.m && n>0){ const e=new Date(start.y+n, start.m-1, (start.d||1)-1); end={ y:e.getFullYear(), m:e.getMonth()+1, d:e.getDate() }; }
-    const aa=start?String(start.y).slice(2)+(start.m && start.m!==1?'('+pqPad(start.m)+')':''):'[AA]';
-    const bb=end?String(end.y).slice(2)+(end.m && end.m!==12?'('+pqPad(end.m)+')':''):'[BB]';
-    const mkt=o.marche==='AC'?'AC':o.marche==='MD'?'MD':'MP';
-    return aa+bb+' – '+oppName(o)+' – '+mkt+' – L1 – A';
+    const n=parseFloat(String(o.duree||'').replace(',','.'));
+    if(!end && start && start.m && n>0){ const e=new Date(start.y+Math.floor(n), start.m-1+Math.round((n%1)*12), (start.d||1)-1); end={ y:e.getFullYear(), m:e.getMonth()+1, d:e.getDate() }; }
+    const aa=start?String(start.y).slice(2)+(start.m && !(start.m===1 && (start.d||1)===1)?'('+pqPad(start.m)+')':''):'[AA]';
+    const lastDay=end&&end.m===12&&(!end.d||end.d===31);
+    const bb=end?String(end.y).slice(2)+(end.m && !lastDay?'('+pqPad(end.m)+')':''):'[BB]';
+    const prod=String(o.producteur||o.company||'').trim(), name=oppName(o);
+    return aa+bb+' - '+[prod, name].filter(Boolean).join('_')+' - A';
   }
   const CARACT_ROWS=['Nom Installation','Nom SPV','SIRET SPV','Adresse Installation','Département','Commune','Altitude','Latitude','Longitude','Nature Projet',"Type d'injection",
     "Taux d'autoconsommation individuelle","Taux d'autoconsommation collective (sur Prod totale)",'Première injection','Date de mise en service (effective ou prévisionnelle)',
@@ -4946,7 +4949,7 @@
     const offre=o.dateOffre?new Date(o.dateOffre+'T00:00:00'):null;
     const or=v=>v===''||v==null?null:v;
     Object.assign(row, {
-      1:numCell(o.annee), 2:or(o.charge), 3:dateCell(o.goDate), 4:or(o.origine), 5:or(o.ca), 6:or(o.producteur||o.company),
+      1:numCell(o.annee), 2:or(o.charge), 7:codeAffaire(o), 3:dateCell(o.goDate), 4:or(o.origine), 5:or(o.ca), 6:or(o.producteur||o.company),
       8:/OA/.test(c)&&!/CR/.test(c)?'OA':/ACC/.test(c)?'ACC':/PPA/.test(c)?'Marché':c?'CR':null,
       9:/AOS/.test(c)?'AOS CRE':/AO/.test(c)?'AO CRE':null, 10:/PPA/.test(c)?null:(c?'Marché de gros':null),
       17:'France', 18:or(o.region), 19:or(o.dept), 20:or(deptName),
@@ -6630,7 +6633,7 @@
   $('vcf-overlay').addEventListener('click', e=>{ if(e.target.id==='vcf-overlay') $('vcf-overlay').classList.add('hidden'); });
 
   // Test hooks (tests/smoke_test.py and the mail corpus set window.TODO_TEST_HOOKS before loading)
-  if(window.TODO_TEST_HOOKS) window.__todo={ parsePipeMail, parsePipeMailInstallations:parseMailInstallations, parseSignatureBlock, parseSignatureText, xlsxToInstallations:(rowsBySheet)=>pqRowsToInstallations(Object.keys(rowsBySheet), n=>rowsBySheet[n]) };
+  if(window.TODO_TEST_HOOKS) window.__todo={ parsePipeMail, parsePipeMailInstallations:parseMailInstallations, parseSignatureBlock, parseSignatureText, xlsxToInstallations:(rowsBySheet)=>pqRowsToInstallations(Object.keys(rowsBySheet), n=>rowsBySheet[n]), codeAffaire };
 
   // Phone version: bottom bar drives the sidebar tabs (which stay the single source of truth).
   if(window.TODO_LITE){
