@@ -609,6 +609,7 @@ with sync_playwright() as p:
     page, errors = new_page(browser, {"todo_todo-widget-opportunities": json.dumps(bt)}, viewport={"width": 1300, "height": 900})
     page.goto(URL); page.click('[data-tab="pipeline"]'); page.locator(".pipe-req-name", has_text="Centrale 1").click()
     check(page.locator("#opp-detail-body .stage-scope button.on").inner_text() == "Toutes les installations (3)", "batch: by default a stage applies to all the installations")
+    check(page.inner_text("#opp-detail-sum") == "3 installations", "sheet: the header sums up the opportunity (installations · power · technology · volume)")
     page.click("#opp-detail-body .opp-stage-step:has-text('Demande de prix')"); page.wait_for_timeout(200)
     st_ = {o["id"]: o.get("stage") for o in stored(page, "todo-widget-opportunities")}
     check(st_["b1"] == st_["b2"] == st_["b3"] == "demande_prix", f"batch: the three installations moved together ({st_})")
@@ -892,7 +893,7 @@ with sync_playwright() as p:
     page, errors = new_page(browser, {"todo_todo-widget-opportunities": json.dumps(mixed)})
     page.goto(URL); page.click('[data-tab="pipeline"]')
     page.locator('[data-phase="contrat"] .pipe-card', has_text="A").first.click()
-    page.click("#opp-detail-body >> text=Fait partie de")
+    page.click("#opp-detail-body .opp-back")
     page.click("#opp-detail-actions >> text=Avancer chaque installation"); page.click("#stage-advance-confirm")
     st = {o["id"]: o.get("stage") for o in stored(page, "todo-widget-opportunities")}
     check(st["a"] == "pricing_ferme" and st["b"] == "qualif_en_cours", f"mixed request: each installation to its own next stage ({st})")

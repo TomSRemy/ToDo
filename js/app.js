@@ -4260,6 +4260,7 @@
     viewingOppId=id;
     const box=$('opp-detail-body'); box.innerHTML='';
     $('opp-detail-title').textContent=o.kind==='prequal'?o.company+' — pré-qualif':o.company+' — '+oppName(o);
+    $('opp-detail-sum').textContent=o.kind==='prequal'?'':oppSummary(o.requestId?requestInstalls(o.requestId).filter(x=>!isExited(x)):[o]);
     { const sb=suiviBadge(o, true); if(sb){ const line=document.createElement('div'); line.className='suivi-line'; line.appendChild(sb); const t=document.createElement('span'); t.textContent=sb.title; line.appendChild(t); box.appendChild(line); } }
     if(o.company || o.requestId){
       const nav=document.createElement('div'); nav.className='opp-nav';
@@ -4288,11 +4289,6 @@
       box.appendChild(head);
       box.appendChild(buildInstallSheet(o));
       if(siblings.length>1) box.appendChild(buildRequestCompare(siblings, o.id));
-      if(o.requestId){
-        const req=opportunities.find(x=>x.id===o.requestId);
-        const l=document.createElement('button'); l.type='button'; l.className='pq-link'; l.textContent='Fait partie de : '+((req&&req.title)||'Demande de pricing')+' ('+requestInstalls(o.requestId).length+' installations)';
-        l.onclick=()=>openRequestDetail(o.requestId); box.appendChild(l);
-      }
       // installations of one request usually move together: the stage applies to all of them, or to this one only
       const batch=o.requestId?requestInstalls(o.requestId).filter(x=>!isExited(x)):[];
       const many=batch.length>1 && !isExited(o);
@@ -4477,6 +4473,13 @@
     closeOppDetail(); renderPipeline();
   }
   // Moving into a stage records the dates the BDD needs.
+  // the opportunity in one line: installations · power · technology · volume
+  function oppSummary(list){
+    if(!list.length) return '';
+    const kwc=list.reduce((s,x)=>s+(pqNum(String(x.kwc||''))||0),0), mwh=list.reduce((s,x)=>s+(pqNum(String(x.mwh||''))||0),0);
+    const techs=[...new Set(list.map(x=>x.install).filter(Boolean))].join(' + ');
+    return [list.length+' installation'+(list.length>1?'s':''), kwc?fmtKwc(kwc):'', techs, mwh?Math.round(mwh).toLocaleString('fr-FR')+' MWh/an':''].filter(Boolean).join(' · ');
+  }
   let stageScopeAll=true;   // a stage chosen in an installation's sheet applies to all the installations of its request
   function setOppStage(o, key){
     const prev=stageIndex(o.stage), next=stageIndex(key), today=toISO(new Date());
@@ -4550,6 +4553,7 @@
     viewingOppId=reqId;
     const list=requestInstalls(reqId);
     $('opp-detail-title').textContent=req.company+' — '+(req.title||'Demande de pricing');
+    $('opp-detail-sum').textContent=oppSummary(requestInstalls(reqId).filter(x=>!isExited(x)));
     $('opp-detail-edit').hidden=true;   // a pricing request: each installation has its own « Modifier la fiche »
     const box=$('opp-detail-body'); box.innerHTML='';
     const ul=document.createElement('div'); ul.className='opp-req-list';
