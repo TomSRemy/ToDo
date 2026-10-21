@@ -3892,14 +3892,16 @@
     if(f.k==='debut' && scope!=='s'){
       const inst=pqState.installs[+scope]||{}, mes=pqFullDate(inst.mesEff||inst.mesPrev), y=new Date().getFullYear();
       extra='<div class="pq-dchips">'+(mes?'<button type="button" data-dset="debut" data-v="'+mes+'" data-s="'+scope+'" title="Début à la mise en service ('+mes+')">MES</button>':'')
-        +[y+1,y+2].map(Y=>'<button type="button" data-dset="debut" data-v="01/01/'+Y+'" data-s="'+scope+'" title="1er janvier '+Y+'">1/1/'+String(Y).slice(2)+'</button>').join('')+'</div>';
+        +[y+1,y+2].map(Y=>'<button type="button" data-dset="debut" data-v="01/01/'+Y+'" data-s="'+scope+'" title="1er janvier '+Y+'">1/1/'+String(Y).slice(2)+'</button>').join('')
+        +(pqState.installs.length>1?'<button type="button" class="all" data-dall="mes" data-s="'+scope+'" title="Chaque installation démarre à sa propre mise en service (date de début = MES)">toutes : début à la MES</button>':'')+'</div>';
     }
-    // under the end date (free space): every installation starts at its own commissioning date
-    if(f.k==='fin' && scope!=='s' && pqState.installs.length>1)
-      extra='<div class="pq-dchips"><button type="button" class="all" data-dall="mes" data-s="'+scope+'" title="Chaque installation démarre à sa propre mise en service (date de début = MES)">toutes : début à la MES</button></div>';
     if(f.k==='duree' && scope!=='s') extra='<div class="pq-dchips">'+[1,2,3,5].map(n=>'<button type="button" data-dset="duree" data-v="'+n+'" data-s="'+scope+'" title="'+n+' an'+(n>1?'s':'')+'">'+n+'a</button>').join('')+'</div>';
-    const toAll=scope!=='s' && pqState.installs.length>1 && f.type!=='computed'
-      ?'<button type="button" class="pq-toall" data-toall="'+f.k+'" data-s="'+scope+'" title="Mettre cette valeur sur toutes les installations'+(['debut','fin','duree'].includes(f.k)?' (début, durée et fin)':'')+'">→ toutes</button>':'';
+    let toAll='';
+    if(scope!=='s' && pqState.installs.length>1 && f.type!=='computed' && !['centrale','kwc','mwh','p90','productible'].includes(f.k)){   // a plant's own name and figures are never copied
+      const has=v!=null && v!=='' && v!==false, differs=has && pqState.installs.some((x,j)=>j!==+scope && String(x[f.k]==null?'':x[f.k])!==String(v));
+      toAll='<button type="button" class="pq-toall'+(!has?' off':differs?' go':'')+'" data-toall="'+f.k+'" data-s="'+scope+'"'+(!has?' tabindex="-1" aria-hidden="true"':'')
+        +' title="'+(differs?'Mettre cette valeur sur toutes les installations'+(['debut','fin','duree'].includes(f.k)?' (début, durée et fin)':''):'Toutes les installations ont déjà cette valeur')+'">'+(has && !differs?'✓ toutes':'→ toutes')+'</button>';
+    }
     return '<div class="pq-f'+(f.wide?' wide':'')+(auto?' auto':'')+(empty?' empty':'')+'"><label for="'+id+'">'+escapeHtml(f.label)+' <span class="pq-col">'+f.col+'</span>'+toAll+'</label>'+input+extra+'</div>';
   }
   // ---------- Contract dates: start + duration → end, start + end → duration, end + duration → start ----------
@@ -3955,7 +3957,8 @@
       pqDerive(i);
       const fs=PQ_FIELDS.filter(f=>f.sec==='centrale').concat(PQ_EXTRA_FIELDS);
       const tag=!st.editId||st.installs.length<2?'':i===0?'<span class="pq-inst-tag">celle que tu modifies</span>':inst._oppId?'<span class="pq-inst-tag">déjà dans la demande</span>':'<span class="pq-inst-tag new">nouvelle : sera créée</span>';
-      h+='<div class="pq-sec pq-inst"><div class="pq-sec-h">'+(st.installs.length>1?'Installation '+(i+1):'Installation')+tag
+      const many=st.installs.length>1, sub=[inst.centrale, fmtKwc(inst.kwc)].filter(Boolean).join(' · ');
+      h+='<div class="pq-sec pq-inst'+(many?' many':'')+'" style="--inst-c:'+PROJECT_PALETTE[i%PROJECT_PALETTE.length]+'"><div class="pq-sec-h">'+(many?'<span class="pq-inst-n">'+(i+1)+'</span><span class="pq-inst-name">'+escapeHtml(sub||'Installation '+(i+1))+'</span>':'Installation')+tag
         +(st.installs.length>1 && !(st.editId && i===0)?'<button type="button" class="pq-link" data-remove="'+i+'">'+(st.editId && inst._oppId?'Ne pas modifier ici':'Retirer')+'</button>':'')+'</div>'
         +'<div class="pq-grid">'+fs.map(f=>pqFieldHtml(f,String(i),inst[f.k],st.auto.has(i+'.'+f.k))).join('')+'</div></div>';
     });

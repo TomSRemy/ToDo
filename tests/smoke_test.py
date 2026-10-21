@@ -634,7 +634,7 @@ with sync_playwright() as p:
     page.fill("#pq-0-duree", "5"); page.locator("#pq-0-duree").dispatch_event("change")
     page.click("#pq-form button[data-toall='duree'][data-s='0']")
     check(page.evaluate("""(()=>{ const b=document.querySelector("#pq-form button[data-dall='mes'][data-s='0']"), f=b.closest('.pq-f'), r=b.getBoundingClientRect(), p=f.getBoundingClientRect();
-          return !!f.querySelector('#pq-0-fin') && r.right<=p.right+1 && b.scrollWidth<=b.clientWidth+1; })()"""), "dates: « toutes : début à la MES » sits under the end date, fully visible")
+          return !!f.querySelector('#pq-0-debut') && r.right<=p.right+1 && b.scrollWidth<=b.clientWidth+1; })()"""), "dates: « toutes : début à la MES » under the start date, fully visible")
     page.click("#pq-form button[data-dall='mes'][data-s='0']")
     check(page.is_visible("#choice-overlay"), "dates: asks before replacing start dates already filled")
     page.click("#choice-btns >> text=Remplacer")
@@ -643,6 +643,16 @@ with sync_playwright() as p:
           f"dates: same duration for all, then each plant at its own commissioning date ({got})")
     page.select_option("#pq-0-contrat", "AOS CRE"); page.click("#pq-form button[data-toall='contrat'][data-s='0']")
     check([page.input_value(f"#pq-{i}-contrat") for i in range(3)] == ["AOS CRE"] * 3, "« → toutes » puts any field of an installation on all the others")
+    cls = lambda k, i=0: page.get_attribute(f"#pq-form button[data-toall='{k}'][data-s='{i}']", "class")
+    check("off" in cls("particularites") and "✓" in page.inner_text("#pq-form button[data-toall='contrat'][data-s='0']")
+          and page.locator("#pq-form button[data-toall='centrale']").count() == 0 and page.locator("#pq-form button[data-toall='kwc']").count() == 0,
+          "« → toutes »: hidden while empty, ✓ when all the same, never on a plant's name or power")
+    page.fill("#pq-0-particularites", "Toiture"); page.locator("#pq-0-particularites").dispatch_event("change")
+    page.select_option("#pq-0-install", "PV"); page.wait_for_timeout(100)
+    check("go" in cls("particularites"), "« → toutes » stands out when the others differ")
+    page.click("#pq-form button[data-toall='particularites'][data-s='0']")
+    check([page.input_value(f"#pq-{i}-particularites") for i in range(3)] == ["Toiture"] * 3, "« → toutes » for Particularités too")
+    check(page.locator("#pq-form .pq-inst.many .pq-inst-n").count() == 3, "each installation in its own numbered card")
     check(not errors, f"no page errors ({errors})")
     page.close()
 

@@ -718,6 +718,11 @@
   details.pq-sec > summary{ cursor:pointer; }
   details.pq-sec > summary::-webkit-details-marker{ display:none; }
   .pq-inst{ border-left:2px solid var(--accent-dim); padding-left:10px; margin-top:4px; }
+  /* several installations: one card each, its own colour, its name in the header (stays visible while scrolling) */
+  .pq-inst.many{ border:1px solid var(--bd); border-left:4px solid var(--inst-c); border-radius:10px; padding:0 14px 12px; margin:16px 0; background:color-mix(in srgb, var(--inst-c) 4%, var(--panel)); }
+  .pq-inst.many > .pq-sec-h{ position:sticky; top:0; z-index:2; margin:0 -14px 6px; padding:10px 14px; border-bottom:1px solid var(--bd-soft); border-radius:9px 9px 0 0; background:color-mix(in srgb, var(--inst-c) 10%, var(--panel)); font:600 13px var(--font-ui); color:var(--tx1); text-transform:none; letter-spacing:0; }
+  .pq-inst-n{ display:inline-flex; align-items:center; justify-content:center; width:22px; height:22px; border-radius:50%; background:var(--inst-c); color:#04070C; font:700 12px var(--font-ui); flex-shrink:0; }
+  .pq-inst-name{ overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .pq-grid{ display:grid; grid-template-columns:repeat(auto-fill,minmax(170px,1fr)); gap:8px 12px; }
   .pq-f{ display:flex; flex-direction:column; gap:3px; min-width:0; }
   .pq-f.wide{ grid-column:1 / -1; }
@@ -1302,8 +1307,9 @@ details.req-compare:not([open]) .req-compare-h::before{ transform:rotate(-90deg)
 .pq-dchips button{ font:500 10.5px var(--font-ui); padding:1px 7px; line-height:16px; white-space:nowrap; }
 /* « → toutes » tab on each installation field */
 .pq-f label{ display:flex; align-items:baseline; gap:4px; }
-.pq-toall{ margin-left:auto; background:none; border:1px solid transparent; border-radius:4px; padding:0 5px; font:500 10px var(--font-ui); color:var(--tx3); cursor:pointer; opacity:.45; line-height:15px; }
-.pq-f:hover .pq-toall, .pq-f:focus-within .pq-toall{ opacity:1; }
+.pq-toall{ margin-left:auto; background:none; border:1px solid transparent; border-radius:999px; padding:0 7px; font:500 10.5px var(--font-ui); color:var(--tx3); cursor:pointer; line-height:16px; white-space:nowrap; }
+.pq-toall.off{ visibility:hidden; }
+.pq-toall.go{ color:var(--accent); border-color:var(--accent); background:var(--accent-dim); }
 .pq-toall:hover{ color:var(--accent); border-color:var(--accent); }
 .pq-f.flash input, .pq-f.flash select, .pq-f.flash textarea{ animation:pqFlash 1s ease-out; }
 @keyframes pqFlash{ 0%{ box-shadow:0 0 0 2px var(--accent); } 100%{ box-shadow:none; } }
