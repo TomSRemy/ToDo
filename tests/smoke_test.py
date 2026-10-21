@@ -407,6 +407,15 @@ with sync_playwright() as p:
     check(not errors, f"no page errors ({errors})")
     page.close()
 
+    # --- A sub-task written without « text » (another tool, an old version) is read, edited and saved without loss
+    page, errors = new_page(browser, {"todo_todo-widget-tasks": json.dumps([task("sx", "Avec sous-tâches", subtasks=[{"title": "Écrite ailleurs", "done": False}, {"text": "Normale", "done": True}])])},
+                            viewport={"width": 1300, "height": 850})
+    page.goto(URL); page.click('[data-tab="tasks"]'); page.locator("#task-list .td-title-text").first.click(); page.wait_for_timeout(200)
+    page.locator("#task-list .edit-save").first.click(); page.wait_for_timeout(200)
+    subs = next(x for x in stored(page, "todo-widget-tasks") if x["id"] == "sx")["subtasks"]
+    check([s_["text"] for s_ in subs] == ["Écrite ailleurs", "Normale"] and not errors, f"sub-tasks without « text » kept when the task is saved ({subs}, {errors})")
+    page.close()
+
     # --- Recurring tasks: monthly keeps its day (31 jan → 28 feb → 31 mar), done late → the next one after today
     ny = TODAY.year + 1
     page, errors = new_page(browser, {"todo_todo-widget-tasks": json.dumps([

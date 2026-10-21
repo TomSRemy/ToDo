@@ -86,6 +86,7 @@
       if(t.status==='termine'&&t.archived===undefined){ t.archived=true; t.archivedAt=t.archivedAt||Date.now(); t.status='a_faire'; seeded=true; }
       if(t.archived===undefined){ t.archived=false; seeded=true; }
       if(t.subtasks===undefined){ t.subtasks=[]; seeded=true; }
+      if(Array.isArray(t.subtasks)) t.subtasks.forEach(s=>{ if(s && s.text==null){ s.text=String(s.title||s.label||''); seeded=true; } });   // a sub-task written by something else keeps its text
       if(t.recur===undefined){ t.recur=null; seeded=true; }
       if(t.client&&!clientsList.includes(t.client)){ clientsList.push(t.client); seeded=true; }
       if(t.project&&!projectsList.includes(t.project)){ projectsList.push(t.project); seeded=true; }
@@ -1174,7 +1175,7 @@
     quickDates(f.querySelector('.e-due'));
 
     const stWrap=f.querySelector('.subtasks-edit');
-    let localSubs=(t.subtasks||[]).map(s=>({...s}));
+    let localSubs=(t.subtasks||[]).map(s=>({...s, text:s.text!=null?s.text:String(s.title||s.label||'')}));
     function renderSubs(){
       stWrap.innerHTML='';
       localSubs.forEach((s,i)=>{
@@ -1202,7 +1203,7 @@
       t.status=f.querySelector('.e-status').value;
       t.urgency=f.querySelector('.e-urgency').value;
       t.link=f.querySelector('.e-link').value.trim();
-      t.subtasks=localSubs.filter(s=>s.text.trim()).map(s=>({text:s.text.trim(),done:!!s.done}));
+      t.subtasks=localSubs.filter(s=>String(s.text||'').trim()).map(s=>({text:String(s.text).trim(),done:!!s.done}));
       if(t.client){ const existing=findExistingCI(clientsList,t.client); if(existing){ t.client=existing; } else { clientsList.push(t.client); saveClients(); } }
       if(t.project){ const existing=findExistingCI(projectsList,t.project); if(existing){ t.project=existing; } else { projectsList.push(t.project); saveProjects(); } }
       touch(t);
