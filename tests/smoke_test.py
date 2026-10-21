@@ -580,6 +580,29 @@ with sync_playwright() as p:
     check(not errors, f"no page errors ({errors})")
     page.close()
 
+    # --- Power, P50 and specific yield: any two give the third; P90 suggested; département from the postcode
+    page, errors = new_page(browser, viewport={"width": 1300, "height": 900})
+    page.goto(URL); page.click('[data-tab="pipeline"]'); page.click("#opp-add-btn"); page.fill("#pq1-company", "SCEA CALCUL"); page.click("#pq-next-btn")
+    def put(k, v):
+        page.fill("#pq-0-" + k, v); page.locator("#pq-0-" + k).dispatch_event("input"); page.locator("#pq-0-" + k).dispatch_event("change")
+    is_auto = lambda k: page.evaluate(f"document.querySelector('#pq-0-{k}').closest('.pq-f').classList.contains('auto')")
+    put("kwc", "300"); put("productible", "1200")
+    check(page.input_value("#pq-0-mwh") == "360" and is_auto("mwh"), f"kWc × productible → P50 computed, in green ({page.input_value('#pq-0-mwh')})")
+    put("productible", "1300")
+    check(page.input_value("#pq-0-mwh") == "390", "a new productible updates the computed P50")
+    put("productible", "")
+    check(page.input_value("#pq-0-mwh") == "", "a computed P50 goes away with its source")
+    put("mwh", "450")
+    check(page.input_value("#pq-0-productible") == "1500" and is_auto("productible"), "kWc and P50 → productible")
+    put("productible", "1400")
+    check(page.input_value("#pq-0-mwh") == "450" and page.input_value("#pq-0-productible") == "1400", "typed values are never overwritten")
+    page.click("#pq-form [data-p90]")
+    check(page.input_value("#pq-0-p90") == "414", f"P90 suggested from the P50 (92 % in solar) ({page.input_value('#pq-0-p90')})")
+    put("cp", "46100")
+    check(page.input_value("#pq-0-dept") == "46 - Lot", f"département from the postcode ({page.input_value('#pq-0-dept')})")
+    check(not errors, f"no page errors ({errors})")
+    page.close()
+
     # --- Contract dates: start + duration → end, start + end → duration, one-click choices
     page, errors = new_page(browser, viewport={"width": 1300, "height": 900})
     page.goto(URL); page.click('[data-tab="pipeline"]'); page.click("#opp-add-btn"); page.fill("#pq1-company", "SCEA DATES"); page.click("#pq-next-btn")

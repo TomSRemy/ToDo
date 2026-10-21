@@ -2636,7 +2636,7 @@
     { k:'install', col:'U', label:'Type installation', type:'select', opts:PQ_INSTALLS, sec:'centrale' },
     { k:'contrat', col:'V', label:'Type contrat', type:'select', opts:PQ_CONTRATS, sec:'centrale' },
     { k:'kwc', col:'W', label:'Puissance (kWc)', type:'number', sec:'centrale' },
-    { k:'mwh', col:'X', label:'Vol. annuel (MWh)', type:'number', sec:'centrale' },
+    { k:'mwh', col:'X', label:'Vol. annuel P50 (MWh)', type:'number', sec:'centrale' },
     { k:'mesPrev', col:'Y', label:'MES prévisionnelle', type:'text', sec:'centrale', ph:'jj/mm/aaaa ou « 2027 »' },
     { k:'mesEff', col:'Z', label:'MES effective', type:'text', sec:'centrale', ph:'jj/mm/aaaa' },
     { k:'debut', col:'AA', label:'Date début', type:'text', sec:'centrale', ph:'jj/mm/aaaa' },
@@ -2658,7 +2658,8 @@
     { k:'siret', col:'BDD', label:'SIRET', type:'text', sec:'centrale' },
     { k:'commune', col:'BDD', label:'Commune', type:'text', sec:'centrale' },
     { k:'cp', col:'BDD', label:'Code postal', type:'text', sec:'centrale' },
-    { k:'p90', col:'BDD', label:'P90 (MWh)', type:'number', sec:'centrale' }
+    { k:'p90', col:'BDD', label:'P90 (MWh)', type:'number', sec:'centrale' },
+    { k:'productible', col:'kWh/kWc', label:'Productible P50 (kWh/kWc/an)', type:'number', sec:'centrale' }
   ];
   const PQ_CENTRALE_KEYS=PQ_FIELDS.filter(f=>f.sec==='centrale').map(f=>f.k).concat(PQ_EXTRA_FIELDS.map(f=>f.k));
 
@@ -3236,6 +3237,7 @@
     { k:'cp', re:/code postal|^cp$/ },
     { k:'dept', re:/^(departement|dept|dpt|location|localisation|county)\b/ },
     { k:'install', re:/^(type|filiere|technologie|techno|energie|nature projet|nature du projet|type d.installation|type de centrale|technology)$/, not:/injection|contrat|liste/ },
+    { k:'productible', re:/kwh ?\/ ?kwc|kwh ?\/ ?kwp|par kwc|productible specifique|specific yield|heures? equivalentes?/, not:/\bp90\b/ },
     { k:'kwc', re:/puissance|^p ?(installee|crete|nominale)\b|^pc$|\bkwc\b|\bmwc\b|capacity|\bpower\b|\bmwp\b|\bkwp\b/, not:/raccordement|\bac\b|kva|mva|unitaire|onduleur|injection|reservee|kwh ?\/ ?kwc|par kwc|productible/ },
     { k:'mwh', re:/\bp50\b|production|productible|volume|energie (produite|annuelle)|\byield\b|generation|annual energy/, not:/kwh ?\/ ?kwc|\bp90\b|par kwc/ },
     { k:'p90', re:/\bp90\b/, not:/kwh ?\/ ?kwc/ },
@@ -3270,6 +3272,7 @@
       case 'kwc': { const q=xlQty(v, lu); if(!q||isNaN(q.n)) return; const dcFirst=/\bdc\b|crete|installee|totale|kwc|mwc/.test(xlLabel(label)); if(inst.kwc && !dcFirst) return; inst.kwc=xlRound(/^m/.test(q.unit)?q.n*1000:q.n, 2); return; }
       case 'unit': { const q=xlQty(v, lu||'mw'); if(q&&!isNaN(q.n)) inst._unitKw=/^m/.test(q.unit)?q.n*1000:q.n; return; }
       case 'nbm': { const n=parseFloat(v); if(n) inst._nb=n; return; }
+      case 'productible': { const n=typeof v==='number'?v:pqNum(String(v)); if(!n||isNaN(n)) return; inst.productible=String(Math.round(n<10?n*1000:n)); return; }
       case 'mwh': case 'p90': { const q=xlQty(v, lu||'mwh'); if(!q||isNaN(q.n)) return; let n=q.n; if(q.unit==='gwh') n*=1000; if(q.unit==='kwh') n/=1000; inst[def.k]=String(Math.round(n)); return; }
       case 'mesPrev': case 'fin': { const d=pqCellDate(v); if(d) inst[def.k]=d; return; }
       case 'dept': { const d=pqDeptFromText(String(v)); if(d){ inst.dept=pqDeptLabel(d); inst.region=PQ_REGIONS[d[2]]; } return; }
@@ -3882,6 +3885,10 @@
         if(est>0) extra='<button type="button" class="pq-sugg" data-est="'+est+'" data-s="'+scope+'">≈ '+est.toLocaleString('fr-FR')+' MWh ('+y+' kWh/kWc)</button>';
       }
     }
+    if(f.k==='p90' && scope!=='s'){
+      const inst=pqState.installs[+scope]||{}, p50=pqNum(String(inst.mwh||'')), wind=inst.install==='Eolien', r=wind?0.85:0.92;
+      if(!inst.p90 && p50>0) extra='<button type="button" class="pq-sugg" data-p90="'+Math.round(p50*r)+'" data-s="'+scope+'" title="Ordre de grandeur usuel ('+(wind?'éolien':'solaire')+') : P90 ≈ '+Math.round(r*100)+' % du P50. À confirmer avec le producteur.">≈ '+Math.round(p50*r).toLocaleString('fr-FR')+' MWh ('+Math.round(r*100)+' % du P50)</button>';
+    }
     if(f.k==='debut' && scope!=='s'){
       const inst=pqState.installs[+scope]||{}, mes=pqFullDate(inst.mesEff||inst.mesPrev), y=new Date().getFullYear();
       extra='<div class="pq-dchips">'+(mes?'<button type="button" data-dset="debut" data-v="'+mes+'" data-s="'+scope+'" title="Début à la mise en service ('+mes+')">MES</button>':'')
@@ -3914,6 +3921,22 @@
     else { if(d && n>0) endFrom(); else if(d && f && f>d) durFrom(); }
   }
 
+  // ---------- Power, P50 volume and specific yield: any two give the third ----------
+  // P50 (MWh) = kWc × productible (kWh/kWc) / 1000. Only an empty or already computed box is filled (green, can be typed over);
+  // a computed value never feeds another computation.
+  function pqDerive(i){
+    const st=pqState, inst=st.installs[i]; if(!inst) return;
+    const der=st.derived||(st.derived=new Set());
+    const val=k=>{ const n=pqNum(String(inst[k]==null?'':inst[k])); return n>0 && !der.has(i+'.'+k)?n:0; };
+    const free=k=>inst[k]==null||inst[k]===''||der.has(i+'.'+k);
+    const set=(k,v)=>{ if(String(inst[k]||'')===v) { der.add(i+'.'+k); st.auto.add(i+'.'+k); return; } inst[k]=v; der.add(i+'.'+k); st.auto.add(i+'.'+k); st.touched.delete(i+'.'+k); };
+    const kwc=val('kwc'), mwh=val('mwh'), pr=val('productible');
+    if(free('mwh') && kwc && pr){ const n=kwc*pr/1000; set('mwh', String(n>=100?Math.round(n):Math.round(n*10)/10)); }
+    else if(free('productible') && kwc && mwh) set('productible', String(Math.round(mwh*1000/kwc)));
+    else if(free('kwc') && mwh && pr) set('kwc', xlRound(mwh*1000/pr, 2));
+    // a computed box whose sources were emptied is emptied too
+    ['mwh','productible','kwc'].forEach(k=>{ if(der.has(i+'.'+k) && [kwc,mwh,pr].filter(Boolean).length<2){ inst[k]=''; der.delete(i+'.'+k); st.auto.delete(i+'.'+k); } });
+  }
   function flashPqToAll(k){ document.querySelectorAll('#pq-form [data-k="'+k+'"]').forEach(el=>{ const f=el.closest('.pq-f'); if(f){ f.classList.remove('flash'); void f.offsetWidth; f.classList.add('flash'); } }); }
   function pqIsEmpty(f, scope){
     const src=scope==='s'?pqState.shared:pqState.installs[+scope]||{};
@@ -3929,6 +3952,7 @@
     };
     let h=sec('prod','Producteur',true)+sec('contact','Contact principal',true).replace('Contact principal</div>','Contact principal'+pqContactSwitch()+'</div>')+pqCountBox();
     st.installs.forEach((inst,i)=>{
+      pqDerive(i);
       const fs=PQ_FIELDS.filter(f=>f.sec==='centrale').concat(PQ_EXTRA_FIELDS);
       const tag=!st.editId||st.installs.length<2?'':i===0?'<span class="pq-inst-tag">celle que tu modifies</span>':inst._oppId?'<span class="pq-inst-tag">déjà dans la demande</span>':'<span class="pq-inst-tag new">nouvelle : sera créée</span>';
       h+='<div class="pq-sec pq-inst"><div class="pq-sec-h">'+(st.installs.length>1?'Installation '+(i+1):'Installation')+tag
@@ -4232,7 +4256,7 @@
     const el=e.target, k=el.dataset.k, s=el.dataset.s; if(!k||!pqState) return;
     const v=el.type==='checkbox'?el.checked:el.value;
     if(s==='s') pqState.shared[k]=v; else if(pqState.installs[+s]) pqState.installs[+s][k]=v;
-    const key=s+'.'+k; pqState.touched.add(key); pqState.auto.delete(key);
+    const key=s+'.'+k; pqState.touched.add(key); pqState.auto.delete(key); if(pqState.derived) pqState.derived.delete(key);
     if(k==='dateEntree' && v) pqState.shared.annee=String(v).slice(0,4);
     if(k==='charge'){ try{ localStorage.setItem('qualif-charge', v); }catch(err){} }
     const w=el.closest('.pq-f'); if(w){ w.classList.remove('auto'); if(v!=='' ) w.classList.remove('empty'); }
@@ -4243,7 +4267,9 @@
     if(k==='dept'){ const d=PQ_DEPTS.find(x=>pqDeptLabel(x)===el.value); const src=s==='s'?pqState.shared:pqState.installs[+s]; if(d && src && !pqState.touched.has(s+'.region')) src.region=PQ_REGIONS[d[2]]; }
     if(s!=='s' && ['debut','fin','duree'].includes(k)){ pqLinkDates(+s, k); pqRerenderKeepFocus(); return; }
     if(s!=='s' && ['mesPrev','mesEff'].includes(k)){ pqRerenderKeepFocus(); return; }   // « À la MES » follows the new date
-    if(el.type==='checkbox'||el.tagName==='SELECT'||['dept','kwc','tel','mail'].includes(k)) pqRerenderKeepFocus();
+    if(s!=='s' && k==='cp' && /^\d{5}$/.test(el.value.trim())){ const inst=pqState.installs[+s], d=pqDeptFromPostal(el.value.trim());
+      if(d && inst && !inst.dept){ inst.dept=pqDeptLabel(d); pqState.auto.add(s+'.dept'); if(!pqState.touched.has(s+'.region')){ inst.region=PQ_REGIONS[d[2]]; pqState.auto.add(s+'.region'); } } pqRerenderKeepFocus(); return; }
+    if(el.type==='checkbox'||el.tagName==='SELECT'||['dept','kwc','mwh','productible','tel','mail'].includes(k)) pqRerenderKeepFocus();
   }
   function pqRerenderKeepFocus(){
     const active=document.activeElement, id=active&&active.id, pos=active&&active.selectionStart;
@@ -4827,7 +4853,7 @@
       case caractKey('Puissance installée (kWc)'): return num(o.kwc)||fromFile();
       case caractKey('P50 annuel (indicatif) (MWh/an)'): return num(o.mwh)||fromFile();
       case caractKey('P90 annuel (indicatif) (MWh/an)'): return num(o.p90)||fromFile();
-      case caractKey('Productible (P50) (kWh/kWc/an)'): { const f=fromFile(); if(f!=='') return f; const a=num(o.mwh), b=num(o.kwc); return a&&b?Math.round(a*1000/b*10)/10:''; }
+      case caractKey('Productible (P50) (kWh/kWc/an)'): { if(num(o.productible)) return num(o.productible); const f=fromFile(); if(f!=='') return f; const a=num(o.mwh), b=num(o.kwc); return a&&b?Math.round(a*1000/b*10)/10:''; }
       default: return fromFile();
     }
   }
@@ -5892,6 +5918,7 @@
       pqRerenderKeepFocus(); return;
     }
     const dc=e.target.closest('[data-dset]'); if(dc){ const i=+dc.dataset.s, k=dc.dataset.dset; pqState.installs[i][k]=dc.dataset.v; pqState.touched.add(i+'.'+k); pqState.auto.delete(i+'.'+k); pqLinkDates(i, k); pqRerenderKeepFocus(); return; }
+    const p9=e.target.closest('[data-p90]'); if(p9){ const i=+p9.dataset.s; pqState.installs[i].p90=p9.dataset.p90; pqState.touched.add(i+'.p90'); pqRerenderKeepFocus(); return; }
     const est=e.target.closest('[data-est]'); if(est){ const i=+est.dataset.s; pqState.installs[i].mwh=est.dataset.est; pqState.touched.add(i+'.mwh'); pqRerenderKeepFocus(); return; }
     const rm=e.target.closest('[data-remove]'); if(rm){ pqState.installs.splice(+rm.dataset.remove,1); pqState.auto=new Set([...pqState.auto].filter(k=>k.startsWith('s.'))); pqRerenderKeepFocus(); return; }
     if(e.target.id==='pq-add-inst'){ const last=pqState.installs[pqState.installs.length-1]||{}; pqState.installs.push({ install:last.install, contrat:last.contrat }); pqRender(); const f=$('pq-'+(pqState.installs.length-1)+'-centrale'); if(f) f.focus(); }
