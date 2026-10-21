@@ -697,6 +697,18 @@
   @media (min-width:1000px){ .pq-mail-pane{ min-height:0; } }
   @media (max-width:999px){ .pq-mail-pane #pq-mail{ min-height:150px; flex:none; height:150px; } .pq-mail-pane{ border-right:none; border-bottom:1px solid var(--bd); } }
   .pq-mail-pane.drag{ background:var(--accent-dim); }
+  /* the mail / file column folds away (remembered on this device); a file can still be dropped on the slim bar */
+  .pq-fold{ align-self:flex-start; display:inline-flex; align-items:center; gap:6px; padding:3px 8px 3px 4px; background:none; border:1px solid transparent; border-radius:6px; color:var(--tx3); font:500 11px var(--font-ui); cursor:pointer; }
+  .pq-fold:hover{ color:var(--tx1); border-color:var(--bd); }
+  .pq-fold svg{ width:13px; height:13px; fill:none; stroke:currentColor; stroke-width:1.8; stroke-linecap:round; stroke-linejoin:round; transition:transform .15s; }
+  .pq-layout.folded .pq-mail-pane > :not(.pq-fold){ display:none; }
+  .pq-layout.folded .pq-fold svg{ transform:rotate(180deg); }
+  @media (min-width:1000px){
+    .pq-layout.folded{ grid-template-columns:40px minmax(0,1fr); }
+    .pq-layout.folded .pq-mail-pane{ padding:12px 0; align-items:center; }
+    .pq-layout.folded .pq-fold{ flex-direction:column; align-self:center; padding:8px 4px; }
+    .pq-layout.folded .pq-fold span{ writing-mode:vertical-rl; }
+  }
   .pq-drop{ display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:6px; font-size:11.5px; color:var(--tx3); border:1px dashed var(--bd); border-radius:7px; padding:8px 10px; }
   .pq-drop .pq-link{ color:var(--accent); }
   #pq-mail{ flex:1; min-height:260px; width:100%; resize:vertical; background:var(--panel-2); color:var(--tx1); border:1px solid var(--bd); border-radius:7px; padding:10px; font:400 12px/1.55 var(--font-mono); }
@@ -1099,7 +1111,8 @@
 /* close cross at the top right of every window (stays in view while the window scrolls) */
 .modal-box{ position:relative; }
 .modal-x-wrap{ position:sticky; top:0; height:0; z-index:6; }
-.modal-x{ position:absolute; top:-1px; right:-8px; width:30px; height:30px; display:grid; place-items:center; background:var(--panel); border:1px solid var(--bd); border-radius:6px; color:var(--tx2); font-size:13px; line-height:1; cursor:pointer; }
+.modal-x{ position:absolute; top:-5px; right:0; width:30px; height:30px; padding:0; display:flex; align-items:center; justify-content:center; background:var(--panel); border:1px solid var(--bd); border-radius:8px; color:var(--tx2); line-height:0; cursor:pointer; }
+.modal-x svg{ width:12px; height:12px; display:block; fill:none; stroke:currentColor; stroke-width:1.8; stroke-linecap:round; }
 .modal-x:hover{ color:var(--tx1); border-color:var(--tx3); background:var(--panel-3); }
 .modal-box > h3, .modal-box > .pq-head, .modal-box > .opp-detail-head{ padding-right:34px; }
 #guide-close{ display:none; }   /* replaced by the cross */
@@ -1173,7 +1186,7 @@
 .os-person .os-row{ padding:3px 0; }
 
 /* the opportunity form has no inner margin: its cross sits inside the header */
-.pq-box .modal-x{ top:14px; right:14px; }
+.pq-box .modal-x{ top:10px; right:14px; }
 .modal-box > .pq-head{ padding-right:60px; }
 .pq-inst-tag{ margin-left:10px; font:500 10.5px var(--font-ui); text-transform:none; letter-spacing:0; color:var(--tx3); padding:2px 7px; border:1px solid var(--bd); border-radius:999px; }
 .pq-inst-tag.new{ color:var(--accent); border-color:var(--accent); }
@@ -1304,12 +1317,21 @@ details.req-compare:not([open]) .req-compare-h::before{ transform:rotate(-90deg)
 
 /* compact date chips, one line */
 .pq-dchips{ flex-wrap:wrap; gap:3px; margin-top:4px; }
+.pq-dchips button{ padding-left:6px !important; padding-right:6px !important; letter-spacing:-.1px; }
 .pq-dchips button{ font:500 10.5px var(--font-ui); padding:1px 7px; line-height:16px; white-space:nowrap; }
 /* « → toutes » tab on each installation field */
 .pq-f label{ display:flex; align-items:baseline; gap:4px; }
-.pq-toall{ margin-left:auto; background:none; border:1px solid transparent; border-radius:999px; padding:0 7px; font:500 10.5px var(--font-ui); color:var(--tx3); cursor:pointer; line-height:16px; white-space:nowrap; }
+.pq-in{ position:relative; }
+.pq-in > input, .pq-in > select{ padding-right:30px; }
+.pq-in-select > select, .pq-in-list > input{ padding-right:46px; }
+.pq-toall{ position:absolute; top:50%; right:6px; transform:translateY(-50%); z-index:1; display:inline-flex; align-items:center; justify-content:center; width:18px; height:18px; padding:0; background:var(--panel-2); border:1px solid var(--bd); border-radius:50%; color:var(--tx3); cursor:pointer; }
+.pq-in-select .pq-toall, .pq-in-list .pq-toall{ right:24px; }
+.pq-in-area .pq-toall{ top:6px; transform:none; }
+.pq-in-check .pq-toall{ position:static; transform:none; margin-left:8px; vertical-align:middle; }
+.pq-toall svg{ width:11px; height:11px; fill:none; stroke:currentColor; stroke-width:1.8; stroke-linecap:round; stroke-linejoin:round; }
 .pq-toall.off{ visibility:hidden; }
-.pq-toall.go{ color:var(--accent); border-color:var(--accent); background:var(--accent-dim); }
+.pq-toall.go{ color:#04070C; border-color:var(--accent); background:var(--accent); }
+.pq-toall.go:hover{ color:#04070C; opacity:.85; }
 .pq-toall:hover{ color:var(--accent); border-color:var(--accent); }
 .pq-f.flash input, .pq-f.flash select, .pq-f.flash textarea{ animation:pqFlash 1s ease-out; }
 @keyframes pqFlash{ 0%{ box-shadow:0 0 0 2px var(--accent); } 100%{ box-shadow:none; } }

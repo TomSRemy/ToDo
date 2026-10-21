@@ -637,6 +637,13 @@ with sync_playwright() as p:
     # --- Contract dates: start + duration → end, start + end → duration, one-click choices
     page, errors = new_page(browser, viewport={"width": 1300, "height": 900})
     page.goto(URL); page.click('[data-tab="pipeline"]'); page.click("#opp-add-btn"); page.fill("#pq1-company", "SCEA DATES"); page.click("#pq-next-btn")
+    page.click("#pq-fold")
+    check(not page.is_visible("#pq-mail") and page.get_attribute("#pq-fold", "aria-expanded") == "false", "form: the mail / file column folds away")
+    page.click("#pq-fold"); check(page.is_visible("#pq-mail"), "form: and opens again")
+    y = datetime.date.today().year
+    page.click(f"#pq-form [data-dset='fin'][data-v='31/12/{y + 2}']")
+    check(page.input_value("#pq-0-fin") == f"31/12/{y + 2}", "dates: end on 31/12 of next year, the year after or in 3 years in one click")
+    page.fill("#pq-0-fin", ""); page.locator("#pq-0-fin").dispatch_event("change")
     page.fill("#pq-0-mesPrev", "20/07/2027"); page.locator("#pq-0-mesPrev").dispatch_event("change")
     page.click("#pq-form button[data-dset='debut']:has-text('MES')")
     page.click("#pq-form [data-dset='duree'][data-v='3']")
@@ -651,6 +658,8 @@ with sync_playwright() as p:
     page.fill("#pq-1-mesPrev", "01/03/2028"); page.locator("#pq-1-mesPrev").dispatch_event("change")
     page.fill("#pq-0-duree", "5"); page.locator("#pq-0-duree").dispatch_event("change")
     page.click("#pq-form button[data-toall='duree'][data-s='0']")
+    check(page.is_visible("#choice-overlay") and "Durée" in page.inner_text("#choice-text"), "« → toutes »: a round button, confirmed before applying")
+    page.click("#choice-btns >> text=Appliquer à toutes")
     check(page.evaluate("""(()=>{ const b=document.querySelector("#pq-form button[data-dall='mes'][data-s='0']"), f=b.closest('.pq-f'), r=b.getBoundingClientRect(), p=f.getBoundingClientRect();
           return !!f.querySelector('#pq-0-debut') && r.right<=p.right+1 && b.scrollWidth<=b.clientWidth+1; })()"""), "dates: « toutes : début à la MES » under the start date, fully visible")
     page.click("#pq-form button[data-dall='mes'][data-s='0']")
@@ -659,16 +668,16 @@ with sync_playwright() as p:
     got = [[page.input_value(f"#pq-{i}-{k}") for k in ("debut", "duree", "fin")] for i in range(3)]
     check(got[0] == ["20/07/2027", "5", "19/07/2032"] and got[1] == ["01/03/2028", "5", "28/02/2033"] and got[2] == ["01/01/2028", "5", "31/12/2032"],
           f"dates: same duration for all, then each plant at its own commissioning date ({got})")
-    page.select_option("#pq-0-contrat", "AOS CRE"); page.click("#pq-form button[data-toall='contrat'][data-s='0']")
+    page.select_option("#pq-0-contrat", "AOS CRE"); page.click("#pq-form button[data-toall='contrat'][data-s='0']"); page.click("#choice-btns >> text=Appliquer à toutes")
     check([page.input_value(f"#pq-{i}-contrat") for i in range(3)] == ["AOS CRE"] * 3, "« → toutes » puts any field of an installation on all the others")
     cls = lambda k, i=0: page.get_attribute(f"#pq-form button[data-toall='{k}'][data-s='{i}']", "class")
-    check("off" in cls("particularites") and "✓" in page.inner_text("#pq-form button[data-toall='contrat'][data-s='0']")
+    check("off" in cls("particularites") and "Déjà" in page.get_attribute("#pq-form button[data-toall='contrat'][data-s='0']", "aria-label")
           and page.locator("#pq-form button[data-toall='centrale']").count() == 0 and page.locator("#pq-form button[data-toall='kwc']").count() == 0,
           "« → toutes »: hidden while empty, ✓ when all the same, never on a plant's name or power")
     page.fill("#pq-0-particularites", "Toiture"); page.locator("#pq-0-particularites").dispatch_event("change")
     page.select_option("#pq-0-install", "PV"); page.wait_for_timeout(100)
     check("go" in cls("particularites"), "« → toutes » stands out when the others differ")
-    page.click("#pq-form button[data-toall='particularites'][data-s='0']")
+    page.click("#pq-form button[data-toall='particularites'][data-s='0']"); page.click("#choice-btns >> text=Appliquer à toutes")
     check([page.input_value(f"#pq-{i}-particularites") for i in range(3)] == ["Toiture"] * 3, "« → toutes » for Particularités too")
     check(page.locator("#pq-form .pq-inst.many .pq-inst-n").count() == 3, "each installation in its own numbered card")
     check(not errors, f"no page errors ({errors})")

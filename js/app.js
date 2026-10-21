@@ -3715,6 +3715,7 @@
     $('pq-title').textContent=editing?('Modifier — '+oppName(editing)):'Nouvelle opportunité';
     $('pq-mail').value=''; $('pq-files-info').textContent='';
     // editing: the mail / file area completes the empty fields only (what is already filled is "touched")
+    pqSetFolded(pqFoldedPref());
     $('pq-drop-text').textContent=editing?'Pour compléter cette fiche : colle un mail ou dépose un .msg, un .eml ou l\u2019Excel du producteur. Seuls les champs vides seront remplis.':'Collez le mail, ou déposez ici un .msg, un .eml ou l\u2019Excel du producteur';
     if(editing){
       Object.keys(pqState.shared).forEach(k=>{ const v=pqState.shared[k]; if(v!==''&&v!=null&&v!==false) pqState.touched.add('s.'+k); });
@@ -3901,16 +3902,21 @@
       const inst=pqState.installs[+scope]||{}, mes=pqFullDate(inst.mesEff||inst.mesPrev), y=new Date().getFullYear();
       extra='<div class="pq-dchips">'+(mes?'<button type="button" data-dset="debut" data-v="'+mes+'" data-s="'+scope+'" title="Début à la mise en service ('+mes+')">MES</button>':'')
         +[y+1,y+2].map(Y=>'<button type="button" data-dset="debut" data-v="01/01/'+Y+'" data-s="'+scope+'" title="1er janvier '+Y+'">1/1/'+String(Y).slice(2)+'</button>').join('')
-        +(pqState.installs.length>1?'<button type="button" class="all" data-dall="mes" data-s="'+scope+'" title="Chaque installation démarre à sa propre mise en service (date de début = MES)">toutes : début à la MES</button>':'')+'</div>';
+        +(pqState.installs.length>1?'<button type="button" data-dall="mes" data-s="'+scope+'" title="Chaque installation démarre à sa propre mise en service (date de début = MES de chacune)">MES toutes</button>':'')+'</div>';
     }
+    if(f.k==='fin' && scope!=='s'){ const y=new Date().getFullYear();
+      extra='<div class="pq-dchips">'+[1,2,3].map(n=>'<button type="button" data-dset="fin" data-v="31/12/'+(y+n)+'" data-s="'+scope+'" title="Fin le 31 décembre '+(y+n)+'">31/12/'+String(y+n).slice(2)+'</button>').join('')+'</div>'; }
     if(f.k==='duree' && scope!=='s') extra='<div class="pq-dchips">'+[1,2,3,5].map(n=>'<button type="button" data-dset="duree" data-v="'+n+'" data-s="'+scope+'" title="'+n+' an'+(n>1?'s':'')+'">'+n+'a</button>').join('')+'</div>';
     let toAll='';
     if(scope!=='s' && pqState.installs.length>1 && f.type!=='computed' && !['centrale','kwc','mwh','p90','productible'].includes(f.k)){   // a plant's own name and figures are never copied
       const has=v!=null && v!=='' && v!==false, differs=has && pqState.installs.some((x,j)=>j!==+scope && String(x[f.k]==null?'':x[f.k])!==String(v));
       toAll='<button type="button" class="pq-toall'+(!has?' off':differs?' go':'')+'" data-toall="'+f.k+'" data-s="'+scope+'"'+(!has?' tabindex="-1" aria-hidden="true"':'')
-        +' title="'+(differs?'Mettre cette valeur sur toutes les installations'+(['debut','fin','duree'].includes(f.k)?' (début, durée et fin)':''):'Toutes les installations ont déjà cette valeur')+'">'+(has && !differs?'✓ toutes':'→ toutes')+'</button>';
+        +' title="'+(differs?'Mettre cette valeur sur toutes les installations'+(['debut','fin','duree'].includes(f.k)?' (début, durée et fin)':''):'Toutes les installations ont déjà cette valeur')+'" aria-label="'+(differs?'Appliquer à toutes les installations':'Déjà sur toutes les installations')+'">'
+        +(has && !differs?'<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 8.5l2.5 2.5L12 5.5"/></svg>':'<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 8h9M8.5 4.5L12 8l-3.5 3.5"/></svg>')+'</button>';
     }
-    return '<div class="pq-f'+(f.wide?' wide':'')+(auto?' auto':'')+(empty?' empty':'')+'"><label for="'+id+'">'+escapeHtml(f.label)+' <span class="pq-col">'+f.col+'</span>'+toAll+'</label>'+input+extra+'</div>';
+    // the round « → toutes » sits inside the field, on its right
+    const box=toAll?'<div class="pq-in pq-in-'+f.type+'">'+input+toAll+'</div>':input;
+    return '<div class="pq-f'+(f.wide?' wide':'')+(auto?' auto':'')+(empty?' empty':'')+'"><label for="'+id+'">'+escapeHtml(f.label)+' <span class="pq-col">'+f.col+'</span></label>'+box+extra+'</div>';
   }
   // ---------- Contract dates: start + duration → end, start + end → duration, end + duration → start ----------
   // « mars 2027 » / « 2027 » become dd/mm/yyyy; a computed date shows in green and can still be typed over.
@@ -3947,6 +3953,10 @@
     // a computed box whose sources were emptied is emptied too
     ['mwh','productible','kwc'].forEach(k=>{ if(der.has(i+'.'+k) && [kwc,mwh,pr].filter(Boolean).length<2){ inst[k]=''; der.delete(i+'.'+k); st.auto.delete(i+'.'+k); } });
   }
+  // the mail / file column of the form can be folded away; remembered on this device
+  function pqFoldedPref(){ try{ return localStorage.getItem('pq-mail-folded')==='1'; }catch(e){ return false; } }
+  function pqSetFolded(f){ const l=$('pq-layout'), b=$('pq-fold'); if(!l||!b) return; l.classList.toggle('folded', f); b.setAttribute('aria-expanded', String(!f)); b.title=f?'Afficher le mail et les fichiers':'Replier le mail et les fichiers'; }
+  document.addEventListener('click', e=>{ const b=e.target.closest && e.target.closest('#pq-fold'); if(!b) return; const f=!$('pq-layout').classList.contains('folded'); pqSetFolded(f); try{ localStorage.setItem('pq-mail-folded', f?'1':'0'); }catch(err){} });
   function flashPqToAll(k){ document.querySelectorAll('#pq-form [data-k="'+k+'"]').forEach(el=>{ const f=el.closest('.pq-f'); if(f){ f.classList.remove('flash'); void f.offsetWidth; f.classList.add('flash'); } }); }
   function pqIsEmpty(f, scope){
     const src=scope==='s'?pqState.shared:pqState.installs[+scope]||{};
@@ -5950,8 +5960,13 @@
       const filled=v=>v!=null && String(v).trim()!=='';
       const clash=st.installs.map((x,i)=>({x,i})).filter(({x})=>x!==from && keys.some(kk=>filled(x[kk]) && String(x[kk])!==String(from[kk]??'')));
       const apply=onlyEmpty=>{ st.installs.forEach((x,i)=>{ if(x===from) return; keys.forEach(kk=>{ if(onlyEmpty && filled(x[kk])) return; x[kk]=from[kk]; if(filled(from[kk])){ st.touched.add(i+'.'+kk); st.auto.delete(i+'.'+kk); } }); }); pqRerenderKeepFocus(); flashPqToAll(k); };
-      if(!clash.length){ apply(false); return; }
       const label=(PQ_FIELDS.find(f=>f.k===k)||PQ_EXTRA_FIELDS.find(f=>f.k===k)||{}).label||k;
+      if(!clash.length){
+        const shown=keys.map(kk=>from[kk]).filter(filled).join(', '), n=st.installs.length-1;
+        askChoice('Appliquer à toutes les installations ?', '« '+label+' » : '+shown+' → sur '+(n>1?'les '+n+' autres installations':'l\u2019autre installation')+'.',
+          [{ label:'Appliquer à toutes', value:'all' }]).then(v=>{ if(v) apply(false); });
+        return;
+      }
       askChoice('Remplacer des valeurs déjà remplies ?', clash.length+' installation'+(clash.length>1?'s ont':' a')+' déjà une autre valeur pour « '+label+' » : '+clash.slice(0,4).map(({x,i})=>(x.centrale||'Installation '+(i+1))+' ('+keys.map(kk=>x[kk]).filter(filled).join(', ')+')').join(' ; ')+(clash.length>4?'…':'')+'.',
         [{ label:'Remplacer partout', value:'all' }, { label:'Seulement les champs vides', value:'empty' }]).then(v=>{ if(v) apply(v==='empty'); });
       return;
@@ -6703,7 +6718,7 @@
   document.querySelectorAll('.modal-overlay').forEach(ov=>{
     const box=ov.querySelector('.modal-box'); if(!box || box.querySelector('.modal-x, .co-sheet-x')) return;
     const wrap=document.createElement('div'); wrap.className='modal-x-wrap';
-    const x=document.createElement('button'); x.type='button'; x.className='modal-x'; x.title='Fermer (Échap)'; x.setAttribute('aria-label','Fermer'); x.textContent='✕';
+    const x=document.createElement('button'); x.type='button'; x.className='modal-x'; x.title='Fermer (Échap)'; x.setAttribute('aria-label','Fermer'); x.innerHTML='<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 4l8 8M12 4l-8 8"/></svg>';
     x.onclick=()=>{
       const own=[...ov.querySelectorAll('button')].find(b=>b!==x && /^(fermer|annuler|plus tard)$/i.test(b.textContent.trim()) && (b.offsetParent || b.id==='guide-close'));
       if(own) own.click(); else ov.classList.add('hidden');
