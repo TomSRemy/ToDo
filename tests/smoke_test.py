@@ -394,6 +394,25 @@ with sync_playwright() as p:
     check(page.is_visible("#bridge-phone-note") and not page.is_visible("#bridge-token"), "bridge: Réf. & data says the bridge is for the computer only")
     page.close()
 
+    # --- Windows: « Modifier la fiche » and the closing cross at the top right
+    win_opp = [{"id": "w1", "kind": "installation", "company": "SOLARIS", "producteur": "SOLARIS", "centrale": "Toit Durand", "title": "Toit Durand",
+                "stage": "collecte", "kwc": "299", "createdAt": 1, "updatedAt": 1, "deleted": False}]
+    page, errors = new_page(browser, {"todo_todo-widget-opportunities": json.dumps(win_opp)}, viewport={"width": 1300, "height": 800})
+    page.goto(URL); page.click('[data-tab="pipeline"]'); page.click(".pipe-card")
+    box = page.locator("#opp-detail-overlay .modal-box").bounding_box(); eb = page.locator("#opp-detail-edit").bounding_box(); xb = page.locator("#opp-detail-overlay .modal-x").bounding_box()
+    check(eb["y"] - box["y"] < 60 and box["x"] + box["width"] - (xb["x"] + xb["width"]) < 30 and xb["x"] > eb["x"] + eb["width"] - 1 and xb["y"] - box["y"] < 40,
+          "windows: « Modifier la fiche » at the top, the cross in the top right corner")
+    check("Modifier la fiche" not in page.inner_text("#opp-detail-actions"), "windows: no second « Modifier la fiche » at the bottom")
+    page.click("#opp-detail-overlay .modal-x")
+    check(page.is_hidden("#opp-detail-overlay"), "windows: the cross closes the sheet")
+    page.click(".pipe-card"); page.click("#opp-detail-edit")
+    check(page.is_visible("#pq-overlay"), "windows: « Modifier la fiche » opens the form")
+    page.click("#pq-overlay .modal-x")
+    check(page.is_hidden("#pq-overlay") and page.locator(".modal-overlay:not(.hidden)").count() == 0, "windows: the cross closes the form too (every window has one)")
+    check(page.evaluate("[...document.querySelectorAll('.modal-overlay .modal-box')].every(b=>b.querySelector('.modal-x, .co-sheet-x'))"), "windows: every window has its cross")
+    check(not errors, f"no page errors ({errors})")
+    page.close()
+
     # --- Sync pill: state visible everywhere, token problems explained
     page, errors = new_page(browser, viewport={"width": 1300, "height": 800})
     page.goto(URL); page.wait_for_timeout(300)
@@ -630,7 +649,7 @@ with sync_playwright() as p:
           "the first contact, no longer main, keeps both numbers and is linked as an other contact")
     check(inst.get("prenom") == "Marc", "the installation's main contact is the chosen one")
     # editing: switch the main contact to Camille, complete an empty field from a pasted mail (filled fields untouched)
-    page.locator(".pipe-card", has_text="Toit A").first.click(); page.click("#opp-detail-actions >> text=Modifier la fiche")
+    page.locator(".pipe-card", has_text="Toit A").first.click(); page.click("#opp-detail-edit")
     cam_opt = page.eval_on_selector("#pq-contact-switch", "s=>[...s.options].find(o=>o.textContent.startsWith('Camille')).value")
     page.select_option("#pq-contact-switch", cam_opt); page.wait_for_timeout(100)
     page.fill("#pq-mail", "Bonjour, notre centrale fait 2,4 MWc à Valence (26000).\nCordialement"); page.wait_for_timeout(500)
@@ -773,7 +792,7 @@ Responsable technique
     ed_inst = [{"id": "e1", "kind": "installation", "company": "SOLARIS", "producteur": "SOLARIS", "centrale": "", "title": "", "kwc": "299", "stage": "collecte",
                 "createdAt": 1, "updatedAt": 1, "deleted": False}]
     page, errors = new_page(browser, {"todo_todo-widget-opportunities": json.dumps(ed_inst)}, viewport={"width": 1300, "height": 900}, timezone_id="Europe/Paris")
-    page.goto(URL); page.click('[data-tab="pipeline"]'); page.locator(".pipe-card").first.click(); page.click("#opp-detail-actions >> text=Modifier la fiche")
+    page.goto(URL); page.click('[data-tab="pipeline"]'); page.locator(".pipe-card").first.click(); page.click("#opp-detail-edit")
     page.set_input_files("#pq-file", str(multi)); page.wait_for_function("document.getElementById('pq-files-info').textContent.includes('installation')", timeout=20000)
     got = [page.input_value(s_) for s_ in ("#pq-0-centrale", "#pq-0-spv", "#pq-0-cp", "#pq-0-commune", "#pq-0-mesPrev")]
     check(got == ["ALPHA PV1", "ALPHA PV1", "49640", "VILLE-SUR-EXEMPLE", "20/07/2027"],

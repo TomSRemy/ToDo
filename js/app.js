@@ -4066,6 +4066,8 @@
     { const sb=suiviBadge(o, true); if(sb){ const line=document.createElement('div'); line.className='suivi-line'; line.appendChild(sb); const t=document.createElement('span'); t.textContent=sb.title; line.appendChild(t); box.appendChild(line); } }
     if(o.company){ const l=document.createElement('button'); l.type='button'; l.className='opp-co-link'; l.textContent='Fiche '+o.company+' →'; l.onclick=()=>{ closeOppDetail(); openCompanySheet(o.company); }; box.appendChild(l); }
     const actions=$('opp-detail-actions'); actions.innerHTML='';
+    // « Modifier la fiche » at the top right of the sheet, for an installation
+    const edit=$('opp-detail-edit'); edit.hidden=o.kind!=='installation'; edit.onclick=()=>{ closeOppDetail(); openOppForm({ editId:o.id }); };
     if(o.kind==='prequal'){
       const p=document.createElement('p'); p.className='modal-hint'; p.textContent=(o.metAt?'Rencontré le '+pqIsoToFr(o.metAt)+'. ':'')+(o.note||'Pas de note.');
       box.appendChild(p);
@@ -4133,7 +4135,6 @@
         opportunities.push({ id:reqId, kind:'request', company:o.company, title:'Demande de pricing', createdAt:Date.now(), updatedAt:Date.now(), deleted:false });
         o.requestId=reqId; touchCrm(o); saveCrm(); renderPipeline(); openRequestDetail(reqId);
       }, 'ghost-btn'));
-      actions.appendChild(oppActionBtn('Modifier la fiche', ()=>{ closeOppDetail(); openOppForm({ editId:o.id }); }, 'ghost-btn'));
       if(!isExited(o)){
         if(stageIndex(o.stage)>=stageIndex('demande_prix')){ actions.appendChild(oppActionBtn('Perdu', ()=>exitOpp(o,'perdu'), 'ghost-btn danger-btn')); }
         actions.appendChild(oppActionBtn('Abandonner', ()=>exitOpp(o,'abandonne'), 'ghost-btn danger-btn'));
@@ -4248,6 +4249,7 @@
     viewingOppId=reqId;
     const list=requestInstalls(reqId);
     $('opp-detail-title').textContent=req.company+' — '+(req.title||'Demande de pricing');
+    $('opp-detail-edit').hidden=true;   // a pricing request: each installation has its own « Modifier la fiche »
     const box=$('opp-detail-body'); box.innerHTML='';
     const ul=document.createElement('div'); ul.className='opp-req-list';
     list.forEach(o=>{
@@ -6036,6 +6038,20 @@
     document.addEventListener('click', e=>{ if(e.target.closest('.tab')) setTimeout(sync,0); }, true);
     sync();
   }
+  // ---------- Every window closes with a cross at the top right ----------
+  // The cross does what the window's own « Fermer » / « Annuler » / « Plus tard » button does (same checks), else hides it;
+  // it stays visible while the window scrolls.
+  document.querySelectorAll('.modal-overlay').forEach(ov=>{
+    const box=ov.querySelector('.modal-box'); if(!box || box.querySelector('.modal-x, .co-sheet-x')) return;
+    const wrap=document.createElement('div'); wrap.className='modal-x-wrap';
+    const x=document.createElement('button'); x.type='button'; x.className='modal-x'; x.title='Fermer (Échap)'; x.setAttribute('aria-label','Fermer'); x.textContent='✕';
+    x.onclick=()=>{
+      const own=[...ov.querySelectorAll('button')].find(b=>b!==x && /^(fermer|annuler|plus tard)$/i.test(b.textContent.trim()) && (b.offsetParent || b.id==='guide-close'));
+      if(own) own.click(); else ov.classList.add('hidden');
+    };
+    wrap.appendChild(x); box.insertBefore(wrap, box.firstChild);
+  });
+
   // ---------- Keyboard and screen readers ----------
   // Clickable shapes that are not real buttons (check circles, cards, tags, tabs…) become focusable and answer
   // Enter/Space; icon-only buttons get their tooltip as a spoken name. Applied to everything rendered, as it appears.
