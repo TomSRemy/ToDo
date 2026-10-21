@@ -1053,3 +1053,9 @@
 .xr-row select{ width:100%; }
 @media (max-width:760px){ .xr-row{ grid-template-columns:1fr 1fr; } .xr-row b{ grid-column:1 / -1; } .xr-row select{ grid-column:1 / -1; } }
 #xl-review-overlay{ z-index:20050; }   /* above the opportunity sheet it was opened from */
+
+/* editing one installation with a workbook of several plants: the others, to create in the same request */
+.pq-others{ margin-top:10px; padding:10px 12px; border:1px solid var(--accent); border-radius:8px; background:var(--accent-dim); font-size:12.5px; color:var(--tx1); }
+.pq-others[hidden]{ display:none; }
+.pq-others-check{ display:flex; gap:8px; align-items:flex-start; cursor:pointer; font-weight:500; }
+.pq-others ul{ margin:6px 0 0 24px; padding:0; color:var(--tx2); }

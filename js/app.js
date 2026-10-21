@@ -96,7 +96,7 @@
     await loadSyncConfig();
     consolidateNotes();
     loadParc(); ensureRenewalTasks();
-    if(migrateCompanyStars()) saveCrm();
+    if(migrateCompanyStars() | migrateContactCivility()) saveCrm();
     checkReminders();
     render(); renderArchive(); renderLists(); renderToday(); initPostit(); updateConflictBadge(); applyColumnVisibility();
     await loadSeenIds();
@@ -2580,8 +2580,11 @@
     return null;
   }
   // Excel serial date or JS Date → dd/mm/yyyy
+  // A date read from Excel (SheetJS, cellDates) is built from a winter date plus a number of days: a summer date comes out
+  // at 23:00 the day before (and very old ones a few minutes off). Back to the right calendar day.
+  function xlDay(v){ const d=new Date(v.getTime()); if(d.getHours()>=22) d.setDate(d.getDate()+1); d.setHours(0,0,0,0); return d; }
   function pqCellDate(v){
-    if(v instanceof Date && !isNaN(v)) return pqPad(v.getDate())+'/'+pqPad(v.getMonth()+1)+'/'+v.getFullYear();
+    if(v instanceof Date && !isNaN(v)){ v=xlDay(v); return pqPad(v.getDate())+'/'+pqPad(v.getMonth()+1)+'/'+v.getFullYear(); }
     if(typeof v==='number' && v>20000 && v<80000){ const d=new Date(Math.round((v-25569)*86400000)); return pqPad(d.getUTCDate())+'/'+pqPad(d.getUTCMonth()+1)+'/'+d.getUTCFullYear(); }
     return pqParseDateLoose(String(v));
   }
@@ -3063,6 +3066,7 @@
       case 'cp': { const cp=typeof v==='number'?String(v).padStart(5,'0'):String(v).trim(); inst.cp=cp; return; }
       case 'install': { const t=xlInstallType(v); if(t) inst.install=t; if(/au sol|\bsol\b/i.test(v)) inst._nature='Centrale au sol'; else if(/toiture|hangar/i.test(v)) inst._nature='Toiture'; else if(/ombri/i.test(v)) inst._nature='Ombrière'; return; }
       case 'contrat': { const c=xlContrat(v); if(c) inst.contrat=c; return; }
+      case 'commune': { const s=String(v).trim(), m=/^(\d{5})\s+(.+)$/.exec(s); if(m){ inst.commune=m[2].trim(); if(!inst.cp) inst.cp=m[1]; } else inst.commune=s; return; }
       default: inst[def.k]=String(v).trim();
     }
   }
@@ -3073,6 +3077,7 @@
     if(!inst.cp && inst.adresse){ const m=/\b(\d{5})\b/.exec(inst.adresse); if(m) inst.cp=m[1]; }
     if(!inst.install && (inst.kwc||'') && /kwc|mwc|crete/.test(inst._labels||'')) inst.install='PV';
     if(inst._nature) inst.particularites=inst._nature;
+    if(!inst.centrale && inst.spv) inst.centrale=inst.spv;   // « Nom Installation » left empty: the SPV names the plant
     Object.keys(inst).forEach(k=>{ if(k.charAt(0)==='_') delete inst[k]; });
     return inst;
   }
@@ -3267,7 +3272,10 @@
     if(!companies.find(co=>co.name===finalName && !co.deleted)) companies.push({ id:newOppId('co'), name:finalName, type:'Client', whatTheyDo:'', marketScope:[], website:'', createdAt:Date.now(), updatedAt:Date.now(), deleted:false });
     return finalName;
   }
+  const PQ_CIVILITY=/^(m\.|mr\.?|mme|mlle|mrs?|ms|monsieur|madame|mademoiselle)\s+/i;
+  function migrateContactCivility(){ let ch=false; contacts.forEach(c=>{ if(!c.deleted && PQ_CIVILITY.test(c.firstName||'')){ c.firstName=c.firstName.replace(PQ_CIVILITY,'').trim(); touchCrm(c); ch=true; } }); return ch; }
   function ensureContact(v, company){
+    if(v.prenom) v=Object.assign({}, v, { prenom:String(v.prenom).replace(PQ_CIVILITY,'').trim() });
     if(!v.prenom && !v.nom && !v.mail) return null;
     const mail=(v.mail||'').toLowerCase();
     const lastName=pqTitleCase(v.nom||'').replace(/^(M\.|Mme)\s+/i,'');
@@ -3748,6 +3756,32 @@
     $('pq-summary').innerHTML=(nAuto?'<span class="pq-ok">'+nAuto+' champ'+(nAuto>1?'s':'')+' rempli'+(nAuto>1?'s':'')+' automatiquement</span>':'<span class="pq-muted">'+(st.editId?'Colle un mail ou dépose un fichier à gauche pour compléter les champs vides':'Collez un mail ou déposez un fichier pour pré-remplir')+'</span>')
       +(uniq.length?'<span class="pq-todo">À compléter : '+escapeHtml(uniq.join(', '))+'</span>':'<span class="pq-ok">Champs obligatoires remplis</span>');
   }
+  // the plant of a workbook that is the installation being edited: name, SPV, power, postal code, département
+  function pqBestPlant(cur, list){
+    const n=v=>parcNorm(v||''), near=(a,b)=>{ const x=pqNum(String(a||'')), y=pqNum(String(b||'')); return x>0 && y>0 && Math.abs(x-y)/Math.max(x,y)<0.02; };
+    let best=0, top=0;
+    list.forEach((p,i)=>{
+      let s=0;
+      if(n(cur.centrale) && n(p.centrale) && (n(cur.centrale)===n(p.centrale) || n(cur.centrale).includes(n(p.centrale)) || n(p.centrale).includes(n(cur.centrale)))) s+=5;
+      if(n(cur.spv) && n(cur.spv)===n(p.spv)) s+=4;
+      if(near(cur.kwc, p.kwc)) s+=3;
+      if(cur.cp && cur.cp===p.cp) s+=2;
+      if(cur.dept && cur.dept===p.dept) s+=1;
+      if(s>top){ top=s; best=i; }
+    });
+    return best;
+  }
+  function pqOthersBox(){
+    const box=$('pq-others'); if(!box) return;
+    const st=pqState, list=st&&st.xlsOthers;
+    if(!list || !list.length){ box.hidden=true; box.innerHTML=''; return; }
+    box.hidden=false;
+    box.innerHTML='<label class="pq-others-check"><input type="checkbox" id="pq-others-create"'+(st.createOthers?' checked':'')+'> <span></span></label><ul></ul>';
+    box.querySelector('span').textContent='L\u2019Excel contient aussi '+list.length+' autre'+(list.length>1?'s installations':' installation')+' : '+(list.length>1?'les':'la')+' créer dans la même demande en enregistrant';
+    const ul=box.querySelector('ul');
+    list.forEach(p=>{ const li=document.createElement('li'); li.textContent=[p.centrale||'(sans nom)', p.kwc?fmtKwc(p.kwc):'', [p.cp,p.commune].filter(Boolean).join(' ')||p.dept].filter(Boolean).join(' · '); ul.appendChild(li); });
+    $('pq-others-create').onchange=e=>{ st.createOthers=e.target.checked; };
+  }
   function pqApply(parsed, xlsInstalls){
     const st=pqState; if(!st) return;
     // drop previous automatic values the user did not edit, then apply the new ones
@@ -3758,9 +3792,14 @@
       if(PQ_CENTRALE_KEYS.includes(k)){ if(!st.touched.has('0.'+k)){ st.installs[0][k]=v; st.auto.add('0.'+k); } }
       else if(!st.touched.has('s.'+k)){ st.shared[k]=v; st.auto.add('s.'+k); }
     });
+    st.xlsOthers=null;
     if(xlsInstalls && xlsInstalls.length && st.editId){
-      // editing one installation: the file only completes its empty fields
-      Object.keys(xlsInstalls[0]).forEach(k=>{ if(!st.touched.has('0.'+k) && xlsInstalls[0][k]){ st.installs[0][k]=xlsInstalls[0][k]; st.auto.add('0.'+k); } });
+      // editing one installation: the plant of the file that matches it completes its empty fields; the others can be
+      // created in the same pricing request when saving
+      const cur=st.installs[0], best=pqBestPlant(cur, xlsInstalls), x=xlsInstalls[best];
+      Object.keys(x).forEach(k=>{ const has=cur[k]!=null && String(cur[k]).trim()!==''; if(!st.touched.has('0.'+k) && x[k] && (!has || st.auto.has('0.'+k))){ cur[k]=x[k]; st.auto.add('0.'+k); } });
+      const others=xlsInstalls.filter((_,i)=>i!==best);
+      if(others.length){ st.xlsOthers=others; if(st.createOthers==null) st.createOthers=true; }
     } else if(xlsInstalls && xlsInstalls.length){
       const base=Object.assign({}, st.installs[0]);
       st.installs=xlsInstalls.map((x,i)=>{
@@ -3770,7 +3809,7 @@
       });
     }
     if(st.shared.dateEntree) st.shared.annee=st.shared.dateEntree.slice(0,4);
-    pqRender();
+    pqRender(); pqOthersBox();
   }
   let pqParseTimer=null, pqLastFiles=null;
   // Copying a mail from Outlook's message list gives only its summary line ("De  Objet  Reçu  Taille…"), not its content
@@ -3835,6 +3874,20 @@
       // producer and contact columns are shared by the installations of a request
       if(o.requestId) requestInstalls(o.requestId).forEach(x=>{ if(x.id===o.id) return; PQ_SHARED_KEYS.filter(k=>!['action','relance','commentaires','rdv1','rdv2','cr1','cr2','dateOffre','nature','qualification'].includes(k)).forEach(k=>{ x[k]=v[k]; }); x.company=company; touchCrm(x); });
       const mc=ensureContact(v, company);
+      if(st.xlsOthers && st.xlsOthers.length && st.createOthers){
+        if(!o.requestId){ const reqId=newOppId('req'); opportunities.push({ id:reqId, kind:'request', company, title:'Demande de pricing', createdAt:Date.now(), updatedAt:Date.now(), deleted:false }); o.requestId=reqId; touchCrm(o); }
+        st.xlsOthers.forEach((p,i)=>{
+          const x={ id:newOppId('opp'), kind:'installation', company, stage:o.stage, requestId:o.requestId, taskId:null, createdAt:Date.now(), updatedAt:Date.now(), deleted:false, lostAt:null };
+          PQ_SHARED_KEYS.forEach(k=>{ if(v[k]!==undefined) x[k]=v[k]; });
+          ['install','contrat','dept','region'].forEach(k=>{ if(o[k]) x[k]=o[k]; });
+          PQ_CENTRALE_KEYS.forEach(k=>{ if(p[k]!==undefined && p[k]!=='') x[k]=p[k]; });
+          if(!(x.centrale||'').trim()) x.centrale=producteur+' '+(i+2);
+          x.title=x.centrale;
+          if(o.goDate) x.goDate=o.goDate;
+          if(o.otherContactIds) x.otherContactIds=o.otherContactIds.slice();
+          opportunities.push(x);
+        });
+      }
       if(st.editOtherIds){ o.otherContactIds=[...new Set(st.editOtherIds.filter(id=>!mc || id!==mc.id))]; if(!o.otherContactIds.length) delete o.otherContactIds; touchCrm(o); }
       saveCrm(); closeOppForm(); renderPipeline(); render();
       openOppDetail(o.id);
@@ -5244,7 +5297,7 @@
   function saveParc(){ window.storage.set(PARC_KEY, JSON.stringify(parcData)).catch(e=>console.error(e)); }
   const parcNorm=s=>pqFold(String(s==null?'':s)).replace(/[^a-z0-9%]/g,'');
   function parcIso(v){
-    if(v instanceof Date && !isNaN(v)) return toISO(v);
+    if(v instanceof Date && !isNaN(v)) return toISO(xlDay(v));
     if(typeof v==='number' && v>20000 && v<80000){ const d=new Date(Math.round((v-25569)*86400000)); return d.toISOString().slice(0,10); }
     const s=String(v||'').trim(); const m=/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(s); if(m) return m[3]+'-'+pqPad(m[2])+'-'+pqPad(m[1]);
     return /^\d{4}-\d{2}-\d{2}/.test(s)?s.slice(0,10):'';

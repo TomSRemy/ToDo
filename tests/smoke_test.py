@@ -706,6 +706,35 @@ with sync_playwright() as p:
     page.set_input_files("#pq-file", str(tpl)); page.wait_for_function("document.getElementById('pq-files-info').textContent.includes('installation')", timeout=20000)
     got = [page.input_value(s_) for s_ in ("#pq-0-centrale", "#pq-0-kwc", "#pq-0-spv", "#pq-0-siret", "#pq-0-p90", "#pq-0-dept")]
     check(got == ["CS Bram", "4986.93", "BRAM SOLAIRE SAS", "123 456 789 00012", "6100", "11 - Aude"], f"Selfee template read into the form ({got})")
+    check(not errors, f"no page errors ({errors})")
+    page.close()
+
+    # --- Editing one installation with a producer workbook of several plants (no plant names, SPV only, summer dates)
+    wb = openpyxl.Workbook(); ws = wb.active; ws.title = "Données"
+    for r in [["", "Centrale 1", "Centrale 2", "Centrale 3"], ["Nom Installation"], ["Nom SPV", "ALPHA PV1", "BETA PV1"], ["SIRET SPV", 12345678900011, 98765432100022],
+              ["Département", 49, 49], ["Commune", "49640 VILLE-SUR-EXEMPLE", "49330 AUTRE-VILLE"], ["Nature Projet", "Centrale au sol", "Toiture"],
+              ["Date de mise en service (effective ou prévisionnelle)", datetime.datetime(2027, 7, 20), datetime.datetime(2027, 7, 20)],
+              ["Puissance installée (kWc)", "299", "211,14"], ["P50 annuel (indicatif) (MWh/an)", 358, 252]]:
+        ws.append(r)
+    multi = pathlib.Path(tempfile.mkdtemp()) / "caracteristiques.xlsx"; wb.save(multi)
+    ed_inst = [{"id": "e1", "kind": "installation", "company": "SOLARIS", "producteur": "SOLARIS", "centrale": "", "title": "", "kwc": "299", "stage": "collecte",
+                "createdAt": 1, "updatedAt": 1, "deleted": False}]
+    page, errors = new_page(browser, {"todo_todo-widget-opportunities": json.dumps(ed_inst)}, viewport={"width": 1300, "height": 900}, timezone_id="Europe/Paris")
+    page.goto(URL); page.click('[data-tab="pipeline"]'); page.locator(".pipe-card").first.click(); page.click("#opp-detail-actions >> text=Modifier la fiche")
+    page.set_input_files("#pq-file", str(multi)); page.wait_for_function("document.getElementById('pq-files-info').textContent.includes('installation')", timeout=20000)
+    got = [page.input_value(s_) for s_ in ("#pq-0-centrale", "#pq-0-spv", "#pq-0-cp", "#pq-0-commune", "#pq-0-mesPrev")]
+    check(got == ["ALPHA PV1", "ALPHA PV1", "49640", "VILLE-SUR-EXEMPLE", "20/07/2027"],
+          f"edit + workbook: the matching plant (299 kWc) fills the form, SPV names it, postal code split, summer date right in Paris time ({got})")
+    check(page.is_visible("#pq-others") and "BETA PV1" in page.inner_text("#pq-others") and page.is_checked("#pq-others-create"),
+          "edit + workbook: the other plant is shown, to create in the same request")
+    page.click("#pq-save-btn"); page.wait_for_timeout(300)
+    opps_now = [o for o in stored(page, "todo-widget-opportunities") if not o.get("deleted")]
+    insts = sorted((o for o in opps_now if o["kind"] == "installation"), key=lambda o: o["kwc"])
+    reqs = [o for o in opps_now if o["kind"] == "request"]
+    check(len(insts) == 2 and len(reqs) == 1 and all(o["requestId"] == reqs[0]["id"] for o in insts) and insts[0]["centrale"] == "BETA PV1"
+          and insts[0]["kwc"] == "211.14" and insts[0]["stage"] == "collecte", f"edit + workbook: the second plant created in the same request ({[o.get('centrale') for o in insts]})")
+    page, errors = new_page(browser)
+    page.goto(URL); page.click('[data-tab="pipeline"]'); page.click("#opp-add-btn"); page.fill("#pq1-company", "SCEA Y"); page.click("#pq-next-btn")
     # a mail saved as .eml (new Outlook, Outlook web): its text and its attached Excel, also inside a forwarded mail
     from email.message import EmailMessage
     inner = EmailMessage(); inner["From"] = "Jean Martin <j.martin@exemple-solaire.fr>"; inner["Subject"] = "Nos centrales"
