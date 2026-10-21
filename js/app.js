@@ -4298,28 +4298,12 @@
         [[true,'Toutes les installations ('+batch.length+')'],[false,'Seulement celle-ci']].forEach(([v,l])=>{ const b=document.createElement('button'); b.type='button'; b.textContent=l; b.className=stageScopeAll===v?'on':''; b.setAttribute('aria-pressed', String(stageScopeAll===v)); b.onclick=()=>{ stageScopeAll=v; openOppDetail(o.id); }; sc.appendChild(b); });
         box.appendChild(sc);
       }
-      const track=document.createElement('div'); track.className='opp-stage-track';
+      box.appendChild(buildStageTrack(many&&stageScopeAll?batch:[o], key=>{
+        const targets=many&&stageScopeAll?batch:[o];
+        targets.forEach(x=>{ if(x.stage!==key) setOppStage(x, key); });
+        openOppDetail(o.id);
+      }));
       const cur=stageIndex(o.stage);
-      PIPE_PHASES.filter(p=>p.key!=='prequal').forEach(ph=>{
-        const g=document.createElement('div'); g.className='opp-phase';
-        const h=document.createElement('div'); h.className='opp-phase-h'; h.textContent=ph.label; g.appendChild(h);
-        OPP_STAGES.filter(st=>st.phase===ph.key).forEach(st=>{
-          const i=stageIndex(st.key);
-          const row=document.createElement('button'); row.type='button';
-          row.className='opp-stage-step '+(isExited(o)?'upcoming':(i<cur?'done':(i===cur?'current':'upcoming')));
-          row.innerHTML=escapeHtml(st.label)+(st.who!=='Com'?' <span class="pipe-who">'+st.who+'</span>':'');
-          row.title=many&&stageScopeAll?'Placer les '+batch.length+' installations à cette étape':'Placer l\u2019installation à cette étape';
-          row.onclick=()=>{
-            const targets=many&&stageScopeAll?batch:[o];
-            if(targets.every(x=>x.stage===st.key)) return;
-            targets.forEach(x=>{ if(x.stage!==st.key) setOppStage(x, st.key); });
-            openOppDetail(o.id);
-          };
-          g.appendChild(row);
-        });
-        track.appendChild(g);
-      });
-      box.appendChild(track);
       if(o.stage==='onboarding'){
         const ob=document.createElement('div'); ob.className='opp-onb';
         const h=document.createElement('div'); h.className='opp-phase-h'; h.textContent='Onboarding'; ob.appendChild(h);
@@ -4480,6 +4464,27 @@
     const techs=[...new Set(list.map(x=>x.install).filter(Boolean))].join(' + ');
     return [list.length+' installation'+(list.length>1?'s':''), kwc?fmtKwc(kwc):'', techs, mwh?Math.round(mwh).toLocaleString('fr-FR')+' MWh/an':''].filter(Boolean).join(' · ');
   }
+  // the steps of the pipeline as a clickable track; for several installations, the number at each step
+  function buildStageTrack(list, onPick){
+    const track=document.createElement('div'); track.className='opp-stage-track';
+    const idx=list.filter(x=>!isExited(x)).map(x=>stageIndex(x.stage)).filter(i=>i>=0), lo=idx.length?Math.min(...idx):-1;
+    const allOut=list.every(isExited);
+    PIPE_PHASES.filter(p=>p.key!=='prequal').forEach(ph=>{
+      const g=document.createElement('div'); g.className='opp-phase';
+      const h=document.createElement('div'); h.className='opp-phase-h'; h.textContent=ph.label; g.appendChild(h);
+      OPP_STAGES.filter(st=>st.phase===ph.key).forEach(st=>{
+        const i=stageIndex(st.key), n=list.filter(x=>x.stage===st.key).length;
+        const row=document.createElement('button'); row.type='button';
+        row.className='opp-stage-step '+(allOut?'upcoming':(n?'current':(i<lo?'done':'upcoming')));
+        row.innerHTML=escapeHtml(st.label)+(st.who!=='Com'?' <span class="pipe-who">'+st.who+'</span>':'')+(list.length>1&&n?' <span class="stage-n">'+n+'</span>':'');
+        row.title=list.length>1?'Placer les '+list.length+' installations à cette étape':'Placer l\u2019installation à cette étape';
+        row.onclick=()=>{ if(list.every(x=>x.stage===st.key)) return; onPick(st.key); };
+        g.appendChild(row);
+      });
+      track.appendChild(g);
+    });
+    return track;
+  }
   let stageScopeAll=true;   // a stage chosen in an installation's sheet applies to all the installations of its request
   function setOppStage(o, key){
     const prev=stageIndex(o.stage), next=stageIndex(key), today=toISO(new Date());
@@ -4556,36 +4561,45 @@
     $('opp-detail-sum').textContent=oppSummary(requestInstalls(reqId).filter(x=>!isExited(x)));
     $('opp-detail-edit').hidden=true;   // a pricing request: each installation has its own « Modifier la fiche »
     const box=$('opp-detail-body'); box.innerHTML='';
-    const ul=document.createElement('div'); ul.className='opp-req-list';
-    list.forEach(o=>{
-      const r=document.createElement('div'); r.className='pipe-req-line';
-      const n=document.createElement('span'); n.className='pipe-req-name req-line-name'; n.innerHTML='<b></b><span></span>'; n.firstChild.textContent=oppName(o); n.lastChild.textContent=instLineInfo(o);
-      n.onclick=()=>openOppDetail(o.id);
-      r.appendChild(n); r.appendChild(stageChip(o));
-      const rm=document.createElement('button'); rm.type='button'; rm.className='pq-link'; rm.textContent='Retirer';
-      rm.onclick=()=>{ o.requestId=null; touchCrm(o); saveCrm(); renderPipeline(); openRequestDetail(reqId); };
-      r.appendChild(rm);
-      ul.appendChild(r);
-    });
-    box.appendChild(ul);
     const liveReq=list.filter(o=>!isExited(o));
-    if(liveReq.length>1){
-      const row=document.createElement('div'); row.className='req-stage-all';
-      const lab=document.createElement('label'); lab.htmlFor='req-stage-all'; lab.textContent='Passer toutes les installations à l\u2019étape';
-      const sel=document.createElement('select'); sel.id='req-stage-all';
-      sel.innerHTML='<option value="">—</option>'+PIPE_PHASES.filter(p=>p.key!=='prequal').map(p=>'<optgroup label="'+escapeHtml(p.label)+'">'+OPP_STAGES.filter(s=>s.phase===p.key).map(s=>'<option value="'+s.key+'">'+escapeHtml(s.label)+'</option>').join('')+'</optgroup>').join('');
-      const same=liveReq.every(o=>o.stage===liveReq[0].stage); if(same) sel.value=liveReq[0].stage;
-      sel.onchange=()=>{ if(!sel.value) return; liveReq.forEach(o=>{ if(o.stage!==sel.value) setOppStage(o, sel.value); }); openRequestDetail(reqId); };
-      row.append(lab, sel); box.appendChild(row);
-    }
-    if(list.length>1) box.appendChild(buildRequestCompare(list, null));
+    // key figures, as on an installation's sheet
+    const num=v=>pqNum(String(v||''))||0, kwc=liveReq.reduce((s,x)=>s+num(x.kwc),0), mwh=liveReq.reduce((s,x)=>s+num(x.mwh),0);
+    const mes=[...new Set(liveReq.map(x=>x.mesEff||x.mesPrev).filter(Boolean))].map(m=>({ m, d:pqDateOf(m) })).filter(x=>x.d).sort((a,b)=>a.d-b.d);
+    const stages=[...new Set(liveReq.map(x=>x.stage))];
+    const facts=document.createElement('div'); facts.className='os-facts';
+    [['Installations',String(liveReq.length)+(list.length>liveReq.length?' (+'+(list.length-liveReq.length)+' sorties)':'')],['Puissance totale',kwc?fmtKwc(kwc):''],['Volume total',mwh?Math.round(mwh).toLocaleString('fr-FR')+' MWh':''],
+     ['Mise en service',mes.length?(mes.length>1?mes[0].m+' → '+mes[mes.length-1].m:mes[0].m):''],['Étape',stages.length===1?stageLabel(stages[0]):(stages.length?stages.length+' étapes':'')]]
+      .forEach(([l,v])=>{ const d=document.createElement('div'); d.className='os-fact'+(v?'':' empty'); d.innerHTML='<span></span><b></b>'; d.firstChild.textContent=l; d.lastChild.textContent=v||'à compléter'; facts.appendChild(d); });
+    box.appendChild(facts);
+    // the installations, one line each
+    const card=document.createElement('section'); card.className='os-card req-insts';
+    card.innerHTML='<h4>Installations</h4>';
+    list.forEach((o,i)=>{
+      const r=document.createElement('div'); r.className='req-inst'+(isExited(o)?' out':'');
+      r.innerHTML='<span class="n"></span><button type="button" class="req-inst-name"><b></b><span></span></button>';
+      r.querySelector('.n').textContent=String(i+1); r.querySelector('b').textContent=oppName(o); r.querySelector('.req-inst-name span').textContent=instLineInfo(o);
+      r.querySelector('.req-inst-name').onclick=()=>openOppDetail(o.id);
+      r.appendChild(stageChip(o));
+      const rm=document.createElement('button'); rm.type='button'; rm.className='req-inst-rm'; rm.title='Retirer de la demande (l\u2019installation reste dans le pipeline)'; rm.setAttribute('aria-label','Retirer '+oppName(o)+' de la demande'); rm.textContent='✕';
+      rm.onclick=()=>{ o.requestId=null; touchCrm(o); saveCrm(); renderPipeline(); openRequestDetail(reqId); };
+      r.appendChild(rm); card.appendChild(r);
+    });
     const candidates=opportunities.filter(o=>!o.deleted && o.kind==='installation' && !o.requestId && o.company===req.company && !isExited(o));
     if(candidates.length){
       const sel=document.createElement('select'); sel.className='opp-req-add';
       sel.innerHTML='<option value="">+ Ajouter une installation de '+escapeHtml(req.company)+'…</option>'+candidates.map(o=>'<option value="'+o.id+'">'+escapeHtml(oppName(o))+'</option>').join('');
       sel.onchange=()=>{ const o=opportunities.find(x=>x.id===sel.value); if(o){ o.requestId=reqId; touchCrm(o); saveCrm(); renderPipeline(); openRequestDetail(reqId); } };
-      box.appendChild(sel);
+      card.appendChild(sel);
     }
+    box.appendChild(card);
+    // the same step track as an installation, for all of them at once
+    if(liveReq.length){
+      const sh=document.createElement('div'); sh.className='stage-scope'; sh.innerHTML='<span></span>';
+      sh.firstChild.textContent=liveReq.length>1?'Étape des '+liveReq.length+' installations (un clic les place toutes à l\u2019étape)':'Étape de l\u2019installation';
+      box.appendChild(sh);
+      box.appendChild(buildStageTrack(liveReq, key=>{ liveReq.forEach(o=>{ if(o.stage!==key) setOppStage(o, key); }); openRequestDetail(reqId); }));
+    }
+    if(list.length>1) box.appendChild(buildRequestCompare(list, null));
     const mailBox=document.createElement('div'); mailBox.className='opp-mail';
     const ml=pricingMail(req, list);
     mailBox.innerHTML='<div class="opp-phase-h">Mail de demande de pricing</div>';
