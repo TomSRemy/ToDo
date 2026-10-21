@@ -3793,13 +3793,14 @@
     }
     if(f.k==='debut' && scope!=='s'){
       const inst=pqState.installs[+scope]||{}, mes=pqFullDate(inst.mesEff||inst.mesPrev), y=new Date().getFullYear();
-      extra='<div class="pq-dchips">'+(mes?'<button type="button" data-dset="debut" data-v="'+mes+'" data-s="'+scope+'">À la MES ('+mes+')</button>':'')
-        +[y+1,y+2].map(Y=>'<button type="button" data-dset="debut" data-v="01/01/'+Y+'" data-s="'+scope+'">1er janv. '+Y+'</button>').join('')
-        +(pqState.installs.length>1?'<button type="button" class="all" data-dall="mes" data-s="'+scope+'">Toutes à leur MES</button>':'')+'</div>';
+      extra='<div class="pq-dchips">'+(mes?'<button type="button" data-dset="debut" data-v="'+mes+'" data-s="'+scope+'" title="Début à la mise en service ('+mes+')">MES</button>':'')
+        +[y+1,y+2].map(Y=>'<button type="button" data-dset="debut" data-v="01/01/'+Y+'" data-s="'+scope+'" title="1er janvier '+Y+'">1/1/'+String(Y).slice(2)+'</button>').join('')
+        +(pqState.installs.length>1?'<button type="button" class="all" data-dall="mes" data-s="'+scope+'" title="Chaque installation démarre à sa propre mise en service">toutes : MES</button>':'')+'</div>';
     }
-    if(f.k==='duree' && scope!=='s') extra='<div class="pq-dchips">'+[1,2,3,5].map(n=>'<button type="button" data-dset="duree" data-v="'+n+'" data-s="'+scope+'">'+n+' an'+(n>1?'s':'')+'</button>').join('')
-      +(pqState.installs.length>1?'<button type="button" class="all" data-dall="same" data-s="'+scope+'" title="Même début, même durée et même fin pour toutes les installations">Appliquer à toutes</button>':'')+'</div>';
-    return '<div class="pq-f'+(f.wide?' wide':'')+(auto?' auto':'')+(empty?' empty':'')+'"><label for="'+id+'">'+escapeHtml(f.label)+' <span class="pq-col">'+f.col+'</span></label>'+input+extra+'</div>';
+    if(f.k==='duree' && scope!=='s') extra='<div class="pq-dchips">'+[1,2,3,5].map(n=>'<button type="button" data-dset="duree" data-v="'+n+'" data-s="'+scope+'" title="'+n+' an'+(n>1?'s':'')+'">'+n+'a</button>').join('')+'</div>';
+    const toAll=scope!=='s' && pqState.installs.length>1 && f.type!=='computed'
+      ?'<button type="button" class="pq-toall" data-toall="'+f.k+'" data-s="'+scope+'" title="Mettre cette valeur sur toutes les installations'+(['debut','fin','duree'].includes(f.k)?' (début, durée et fin)':'')+'">→ toutes</button>':'';
+    return '<div class="pq-f'+(f.wide?' wide':'')+(auto?' auto':'')+(empty?' empty':'')+'"><label for="'+id+'">'+escapeHtml(f.label)+' <span class="pq-col">'+f.col+'</span>'+toAll+'</label>'+input+extra+'</div>';
   }
   // ---------- Contract dates: start + duration → end, start + end → duration, end + duration → start ----------
   // « mars 2027 » / « 2027 » become dd/mm/yyyy; a computed date shows in green and can still be typed over.
@@ -3820,6 +3821,7 @@
     else { if(d && n>0) endFrom(); else if(d && f && f>d) durFrom(); }
   }
 
+  function flashPqToAll(k){ document.querySelectorAll('#pq-form [data-k="'+k+'"]').forEach(el=>{ const f=el.closest('.pq-f'); if(f){ f.classList.remove('flash'); void f.offsetWidth; f.classList.add('flash'); } }); }
   function pqIsEmpty(f, scope){
     const src=scope==='s'?pqState.shared:pqState.installs[+scope]||{};
     if(f.k==='tel'||f.k==='mail') return !pqState.shared.tel && !pqState.shared.mail;
@@ -5705,6 +5707,13 @@
   $('pq-form').addEventListener('change', e=>{ if(e.target.id==='pq-count-ok' && pqState){ pqState.countConfirmed=e.target.checked?pqState.installs.length:null; } });
   $('pq-form').addEventListener('click', e=>{
     if(!pqState) return;
+    const ta=e.target.closest('[data-toall]'); if(ta){
+      // one field of one installation onto all the others (dates go as a set: start, duration, end)
+      e.preventDefault();
+      const st=pqState, from=st.installs[+ta.dataset.s], k=ta.dataset.toall, keys=['debut','fin','duree'].includes(k)?['debut','duree','fin']:(k==='dept'?['dept','region']:[k]);
+      st.installs.forEach((x,i)=>{ if(x===from) return; keys.forEach(kk=>{ x[kk]=from[kk]; if(from[kk]!=null && from[kk]!==''){ st.touched.add(i+'.'+kk); st.auto.delete(i+'.'+kk); } }); });
+      pqRerenderKeepFocus(); flashPqToAll(ta.dataset.toall); return;
+    }
     const da=e.target.closest('[data-dall]'); if(da){
       // every installation: its own commissioning date as start (with the duration shown here), or the same dates as this one
       const st=pqState, from=st.installs[+da.dataset.s];

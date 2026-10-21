@@ -582,7 +582,7 @@ with sync_playwright() as p:
     page, errors = new_page(browser, viewport={"width": 1300, "height": 900})
     page.goto(URL); page.click('[data-tab="pipeline"]'); page.click("#opp-add-btn"); page.fill("#pq1-company", "SCEA DATES"); page.click("#pq-next-btn")
     page.fill("#pq-0-mesPrev", "20/07/2027"); page.locator("#pq-0-mesPrev").dispatch_event("change")
-    page.click("#pq-form button[data-dset='debut']:has-text('À la MES')")
+    page.click("#pq-form button[data-dset='debut']:has-text('MES')")
     page.click("#pq-form [data-dset='duree'][data-v='3']")
     check(page.input_value("#pq-0-debut") == "20/07/2027" and page.input_value("#pq-0-fin") == "19/07/2030", f"dates: start at commissioning + 3 years → end the day before ({page.input_value('#pq-0-fin')})")
     page.fill("#pq-0-fin", "31/12/2031"); page.locator("#pq-0-fin").dispatch_event("change")
@@ -594,11 +594,13 @@ with sync_playwright() as p:
     page.click("#pq-add-inst"); page.click("#pq-add-inst")
     page.fill("#pq-1-mesPrev", "01/03/2028"); page.locator("#pq-1-mesPrev").dispatch_event("change")
     page.fill("#pq-0-duree", "5"); page.locator("#pq-0-duree").dispatch_event("change")
-    page.click("#pq-form button[data-dall='same'][data-s='0']")
+    page.click("#pq-form button[data-toall='duree'][data-s='0']")
     page.click("#pq-form button[data-dall='mes'][data-s='0']")
     got = [[page.input_value(f"#pq-{i}-{k}") for k in ("debut", "duree", "fin")] for i in range(3)]
     check(got[0] == ["20/07/2027", "5", "19/07/2032"] and got[1] == ["01/03/2028", "5", "28/02/2033"] and got[2] == ["01/01/2028", "5", "31/12/2032"],
           f"dates: same duration for all, then each plant at its own commissioning date ({got})")
+    page.select_option("#pq-0-contrat", "AOS CRE"); page.click("#pq-form button[data-toall='contrat'][data-s='0']")
+    check([page.input_value(f"#pq-{i}-contrat") for i in range(3)] == ["AOS CRE"] * 3, "« → toutes » puts any field of an installation on all the others")
     check(not errors, f"no page errors ({errors})")
     page.close()
 
