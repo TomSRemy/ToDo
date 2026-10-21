@@ -550,7 +550,9 @@
 
   #tab-pipeline{ overflow-y:auto; }
   #pipeline-board{ display:flex; gap:10px; padding:14px; overflow-x:auto; align-items:flex-start; }
-  .pipe-col{ flex:1 1 0; min-width:165px; max-width:280px; background:var(--panel-2); border-radius:8px; padding:8px; }
+  .pipe-col{ flex:1 1 0; min-width:200px; max-width:340px; background:var(--panel-2); border-radius:8px; padding:8px; }
+  .pipe-col.empty{ flex:0 0 auto; min-width:0; width:118px; }
+  .pipe-req-kwc{ font-family:var(--font-mono); font-size:9.5px; color:var(--tx3); white-space:nowrap; }
   .pipe-col-head{ font-family:var(--font-mono); font-size:9.5px; color:var(--tx3); text-transform:uppercase; letter-spacing:.4px; padding:4px 4px 8px; display:flex; justify-content:space-between; gap:6px; }
   .pipe-col.lost{ background:transparent; border:1px dashed var(--bd); }
   .pipe-empty{ color:var(--tx3); font-size:11px; padding:2px 6px 6px; opacity:.6; }
@@ -1516,3 +1518,12 @@ select.req-in{ cursor:pointer; }
 tbody.req-sec.folded tr:not(.req-sub){ display:none; }
 tbody.req-sec.folded .req-sec-h::before{ transform:rotate(-90deg); }
 .pq-toall.go.clear{ background:var(--panel-2); color:var(--accent); }
+
+/* E1: with the note open, every list keeps room at the bottom so that nothing stays hidden under it */
+body.postit-open #task-list, body.postit-open #tab-today, body.postit-open #pipeline-board, body.postit-open #tab-contacts, body.postit-open #tab-archive,
+body.postit-open #tab-parc, body.postit-open #tab-lists, body.postit-open #tab-inbox{ padding-bottom:300px; }
+html.lite body.postit-open #task-list, html.lite body.postit-open .tab-panel{ padding-bottom:0; }
+/* E7: on the phone, small controls get a finger-sized touch area (the drawing does not change) */
+html.lite .task-check, html.lite .subtask-arrow, html.lite .contact-meta button, html.lite .ct-dupes-banner .pq-link{ position:relative; }
+html.lite .task-check::after, html.lite .subtask-arrow::after, html.lite .contact-meta button::after, html.lite .ct-dupes-banner .pq-link::after{ content:''; position:absolute; inset:-8px; }
+html.lite .pipe-col.empty{ width:100%; }

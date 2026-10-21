@@ -327,7 +327,7 @@
   // Field labels shown in the conflict list, per entity type.
   const CONFLICT_ENTITY_LABELS={
     task:{ name:t=>t.title, fields:{title:'Titre',description:'Description',client:'Client',project:'Projet',urgency:'Urgence',status:'Statut',due:'Échéance'} },
-    company:{ name:c=>c.name, fields:{whatTheyDo:'Activité',website:'Site web',marketScope:'Périmètre',type:'Type',relevance:'Note'} },
+    company:{ name:c=>c.name, fields:{whatTheyDo:'Activité',website:'Site web',marketScope:'Périmètre',type:'Type',relevance:'Pertinence'} },
     contact:{ name:c=>[c.firstName,c.lastName].filter(Boolean).join(' ')||'(sans nom)', fields:{firstName:'Prénom',lastName:'Nom',role:'Rôle',company:'Société',email:'Email',phone1:'Téléphone 1',phone2:'Téléphone 2',relevance:'Pertinence',comment:'Commentaire'} },
     meeting:{ name:m=>m.label, fields:{label:'Intitulé',date:'Date'} },
     opportunity:{ name:o=>o.title, fields:{title:'Intitulé',company:'Société',stage:'Étape'} },
@@ -1084,11 +1084,13 @@
     grid.appendChild(titleWrap);
 
     const clientTag=t.client ? makeTag(t.client, clientColor(t.client), 'dot') : makeTag('+ Client', '#6B7480');
+    if(t.client) clientTag.title=t.client;   // the full name when the chip is cut
     clientTag.style.cursor='pointer'; clientTag.title='Cliquer pour changer le client';
     clientTag.onclick=e=>openInlineFieldPopover(e, t, 'client', clientsList, clientColor);
     grid.appendChild(clientTag);
 
     const projectTag=t.project ? makeTag(t.project, projectColor(t.project), 'flag') : makeTag('+ Projet', '#6B7480');
+    if(t.project) projectTag.title=t.project;
     projectTag.style.cursor='pointer'; projectTag.title='Cliquer pour changer le projet';
     projectTag.onclick=e=>openInlineFieldPopover(e, t, 'project', projectsList, projectColor);
     grid.appendChild(projectTag);
@@ -1531,6 +1533,7 @@
     if(!postitEl) return;
     if(!open) flushPostit();
     postitEl.classList.toggle('hidden', !open);
+    document.body.classList.toggle('postit-open', !!open);   // the lists get room at the bottom: their last lines scroll above the note
     postitTabEl.classList.toggle('hidden', open);
     try{ localStorage.setItem('postit-open', open?'1':'0'); }catch(e){}
     if(open){ clampPostit(); if(focus) setTimeout(()=>{ postitShowEditor(); postitTextEl.focus(); const l=postitTextEl.value.length; postitTextEl.setSelectionRange(l,l); },0); }
@@ -3692,7 +3695,7 @@
         }
         done.add(o.id); col.appendChild(buildPipeCard(o));
       });
-      if(!inPhase.length){ const e=document.createElement('div'); e.className='pipe-empty'; e.textContent='—'; col.appendChild(e); }
+      if(!inPhase.length){ const e=document.createElement('div'); e.className='pipe-empty'; e.textContent='—'; col.appendChild(e); col.classList.add('empty'); }   // empty columns stay narrow
       board.appendChild(col);
     });
     if(pipeShowExited && exited.length){
@@ -3769,10 +3772,13 @@
     const c=document.createElement('div'); c.className='pipe-card-company'; c.style.color=clientColor(company); c.textContent=company;
     const t=document.createElement('div'); t.className='pipe-card-title'; t.textContent=(req.title||'Demande de pricing')+' · '+group.length+' installations';
     card.appendChild(c); card.appendChild(t);
+    const same=group.every(o=>o.stage===group[0].stage);
+    if(same){ const m=document.createElement('div'); m.className='pipe-card-meta'; m.appendChild(stageChip(group[0])); card.appendChild(m); }
     group.forEach(o=>{
       const r=document.createElement('div'); r.className='pipe-req-line';
-      const n=document.createElement('span'); n.className='pipe-req-name'; n.textContent=oppName(o);
-      r.appendChild(n); r.appendChild(stageChip(o));
+      const n=document.createElement('span'); n.className='pipe-req-name'; n.textContent=oppName(o); n.title=[oppName(o), fmtKwc(o.kwc), stageLabel(o.stage)].filter(Boolean).join(' · ');
+      r.appendChild(n);
+      if(same){ const k=document.createElement('span'); k.className='pipe-req-kwc'; k.textContent=fmtKwc(o.kwc); r.appendChild(k); } else r.appendChild(stageChip(o));
       r.onclick=e=>{ e.stopPropagation(); openOppDetail(o.id); };
       card.appendChild(r);
     });
