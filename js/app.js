@@ -2757,6 +2757,59 @@
     return res;
   }
 
+  // Everyone of a document: each sender of a mail thread with their signature, people in To/Cc, the signature of a
+  // pasted reply. Colleagues and bank relays are left out. Merged by address; senders first.
+  function pqSplitDisplayName(s){
+    const t=String(s||'').replace(/["'\[\]()]/g,' ').replace(PQ_CIVILITY,'').replace(/\s+/g,' ').trim();
+    if(!t || /@/.test(t) || PQ_NOT_NAME.test(t)) return null;
+    const w=t.split(' '); if(w.length<2 || w.length>4) return null;
+    const caps=x=>x.length>1 && x===x.toUpperCase() && /[A-Z]/.test(pqFold(x).toUpperCase());
+    if(caps(w[0]) && !caps(w[w.length-1])) return { prenom:pqTitleCase(w.slice(1).join(' ')), nom:w[0].toUpperCase() };
+    return { prenom:pqTitleCase(w.slice(0,-1).join(' ')), nom:w[w.length-1].toUpperCase() };
+  }
+  const PQ_ROBOT=/^(no-?reply|ne-?pas-?repondre|notification|mailer-daemon|postmaster)@/i;
+  function pqDetectPeople(raw){
+    const text=String(raw||'').replace(/\r/g,'').replace(/\u00a0/g,' ').replace(/<(mailto|tel):[^>]*>/gi,'').replace(/^[ \t]*(>[ \t]?)+/gm,'');
+    const lines=text.split('\n').map(l=>l.trim()); if(!text.trim()) return [];
+    const blocks=[]; let cur={ from:null, lines:[], to:[] };
+    lines.forEach(l=>{
+      const m=/^(de|from)\s*:\s*(.*)$/i.exec(l)||/^(le|on)\s.{6,120}?(<?[\w.+-]+@[\w.-]+>?).{0,40}(a [ée]crit|wrote)\s*:?\s*$/i.exec(l);
+      if(m){ if(cur.lines.length||cur.from) blocks.push(cur); cur={ from:/^(de|from)$/i.test(m[1])?m[2]:l, lines:[], to:[] }; return; }
+      const r=/^(à|a|to|cc|cci|bcc)\s*:\s*(.+)$/i.exec(l); if(r){ cur.to.push(r[2]); return; }
+      cur.lines.push(l);
+    });
+    blocks.push(cur);
+    const people=new Map();
+    const ok=mail=>mail && !pqIsRelay(mail) && !PQ_ROBOT.test(mail);
+    const add=(p, sender)=>{
+      const mail=(p.mail||'').toLowerCase(); if(mail && !ok(mail)) return;
+      if(!mail && !(p.prenom && p.nom)) return;
+      const key=mail||pqFold(p.prenom+' '+p.nom), was=people.get(key)||{ prenom:'', nom:'', qualite:'', tel:'', tel2:'', mail, sender:false };
+      ['prenom','nom','qualite','tel','tel2'].forEach(k=>{ if(!was[k] && p[k]) was[k]=p[k]; });
+      was.sender=was.sender||sender; people.set(key, was);
+    };
+    blocks.forEach((b,bi)=>{
+      const email=(((b.from||'').match(PQ_EMAIL_RE)||[])[0]||'').toLowerCase();
+      const body=b.lines.filter(l=>l && !PQ_HEADER.test(l));
+      let sigStart=-1; body.forEach((l,i)=>{ if(PQ_CLOSINGS.test(l)) sigStart=i; });
+      const sigLines=(sigStart>=0?body.slice(sigStart+1):body.slice(-8)).filter(l=>!/message d.origine|original message|forwarded message/i.test(l)).slice(0,10);
+      const sig=sigLines.length?parseSignatureBlock(sigLines.join('\n'), email?{ mail:email }:{}):{};
+      const sigMail=(sig.mail||'').toLowerCase();
+      if(email && ok(email)){
+        const dn=pqSplitDisplayName((b.from||'').replace(/<.*?>/,'').replace(PQ_EMAIL_RE,''));
+        const sigIsHim=!sigMail || sigMail===email;
+        add({ prenom:(sigIsHim&&sig.prenom)||(dn&&dn.prenom)||'', nom:(sigIsHim&&sig.nom)||(dn&&dn.nom)||'', qualite:sigIsHim?sig.qualite:'', tel:sigIsHim?sig.tel:'', tel2:sigIsHim?sig.tel2:'', mail:email }, true);
+      } else if(!b.from && bi===0 && sigMail && ok(sigMail) && (sig.prenom||sig.nom)){
+        add({ prenom:sig.prenom, nom:sig.nom, qualite:sig.qualite, tel:sig.tel, tel2:sig.tel2, mail:sigMail }, true);   // a reply pasted without its header
+      }
+      b.to.forEach(list=>list.split(/[;,](?![^<]*>)/).forEach(part=>{
+        const mail=((part.match(PQ_EMAIL_RE)||[])[0]||'').toLowerCase(); if(!mail) return;
+        const dn=pqSplitDisplayName(part.replace(/<.*?>/,'').replace(PQ_EMAIL_RE,''));
+        add({ prenom:dn?dn.prenom:'', nom:dn?dn.nom:'', mail }, false);
+      }));
+    });
+    return [...people.values()].sort((a,b)=>(b.sender?1:0)-(a.sender?1:0));
+  }
   function parsePipeMail(raw){
     const out={};
     // clean-up: "<mailto:…>" / "<tel:…>" copies left by Outlook, "> " quote marks of plain-text replies
@@ -2847,7 +2900,10 @@
     }
     if(name){ const n=pqSplitName(name); out.prenom=n.prenom; out.nom=n.nom; }
     if(role) out.qualite=role.replace(/\s*[-–|,]\s*$/,'');
-    const scope=prospect?bodyText:text;
+    // figures: the prospect's message first, then the other messages of the producer's side in the thread (a later reply
+    // often brings the power or the volume)
+    const sideText=prospect?blocks.filter(b=>b!==prospect && b.email && !b.relay).map(b=>b.lines.filter(l=>!PQ_HEADER.test(l)).join('\n')):[];
+    const scope=prospect?[bodyText].concat(sideText).join('\n'):text;
     if(!company) company=pqCompanyInText(prospect?bodyText:lines.filter(l=>!(caPerson && l.includes(caPerson))).join('\n'));
     if(!company){ const m=/\b(?:société|societe|entreprise|ferme|exploitation|commune de|ville de)\s+([A-Z][\p{L}'&.\- ]{2,40})/u.exec(scope); if(m) company=(/^(commune|ville)/i.test(m[0])?m[0]:m[1]).trim(); }
     if(!company && out.mail && !PQ_GENERIC_DOMAINS.test(out.mail.split('@')[1]||'')){
@@ -3820,7 +3876,58 @@
     $('pq-mail-warning').hidden=!listOnly;
     const text=[pasted, files.text].filter(Boolean).join('\n\n');
     pqState.hints=pqPlantHints(text);
-    pqApply(parsePipeMail(text), files.installs.length?files.installs:parseMailInstallations(text));
+    const parsed=parsePipeMail(text), installs=files.installs.length?files.installs:parseMailInstallations(text);
+    pqState.detected=pqDetectPeople(text).map(p=>({ v:p, on:p.sender }));
+    pqApply(parsed, installs);
+    pqDetectBox(parsed, installs);
+  }
+  // « Ce que j'ai trouvé » : producer, plants and people of the documents; each person can be linked or not, and made
+  // the main contact. Known contacts are recognised (same mail, or same name in the same company).
+  function pqKnownPerson(v){
+    const mail=(v.mail||'').toLowerCase();
+    return contacts.find(c=>!c.deleted && ((mail && (c.email||'').toLowerCase()===mail) || (v.prenom && v.nom && pqFold(c.firstName)===pqFold(v.prenom) && pqFold(c.lastName)===pqFold(v.nom))))||null;
+  }
+  const pqIsMain=v=>{ const s=pqState.shared, m=(s.mail||'').toLowerCase(); return (m && m===(v.mail||'').toLowerCase()) || (v.prenom && pqFold(v.prenom+' '+v.nom)===pqFold((s.prenom||'')+' '+(s.nom||''))); };
+  function pqDetectBox(parsed, installs){
+    const box=$('pq-detect'); if(!box) return;
+    const st=pqState, people=st.detected||[];
+    if(!people.length && !(installs&&installs.length) && !parsed.producteur){ box.hidden=true; box.innerHTML=''; return; }
+    box.hidden=false;
+    const plants=(installs&&installs.length)?installs:((parsed.kwc||parsed.centrale)?[{ centrale:parsed.centrale, kwc:parsed.kwc }]:[]);   // one plant described in the mail itself
+    let html='<div class="pq-detect-h">Ce que j\u2019ai trouvé</div><ul class="pq-detect-sum">';
+    if(parsed.producteur) html+='<li><b>Producteur</b> '+escapeHtml(parsed.producteur)+'</li>';
+    html+='<li><b>'+plants.length+' installation'+(plants.length>1?'s':'')+'</b>'+(plants.length?' : '+plants.map(p=>escapeHtml([p.centrale||'(sans nom)', p.kwc?fmtKwc(p.kwc):''].filter(Boolean).join(' '))).join(' · '):'')+'</li>';
+    html+='<li><b>'+people.length+' contact'+(people.length>1?'s':'')+'</b>'+(people.length?' — coche ceux à lier, ★ = contact principal':'')+'</li></ul>';
+    box.innerHTML=html;
+    if(people.length){
+      const list=document.createElement('div'); list.className='pq-detect-people';
+      people.forEach((d,i)=>{
+        const known=pqKnownPerson(d.v), main=pqIsMain(d.v);
+        const r=document.createElement('div'); r.className='pq-person'+(main?' main':'');
+        r.innerHTML='<input type="checkbox" id="pq-det-'+i+'"'+(d.on||main?' checked':'')+(main?' disabled':'')+'><label for="pq-det-'+i+'"><b></b><span></span></label><button type="button" class="pq-star" title="En faire le contact principal" aria-label="En faire le contact principal">★</button><em></em>';
+        r.querySelector('b').textContent=[d.v.prenom,d.v.nom].filter(Boolean).join(' ')||d.v.mail;
+        r.querySelector('label span').textContent=[d.v.qualite, d.v.tel, d.v.mail].filter(Boolean).join(' · ');
+        r.querySelector('em').textContent=main?'principal':known?'déjà dans tes contacts':'nouveau';
+        r.querySelector('input').onchange=e=>{ d.on=e.target.checked; };
+        r.querySelector('.pq-star').onclick=()=>{ pqMakeMain(d.v); d.on=true; pqDetectBox(parsed, installs); };
+        list.appendChild(r);
+      });
+      box.appendChild(list);
+    }
+  }
+  // the chosen person becomes the main contact of the form; the previous one stays linked as another contact
+  function pqMakeMain(v){
+    const st=pqState, s=st.shared;
+    const prev={ prenom:s.prenom||'', nom:s.nom||'', qualite:s.qualite||'', tel:s.tel||'', mail:(s.mail||'').toLowerCase() };
+    if((prev.prenom||prev.nom||prev.mail) && !(st.detected||[]).some(d=>pqIsMain(d.v) && (d.v.mail===prev.mail || pqFold(d.v.prenom+d.v.nom)===pqFold(prev.prenom+prev.nom)))) (st.detected=st.detected||[]).push({ v:prev, on:true });
+    else (st.detected||[]).forEach(d=>{ if(pqIsMain(d.v)) d.on=true; });
+    const tel=[v.tel,v.tel2].filter(Boolean).join(' / ');
+    [['prenom',v.prenom],['nom',v.nom],['qualite',v.qualite],['tel',tel],['mail',v.mail]].forEach(([k,x])=>{ s[k]=x||''; st.touched.add('s.'+k); st.auto.delete('s.'+k); });
+    pqRender();
+  }
+  // at saving: the ticked people (except the main contact) are created if new and linked to the opportunity
+  function pqDetectedIds(company){
+    return (pqState.detected||[]).filter(d=>d.on && !pqIsMain(d.v)).map(d=>{ const v=Object.assign({}, d.v, { tel:[d.v.tel,d.v.tel2].filter(Boolean).join(' / ') }); const c=ensureContact(v, company); return c&&c.id; }).filter(Boolean);
   }
   async function pqHandleFiles(fileList){
     const files=[...fileList]; if(!files.length) return;
@@ -3874,6 +3981,8 @@
       // producer and contact columns are shared by the installations of a request
       if(o.requestId) requestInstalls(o.requestId).forEach(x=>{ if(x.id===o.id) return; PQ_SHARED_KEYS.filter(k=>!['action','relance','commentaires','rdv1','rdv2','cr1','cr2','dateOffre','nature','qualification'].includes(k)).forEach(k=>{ x[k]=v[k]; }); x.company=company; touchCrm(x); });
       const mc=ensureContact(v, company);
+      const detIds=pqDetectedIds(company).filter(id=>!mc || id!==mc.id);
+      if(detIds.length){ st.editOtherIds=[...new Set((st.editOtherIds||o.otherContactIds||[]).concat(detIds))]; }
       if(st.xlsOthers && st.xlsOthers.length && st.createOthers){
         if(!o.requestId){ const reqId=newOppId('req'); opportunities.push({ id:reqId, kind:'request', company, title:'Demande de pricing', createdAt:Date.now(), updatedAt:Date.now(), deleted:false }); o.requestId=reqId; touchCrm(o); }
         st.xlsOthers.forEach((p,i)=>{
@@ -3896,7 +4005,7 @@
     const company=ensureCompany(producteur);
     const mainContact=ensureContact(v, company);
     // other contacts: new ones are created in Contacts, existing ones linked
-    const otherIds=(st.extraContactIds||[]).concat((st.extraContacts||[]).map(x=>{ const c=ensureContact(x, company); return c&&c.id; }).filter(Boolean)).filter(id=>!mainContact || id!==mainContact.id);
+    const otherIds=(st.extraContactIds||[]).concat((st.extraContacts||[]).map(x=>{ const c=ensureContact(x, company); return c&&c.id; }).filter(Boolean)).concat(pqDetectedIds(company)).filter(id=>!mainContact || id!==mainContact.id);
     const startStage=$('pq-start-stage').value||'a_qualifier';
     let reqId=null;
     if(st.installs.length>1){

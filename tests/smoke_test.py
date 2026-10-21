@@ -709,6 +709,59 @@ with sync_playwright() as p:
     check(not errors, f"no page errors ({errors})")
     page.close()
 
+    # --- A mail thread with several people: all detected, ticked or not, any of them can become the main contact
+    thread = """De : Jean Martin <j.martin@exemple-solaire.fr>
+Envoyé : mardi 20 octobre 2026 10:12
+À : Paul Collègue <paul.collegue@selfee.fr>
+Cc : Sophie Durand <s.durand@exemple-solaire.fr>
+Objet : RE: Centrale de Villers
+
+Bonjour,
+Voici les éléments pour la centrale de Villers, 450 kWc.
+Cordialement,
+Jean MARTIN
+Gérant
+06 10 20 30 40
+
+De : Paul Collègue <paul.collegue@selfee.fr>
+Envoyé : lundi 19 octobre 2026 09:00
+À : Paul Bernard <p.bernard@exemple-solaire.fr>
+Objet : Centrale de Villers
+
+Bonjour, pouvez-vous m'envoyer les caractéristiques ?
+
+De : Paul Bernard <p.bernard@exemple-solaire.fr>
+Envoyé : vendredi 16 octobre 2026 17:40
+À : contact@selfee.fr
+Objet : Centrale de Villers
+
+Bonjour, nous cherchons un agrégateur pour notre centrale.
+Bien à vous,
+Paul BERNARD
+Responsable technique
+06 22 33 44 55
+"""
+    page, errors = new_page(browser, viewport={"width": 1300, "height": 900})
+    page.goto(URL); page.click('[data-tab="pipeline"]'); page.click("#opp-add-btn"); page.fill("#pq1-company", "EXEMPLE SOLAIRE"); page.click("#pq-next-btn")
+    page.fill("#pq-mail", thread); page.wait_for_selector("#pq-detect:not([hidden]) .pq-person", timeout=5000)
+    people = page.eval_on_selector_all("#pq-detect .pq-person", "els=>els.map(e=>[e.querySelector('b').textContent, e.querySelector('input').checked, e.querySelector('em').textContent])")
+    names = sorted(p[0] for p in people)
+    check(names == ["Jean MARTIN", "Paul BERNARD", "Sophie DURAND"] and dict((p[0], p[1]) for p in people)["Sophie DURAND"] is False
+          and all(p[1] for p in people if p[0] != "Sophie DURAND"), f"import: every person of the thread found, colleagues left out, people in copy not ticked ({people})")
+    check("1 installation" in page.inner_text("#pq-detect") and "450 kWc" in page.inner_text("#pq-detect"), "import: what was found is summed up (plants)")
+    page.locator("#pq-detect .pq-person", has_text="Sophie DURAND").locator(".pq-star").click()
+    check(page.input_value("#pq-s-prenom") == "Sophie" and page.input_value("#pq-s-nom") == "DURAND", "import: ★ makes a detected person the main contact")
+    page.fill("#pq-0-centrale", "Villers")
+    page.click("#pq-save-btn"); page.wait_for_timeout(300)
+    if page.is_visible("#pq-count-ok"): page.check("#pq-count-ok"); page.click("#pq-save-btn"); page.wait_for_timeout(300)
+    cts_now = {c["firstName"] + " " + c["lastName"]: c["id"] for c in stored(page, "todo-widget-contacts") if not c.get("deleted")}
+    opp = next(o for o in stored(page, "todo-widget-opportunities") if o.get("kind") == "installation")
+    linked = sorted(k for k, v in cts_now.items() if v in (opp.get("otherContactIds") or []))
+    check(sorted(cts_now) == ["Jean Martin", "Paul Bernard", "Sophie Durand"] and opp.get("nom") == "DURAND" and linked == ["Jean Martin", "Paul Bernard"],
+          f"import: the ticked people are created and linked, the main one in the Pipe columns ({sorted(cts_now)}, linked {linked})")
+    check(not errors, f"no page errors ({errors})")
+    page.close()
+
     # --- Editing one installation with a producer workbook of several plants (no plant names, SPV only, summer dates)
     wb = openpyxl.Workbook(); ws = wb.active; ws.title = "Données"
     for r in [["", "Centrale 1", "Centrale 2", "Centrale 3"], ["Nom Installation"], ["Nom SPV", "ALPHA PV1", "BETA PV1"], ["SIRET SPV", 12345678900011, 98765432100022],
