@@ -1100,6 +1100,12 @@ with sync_playwright() as p:
       window.todoCelebrate(k, {sub:'x'}, v); const el=document.querySelector('.celebrate'); r.push(el.dataset.variant===v && el.getBoundingClientRect().width===innerWidth && !!el.querySelector('.cx-msg b').textContent); }); return r; })()""")
     check(all(shown), f"animations: the nine play full screen with their message ({shown})")
     page.evaluate("document.querySelectorAll('.celebrate').forEach(n=>n.remove())")
+    sounds = page.evaluate("""new Promise(r=>{ const P=(window.BaseAudioContext||window.AudioContext).prototype, out={}; let n=0; const o=P.createOscillator, s=P.createBufferSource;
+      P.createOscillator=function(){ n++; return o.apply(this, arguments); }; P.createBufferSource=function(){ n++; return s.apply(this, arguments); };
+      const list=[['won','panel'],['won','turbine'],['won','battery'],['signed','gun'],['signed','gong'],['signed','champagne'],['lost','umbrella'],['lost','nowind'],['lost','plane']]; let i=0;
+      (function next(){ if(i>=list.length){ r(out); return; } const [k,v]=list[i++]; const before=n; window.todoCelebrate(k,{},v); setTimeout(()=>{ out[v]=n-before; next(); }, 2300); })(); })""")
+    check(all(x > 0 for x in sounds.values()), f"animations: each one makes a little sound ({sounds})")
+    page.evaluate("document.querySelectorAll('.celebrate').forEach(n=>n.remove())")
     check(not errors, f"no page errors ({errors})")
     page.close()
 

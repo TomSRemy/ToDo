@@ -164,6 +164,30 @@
     try{ const a=ctx(), t=a.currentTime, out=a.createGain(); out.gain.value=.18; out.connect(a.destination);
       [[2093,1,.9],[3136,.5,.6],[4186,.3,.4]].forEach(([f,v,d])=>{ const o=a.createOscillator(), g=a.createGain(); o.frequency.value=f; g.gain.setValueAtTime(v,t); g.gain.exponentialRampToValueAtTime(.0001,t+d); o.connect(g); g.connect(out); o.start(t); o.stop(t+d); }); }catch(e){}
   }
+  // small building blocks: a note (with an optional glide) and a burst of filtered noise
+  function tone(f, at, dur, opt){
+    try{ const o=opt||{}, a=ctx(), t=a.currentTime+at, osc=a.createOscillator(), g=a.createGain(); osc.type=o.type||'sine'; osc.frequency.setValueAtTime(f,t);
+      if(o.to) osc.frequency.exponentialRampToValueAtTime(o.to,t+dur); g.gain.setValueAtTime(0,t); g.gain.linearRampToValueAtTime(o.vol||.12,t+.012); g.gain.exponentialRampToValueAtTime(.0001,t+dur);
+      osc.connect(g); g.connect(a.destination); osc.start(t); osc.stop(t+dur+.02); }catch(e){}
+  }
+  function hiss(at, dur, opt){
+    try{ const o=opt||{}, a=ctx(), t=a.currentTime+at, len=Math.max(1,a.sampleRate*dur), nb=a.createBuffer(1,len,a.sampleRate), ch=nb.getChannelData(0); for(let i=0;i<len;i++) ch[i]=Math.random()*2-1;
+      const src=a.createBufferSource(), f=a.createBiquadFilter(), g=a.createGain(); src.buffer=nb; f.type=o.filter||'bandpass'; f.frequency.setValueAtTime(o.f||1200,t); if(o.fto) f.frequency.exponentialRampToValueAtTime(o.fto,t+dur); f.Q.value=o.q||1;
+      const v=o.vol||.1; g.gain.setValueAtTime(0,t); g.gain.linearRampToValueAtTime(v,t+(o.attack||.02)); g.gain.setValueAtTime(v,t+Math.max(.02,dur-(o.release||.1))); g.gain.linearRampToValueAtTime(0,t+dur);
+      src.connect(f); f.connect(g); g.connect(a.destination); src.start(t); src.stop(t+dur); }catch(e){}
+  }
+  // one little sound per animation (synthesized, quiet)
+  const SOUND={
+    panel(){ [523,659,784,1047].forEach((f,i)=>tone(f,.25+i*.11,.18,{ type:'triangle', vol:.1 })); tone(196,.75,.25,{ type:'sine', to:392, vol:.08 }); },   // a happy little tune, then « boing »
+    turbine(){ hiss(.9,1.4,{ f:300, fto:2400, q:.8, vol:.07, attack:.5, release:.3 }); tone(1568,2.2,.5,{ vol:.08 }); tone(2093,2.28,.5,{ vol:.06 }); },   // whoosh, then « ding »
+    battery(){ hiss(.4,.12,{ filter:'highpass', f:2000, vol:.12, attack:.005, release:.08 }); tone(1800,.4,.15,{ type:'square', to:200, vol:.05 }); tone(300,.6,1,{ type:'triangle', to:950, vol:.06 }); tone(1319,1.6,.4,{ vol:.08 }); tone(1760,1.68,.5,{ vol:.07 }); },   // zap, charging, ding
+    gun(){ tone(2637,.15,.5,{ vol:.07 }); tone(3136,.22,.6,{ vol:.06 }); hiss(.15,.08,{ filter:'highpass', f:4000, vol:.08, attack:.005, release:.06 }); for(let i=0;i<14;i++) hiss(.5+i*.13,.06,{ f:900+Math.random()*400, q:2, vol:.06, attack:.005, release:.05 }); },   // « ka-ching », then the shots
+    gong(el){ setTimeout(()=>{ if(el.isConnected) gongSound(); }, 620); },
+    champagne(el){ setTimeout(()=>{ if(el.isConnected) popSound(); }, 900); hiss(1,1.1,{ filter:'highpass', f:5000, vol:.04, attack:.05, release:.6 }); setTimeout(()=>{ if(el.isConnected) clinkSound(); }, 2050); },   // pop, fizz, « ting »
+    umbrella(){ hiss(.3,3.4,{ filter:'lowpass', f:1800, q:.5, vol:.05, attack:.8, release:.8 }); tone(392,1.7,.5,{ vol:.07 }); tone(330,2.15,.8,{ vol:.07 }); },   // rain, two sad notes
+    nowind(){ tromboneSound(); },
+    plane(){ hiss(.1,1.9,{ f:700, fto:1600, q:1.2, vol:.05, attack:.4, release:.4 }); hiss(2.05,.18,{ filter:'lowpass', f:600, vol:.14, attack:.005, release:.15 }); tone(110,2.05,.25,{ vol:.12, to:60 }); }   // whoosh, thud in the bin
+  };
   function tromboneSound(){ // « wah wah wah waaah »
     try{ const a=ctx(), t0=a.currentTime, out=a.createGain(), lp=a.createBiquadFilter(); lp.type='lowpass'; lp.frequency.value=900; out.gain.value=.16; lp.connect(out); out.connect(a.destination);
       [[233,0,.38],[220,.42,.38],[208,.84,.38],[196,1.26,1.1]].forEach(([f,s,d],i)=>{ const o=a.createOscillator(), g=a.createGain(), t=t0+s; o.type='sawtooth'; o.frequency.setValueAtTime(f*1.03,t); o.frequency.linearRampToValueAtTime(f,t+.08);
@@ -191,9 +215,8 @@
       if(kind==='won') confetti(fx, 80);
       if(v==='battery'){ const t=el.querySelector('.cx-pct'); let n=0; setTimeout(()=>{ const iv=setInterval(()=>{ n=Math.min(100,n+5); if(t) t.textContent=n+' %'; if(n>=100) clearInterval(iv); },45); },550); }
       if(v==='gun') setTimeout(()=>moneyGun(fx), 150);
-      if(v==='gong'){ setTimeout(gongSound, 620); confetti(fx, 70); }
-      if(v==='champagne'){ setTimeout(popSound, 900); setTimeout(clinkSound, 1900); confetti(fx, 70); }
-      if(v==='nowind') tromboneSound();
+      if(v==='gong' || v==='champagne') confetti(fx, 70);
+      if(SOUND[v]) SOUND[v](el);
     }
     const len=less?1800:LENGTH[v];
     setTimeout(()=>el.classList.add('out'), len-500);
