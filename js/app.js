@@ -1886,7 +1886,9 @@
     removeFromContactInboxOnGitHub(id);
   }
 
-  let contactsView='groupe';
+  // list view by default; the last choice is kept on this device
+  let contactsView=(()=>{ try{ return localStorage.getItem('contacts-view')==='groupe'?'groupe':'liste'; }catch(e){ return 'liste'; } })();
+  document.querySelectorAll('#contacts-view-switch .view-icon-btn').forEach(b=>b.classList.toggle('active', b.dataset.view===contactsView));
   let visibleColumns={client:true, project:true, status:true, urgency:true, date:true};
   const COLUMN_LABELS={client:'Client', project:'Projet', status:'Statut', urgency:'Urgence', date:'Échéance'};
 
@@ -2231,6 +2233,11 @@
     row.appendChild(stars);
 
     const actions=document.createElement('div'); actions.className='contact-actions';
+    const edit=document.createElement('button'); edit.className='edit-btn'; edit.title='Modifier le contact'; edit.setAttribute('aria-label','Modifier '+([c.firstName,c.lastName].filter(Boolean).join(' ')||'le contact'));
+    edit.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>';
+    edit.onclick=e=>{ e.stopPropagation(); openContactForm(c); };
+    actions.appendChild(edit);
+    row.ondblclick=()=>openContactForm(c);
     const del=document.createElement('button'); del.className='del-btn'; del.title='Supprimer';
     del.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="width:14px;height:14px;"><path d="M18 6L6 18M6 6l12 12"/></svg>';
     del.onclick=()=>{ if(confirm('Supprimer ce contact ?')){ c.deleted=true; touchCrm(c); saveCrm(); renderContacts(); } };
@@ -5408,7 +5415,7 @@
     btn.onclick=()=>{
       document.querySelectorAll('#contacts-view-switch .view-icon-btn').forEach(b=>b.classList.remove('active'));
       btn.classList.add('active');
-      contactsView=btn.dataset.view;
+      contactsView=btn.dataset.view; try{ localStorage.setItem('contacts-view', contactsView); }catch(e){}
       renderContacts();
     };
   });

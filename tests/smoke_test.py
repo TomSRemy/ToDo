@@ -44,6 +44,8 @@ def new_page(browser, seed=None, **ctx):
     page.on("pageerror", lambda e: errors.append(str(e)))
     page.route("**/fonts.googleapis.com/**", lambda r: r.abort())
     page.route("**/fonts.gstatic.com/**", lambda r: r.abort())
+    # older checks were written for the grouped contacts view; the default (list) is checked on its own
+    page.add_init_script("try{ if(!sessionStorage.getItem('cvs')){ sessionStorage.setItem('cvs','1'); if(localStorage.getItem('contacts-view')===null) localStorage.setItem('contacts-view','groupe'); } }catch(e){}")
     if seed:
         page.add_init_script(
             "if(!sessionStorage.getItem('seeded')){ for (const [k,v] of Object.entries(" + json.dumps(seed) + ")) localStorage.setItem(k,v); sessionStorage.setItem('seeded','1'); }")
@@ -459,6 +461,22 @@ with sync_playwright() as p:
     check(not page.is_visible("#opp-detail-body .os-dup"), "duplicates: the sheet no longer warns once merged")
     page.click("#opp-detail-overlay .modal-x"); page.click('[data-tab="contacts"]')
     check(page.is_hidden("#ct-dupes-banner"), "duplicates: no banner left once merged")
+    check(not errors, f"no page errors ({errors})")
+    page.close()
+
+    # --- Contacts page: list view by default, pencil to edit, top bars always in view
+    many = [{"id": f"k{i}", "firstName": f"P{i}", "lastName": f"Nom{i:02d}", "role": "", "company": "Gamma", "email": "", "phone1": "", "phone2": "",
+             "relevance": 0, "comment": "", "createdAt": 1, "updatedAt": 1, "deleted": False} for i in range(40)]
+    page, errors = new_page(browser, {"todo_todo-widget-contacts": json.dumps(many)}, viewport={"width": 1300, "height": 700})
+    page.goto(URL); page.evaluate("localStorage.removeItem('contacts-view')"); page.reload(); page.click('[data-tab="contacts"]')
+    check(page.locator('#contacts-view-switch [data-view="liste"].active').count() == 1 and page.locator("#contacts-list .company-group-header").count() == 0,
+          "contacts: list view by default")
+    page.locator("#contacts-list .contact-row", has_text="Nom05").locator(".edit-btn").click()
+    check(page.is_visible("#contact-form") and page.input_value("#ct-last") == "Nom05", "contacts: the pencil opens the contact to edit")
+    page.click("#contact-form >> text=Annuler") if page.locator("#contact-form >> text=Annuler").count() else None
+    page.evaluate("document.getElementById('tab-contacts').scrollTop=1500"); page.wait_for_timeout(100)
+    sb = page.locator("#contact-search").bounding_box()
+    check(sb and 0 <= sb["y"] < 80, "contacts: search and buttons stay in view while scrolling")
     check(not errors, f"no page errors ({errors})")
     page.close()
 

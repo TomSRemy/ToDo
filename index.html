@@ -247,6 +247,7 @@
   </div>
 
   <div class="tab-panel hidden" id="tab-contacts">
+    <div class="ct-sticky">   <!-- search, buttons, views and column titles stay in view while the list scrolls -->
     <div class="quick-add-bar">
       <div class="search-box">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
@@ -262,8 +263,8 @@
     </div>
     <div class="top-toolbar">
       <div class="view-icons" id="contacts-view-switch">
-        <button class="view-icon-btn active" data-view="groupe" title="Par société"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></button>
-        <button class="view-icon-btn" data-view="liste" title="Liste (sans regroupement)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg></button>
+        <button class="view-icon-btn" data-view="groupe" title="Par société"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></button>
+        <button class="view-icon-btn active" data-view="liste" title="Liste (sans regroupement)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg></button>
       </div>
       <select id="contacts-type-filter" class="type-filter-select">
         <option value="">Tous les types</option>
@@ -271,6 +272,7 @@
     </div>
     <div class="contacts-header-row">
       <span></span><span></span><span><span class="sort" data-sort="name" title="Trier par nom">Contact</span></span><span><span class="sort" data-sort="co" title="Trier par société">Société</span></span><span>Email</span><span>Téléphone</span><span><span class="sort" data-sort="rel" title="Trier par note">Note</span></span><span></span>
+    </div>
     </div>
     <div id="contact-form" class="crm-form hidden" role="dialog" aria-modal="true" aria-labelledby="contact-form-title">
       <div class="crm-form-title" id="contact-form-title">Nouveau contact</div>

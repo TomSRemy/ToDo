@@ -1193,3 +1193,9 @@
 .ctm-actions{ display:flex; gap:8px; flex-wrap:wrap; }
 .ctm-merge{ background:var(--accent); color:#06231C; border:none; border-radius:6px; padding:7px 14px; font:600 12.5px var(--font-ui); cursor:pointer; }
 #ct-merge-overlay{ z-index:20060; }   /* above the sheet it is opened from */
+
+/* Contacts: the top bars stay in view; edit button always visible (faint until hover) */
+.ct-sticky{ position:sticky; top:0; z-index:6; background:var(--bg); }
+.contact-actions{ opacity:.55; }
+.contact-row:hover .contact-actions, .contact-actions:focus-within{ opacity:1; }
+html.lite .contact-actions{ opacity:1; }
