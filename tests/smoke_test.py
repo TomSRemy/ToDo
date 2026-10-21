@@ -424,7 +424,7 @@ with sync_playwright() as p:
     page, errors = new_page(browser, {"todo_todo-widget-opportunities": json.dumps(two)}, viewport={"width": 1300, "height": 900})
     page.goto(URL); page.click('[data-tab="pipeline"]'); page.locator(".pipe-req-name", has_text="ALPHA PV1").click()
     tabs = page.eval_on_selector_all("#opp-detail-body .req-tab", "els=>els.map(e=>e.innerText.replace(/\\s+/g,' ').trim())")
-    check(tabs == ["Installation 1 ALPHA PV1 299 kWc · 358 MWh · MES 20/07/2027 · VILLE-SUR-EXEMPLE", "Installation 2 BETA PV1 211 kWc · 49 - Maine-et-Loire"] and "ALPHA PV1" in page.inner_text("#opp-detail-title"),
+    check(tabs == ["Installation 1 ALPHA PV1 299 kWc · 358 MWh · MES 20/07/2027", "Installation 2 BETA PV1 211 kWc"] and "ALPHA PV1" in page.inner_text("#opp-detail-title"),
           f"request: both installations shown as tabs in the sheet ({tabs})")
     table = page.inner_text("#opp-detail-body .req-compare")
     check("358 MWh" in table and "à compléter" in table and "3 cases à compléter" in table, "request: side-by-side check, empty cells to complete flagged")
@@ -536,6 +536,23 @@ with sync_playwright() as p:
     conf = page.inner_text("#conflicts-list") if page.locator("#conflicts-list").count() else ""
     check("Contact « Anne Roux » — champ « Téléphone 1 »" in conf and "Déjà dans tes contacts" in conf and "Dans le fichier « contacts.xlsx », ligne 2" in conf and "06 99 88 77 66" in conf,
           f"import conflict: the field and where each value comes from ({conf[:160]!r})")
+    check(not errors, f"no page errors ({errors})")
+    page.close()
+
+    # --- Post-it edited on two devices: lines merged, no conflict reported (old ones cleared)
+    base_n = [{"id": "scratchpad", "text": "Appeler Paul\nEnvoyer offre", "createdAt": 1, "updatedAt": 10, "deleted": False}]
+    loc_n = [{"id": "scratchpad", "text": "Appeler Paul\nEnvoyer offre\nIdée PC", "createdAt": 1, "updatedAt": 20, "deleted": False}]
+    files = {"notes.json": [{"id": "scratchpad", "text": "Envoyer offre\nIdée téléphone", "createdAt": 1, "updatedAt": 30, "deleted": False}],
+             "tasks.json": [], "crm.json": {"companies": [], "contacts": [], "meetings": [], "opportunities": []}}
+    old_conf = [{"id": "cfn", "entityType": "note", "entityId": "scratchpad", "entityName": "Post-it", "field": "text", "fieldLabel": "Texte", "localValue": "a", "remoteValue": "b", "resolvedValue": "a"}]
+    page, errors = new_page(browser, dict(SYNC_ON, **{"todo_todo-widget-notes": json.dumps(loc_n), "todo_sync-notes-base": json.dumps(base_n),
+                                                     "todo_sync-conflicts": json.dumps(old_conf)}), viewport={"width": 1300, "height": 850})
+    mock_github(page, files); page.goto(URL)
+    page.wait_for_function("document.getElementById('postit-text').value.includes('Idée téléphone')", timeout=10000)
+    txt = page.input_value("#postit-text")
+    check(txt == "Envoyer offre\nIdée PC\nIdée téléphone" or txt == "Envoyer offre\nIdée téléphone\nIdée PC",
+          f"post-it: both devices' lines kept, the line deleted on the other device removed ({txt!r})")
+    check(not [c for c in (stored(page, "sync-conflicts") or []) if c.get("entityType") == "note"], "post-it: no conflict reported, old ones cleared")
     check(not errors, f"no page errors ({errors})")
     page.close()
 

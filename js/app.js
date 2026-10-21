@@ -67,6 +67,8 @@
     try{ const r=await window.storage.get(OPPS_KEY,false); opportunities=r&&r.value?JSON.parse(r.value):[]; }catch(e){ opportunities=[]; }
     try{ const r=await window.storage.get(COMPANY_TYPES_KEY,false); companyTypesList=r&&r.value?JSON.parse(r.value):[]; }catch(e){ companyTypesList=[]; }
     try{ const r=await window.storage.get('sync-conflicts',false); conflicts=r&&r.value?JSON.parse(r.value):[]; }catch(e){ conflicts=[]; }
+    // post-it conflicts are no longer kept (its lines are merged): clear the old ones
+    if(conflicts.some(c=>c.entityType==='note')){ conflicts=conflicts.filter(c=>c.entityType!=='note'); try{ await window.storage.set('sync-conflicts', JSON.stringify(conflicts), false); }catch(e){} }
     try{ const r=await window.storage.get('sync-tasks-base',false); tasksBaseSnapshot=r&&r.value?JSON.parse(r.value):null; }catch(e){ tasksBaseSnapshot=null; }
     try{ const r=await window.storage.get('sync-crm-base',false); crmBaseSnapshot=r&&r.value?JSON.parse(r.value):null; }catch(e){ crmBaseSnapshot=null; }
     try{ const r=await window.storage.get(NOTES_KEY,false); notes=r&&r.value?JSON.parse(r.value):[]; }catch(e){ notes=[]; }
@@ -272,6 +274,16 @@
     note:{ name:n=>'Post-it « '+(n.text||'').slice(0,30)+' »', fields:{text:'Texte',kind:'Type',forDate:'Pour le'} }
   };
 
+  // Post-it text edited on two devices: this device's lines, minus those the other device deleted (and this one did not touch),
+  // plus those the other device added, placed after the line that precedes them there.
+  function mergeNoteLines(base, local, remote){
+    const B=String(base||'').split('\n'), L=String(local||'').split('\n'), R=String(remote||'').split('\n');
+    const inB=new Set(B), inR=new Set(R), inL=new Set(L);
+    const out=L.filter(l=>!(inB.has(l) && !inR.has(l)));
+    R.forEach((l,i)=>{ if(inB.has(l) || inL.has(l) || out.includes(l)) return;
+      const prev=i>0?R[i-1]:null, at=prev!=null?out.lastIndexOf(prev):-1; out.splice(at+1, 0, l); });
+    return out.join('\n').replace(/\n{3,}/g,'\n\n');
+  }
   // src: where each version comes from, shown with the choice ({ a:'Sur cet appareil…', b:'Dans le fichier…' })
   function logConflict(entityType, entity, field, localValue, remoteValue, resolvedValue, src){
     const meta=CONFLICT_ENTITY_LABELS[entityType];
@@ -321,6 +333,11 @@
         const localChanged=lv!==bv, remoteChanged=rv!==bv;
         if(remoteChanged && !localChanged){ result[field]=remote[field]; return; }
         if(localChanged && !remoteChanged) return;
+        if(localChanged && remoteChanged && entityType==='note'){
+          // the post-it changes all the time on both devices: its lines are merged, never reported as a conflict
+          result[field]=field==='text'?mergeNoteLines(base[field], local[field], remote[field]):((remote.updatedAt||0)>(local.updatedAt||0)?remote[field]:local[field]);
+          return;
+        }
         if(localChanged && remoteChanged){
           const takeRemote=(remote.updatedAt||0) > (local.updatedAt||0);
           result[field]=takeRemote?remote[field]:local[field];
@@ -4282,11 +4299,10 @@
     if(k==='mwh' || k==='p90'){ const n=pqNum(String(v)); return isNaN(n)?String(v):n.toLocaleString('fr-FR')+' MWh'; }
     return String(v);
   }
-  // short description of an installation for its line: power · volume · commissioning · town (postal code) · type
+  // short description of an installation for its line: power · volume · commissioning · technology
   function instLineInfo(x){
     const mwh=x.mwh?Number(pqNum(String(x.mwh))).toLocaleString('fr-FR')+' MWh':'';
-    const place=x.commune?x.commune+(x.cp?' ('+x.cp+')':''):(x.dept||'');
-    return [fmtKwc(x.kwc), mwh, x.mesPrev||x.mesEff?'MES '+(x.mesEff||x.mesPrev):'', place, x.install].filter(Boolean).join(' · ');
+    return [fmtKwc(x.kwc), mwh, x.mesPrev||x.mesEff?'MES '+(x.mesEff||x.mesPrev):'', x.install].filter(Boolean).join(' · ');   // no address: power, volume, commissioning, technology
   }
   function buildRequestTabs(list, currentId){
     const t=document.createElement('div'); t.className='req-tabs'; t.setAttribute('role','tablist');
