@@ -1587,3 +1587,19 @@ body.postit-open .nw-side{ bottom:300px; }
 .wl-mentions-h{ font:500 10px var(--font-mono); text-transform:uppercase; letter-spacing:.4px; color:var(--tx3); margin-bottom:4px; }
 .wl-mention{ display:flex; justify-content:space-between; gap:10px; text-align:left; background:none; border:none; border-radius:6px; padding:5px 6px; cursor:pointer; color:var(--tx1); font:400 12.5px var(--font-ui); }
 .wl-mention:hover{ background:var(--panel-2); } .wl-mention span{ color:var(--tx3); font-size:11px; white-space:nowrap; }
+
+/* note of the day: history of the past days, and today's reminder on top of the note */
+.pi-today{ align-self:flex-start; margin:0 0 6px; background:var(--accent-dim); color:var(--accent); border:none; border-radius:999px; font:600 11px var(--font-ui); padding:3px 10px; cursor:pointer; }
+#postit-history{ background:none; border:none; color:var(--tx3); cursor:pointer; padding:2px 4px; display:flex; align-items:center; }
+#postit-history svg{ width:13px; height:13px; } #postit-history:hover{ color:var(--tx1); }
+.dn-box{ max-width:640px; max-height:80vh; display:flex; flex-direction:column; padding:0; }
+.dn-head{ display:flex; align-items:center; gap:10px; padding:16px 18px 12px; border-bottom:1px solid var(--bd); position:relative; }
+.dn-head h3{ margin:0; font-size:15px; flex-shrink:0; }
+.dn-search{ flex:1; min-width:0; background:var(--panel-2); border:1px solid var(--bd); border-radius:var(--radius); color:var(--tx1); font:400 13px var(--font-ui); padding:6px 10px; margin-right:36px; }
+.dn-head .modal-x{ position:absolute; top:12px; right:14px; }
+.dn-list{ overflow-y:auto; padding:6px 18px 18px; }
+.dn-day h4{ margin:14px 0 6px; font:600 12px var(--font-ui); color:var(--tx2); } .dn-day h4::first-letter{ text-transform:uppercase; }
+.dn-line{ font-size:13px; color:var(--tx1); padding:3px 0 3px 14px; position:relative; line-height:1.4; }
+.dn-line::before{ content:'•'; position:absolute; left:2px; color:var(--tx3); }
+.dn-line.done{ color:var(--tx3); text-decoration:line-through; }
+.dn-empty{ color:var(--tx3); font-size:13px; margin:16px 0; }

@@ -99,7 +99,7 @@
     if(seeded){ saveTasks(); saveClients(); saveProjects(); }
     if(crmSeeded){ saveCrm(); }
     await loadSyncConfig();
-    consolidateNotes();
+    consolidateNotes(); rollDailyNote();
     loadParc(); ensureRenewalTasks();
     if(migrateCompanyStars() | migrateContactCivility()) saveCrm();
     checkReminders();
@@ -1517,6 +1517,39 @@
     if(n.text!==postitTextEl.value){ n.text=postitTextEl.value; touch(n); saveNotes(); flashPostitSaved('enregistré'); }
     updatePostitTab();
   }
+  // ---------- note of the day: each morning the note keeps its unticked lines; the day before is kept, dated, in its history ----------
+  // The days are fields of the note itself (« day_2026-10-21 »): the sync merges them field by field, nothing is lost.
+  const DAY_PREFIX='day_';
+  function dayNotes(){ const n=notes.find(x=>x.id===POSTIT_ID && !x.deleted); if(!n) return []; return Object.keys(n).filter(k=>k.startsWith(DAY_PREFIX) && n[k]).map(k=>({ day:k.slice(DAY_PREFIX.length), text:n[k] })).sort((a,b)=>b.day.localeCompare(a.day)); }
+  function rollDailyNote(){
+    const n=notes.find(x=>x.id===POSTIT_ID && !x.deleted); if(!n || !String(n.text||'').trim()) return false;
+    const today=toISO(new Date()), lastDay=n.updatedAt?toISO(new Date(n.updatedAt)):today;
+    if(lastDay>=today || n.rolledFor===today) return false;
+    const key=DAY_PREFIX+lastDay, prev=n[key]?String(n[key]).split('\n'):[];
+    const lines=String(n.text).split('\n'); n[key]=prev.concat(lines.filter(l=>!prev.includes(l))).join('\n').replace(/\n{3,}/g,'\n\n').trim();
+    n.text=lines.filter(l=>!PI_DONE.test(l)).join('\n').replace(/\n{3,}/g,'\n\n').replace(/^\n+/,'');
+    n.rolledFor=today; touch(n); saveNotes(); return true;
+  }
+  document.addEventListener('visibilitychange', ()=>{ if(!document.hidden && rollDailyNote()) renderNotes(); });
+  function openDayNotes(focusDay){
+    const days=dayNotes(); let ov=$('daynotes-overlay');
+    if(!ov){ ov=document.createElement('div'); ov.id='daynotes-overlay'; ov.className='modal-overlay';
+      ov.innerHTML='<div class="modal-box wide dn-box" role="dialog" aria-label="Notes des jours précédents"><div class="dn-head"><h3>Notes des jours précédents</h3><input type="text" class="dn-search" placeholder="Chercher dans les notes…" aria-label="Chercher dans les notes"><button type="button" class="modal-x dn-x" aria-label="Fermer">✕</button></div><div class="dn-list"></div></div>';
+      document.body.appendChild(ov); ov.addEventListener('click', e=>{ if(e.target===ov) ov.classList.add('hidden'); }); ov.querySelector('.dn-x').onclick=()=>ov.classList.add('hidden');
+      ov.addEventListener('keydown', e=>{ if(e.key==='Escape'){ e.stopPropagation(); ov.classList.add('hidden'); } });
+      ov.querySelector('.dn-search').addEventListener('input', ()=>paint()); }
+    const list=ov.querySelector('.dn-list'), search=ov.querySelector('.dn-search');
+    const paint=()=>{ const q=pqFold(search.value.trim()); list.innerHTML='';
+      const shown=dayNotes().map(d=>({ day:d.day, lines:d.text.split('\n').filter(l=>l.trim() && (!q || pqFold(l).includes(q))) })).filter(d=>d.lines.length);
+      if(!shown.length){ list.innerHTML='<p class="dn-empty">'+(days.length?'Rien trouvé.':'Pas encore d’historique : chaque matin, la note de la veille sera rangée ici (ses lignes non cochées restent dans la note).')+'</p>'; return; }
+      shown.forEach(d=>{ const sec=document.createElement('section'); sec.className='dn-day'; sec.dataset.day=d.day;
+        const h=document.createElement('h4'); h.textContent=new Date(d.day+'T12:00:00').toLocaleDateString('fr-FR',{ weekday:'long', day:'numeric', month:'long', year:'numeric' }); sec.appendChild(h);
+        d.lines.forEach(l=>{ const done=PI_DONE.test(l), r=document.createElement('div'); r.className='dn-line'+(done?' done':''); renderLinked(r, l.replace(PI_DONE,'')); sec.appendChild(r); });
+        list.appendChild(sec); });
+      if(focusDay){ const el=list.querySelector('[data-day="'+focusDay+'"]'); if(el) el.scrollIntoView({ block:'start' }); focusDay=null; } };
+    search.value=''; paint(); ov.classList.remove('hidden'); setTimeout(()=>search.focus(), 30);
+  }
+  window.todoOpenDayNote=openDayNotes;
   function updatePostitTab(){
     const n=notes.find(x=>x.id===POSTIT_ID && !x.deleted);
     const first=n ? ((n.text||'').split('\n').map(l=>l.trim()).find(Boolean)||'') : '';
@@ -1552,6 +1585,9 @@
     box.hidden=!show; postitTextEl.classList.toggle('as-list', show);
     if(!show) return;
     box.innerHTML='';
+    { const today=toISO(new Date()), nT=activeTasks().filter(t=>t.due===today).length, nM=meetings.filter(m=>!m.deleted && m.date===today).length;
+      if(nT||nM){ const b=document.createElement('button'); b.type='button'; b.className='pi-today'; b.textContent='Aujourd’hui · '+[nM?nM+' RDV':'', nT?nT+' tâche'+(nT>1?'s':''):''].filter(Boolean).join(' · ');
+        b.title='Ouvrir Aujourd’hui'; b.onclick=()=>gsTab('today'); box.appendChild(b); } }
     txt.split('\n').forEach((line,i)=>{
       if(!line.trim()){ const g=document.createElement('div'); g.className='pi-gap'; box.appendChild(g); return; }
       const done=PI_DONE.test(line), label=line.replace(PI_DONE,'');
@@ -1613,6 +1649,7 @@
     postitTextEl.addEventListener('focus', postitShowEditor);
     postitTextEl.addEventListener('keydown', e=>{ if(e.key==='Escape'){ e.stopPropagation(); setPostitOpen(false); } });
     $('postit-min').onclick=()=>setPostitOpen(false);
+    $('postit-history').onclick=()=>openDayNotes();
     postitTabEl.onclick=()=>setPostitOpen(true, true);
     const toTask=$('postit-to-task');
     toTask.onmousedown=e=>e.preventDefault(); // keep the cursor/selection in the textarea
@@ -7008,7 +7045,9 @@
   function mentionsOf(id){
     const T=linkTargets(), out=[], has=txt=>linksIn(txt,T).includes(id);
     tasks.filter(t=>!t.deleted && has(t.title+' '+(t.description||''))).forEach(t=>out.push({ label:t.title.replace(LINK_RE,'$1'), sub:t.archived?'Tâche faite':'Tâche', open:()=>openTaskEverywhere(t.id) }));
-    notes.filter(n=>!n.deleted && n.text).forEach(n=>String(n.text).split('\n').forEach(line=>{ if(has(line)) out.push({ label:line.replace(PI_DONE,'').replace(LINK_RE,'$1'), sub:n.id===POSTIT_ID?'Note':'Note du '+(n.day?pqIsoToFr(n.day):''), open:()=>{ if(n.id===POSTIT_ID) openPostit(); else if(window.todoOpenDayNote) window.todoOpenDayNote(n.day); } }); }));
+    const sp=notes.find(n=>n.id===POSTIT_ID && !n.deleted);
+    if(sp && sp.text) String(sp.text).split('\n').forEach(line=>{ if(has(line)) out.push({ label:line.replace(PI_DONE,'').replace(LINK_RE,'$1'), sub:'Note', open:()=>openPostit() }); });
+    dayNotes().forEach(d=>d.text.split('\n').forEach(line=>{ if(has(line)) out.push({ label:line.replace(PI_DONE,'').replace(LINK_RE,'$1'), sub:'Note du '+pqIsoToFr(d.day), open:()=>openDayNotes(d.day) }); }));
     activeContacts().filter(c=>c.comment && has(c.comment)).forEach(c=>out.push({ label:[c.firstName,c.lastName].filter(Boolean).join(' '), sub:'Commentaire du contact', open:()=>openContactEverywhere(c.id) }));
     opportunities.filter(o=>!o.deleted && o.commentaires && has(o.commentaires)).forEach(o=>out.push({ label:oppName(o), sub:'Commentaire pipeline', open:()=>{ gsTab('pipeline'); setTimeout(()=>openOppDetail(o.id),30); } }));
     return out;
@@ -7022,7 +7061,9 @@
   }
   // the note's lines with links become « note » nodes in the network
   window.todoNoteLinks=()=>{ const T=linkTargets(), out=[];
-    notes.filter(n=>!n.deleted && n.text).forEach(n=>String(n.text).split('\n').forEach(line=>{ const tg=linksIn(line,T); if(tg.length) out.push([line.replace(PI_DONE,'').replace(LINK_RE,'$1'), n.id===POSTIT_ID?'Note':'Note du '+(n.day?pqIsoToFr(n.day):''), tg, ()=>openPostit()]); }));
+    const sp=notes.find(n=>n.id===POSTIT_ID && !n.deleted);
+    if(sp && sp.text) String(sp.text).split('\n').forEach(line=>{ const tg=linksIn(line,T); if(tg.length) out.push([line.replace(PI_DONE,'').replace(LINK_RE,'$1'), 'Note', tg, ()=>openPostit()]); });
+    dayNotes().forEach(d=>d.text.split('\n').forEach(line=>{ const tg=linksIn(line,T); if(tg.length) out.push([line.replace(PI_DONE,'').replace(LINK_RE,'$1'), 'Note du '+pqIsoToFr(d.day), tg, ()=>openDayNotes(d.day)]); }));
     return out; };
   // typing « [[ » proposes contacts, companies and installations
   function attachLinkAutocomplete(el){
@@ -7191,6 +7232,8 @@
     if(co.length) groups.push(['Sociétés',co]);
     const op=top(opportunities.filter(o=>!o.deleted && o.kind!=='request' && hit(oppName(o),o.company,o.producteur,o.dept,o.commune)).map(o=>({ ic:'P', title:oppName(o), sub:[o.company, stageLabel(o.stage)].filter(Boolean).join(' · '), right:fmtKwc(o.kwc), go:()=>{ gsTab('pipeline'); setTimeout(()=>openOppDetail(o.id),30); } })),6);
     if(op.length) groups.push(['Pipeline',op]);
+    const nl=[]; dayNotes().forEach(d=>d.text.split('\n').forEach(l=>{ if(l.trim() && hit(l)) nl.push({ ic:'✎', title:plainLinks(l.replace(PI_DONE,'')), sub:'Note du '+pqIsoToFr(d.day), go:()=>openDayNotes(d.day) }); }));
+    if(nl.length) groups.push(['Notes', nl.slice(0,5)]);
     if(parcData===null) loadParc();
     if(parcData){ const pc=top(parcData.items.filter(p=>hit(p.inst,p.prod,p.dev,p.siteDept,p.dept)).map(p=>({ ic:'€', title:p.inst||p.prod||'(sans nom)', sub:[p.prod&&p.prod!==p.inst?p.prod:'', p.statut, p.siteDept||p.dept].filter(Boolean).join(' · '), right:p.kwc?fmtKwc(p.kwc):'', go:()=>openParcItem(p) })),6);
       if(pc.length) groups.push(['Portefeuille',pc]); }
@@ -7210,6 +7253,7 @@
       { t:'Vue réunion du pipeline', k:'reunion pricing partager', go:()=>{ gsTab('pipeline'); setTimeout(()=>{ if(!pipeMeet){ pipeMeet=true; pipeDash=false; renderPipeline(); } },40); } },
       { t:'Tableau de bord du pipeline', k:'dashboard stats', go:()=>{ gsTab('pipeline'); setTimeout(()=>{ if(!pipeDash){ pipeDash=true; pipeMeet=false; renderPipeline(); } },40); } },
       { t:'Ouvrir la note (post-it)', k:'postit calepin note', go:()=>openPostit(true) },
+      { t:'Notes des jours précédents', k:'historique note journal jour', go:()=>openDayNotes() },
       { t:'Exporter les contacts (Excel)', k:'export xlsx contacts', go:clickEl('contact-export-btn','contacts') },
       { t:'Importer des contacts (Excel)', k:'import xlsx contacts', go:clickEl('contact-import-btn','contacts') },
       { t:'Contacts vers le téléphone (.vcf)', k:'vcf telephone export', go:clickEl('vcf-btn','contacts') },

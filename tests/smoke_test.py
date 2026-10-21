@@ -364,6 +364,30 @@ with sync_playwright() as p:
     check(not errors, f"no page errors ({errors})")
     page.close()
 
+    # --- Note of the day: each morning the unticked lines stay, the day before is kept in the history
+    yday = datetime.datetime.combine(TODAY - datetime.timedelta(days=1), datetime.time(18, 0))
+    yms = int(yday.timestamp() * 1000)
+    page, errors = new_page(browser, {"todo_todo-widget-notes": json.dumps([{"id": "scratchpad", "text": "✓ Envoyé l'offre SOLARIS\nRappeler [[Paul Durand]]\n✓ Mail CR", "createdAt": yms, "updatedAt": yms, "deleted": False}]),
+                                      "todo_todo-widget-contacts": json.dumps([{"id": "dc1", "firstName": "Paul", "lastName": "Durand", "company": "Solaris", "createdAt": 1, "updatedAt": 1, "deleted": False}])},
+                              viewport={"width": 1300, "height": 850})
+    page.goto(URL); page.wait_for_timeout(500)
+    note = next(n for n in stored(page, "todo-widget-notes") if n["id"] == "scratchpad")
+    yk = "day_" + (TODAY - datetime.timedelta(days=1)).isoformat()
+    check(note["text"] == "Rappeler [[Paul Durand]]" and note.get(yk, "").count("\n") == 2, f"note of the day: ticked lines go to yesterday's page, the others stay ({note['text']!r})")
+    page.click("#postit-history"); page.wait_for_timeout(200)
+    hist = page.inner_text("#daynotes-overlay .dn-list")
+    check("Envoyé l'offre SOLARIS" in hist and "Mail CR" in hist and page.locator("#daynotes-overlay .dn-line.done").count() == 2, "note of the day: the history shows yesterday, ticked lines struck")
+    page.fill("#daynotes-overlay .dn-search", "mail"); page.wait_for_timeout(100)
+    check(page.locator("#daynotes-overlay .dn-line").count() == 1, "note of the day: the history can be searched")
+    page.keyboard.press("Escape"); page.reload(); page.wait_for_timeout(400)
+    note2 = next(n for n in stored(page, "todo-widget-notes") if n["id"] == "scratchpad")
+    check(note2["text"] == "Rappeler [[Paul Durand]]" and note2.get(yk) == note.get(yk), "note of the day: opening again the same day changes nothing")
+    page.keyboard.press("Control+k"); page.keyboard.type("mail cr")
+    check("Note du" in page.inner_text("#gs-results"), "note of the day: the global search finds old notes")
+    page.keyboard.press("Escape")
+    check(not errors, f"no page errors ({errors})")
+    page.close()
+
     # --- Company sheet: contacts, pipeline, tasks, what is coming up and the history of one client
     now_ms = int(datetime.datetime.now().timestamp() * 1000)
     late_day = (TODAY - datetime.timedelta(days=2)).isoformat()
