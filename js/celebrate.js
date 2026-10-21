@@ -61,18 +61,19 @@
       +'<g class="cx-fbub" fill="#FFF6D0"><circle cx="190" cy="134" r="1.5" style="--d:.2s"/><circle cx="196" cy="136" r="1.3" style="--d:.55s"/><circle cx="200" cy="132" r="1.6" style="--d:.9s"/></g><path d="M195 140v42M184 184h22" stroke="#E8EEF5" stroke-width="3" stroke-linecap="round"/></g>'
       +'<g class="cx-clink" fill="#FFE066"><path d="M130 66l4 11l11 4l-11 4l-4 11l-4-11l-11-4l11-4z"/></g>'
       +'<text class="cx-tchin" x="130" y="52" text-anchor="middle" font-family="system-ui,sans-serif" font-weight="900" font-size="20" fill="#FFE066" stroke="#7A5A10" stroke-width="1">Tchin !</text>',
-    // lost 1: a grumpy cloud rains on the solar panel (the same one as « offer accepted »); it opens its umbrella, smiles, hops; a rainbow
-    umbrella:'<g class="cx-rainbow" fill="none" stroke-width="6" stroke-linecap="round">'
-      +['#ED6965','#F2A541','#FFE066','#14D3A9','#7DD3FC','#8B7FB5'].map((c,i)=>'<path d="M'+(22+i*6)+' 226A'+(108-i*6)+' '+(108-i*6)+' 0 0 1 '+(238-i*6)+' 226" stroke="'+c+'" pathLength="100"/>').join('')+'</g>'
-      +'<g class="cx-cloud"><g class="cx-rain" stroke="#8FB4D9" stroke-width="2" stroke-linecap="round">'
-      +[[92,0],[104,.25],[116,.1],[128,.35],[140,.15],[152,.45],[164,.28],[110,.5],[146,.05],[170,.4]].map(([x,d])=>'<line x1="'+x+'" y1="50" x2="'+(x-4)+'" y2="64" style="--d:'+d+'s"/>').join('')+'</g>'
-      +'<path d="M84 44a20 20 0 0 1 8-38a28 28 0 0 1 52-6a22 22 0 0 1 34 18a14 14 0 0 1-4 26z" fill="#5E6B7A"/>'
+    // lost 1: grey clouds gather and rain on the solar panel (the same one as « offer accepted »); it shivers, cries and sags into a puddle
+    umbrella:'<ellipse class="cx-puddle" cx="130" cy="232" rx="70" ry="7" fill="#3E5A78" opacity=".7"/>'
+      +'<g class="cx-rain" stroke="#8FB4D9" stroke-width="2" stroke-linecap="round">'
+      +[[40,.1],[52,.4],[64,0],[76,.3],[88,.15],[100,.45],[112,.05],[124,.35],[136,.2],[148,.5],[160,.1],[172,.3],[184,0],[196,.4],[208,.25],[220,.15],[70,.55],[118,.6],[166,.62],[214,.5]].map(([x,d])=>'<line x1="'+x+'" y1="52" x2="'+(x-4)+'" y2="66" style="--d:'+d+'s"/>').join('')+'</g>'
+      +'<g class="cx-cloud2"><g transform="translate(-64 8) scale(.8)"><path d="M84 44a20 20 0 0 1 8-38a28 28 0 0 1 52-6a22 22 0 0 1 34 18a14 14 0 0 1-4 26z" fill="#4A5563"/></g></g>'
+      +'<g class="cx-cloud3"><g transform="translate(118 4) scale(.85)"><path d="M84 44a20 20 0 0 1 8-38a28 28 0 0 1 52-6a22 22 0 0 1 34 18a14 14 0 0 1-4 26z" fill="#4A5563"/></g></g>'
+      +'<g class="cx-cloud"><path d="M84 44a20 20 0 0 1 8-38a28 28 0 0 1 52-6a22 22 0 0 1 34 18a14 14 0 0 1-4 26z" fill="#5E6B7A"/>'
       +'<path d="M112 16l10 5M150 16l-10 5" stroke="#2C3540" stroke-width="3" stroke-linecap="round"/><circle cx="118" cy="26" r="3" fill="#2C3540"/><circle cx="144" cy="26" r="3" fill="#2C3540"/><path d="M122 38q9-6 18 0" stroke="#2C3540" stroke-width="3" fill="none" stroke-linecap="round"/></g>'
-      +'<g class="cx-hop"><g class="cx-umb"><path d="M78 98a52 36 0 0 1 104 0q-8.7-6-17.3 0q-8.7-6-17.4 0q-8.6-6-17.3 0q-8.7-6-17.4 0q-8.6-6-17.3 0q-8.7-6-17.3 0z" fill="#14D3A9"/><path d="M130 98v12" stroke="#DDE5EE" stroke-width="3" stroke-linecap="round"/></g>'
-      +'<g class="cx-shiver" transform="translate(0 24)"><path d="M118 168l-10 38h-10" stroke="#5B7A99" stroke-width="5" fill="none" stroke-linecap="round" stroke-linejoin="round"/><path d="M142 168l10 38h10" stroke="#5B7A99" stroke-width="5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>'
+      +'<g class="cx-slump"><g class="cx-shiver" transform="translate(0 24)"><path d="M118 168l-10 38h-10" stroke="#5B7A99" stroke-width="5" fill="none" stroke-linecap="round" stroke-linejoin="round"/><path d="M142 168l10 38h10" stroke="#5B7A99" stroke-width="5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>'
       +'<rect x="70" y="80" width="120" height="90" rx="6" fill="#1E3A5F" stroke="#7FA9D6" stroke-width="3"/><path d="M110 80v90M150 80v90M70 110h120M70 140h120" stroke="#7FA9D6" stroke-width="2"/>'
-      +'<circle cx="104" cy="104" r="4" fill="#E8EEF5"/><circle cx="156" cy="104" r="4" fill="#E8EEF5"/><path class="cx-tear" d="M100 112q-3 6 0 8q3-2 0-8z" fill="#7DD3FC"/>'
-      +'<path class="cx-sad" d="M108 156q22-14 44 0" stroke="#E8EEF5" stroke-width="3" fill="none" stroke-linecap="round"/><path class="cx-happy" d="M100 152q30 14 60 0" stroke="#E8EEF5" stroke-width="3" fill="none" stroke-linecap="round"/></g></g>',
+      +'<path d="M95 100l14-5M165 100l-14-5" stroke="#E8EEF5" stroke-width="2.5" stroke-linecap="round"/><circle cx="104" cy="106" r="4" fill="#E8EEF5"/><circle cx="156" cy="106" r="4" fill="#E8EEF5"/>'
+      +'<path class="cx-tear" d="M100 114q-3 6 0 8q3-2 0-8z" fill="#7DD3FC"/><path class="cx-tear t2" d="M160 114q-3 6 0 8q3-2 0-8z" fill="#7DD3FC"/>'
+      +'<path d="M106 158q24-16 48 0" stroke="#E8EEF5" stroke-width="3" fill="none" stroke-linecap="round"/></g></g>',
     // lost 2: no wind: the same turbine as « offer accepted » slows down and stops; a tumbleweed; crickets
     nowind:'<g class="cx-sag"><path d="M126 82l-6 132h20l-6-132z" fill="#DDE5EE"/><rect x="120" y="70" width="22" height="14" rx="5" fill="#C9D3DE"/><g fill="#F2F6FA">'+blades('cx-slow')+'</g></g>'
       +'<g class="cx-tumble" stroke="#B08A58" stroke-width="1.8" fill="none"><circle cx="40" cy="201" r="13"/><path d="M29 195q11 6 22 0M31 207q9-10 18 0M40 188q-6 13 0 26M34 191q12 12 12 20"/></g>'

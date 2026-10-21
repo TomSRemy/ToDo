@@ -1433,17 +1433,19 @@ details.req-compare:not([open]) .req-compare-h::before{ transform:rotate(-90deg)
 .celebrate .cx-clink, .celebrate .cx-tchin{ transform-box:fill-box; transform-origin:center; opacity:0; }
 .cx-play .cx-clink{ animation:cx-clink .9s 2.05s cubic-bezier(.2,.7,.3,1); } @keyframes cx-clink{ 0%{ opacity:0; transform:scale(.2) rotate(0); } 25%{ opacity:1; } 100%{ opacity:0; transform:scale(2.2) rotate(80deg); } }
 .cx-play .cx-tchin{ animation:cx-tchin .6s 2.1s cubic-bezier(.2,.9,.3,1.2) forwards; } @keyframes cx-tchin{ from{ opacity:0; transform:translateY(8px) scale(.6); } to{ opacity:1; transform:none; } }
-/* lost 1: the grumpy cloud rains on the panel; umbrella, smile, hop, rainbow */
-.cx-cloud{ transform:translateX(-170px); } .cx-play .cx-cloud{ animation:cx-in .7s ease-out forwards, cx-cloudout .8s 2.3s ease-in forwards; }
-@keyframes cx-in{ to{ transform:none; } } @keyframes cx-cloudout{ from{ transform:none; } to{ transform:translateX(260px); opacity:0; } }
-.cx-rain line{ opacity:0; } .cx-play .cx-rain line{ animation:cx-rain .55s linear infinite; animation-delay:var(--d); }
-@keyframes cx-rain{ 0%{ opacity:0; transform:translateY(-10px); } 20%{ opacity:.8; } 100%{ opacity:0; transform:translateY(60px); } }
-.cx-play .cx-shiver{ animation:cx-shiver .08s 15 linear; } @keyframes cx-shiver{ 0%,100%{ transform:translate(0,24px); } 50%{ transform:translate(2.5px,24px); } }
-.cx-hop{ transform-origin:130px 228px; } .cx-play .cx-hop{ animation:cx-hop .5s 1.75s ease-out 2; } @keyframes cx-hop{ 0%,100%{ transform:none; } 40%{ transform:translateY(-22px) scaleY(1.03); } 80%{ transform:translateY(0) scaleY(.96); } }
-.cx-umb{ transform-origin:130px 98px; transform:scale(0); } .cx-play .cx-umb{ animation:cx-umb .45s 1.25s cubic-bezier(.3,1.6,.5,1) forwards; } @keyframes cx-umb{ to{ transform:scale(1); } }
-.celebrate .cx-tear{ transform-box:fill-box; } .cx-play .cx-tear{ animation:cx-tear .9s .3s ease-in, cx-hide .01s 1.25s forwards; } @keyframes cx-tear{ 0%{ transform:none; } 100%{ transform:translateY(16px); opacity:0; } }
-.cx-play .cx-sad{ animation:cx-hide .01s 1.45s forwards; } .cx-happy{ opacity:0; } .cx-play .cx-happy{ animation:cx-show .2s 1.45s forwards; }
-.cx-rainbow path{ stroke-dasharray:100; stroke-dashoffset:100; opacity:0; } .cx-play .cx-rainbow path{ animation:cx-draw .9s 2.35s ease-out forwards; } @keyframes cx-draw{ 0%{ opacity:.9; } 100%{ opacity:.9; stroke-dashoffset:0; } }
+/* lost 1: clouds gather and it rains on the panel until the end: it shivers, cries, sags into a growing puddle */
+.cx-cloud{ transform:translateY(-90px); opacity:0; } .cx-play .cx-cloud{ animation:cx-cloudin .7s ease-out forwards; }
+.cx-cloud2{ transform:translateX(-120px); opacity:0; } .cx-play .cx-cloud2{ animation:cx-cloudin 1s .35s ease-out forwards; }
+.cx-cloud3{ transform:translateX(120px); opacity:0; } .cx-play .cx-cloud3{ animation:cx-cloudin 1s .5s ease-out forwards; }
+@keyframes cx-cloudin{ to{ transform:none; opacity:1; } }
+.cx-rain line{ opacity:0; } .cx-play .cx-rain line{ animation:cx-rain .55s linear infinite; animation-delay:calc(.5s + var(--d)); }
+@keyframes cx-rain{ 0%{ opacity:0; transform:translateY(-10px); } 20%{ opacity:.85; } 100%{ opacity:0; transform:translateY(150px); } }
+.cx-play .cx-shiver{ animation:cx-shiver .09s 40 linear; } @keyframes cx-shiver{ 0%,100%{ transform:translate(0,24px); } 50%{ transform:translate(2px,24px); } }
+.cx-slump{ transform-origin:130px 230px; } .cx-play .cx-slump{ animation:cx-slump 1.2s 1.6s cubic-bezier(.4,0,.2,1) forwards; }
+@keyframes cx-slump{ to{ transform:translateY(8px) scale(1.04,.9); } }
+.celebrate .cx-tear{ transform-box:fill-box; opacity:0; } .cx-play .cx-tear{ animation:cx-tear 1s .6s ease-in infinite; } .cx-play .cx-tear.t2{ animation-delay:1.1s; }
+@keyframes cx-tear{ 0%{ opacity:0; transform:none; } 15%{ opacity:1; } 100%{ opacity:0; transform:translateY(22px); } }
+.celebrate .cx-puddle{ transform-box:fill-box; transform-origin:center; transform:scaleX(0); } .cx-play .cx-puddle{ animation:cx-puddle 2.8s .8s ease-out forwards; } @keyframes cx-puddle{ to{ transform:scaleX(1); } }
 /* lost 2: no wind; the turbine looks around and blows on its blades; tumbleweed; crickets */
 .cx-play .cx-slow{ animation:cx-slow 2.4s cubic-bezier(.1,.6,.3,1) forwards; }
 .cx-sag{ transform-origin:130px 214px; } .cx-play .cx-sag{ animation:cx-sag 1s 2.3s cubic-bezier(.4,0,.2,1) forwards; } @keyframes cx-sag{ 40%{ transform:rotate(-2.5deg); } 70%{ transform:rotate(1deg); } 100%{ transform:rotate(-1.5deg); } }
