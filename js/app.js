@@ -13,6 +13,8 @@
   const searchInput=$('search-input'), searchClear=$('search-clear');
 
   const URGENCY_RANK={critique:0,haute:1,moyenne:2,basse:3};
+  const LINK_RE=/\[\[([^\[\]\n]{1,80})\]\]/g;   // [[links]] to contacts, companies, installations
+  const plainLinks=s=>String(s==null?'':s).replace(LINK_RE,'$1');
   const URGENCY_ORDER=['critique','haute','moyenne','basse'];
   const URGENCY_META={critique:{label:'Critique',color:'#ED6965'},haute:{label:'Haute',color:'#BB3E03'},moyenne:{label:'Moyenne',color:'#7DD3FC'},basse:{label:'Basse',color:'#8B7FB5'}};
   // Installation stages, in order. who = RACI owner (Com = me; others become "en attente" follow-up tasks).
@@ -877,7 +879,7 @@
 
     const title=document.createElement('div');
     title.className='task-title-compact';
-    title.textContent=t.title;
+    if(t.title.includes('[[')) renderLinked(title, t.title); else title.textContent=t.title;
     const nSub=(t.subtasks||[]).length;
     if(nSub){
       const done=t.subtasks.filter(s=>s.done).length;
@@ -894,7 +896,7 @@
     body.appendChild(title);
 
     if(t.description){
-      const desc=document.createElement('div'); desc.className='task-desc'; desc.textContent=t.description;
+      const desc=document.createElement('div'); desc.className='task-desc'; if(t.description.includes('[[')) renderLinked(desc, t.description); else desc.textContent=t.description;
       body.appendChild(desc);
     }
 
@@ -1059,7 +1061,7 @@
 
     const hasExpand=!!t.description || (t.subtasks||[]).length>0;
     const titleWrap=document.createElement('div'); titleWrap.className='td-title';
-    const titleText=document.createElement('span'); titleText.className='td-title-text'; titleText.textContent=t.title;
+    const titleText=document.createElement('span'); titleText.className='td-title-text'; if(t.title.includes('[[')) renderLinked(titleText, t.title); else titleText.textContent=t.title;
     titleWrap.appendChild(titleText);
     if((t.subtasks||[]).length){
       const done=t.subtasks.filter(s=>s.done).length;
@@ -1464,7 +1466,7 @@
       r.innerHTML='<span class="k"><b></b><span></span></span><span class="v"></span>'; r.querySelector('b').textContent=title; r.querySelector('.k span').textContent=sub||''; r.querySelector('.v').textContent=val||''; return r; };
     const wk=sortedTasks(weekTasks.slice()).sort((a,b)=>(a.due||'').localeCompare(b.due||''));
     const day=iso=>{ const d=new Date(iso+'T00:00:00'); return d.toLocaleDateString('fr-FR',{ weekday:'short', day:'numeric', month:'short' }); };
-    block('Les 7 prochains jours', wk.length, wk.slice(0,8).map(t=>row(t.title, t.client||'', day(t.due), ()=>openTaskEverywhere(t.id))), wk.length>8?'Les 8 premières ; toutes dans Tâches.':'');
+    block('Les 7 prochains jours', wk.length, wk.slice(0,8).map(t=>row(plainLinks(t.title), t.client||'', day(t.due), ()=>openTaskEverywhere(t.id))), wk.length>8?'Les 8 premières ; toutes dans Tâches.':'');
     const now=Date.now();
     const stalled=opportunities.filter(o=>!o.deleted && (o.kind==='installation'||o.kind==='prequal') && !isExited(o) && o.stage!=='converti' && o.stage!=='actif' && lastMove(o)>1e12 && now-lastMove(o)>=STALL_DAYS*864e5)
       .sort((a,b)=>lastMove(a)-lastMove(b));
@@ -1556,7 +1558,7 @@
       const r=document.createElement('div'); r.className='pi-row'+(done?' done':'');
       const cb=document.createElement('input'); cb.type='checkbox'; cb.checked=done; cb.setAttribute('aria-label',(done?'Décocher : ':'Cocher : ')+label);
       cb.onchange=()=>postitToggleLine(i, cb.checked);
-      const t=document.createElement('span'); t.className='pi-text'; t.textContent=label; t.title='Cliquer pour modifier'; t.onclick=()=>postitEditAt(i);
+      const t=document.createElement('span'); t.className='pi-text'; if(label.includes('[[')) renderLinked(t, label); else t.textContent=label; t.title='Cliquer pour modifier'; t.onclick=()=>postitEditAt(i);
       r.append(cb,t); box.appendChild(r);
     });
     const add=document.createElement('button'); add.type='button'; add.className='pi-add'; add.textContent='+ Ajouter une ligne'; add.onclick=()=>postitEditAt(-1); box.appendChild(add);
@@ -1675,7 +1677,7 @@
     grid.appendChild(restoreDot);
 
     const titleWrap=document.createElement('div'); titleWrap.className='td-title';
-    const titleText=document.createElement('span'); titleText.className='td-title-text'; titleText.style.textDecoration='line-through'; titleText.style.opacity='.6'; titleText.textContent=t.title;
+    const titleText=document.createElement('span'); titleText.className='td-title-text'; titleText.style.textDecoration='line-through'; titleText.style.opacity='.6'; titleText.textContent=plainLinks(t.title);
     titleWrap.appendChild(titleText);
     grid.appendChild(titleWrap);
 
@@ -2430,9 +2432,10 @@
     }
 
     if(c.comment){
-      const com=document.createElement('div'); com.className='contact-detail-comment'; com.textContent=c.comment;
+      const com=document.createElement('div'); com.className='contact-detail-comment'; if(c.comment.includes('[[')) renderLinked(com, c.comment); else com.textContent=c.comment;
       card.appendChild(com);
     }
+    { const mb=mentionsBlock('ct:'+c.id); if(mb) card.appendChild(mb); }
     { const nb=document.createElement('button'); nb.type='button'; nb.className='pq-link contact-net-link'; nb.textContent='Voir dans le réseau'; nb.onclick=()=>openInNetwork('ct:'+c.id); card.appendChild(nb); }
 
     // linked activity: meetings, opportunities and open tasks tied to the same company
@@ -2480,7 +2483,7 @@
       const icon=document.createElement('span'); icon.style.cssText='display:flex;color:var(--tx3);flex-shrink:0;';
       icon.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:13px;height:13px;"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 15"/></svg>';
       row.appendChild(icon);
-      const text=document.createElement('div'); text.className='contact-activity-row-text'; text.textContent=t.title;
+      const text=document.createElement('div'); text.className='contact-activity-row-text'; text.textContent=plainLinks(t.title);
       row.appendChild(text);
       if(t.due){ const tag=document.createElement('span'); tag.className='contact-activity-row-tag'; tag.style.cssText='color:var(--tx2);background:var(--panel-2);'; tag.textContent=fmtDateShort(t.due); row.appendChild(tag); }
       return row;
@@ -4660,6 +4663,7 @@
       }
     }
     actions.appendChild(oppActionBtn('Voir dans le réseau', ()=>{ closeOppDetail(); openInNetwork('op:'+o.id); }, 'ghost-btn'));
+    { const mb=mentionsBlock('op:'+o.id); if(mb) $('opp-detail-body').appendChild(mb); }
     actions.appendChild(oppActionBtn('Supprimer', ()=>{ if(!confirm('Supprimer cette fiche du pipeline ?')) return; o.deleted=true; touchCrm(o); saveCrm(); closeOppDetail(); renderPipeline(); }, 'ghost-btn danger-btn'));
     actions.appendChild(oppActionBtn('Fermer', closeOppDetail, 'ghost-btn lite-keep'));
     $('opp-detail-overlay').classList.remove('hidden');
@@ -6981,6 +6985,72 @@
   }
   // all the company names the app knows, from every module
   function openCompany(name){ openCompanySheet(name); }
+  // ---------- [[links]]: « [[Paul Durand]] » in a task, the note or a comment points to a contact, a company or an installation ----------
+  function linkTargets(){
+    const list=[];
+    activeContacts().forEach(c=>{ const n=[c.firstName,c.lastName].filter(Boolean).join(' '); if(n) list.push({ id:'ct:'+c.id, type:'Contact', name:n, sub:c.company||'', open:()=>openContactEverywhere(c.id) }); });
+    allCompanyNames().forEach(n=>list.push({ id:'co:'+pqFold(n).replace(/[^a-z0-9]/g,''), type:'Société', name:n, sub:'', open:()=>openCompany(n) }));
+    opportunities.filter(o=>!o.deleted && o.kind==='installation').forEach(o=>list.push({ id:'op:'+o.id, type:'Installation', name:oppName(o), sub:o.company||'', open:()=>{ gsTab('pipeline'); setTimeout(()=>openOppDetail(o.id),30); } }));
+    return list;
+  }
+  function resolveLink(name, T){ const f=pqFold(String(name).trim()); return (T||linkTargets()).find(x=>pqFold(x.name)===f)||null; }
+  function linksIn(text, T){ const out=[]; String(text||'').replace(LINK_RE,(m,n)=>{ const r=resolveLink(n,T); if(r && !out.includes(r.id)) out.push(r.id); return m; }); return out; }
+  window.todoLinksOf=text=>linksIn(text);
+  // shows a text with its links clickable (a link to nothing known stays as text, dotted)
+  function renderLinked(el, text){
+    el.textContent=''; const str=String(text||''); let last=0, T=null;
+    str.replace(LINK_RE,(m,n,at)=>{ if(at>last) el.appendChild(document.createTextNode(str.slice(last,at)));
+      T=T||linkTargets(); const r=resolveLink(n,T), a=document.createElement('span'); a.className='wl'+(r?'':' none'); a.textContent=n; a.title=r?r.type+' : ouvrir la fiche':'Rien trouvé à ce nom';
+      if(r) a.onclick=e=>{ e.stopPropagation(); r.open(); }; el.appendChild(a); last=at+m.length; return m; });
+    if(last<str.length) el.appendChild(document.createTextNode(str.slice(last)));
+  }
+  // where an entity is mentioned: tasks (archived too), the note and its archive, contact comments, pipeline comments
+  function mentionsOf(id){
+    const T=linkTargets(), out=[], has=txt=>linksIn(txt,T).includes(id);
+    tasks.filter(t=>!t.deleted && has(t.title+' '+(t.description||''))).forEach(t=>out.push({ label:t.title.replace(LINK_RE,'$1'), sub:t.archived?'Tâche faite':'Tâche', open:()=>openTaskEverywhere(t.id) }));
+    notes.filter(n=>!n.deleted && n.text).forEach(n=>String(n.text).split('\n').forEach(line=>{ if(has(line)) out.push({ label:line.replace(PI_DONE,'').replace(LINK_RE,'$1'), sub:n.id===POSTIT_ID?'Note':'Note du '+(n.day?pqIsoToFr(n.day):''), open:()=>{ if(n.id===POSTIT_ID) openPostit(); else if(window.todoOpenDayNote) window.todoOpenDayNote(n.day); } }); }));
+    activeContacts().filter(c=>c.comment && has(c.comment)).forEach(c=>out.push({ label:[c.firstName,c.lastName].filter(Boolean).join(' '), sub:'Commentaire du contact', open:()=>openContactEverywhere(c.id) }));
+    opportunities.filter(o=>!o.deleted && o.commentaires && has(o.commentaires)).forEach(o=>out.push({ label:oppName(o), sub:'Commentaire pipeline', open:()=>{ gsTab('pipeline'); setTimeout(()=>openOppDetail(o.id),30); } }));
+    return out;
+  }
+  function mentionsBlock(id){
+    const list=mentionsOf(id); if(!list.length) return null;
+    const box=document.createElement('div'); box.className='wl-mentions';
+    const h=document.createElement('div'); h.className='wl-mentions-h'; h.textContent='Mentionné dans · '+list.length; box.appendChild(h);
+    list.slice(0,12).forEach(m=>{ const b=document.createElement('button'); b.type='button'; b.className='wl-mention'; b.innerHTML='<b></b><span></span>'; b.querySelector('b').textContent=m.label; b.querySelector('span').textContent=m.sub; b.onclick=m.open; box.appendChild(b); });
+    return box;
+  }
+  // the note's lines with links become « note » nodes in the network
+  window.todoNoteLinks=()=>{ const T=linkTargets(), out=[];
+    notes.filter(n=>!n.deleted && n.text).forEach(n=>String(n.text).split('\n').forEach(line=>{ const tg=linksIn(line,T); if(tg.length) out.push([line.replace(PI_DONE,'').replace(LINK_RE,'$1'), n.id===POSTIT_ID?'Note':'Note du '+(n.day?pqIsoToFr(n.day):''), tg, ()=>openPostit()]); }));
+    return out; };
+  // typing « [[ » proposes contacts, companies and installations
+  function attachLinkAutocomplete(el){
+    if(!el || el.dataset.wlac) return; el.dataset.wlac='1';
+    let menu=null, items=[], act=0, m=null;
+    const hide=()=>{ if(menu){ menu.remove(); menu=null; } };
+    const update=()=>{
+      const caret=el.selectionStart||0, before=el.value.slice(0,caret); m=/\[\[([^\[\]\n]{0,40})$/.exec(before);
+      if(!m){ hide(); return; }
+      const q=pqFold(m[1]); items=linkTargets().filter(x=>!q || pqFold(x.name+' '+x.sub).includes(q)).sort((a,b)=>(pqFold(a.name).startsWith(q)?0:1)-(pqFold(b.name).startsWith(q)?0:1)||a.name.localeCompare(b.name,'fr')).slice(0,8);
+      if(!items.length){ hide(); return; }
+      if(!menu){ menu=document.createElement('div'); menu.className='wl-ac'; menu.setAttribute('role','listbox'); document.body.appendChild(menu); }
+      act=Math.min(act, items.length-1);
+      menu.innerHTML=''; items.forEach((x,i)=>{ const b=document.createElement('button'); b.type='button'; b.className='wl-ac-item'+(i===act?' on':''); b.innerHTML='<span class="t"></span><b></b><span class="s"></span>';
+        b.querySelector('.t').textContent=x.type; b.querySelector('b').textContent=x.name; b.querySelector('.s').textContent=x.sub; b.onmousedown=e=>{ e.preventDefault(); pick(i); }; menu.appendChild(b); });
+      const r=el.getBoundingClientRect(); menu.style.left=Math.max(8,Math.min(r.left, innerWidth-320))+'px'; const below=r.bottom+4; menu.style.top=(below+260>innerHeight?Math.max(8,r.top-264):below)+'px';
+    };
+    const pick=i=>{ const x=items[i]; if(!x||!m) return; const caret=el.selectionStart||0, before=el.value.slice(0,caret), after=el.value.slice(caret).replace(/^\]\]/,'');
+      const start=before.length-m[0].length, ins='[['+x.name+']]'; el.value=before.slice(0,start)+ins+after; const p=start+ins.length; el.setSelectionRange(p,p); hide(); el.dispatchEvent(new Event('input', { bubbles:true })); };
+    el.addEventListener('input', ()=>{ act=0; update(); });
+    el.addEventListener('keydown', e=>{ if(!menu) return;
+      if(e.key==='ArrowDown'){ e.preventDefault(); act=Math.min(items.length-1,act+1); update(); }
+      else if(e.key==='ArrowUp'){ e.preventDefault(); act=Math.max(0,act-1); update(); }
+      else if(e.key==='Enter'||e.key==='Tab'){ e.preventDefault(); e.stopImmediatePropagation(); pick(act); }
+      else if(e.key==='Escape'){ e.preventDefault(); e.stopImmediatePropagation(); hide(); } }, true);
+    el.addEventListener('blur', ()=>setTimeout(hide, 150));
+  }
+  ['quick-add-input','f-title','f-description','postit-text','ct-comment'].forEach(id=>attachLinkAutocomplete($(id)));
   // ---------- Réseau: every connection between everything, as a graph (js/network.js draws it) ----------
   let networkView=null, networkFocusNext=null;
   function networkData(){
@@ -7075,7 +7145,7 @@
     const row=(title,sub,val,fn,cls)=>{ const r=document.createElement(fn?'button':'div'); if(fn){ r.type='button'; r.onclick=()=>{ closeCompanySheet(); fn(); }; } r.className='co-row'+(cls?' '+cls:'');
       r.innerHTML='<span class="k"><b></b><span></span></span><span class="v"></span>'; r.querySelector('b').textContent=title; r.querySelector('.k span').textContent=sub||''; r.querySelector('.v').textContent=val||''; return r; };
     // what is coming up: dated tasks, contracts ending within a year
-    const next=[...open.filter(t=>t.due).map(t=>({ d:t.due, r:row(t.title,'Tâche',pqIsoToFr(t.due),()=>openTaskEverywhere(t.id), dueStatus(t.due)==='overdue'?'late':'') })),
+    const next=[...open.filter(t=>t.due).map(t=>({ d:t.due, r:row(plainLinks(t.title),'Tâche',pqIsoToFr(t.due),()=>openTaskEverywhere(t.id), dueStatus(t.due)==='overdue'?'late':'') })),
       ...parc.filter(p=>p.fin && p.fin>=today && p.fin<=in12).map(p=>({ d:p.fin, r:row('Fin de contrat : '+(p.inst||p.prod), p.kwc?fmtKwc(p.kwc):'', pqIsoToFr(p.fin), ()=>openParcItem(p)) }))]
       .sort((a,b)=>a.d.localeCompare(b.d)).slice(0,6).map(x=>x.r);
     section(colL,'À venir',next,'Rien de daté pour ce client.');
@@ -7084,7 +7154,8 @@
     section(colR,'Portefeuille',parc.slice().sort((a,b)=>(a.statut==='Gagné'?0:1)-(b.statut==='Gagné'?0:1)||(a.fin||'9').localeCompare(b.fin||'9')).slice(0,8)
       .map(p=>row(p.inst||p.prod||'(sans nom)',[p.statut,p.fin?'fin '+pqIsoToFr(p.fin):''].filter(Boolean).join(' · '),p.kwc?fmtKwc(p.kwc):'',()=>openParcItem(p))),
       parcData?'Aucun contrat dans le Suivi Agrégation.':'Charge le Suivi Agrégation dans Portefeuille pour voir les contrats.');
-    section(colR,'Tâches ouvertes',open.slice(0,6).map(t=>row(t.title,t.due?'pour le '+pqIsoToFr(t.due):'sans date','',()=>openTaskEverywhere(t.id),dueStatus(t.due)==='overdue'?'late':'')),'Aucune tâche ouverte.');
+    { const mb=mentionsBlock('co:'+pqFold(name).replace(/[^a-z0-9]/g,'')); if(mb) colR.appendChild(mb); }
+    section(colR,'Tâches ouvertes',open.slice(0,6).map(t=>row(plainLinks(t.title),t.due?'pour le '+pqIsoToFr(t.due):'sans date','',()=>openTaskEverywhere(t.id),dueStatus(t.due)==='overdue'?'late':'')),'Aucune tâche ouverte.');
     // history: meetings, done tasks, pipeline steps, new contacts and opportunities
     const hist=companyHistory(name), all=!!opts.allHistory;
     const tl=document.createElement('div'); tl.className='co-tl';
@@ -7111,7 +7182,7 @@
     const score=title=>pqFold(title).startsWith(words[0])?0:1;
     const top=(list,n)=>list.sort((a,b)=>score(a.title)-score(b.title)||a.title.localeCompare(b.title,'fr')).slice(0,n);
     const groups=[];
-    const tk=top(tasks.filter(t=>!t.deleted && hit(t.title,t.client,t.project,t.description)).map(t=>({ ic:t.archived?'✓':'T', title:t.title, sub:[t.client, t.archived?'archivée':(t.due?'pour le '+t.due.split('-').reverse().join('/'):'')].filter(Boolean).join(' · '), go:()=>openTaskEverywhere(t.id) })),6);
+    const tk=top(tasks.filter(t=>!t.deleted && hit(t.title,t.client,t.project,t.description)).map(t=>({ ic:t.archived?'✓':'T', title:plainLinks(t.title), sub:[t.client, t.archived?'archivée':(t.due?'pour le '+t.due.split('-').reverse().join('/'):'')].filter(Boolean).join(' · '), go:()=>openTaskEverywhere(t.id) })),6);
     if(tk.length) groups.push(['Tâches',tk]);
     const ct=top(activeContacts().filter(c=>hit(c.firstName,c.lastName,c.company,c.role,c.email,(c.phone1||'').replace(/\D/g,''),(c.phone2||'').replace(/\D/g,''))).map(c=>({ ic:((c.firstName||'')[0]||'')+((c.lastName||'')[0]||'')||'?', title:[c.firstName,c.lastName].filter(Boolean).join(' ')||'(sans nom)', sub:[c.role,c.company,c.phone1].filter(Boolean).join(' · '), go:()=>openContactEverywhere(c.id) })),5);
     if(ct.length) groups.push(['Contacts',ct]);

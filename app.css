@@ -1573,3 +1573,17 @@ html.lite .pipe-col.empty{ width:100%; }
 html.lite .nw-local{ margin-left:0; } html.lite .nw-side{ left:12px; width:auto; top:auto; height:45%; }
 .contact-net-link{ align-self:flex-start; margin-top:8px; }
 body.postit-open .nw-side{ bottom:300px; }
+
+/* [[links]]: clickable in the text, proposed while typing, « Mentionné dans » on the sheets */
+.wl{ color:var(--accent); border-bottom:1px solid rgba(20,211,169,.4); cursor:pointer; }
+.wl:hover{ border-bottom-color:var(--accent); }
+.wl.none{ color:var(--tx2); border-bottom:1px dotted var(--tx3); cursor:default; }
+.wl-ac{ position:fixed; z-index:30500; width:310px; max-height:260px; overflow-y:auto; background:var(--panel); border:1px solid var(--bd); border-radius:10px; box-shadow:0 14px 40px rgba(0,0,0,.45); padding:4px; }
+.wl-ac-item{ display:grid; grid-template-columns:76px 1fr; grid-template-rows:auto auto; column-gap:8px; width:100%; text-align:left; background:none; border:none; border-radius:6px; padding:6px 8px; cursor:pointer; color:var(--tx1); }
+.wl-ac-item .t{ grid-row:1 / 3; align-self:center; font:500 9.5px var(--font-mono); text-transform:uppercase; color:var(--tx3); }
+.wl-ac-item b{ font:500 13px var(--font-ui); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; } .wl-ac-item .s{ font-size:11px; color:var(--tx3); }
+.wl-ac-item.on, .wl-ac-item:hover{ background:var(--accent-dim); }
+.wl-mentions{ margin-top:12px; display:flex; flex-direction:column; gap:2px; }
+.wl-mentions-h{ font:500 10px var(--font-mono); text-transform:uppercase; letter-spacing:.4px; color:var(--tx3); margin-bottom:4px; }
+.wl-mention{ display:flex; justify-content:space-between; gap:10px; text-align:left; background:none; border:none; border-radius:6px; padding:5px 6px; cursor:pointer; color:var(--tx1); font:400 12.5px var(--font-ui); }
+.wl-mention:hover{ background:var(--panel-2); } .wl-mention span{ color:var(--tx3); font-size:11px; white-space:nowrap; }

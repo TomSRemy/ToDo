@@ -345,6 +345,22 @@ with sync_playwright() as p:
     check(page.is_visible("#opp-detail-overlay") and "Toit Durand" in page.inner_text("#opp-detail-title"), "network: « Ouvrir la fiche » opens the installation")
     page.click("#opp-detail-actions >> text=Voir dans le réseau"); page.wait_for_timeout(500)
     check(page.is_visible("#tab-network") and page.evaluate("window.todoNetworkState().selected") == "op:no1", "network: « Voir dans le réseau » from a sheet focuses its node")
+    # [[links]]: typed in a task, proposed while typing, clickable, and « Mentionné dans » on the sheet
+    page.click('[data-tab="tasks"]'); page.click("#quick-add-input"); page.keyboard.type("Rappeler [[pau")
+    check(page.is_visible(".wl-ac") and "Paul Durand" in page.inner_text(".wl-ac"), "links: « [[ » proposes the matching contacts")
+    page.keyboard.press("Enter")
+    check(page.input_value("#quick-add-input") == "Rappeler [[Paul Durand]]", f"links: Enter picks the contact ({page.input_value('#quick-add-input')!r})")
+    page.keyboard.type(" pour [[Toit"); page.keyboard.press("Enter"); page.keyboard.press("Enter"); page.wait_for_timeout(200)
+    t_new = next((x for x in stored(page, "todo-widget-tasks") if x["title"].startswith("Rappeler")), None)
+    check(t_new and t_new["title"] == "Rappeler [[Paul Durand]] pour [[Toit Durand]]", f"links: the task is created with its links ({t_new and t_new['title']})")
+    link = page.locator("#task-list .task-line .wl", has_text="Paul Durand").first
+    check(link.count() == 1, "links: shown as clickable names in the list")
+    link.click(); page.wait_for_timeout(300)
+    check(page.is_visible("#tab-contacts") and "mentionné dans" in page.inner_text("#tab-contacts").lower() and "Rappeler Paul Durand pour Toit Durand" in page.inner_text("#tab-contacts"),
+          "links: a click opens the contact, whose card lists where it is mentioned")
+    page.click('[data-tab="network"]'); page.wait_for_timeout(300)
+    page.fill(".nw-search input", "rappeler"); page.press(".nw-search input", "Enter"); page.wait_for_timeout(300)
+    check("Paul Durand" in page.inner_text(".nw-side") and "Toit Durand" in page.inner_text(".nw-side"), "links: in the network, the task is linked to what it mentions")
     check(not errors, f"no page errors ({errors})")
     page.close()
 
@@ -544,7 +560,7 @@ with sync_playwright() as p:
     many = [{"id": f"k{i}", "firstName": f"P{i}", "lastName": f"Nom{i:02d}", "role": "", "company": "Gamma", "email": "", "phone1": "", "phone2": "",
              "relevance": 0, "comment": "", "createdAt": 1, "updatedAt": 1, "deleted": False} for i in range(40)]
     page, errors = new_page(browser, {"todo_todo-widget-contacts": json.dumps(many)}, viewport={"width": 1300, "height": 700})
-    page.goto(URL); page.evaluate("localStorage.removeItem('contacts-view')"); page.reload(); page.click('[data-tab="contacts"]')
+    page.goto(URL); page.evaluate("localStorage.removeItem('contacts-view')"); page.reload(); page.wait_for_function("document.querySelector('#contacts-view-switch .view-icon-btn.active')"); page.click('[data-tab="contacts"]')
     check(page.locator('#contacts-view-switch [data-view="liste"].active').count() == 1 and page.locator("#contacts-list .company-group-header").count() == 0,
           "contacts: list view by default")
     page.locator("#contacts-list .contact-row", has_text="Nom05").locator(".edit-btn").click()
