@@ -1610,3 +1610,8 @@ body.postit-open .nw-side{ bottom:300px; }
 .edit-form .form-row{ align-items:flex-start; }
 /* the network is not on the phone view: no button to it there */
 html.lite .contact-net-link, html.lite #co-sheet-net, html.lite .opp-net-btn{ display:none !important; }
+
+/* Réf. & data: the sync and bridge fields look like every other field of the app */
+.list-manager input[type=text], .list-manager input[type=password], .list-manager input[type=date]{ background:var(--panel-2); border:1px solid var(--bd); border-radius:var(--radius); color:var(--tx1); font:400 13px var(--font-ui); padding:8px 10px; box-sizing:border-box; }
+.list-manager input[type=text]:focus, .list-manager input[type=password]:focus, .list-manager input[type=date]:focus{ outline:none; border-color:var(--accent); }
+.nw-empty{ position:absolute; inset:0; display:flex; align-items:center; justify-content:center; text-align:center; color:var(--tx3); font-size:13px; line-height:1.6; padding:20px; pointer-events:none; }

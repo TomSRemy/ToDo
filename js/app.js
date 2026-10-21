@@ -1744,7 +1744,7 @@
     grid.appendChild(makeSolidTag(uMeta.label, uMeta.color, null));
 
     const dateTag=document.createElement('span'); dateTag.className='meta-date-compact';
-    dateTag.textContent=inTrash?(t.updatedAt?fmtDateTime(t.updatedAt):''):(t.archivedAt?fmtDateTime(t.archivedAt):'');
+    { const ts=inTrash?t.updatedAt:t.archivedAt; dateTag.textContent=ts?DF_DMY.format(new Date(ts)):''; if(ts) dateTag.title=fmtDateTime(ts); }   // the time on hover: it does not fit in the column
     if(inTrash) dateTag.title='Supprimée le '+dateTag.textContent;
     grid.appendChild(dateTag);
 

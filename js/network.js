@@ -37,6 +37,9 @@
       nodes.forEach(n=>{ n.deg=adj.get(n.id).length; n.r=(TYPES[n.type]||TYPES.task).r+Math.min(9, Math.sqrt(n.deg)*1.6); });
       if(selected) selected=byId.get(selected.id)||null;
       paintTypes(); alpha=Math.max(alpha,.6); kick();
+      let empty=stage.querySelector('.nw-empty');
+      if(!nodes.length){ if(!empty){ empty=document.createElement('div'); empty.className='nw-empty'; empty.innerHTML='Rien à relier pour l’instant.<br>Les sociétés, contacts, opportunités et tâches apparaîtront ici avec leurs liens.'; stage.appendChild(empty); } }
+      else if(empty) empty.remove();
     }
     function paintTypes(){
       const count={}; nodes.forEach(n=>{ count[n.type]=(count[n.type]||0)+1; });
