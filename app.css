@@ -1291,7 +1291,7 @@ details.req-compare:not([open]) .req-compare-h::before{ transform:rotate(-90deg)
 .req-inst-ed:hover{ color:var(--accent); }
 
 /* compact date chips, one line */
-.pq-dchips{ flex-wrap:nowrap; gap:3px; margin-top:4px; overflow:hidden; }
+.pq-dchips{ flex-wrap:wrap; gap:3px; margin-top:4px; }
 .pq-dchips button{ font:500 10.5px var(--font-ui); padding:1px 7px; line-height:16px; white-space:nowrap; }
 /* « → toutes » tab on each installation field */
 .pq-f label{ display:flex; align-items:baseline; gap:4px; }

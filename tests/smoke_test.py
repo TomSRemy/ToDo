@@ -597,6 +597,8 @@ with sync_playwright() as p:
     page.fill("#pq-1-mesPrev", "01/03/2028"); page.locator("#pq-1-mesPrev").dispatch_event("change")
     page.fill("#pq-0-duree", "5"); page.locator("#pq-0-duree").dispatch_event("change")
     page.click("#pq-form button[data-toall='duree'][data-s='0']")
+    check(page.evaluate("""(()=>{ const b=document.querySelector("#pq-form button[data-dall='mes'][data-s='0']"), f=b.closest('.pq-f'), r=b.getBoundingClientRect(), p=f.getBoundingClientRect();
+          return !!f.querySelector('#pq-0-fin') && r.right<=p.right+1 && b.scrollWidth<=b.clientWidth+1; })()"""), "dates: « toutes : début à la MES » sits under the end date, fully visible")
     page.click("#pq-form button[data-dall='mes'][data-s='0']")
     check(page.is_visible("#choice-overlay"), "dates: asks before replacing start dates already filled")
     page.click("#choice-btns >> text=Remplacer")

@@ -3885,9 +3885,11 @@
     if(f.k==='debut' && scope!=='s'){
       const inst=pqState.installs[+scope]||{}, mes=pqFullDate(inst.mesEff||inst.mesPrev), y=new Date().getFullYear();
       extra='<div class="pq-dchips">'+(mes?'<button type="button" data-dset="debut" data-v="'+mes+'" data-s="'+scope+'" title="Début à la mise en service ('+mes+')">MES</button>':'')
-        +[y+1,y+2].map(Y=>'<button type="button" data-dset="debut" data-v="01/01/'+Y+'" data-s="'+scope+'" title="1er janvier '+Y+'">1/1/'+String(Y).slice(2)+'</button>').join('')
-        +(pqState.installs.length>1?'<button type="button" class="all" data-dall="mes" data-s="'+scope+'" title="Chaque installation démarre à sa propre mise en service">toutes : MES</button>':'')+'</div>';
+        +[y+1,y+2].map(Y=>'<button type="button" data-dset="debut" data-v="01/01/'+Y+'" data-s="'+scope+'" title="1er janvier '+Y+'">1/1/'+String(Y).slice(2)+'</button>').join('')+'</div>';
     }
+    // under the end date (free space): every installation starts at its own commissioning date
+    if(f.k==='fin' && scope!=='s' && pqState.installs.length>1)
+      extra='<div class="pq-dchips"><button type="button" class="all" data-dall="mes" data-s="'+scope+'" title="Chaque installation démarre à sa propre mise en service (date de début = MES)">toutes : début à la MES</button></div>';
     if(f.k==='duree' && scope!=='s') extra='<div class="pq-dchips">'+[1,2,3,5].map(n=>'<button type="button" data-dset="duree" data-v="'+n+'" data-s="'+scope+'" title="'+n+' an'+(n>1?'s':'')+'">'+n+'a</button>').join('')+'</div>';
     const toAll=scope!=='s' && pqState.installs.length>1 && f.type!=='computed'
       ?'<button type="button" class="pq-toall" data-toall="'+f.k+'" data-s="'+scope+'" title="Mettre cette valeur sur toutes les installations'+(['debut','fin','duree'].includes(f.k)?' (début, durée et fin)':'')+'">→ toutes</button>':'';
