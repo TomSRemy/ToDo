@@ -514,8 +514,8 @@ with sync_playwright() as p:
         if page.is_visible(ov + " .modal-x"): page.click(ov + " .modal-x")
     page.locator(".pipe-req-card .pipe-card-title").first.click(); page.wait_for_timeout(200)
     mail = page.input_value("#opp-mail-body")
-    check("Les Pins : P50 6 625 MWh/an / P90 6 203 MWh/an" in mail.replace("\u202f", " ") and "lat. 43.38 / long. 2.43" in mail and "Caractéristiques_Centrales_EXEMPLE ENERGIES.xlsx" in mail,
-          "pricing mail: the figures of each plant and the attached file's name")
+    check("Production : voir fichier joint." in mail and "Les Pins : mars 2027 → avril 2027 (test 1 mois)" in mail and "Le Lac : avril 2027 → mai 2027 (test 1 mois)" in mail,
+          f"pricing mail: figures in the attached file, first injection → MSI from the producer's file ({[l for l in mail.split(chr(10)) if 'Les Pins' in l or 'Le Lac' in l]})")
     with page.expect_download() as dl:
         page.click("#opp-detail-actions >> text=Fichier caractéristiques (.xlsx)")
     got_file = pathlib.Path(tempfile.mkdtemp()) / dl.value.suggested_filename; dl.value.save_as(got_file)
@@ -612,8 +612,26 @@ with sync_playwright() as p:
       {company:'GAEC Martin', centrale:'Hangar 2', mesPrev:'15/02/2028', duree:'3'},
       {producteur:'SOLARIS', centrale:'CS du Moulin'},
       {producteur:'SOLARIS', centrale:'Ombrière', mesPrev:'2027', fin:'31/12/2030'}].map(o=>window.__todo.codeAffaire(Object.assign({kind:'installation'},o)))""")
-    check(codes == ["2729 - SOLARIS_Toit Durand - A", "27(06)30(08) - SOLARIS_Toit Durand - A", "28(02)31(02) - GAEC Martin_Hangar 2 - A", "[AA][BB] - SOLARIS_CS du Moulin - A", "2730 - SOLARIS_Ombrière - A"],
+    short = page.evaluate("[window.__todo.codeAffaire({kind:'installation', producteur:'P', centrale:'C', debut:'juil-27', fin:'31/12/2030'})]")
+    check(short == ["27(07)30 – P_C – A"], f"Excel's short dates (« juil-27 ») are read ({short})")
+    check(codes == ["2729 – SOLARIS_Toit Durand – A", "27(06)30(08) – SOLARIS_Toit Durand – A", "28(02)31(02) – GAEC Martin_Hangar 2 – A", "[AA][BB] – SOLARIS_CS du Moulin – A", "2730 – SOLARIS_Ombrière – A"],
           f"business code GENE01-D1 (agrégation): AA(MM)BB(MM) - Producteur_Centrale - A ({codes})")
+    # the pricing mail, on the model of the last one sent (invented plants)
+    ml = page.evaluate("""(()=>{ const base={ kind:'installation', company:'EXEMPLE ENERGIE', producteur:'EXEMPLE ENERGIE', contrat:'AO CRE CR', fin:'31/12/2030' };
+      const L=[Object.assign({}, base, { centrale:'Les Pins', install:'PV', debut:'01/03/2027', mesPrev:'01/04/2027' }),
+               Object.assign({}, base, { centrale:'Le Lac', install:'Eolien', debut:'01/12/2027', mesPrev:'12/01/2028', fin:'31/12/2031' }),
+               Object.assign({}, base, { centrale:'Les Prés', install:'PV', debut:'01/07/2027', mesPrev:'01/08/2027' })];
+      return window.__todo.pricingMail({ company:'EXEMPLE ENERGIE' }, L); })()""")
+    b = ml["body"]
+    check(ml["subject"] == "Demande de prix agrégation – EXEMPLE ENERGIE – 2 PV + 1 éolien CR", f"pricing mail: subject like the model ({ml['subject']})")
+    check("pour EXEMPLE ENERGIE : 2 projets PV greenfield et 1 projet éolien greenfield, tous lauréats AO CRE et bénéficiant d’un contrat de complément de rémunération." in b
+          and "- 27(03)30 – EXEMPLE ENERGIE_Les Pins – A" in b and "(infos en jaune extrapolées)" in b, "pricing mail: intro and business codes like the model")
+    order = [l.strip() for l in b.split("\n") if "(test " in l]
+    check(order == ["- Les Pins : mars 2027 → avril 2027 (test 1 mois)", "- Les Prés : juillet 2027 → août 2027 (test 1 mois)", "- Le Lac : décembre 2027 → janvier 2028 (test 6 semaines)"],
+          f"pricing mail: first injection → MSI per plant, in order, with the test length ({order})")
+    check("- Durée : 2 pricing demandés, jusqu’au 31/12/2030 et jusqu’au 31/12/2031." in b and "- Contexte du marché : AO CRE (CR)" in b
+          and "   - Prix phase de Test : SPOT" in b and "   - Période de test : frais en €/MWh" in b and "- GO : sans objet" in b and "- GAPD : coût et montant à indiquer." in b
+          and "- Éolien : bridages" in b and "Date de remise de l’offre : [À CONFIRMER" in b and b.endswith("Merci d’avance !"), "pricing mail: options, test phase and conditions like the model")
     page.close()
 
     # --- Contract dates: start + duration → end, start + end → duration, one-click choices
@@ -898,7 +916,7 @@ with sync_playwright() as p:
     page.click("#opp-detail-actions >> text=Copier ligne BDD")
     row = page.evaluate("navigator.clipboard.readText()").split("\t")
     check(len(row) == 91 and row[24] == "En préparation" and row[33] == "Le Moulin", "BDD row: 91 columns, status and plant")
-    check(re.match(r"^\[?\w*\]?[\w()\[\]]* - .+_Le Moulin - A$", row[7]) is not None, f"BDD row: business code in column H « Ref_Watt.ee » ({row[7]})")
+    check(re.match(r"^\[?\w*\]?[\w()\[\]]* – .+_Le Moulin – A$", row[7]) is not None, f"BDD row: business code in column H « Ref_Watt.ee » ({row[7]})")
     page.click("#opp-detail-actions >> text=Fermer")
     # pré-qualif → installation
     page.click("#prequal-add-btn"); page.fill("#prequal-company", "Ferme Dupont"); page.fill("#prequal-note", "Salon"); page.click("#prequal-save-btn")

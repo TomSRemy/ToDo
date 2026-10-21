@@ -2726,6 +2726,10 @@
     m=/(\d{4})-(\d{2})-(\d{2})/.exec(s); if(m) return m[3]+'/'+m[2]+'/'+m[1];
     m=/(\d{1,2})(?:er)?\s+(janvier|fevrier|mars|avril|mai|juin|juillet|aout|septembre|octobre|novembre|decembre)\s+(\d{4})/.exec(s); if(m) return pqPad(m[1])+'/'+pqPad(PQ_MONTHS[m[2]])+'/'+m[3];
     m=/(janvier|fevrier|mars|avril|mai|juin|juillet|aout|septembre|octobre|novembre|decembre)\s+(\d{4})/.exec(s); if(m) return PQ_MONTH_LABEL[m[1]]+' '+m[2];
+    // Excel's short form « juil-27 », « déc. 2027 », « sept-2028 »
+    m=/\b(janv?|fevr?|mars|avr|mai|juin|juil|aout|sept?|oct|nov|dec)\.?[\s-]+(\d{2}|\d{4})\b/.exec(s);
+    if(m){ const k={ jan:'janvier', janv:'janvier', fev:'fevrier', fevr:'fevrier', mars:'mars', avr:'avril', mai:'mai', juin:'juin', juil:'juillet', aout:'aout', sep:'septembre', sept:'septembre', oct:'octobre', nov:'novembre', dec:'decembre' }[m[1]];
+      if(k) return PQ_MONTH_LABEL[k]+' '+(m[2].length===2?'20'+m[2]:m[2]); }
     m=/\b(january|february|march|april|may|june|july|august|september|october|november|december)\s+(\d{4})/.exec(s); if(m) return Object.values(PQ_MONTH_LABEL)[['january','february','march','april','may','june','july','august','september','october','november','december'].indexOf(m[1])]+' '+m[2];
     m=/\bq([1-4])\s+(\d{4})/.exec(s); if(m) return 'T'+m[1]+' '+m[2];
     m=/\b(0?[1-9]|1[0-2])\/(20\d{2})\b/.exec(s); if(m) return PQ_MONTH_LABEL[Object.keys(PQ_MONTHS)[parseInt(m[1],10)-1]]+' '+m[2];
@@ -3242,7 +3246,8 @@
     { k:'mwh', re:/\bp50\b|production|productible|volume|energie (produite|annuelle)|\byield\b|generation|annual energy/, not:/kwh ?\/ ?kwc|\bp90\b|par kwc/ },
     { k:'p90', re:/\bp90\b/, not:/kwh ?\/ ?kwc/ },
     { k:'fin', re:/fin (de l.|d.)?oa\b|fin (du |de )?contrat|echeance|date de fin/ },
-    { k:'mesPrev', re:/mise en service|\bmsi\b|\bmes\b|\bcod\b|date de raccordement|raccordement prevu|premiere injection|commissioning|\bcod date\b/, not:/type d.injection/ },
+    { k:'injection', re:/premiere injection|first injection|date d.injection/, not:/type d.injection/ },   // start of the contract (test phase until the MSI)
+    { k:'mesPrev', re:/mise en service|\bmsi\b|\bmes\b|\bcod\b|date de raccordement|raccordement prevu|commissioning|\bcod date\b/, not:/type d.injection/ },
     { k:'contrat', re:/mecanisme|soutien|type de contrat|appel d.offres?|^tarif|^contrat$|cadre (juridique|contractuel)/ }
   ];
   const xlLabel=v=>pqFold(v).replace(/\s+/g,' ').trim();
@@ -3275,6 +3280,7 @@
       case 'productible': { const n=typeof v==='number'?v:pqNum(String(v)); if(!n||isNaN(n)) return; inst.productible=String(Math.round(n<10?n*1000:n)); return; }
       case 'mwh': case 'p90': { const q=xlQty(v, lu||'mwh'); if(!q||isNaN(q.n)) return; let n=q.n; if(q.unit==='gwh') n*=1000; if(q.unit==='kwh') n/=1000; inst[def.k]=String(Math.round(n)); return; }
       case 'mesPrev': case 'fin': { const d=pqCellDate(v); if(d) inst[def.k]=d; return; }
+      case 'injection': { const d=pqCellDate(v); if(d) inst._inj=d; return; }
       case 'dept': { const d=pqDeptFromText(String(v)); if(d){ inst.dept=pqDeptLabel(d); inst.region=PQ_REGIONS[d[2]]; } return; }
       case 'cp': { const cp=typeof v==='number'?String(v).padStart(5,'0'):String(v).trim(); inst.cp=cp; return; }
       case 'install': { const t=xlInstallType(v); if(t) inst.install=t; if(/au sol|\bsol\b/i.test(v)) inst._nature='Centrale au sol'; else if(/toiture|hangar/i.test(v)) inst._nature='Toiture'; else if(/ombri/i.test(v)) inst._nature='Ombrière'; return; }
@@ -3290,6 +3296,8 @@
     if(!inst.cp && inst.adresse){ const m=/\b(\d{5})\b/.exec(inst.adresse); if(m) inst.cp=m[1]; }
     if(!inst.install && (inst.kwc||'') && /kwc|mwc|crete/.test(inst._labels||'')) inst.install='PV';
     if(inst._nature) inst.particularites=inst._nature;
+    if(inst._inj && !inst.debut){ const f=pqFullDate(inst._inj); inst.debut=f||inst._inj; }   // the contract starts at the first injection
+    if(inst._inj && !inst.mesPrev) inst.mesPrev=inst._inj;
     if(!inst.centrale && inst.spv) inst.centrale=inst.spv;   // « Nom Installation » left empty: the SPV names the plant
     Object.keys(inst).forEach(k=>{ if(k.charAt(0)==='_') delete inst[k]; });
     return inst;
@@ -4818,9 +4826,10 @@
     if((m=/^(\d{4})-(\d{2})-(\d{2})$/.exec(t))) return { y:+m[1], m:+m[2], d:+m[3] };
     if((m=/^(\p{L}+)\s+(\d{4})$/u.exec(t)) && PQ_MONTHS[pqFold(m[1])]) return { y:+m[2], m:PQ_MONTHS[pqFold(m[1])], d:1 };
     if((m=/^(\d{4})$/.exec(t))) return { y:+m[1], m:null, d:null };
-    return null;
+    const loose=t?pqParseDateLoose(t):null;   // « juil-27 », « 1er mars 2027 »… once more through the loose reader
+    return loose && loose!==t ? pqMonthYear(loose) : null;
   }
-  // Business code (procédure GENE01-D1, agrégation): AA(MM)BB(MM) - Producteur_Centrale - A
+  // Business code (procédure GENE01-D1, agrégation): AA(MM)BB(MM) – Producteur_Centrale – A
   //  AA = start of the contract (the commissioning date until the start date is known), (MM) when not 1 January;
   //  BB = end of the contract, (MM) when not 31 December. No market (MP) nor lot (L1) in agrégation.
   function codeAffaire(o){
@@ -4833,7 +4842,7 @@
     const lastDay=end&&end.m===12&&(!end.d||end.d===31);
     const bb=end?String(end.y).slice(2)+(end.m && !lastDay?'('+pqPad(end.m)+')':''):'[BB]';
     const prod=String(o.producteur||o.company||'').trim(), name=oppName(o);
-    return aa+bb+' - '+[prod, name].filter(Boolean).join('_')+' - A';
+    return aa+bb+' \u2013 '+[prod, name].filter(Boolean).join('_')+' \u2013 A';
   }
   const CARACT_ROWS=['Nom Installation','Nom SPV','SIRET SPV','Adresse Installation','Département','Commune','Altitude','Latitude','Longitude','Nature Projet',"Type d'injection",
     "Taux d'autoconsommation individuelle","Taux d'autoconsommation collective (sur Prod totale)",'Première injection','Date de mise en service (effective ou prévisionnelle)',
@@ -4879,38 +4888,75 @@
       if(btn){ const t=btn.textContent; btn.textContent='✓ Fichier créé'; setTimeout(()=>{ btn.textContent=t; },2000); }
     }catch(e){ console.error(e); showBridgeMsg('Fichier non créé : '+(e.message||e), false); }
   }
+  // Pricing request mail, on the model of the last one sent (Q ENERGY, 3 PV + 1 éolien CR): the figures stay in the
+  // attached file; the mail gives the codes, the dates (first injection → MSI), the options and the conditions asked.
   function pricingMail(req, list){
-    const company=req.company;
-    const nPv=list.filter(o=>/PV/.test(o.install||'')).length, nEol=list.filter(o=>/Eolien/.test(o.install||'')).length;
+    const company=req.company||(list[0]&&list[0].company)||'';
+    const pv=list.filter(o=>/PV/.test(o.install||'')), eol=list.filter(o=>/Eolien/.test(o.install||'')), other=list.length-pv.length-eol.length;
+    const cr=list.length && list.every(o=>/CR/.test(o.contrat||'')), anyCr=list.some(o=>/CR/.test(o.contrat||''));
     const mech=[...new Set(list.map(o=>/CR/.test(o.contrat||'')?'CR':/OA/.test(o.contrat||'')?'OA':o.contrat?'marché':'').filter(Boolean))].join(' / ');
-    const parts=[]; if(nPv) parts.push(nPv+' PV'); if(nEol) parts.push(nEol+' éolien'); if(!parts.length) parts.push(list.length+' centrale'+(list.length>1?'s':''));
-    const subject='Demande de pricing agrégation – '+company+' – '+parts.join(' + ')+(mech?' '+mech:'');
+    const parts=[]; if(pv.length) parts.push(pv.length+' PV'); if(eol.length) parts.push(eol.length+' éolien'); if(other>0 || !parts.length) parts.push((other||list.length)+' centrale'+((other||list.length)>1?'s':''));
+    const subject='Demande de prix agrégation – '+company+' – '+parts.join(' + ')+(mech?' '+mech:'');
+    // « 3 projets PV greenfield et 1 projet éolien greenfield »
+    const today=new Date();
+    const stage=g=>{ const built=g.filter(o=>{ const d=pqToDate(o.mesEff); return d && d<=today; }).length; return built===g.length?'en service':built?'en service ou greenfield':'greenfield'; };
+    const proj=(g,label)=>g.length?g.length+' projet'+(g.length>1?'s':'')+' '+label+' '+stage(g):'';
+    const what=[proj(pv,'PV'), proj(eol,'éolien'), other>0?other+' autre'+(other>1?'s':'')+' projet'+(other>1?'s':''):''].filter(Boolean).join(' et ');
+    const many=list.length>1;
+    const why=cr?(many?', tous lauréats AO CRE et bénéficiant d’un contrat de complément de rémunération':', lauréat AO CRE et bénéficiant d’un contrat de complément de rémunération')
+      :list.length && list.every(o=>/OA/.test(o.contrat||''))?(many?', tous sous obligation d’achat':', sous obligation d’achat'):'';
     const indicatif=list.some(o=>o.nature==='Engageante')?'fermes et engageants':'indicatifs';
-    const lines=[
-      'Bonjour à tous,','',
-      'Ci-dessous une demande de pricing agrégation pour '+company+' : '+parts.join(' + ')+(mech?', '+mech:'')+'.',
+    const month=p=>p&&p.m?PQ_MONTH_NAMES[p.m-1].toLowerCase()+' '+p.y:(p?String(p.y):'');
+    // first injection = start of the contract (date de début, else the producer's file); MSI = commissioning
+    const injOf=o=>pqMonthYear(o.debut)||pqMonthYear(caractValue(o,'Première injection'));
+    const msiOf=o=>pqMonthYear(o.mesEff||o.mesPrev);
+    const testLen=(a,b)=>{ if(!a||!b||!a.m||!b.m) return ''; const da=new Date(a.y,a.m-1,a.d||1), db=new Date(b.y,b.m-1,b.d||1), days=Math.round((db-da)/864e5); if(days<=0) return '';
+      const m=days/30.44; return Math.abs(m-Math.round(m))<0.2 && Math.round(m)>=1?Math.round(m)+' mois':Math.max(1,Math.round(days/7))+' semaine'+(Math.round(days/7)>1?'s':''); };
+    const byStart=list.slice().sort((x,y)=>{ const a=injOf(x)||msiOf(x), b=injOf(y)||msiOf(y); return (a?a.y*12+(a.m||0):1e9)-(b?b.y*12+(b.m||0):1e9); });
+    const anyTest=list.some(o=>{ const a=injOf(o), b=msiOf(o); return a && b && testLen(a,b); });
+    const dateLine=o=>{ const a=injOf(o), b=msiOf(o), t=testLen(a,b);
+      if(a && b && t) return oppName(o)+' : '+month(a)+' → '+month(b)+' (test '+t+')';
+      if(b) return oppName(o)+' : MSI '+month(b)+(a?'':' (première injection [À CONFIRMER])');
+      if(a) return oppName(o)+' : '+month(a)+' → MSI [À CONFIRMER]';
+      return oppName(o)+' : [À CONFIRMER]'; };
+    const ends=[...new Set(list.map(o=>{ const e=pqMonthYear(o.fin); return e&&e.m?pqPad(e.d||new Date(e.y,e.m,0).getDate())+'/'+pqPad(e.m)+'/'+e.y:(o.fin||''); }).filter(Boolean))];
+    const duree=ends.length>1?ends.length+' pricing demandés, '+ends.map(e=>'jusqu’au '+e).join(' et ')+'.':ends.length?'jusqu’au '+ends[0]+'.':'[À CONFIRMER]';
+    const ctx=[...new Set(list.map(o=>(o.contrat||'').replace(/\s+CR$/,' (CR)')).filter(Boolean))].join(' / ')||'[À CONFIRMER]';
+    const L=['Bonjour à tous,','',
+      'Ci-dessous une demande de pricing agrégation pour '+company+' : '+(what||parts.join(' + '))+why+'.',
       'Les prix demandés sont '+indicatif+'.',
-      'Vous trouverez ci-joint le fichier avec les caractéristiques des centrales ('+caractFileName(list)+') que je continue de compléter avec le producteur.','',
-      'Codes affaire :'
-    ].concat(list.map(o=>'- '+codeAffaire(o))).concat([
-      '','Informations principales :',
-      '- Puissance installée :'
-    ]).concat(list.map(o=>'   - '+oppName(o)+' : '+(fmtKwc(o.kwc)||'[À CONFIRMER]'))).concat([
-      '- Production (P50 / P90) :'
-    ]).concat(list.map(o=>{ const p50=caractValue(o,'P50 annuel (indicatif) (MWh/an)'), p90=caractValue(o,'P90 annuel (indicatif) (MWh/an)'), f=n=>Number(n).toLocaleString('fr-FR')+' MWh/an';
-      return '   - '+oppName(o)+' : '+(p50!==''?'P50 '+f(p50):'P50 [À CONFIRMER]')+(p90!==''?' / P90 '+f(p90):''); })).concat([
-      '- Localisation :'
-    ]).concat(list.map(o=>{ const lat=caractValue(o,'Latitude'), lon=caractValue(o,'Longitude'), place=[o.commune, o.dept].filter(Boolean).join(', ');
-      return '   - '+oppName(o)+' : '+([place, lat!==''&&lon!==''?'lat. '+lat+' / long. '+lon:''].filter(Boolean).join(' · ')||'voir fichier joint'); })).concat([
-      '- Dates données par le producteur (première injection → MSI, phase de test entre les deux) :'
-    ]).concat(list.map(o=>'   - '+oppName(o)+' : '+(o.mesPrev?'MSI '+o.mesPrev:'[À CONFIRMER]'))).concat([
-      '- Durée : '+([...new Set(list.map(o=>o.fin?'fin '+o.fin:(o.duree?o.duree+' ans':'')).filter(Boolean))].join(' / ')||'[À CONFIRMER]'),
-      '- Contexte du marché : '+([...new Set(list.map(o=>o.contrat).filter(Boolean))].join(' / ')||'[À CONFIRMER]'),
-      '- Prix d\u2019achat par Selfee : Prix M0 CR'+(nPv&&!nEol?' (M0 solaire)':nEol&&!nPv?' (M0 éolien)':''),
-      '- Disponibilité : franchise de 30 heures d\u2019indisponibilité','',
-      'Je reste disponible pour en parler si nécessaire.','','Merci d\u2019avance !'
-    ]);
-    return { subject, body:lines.join('\n') };
+      'Vous trouverez ci-joint le fichier avec les caractéristiques des centrales que je continue de compléter avec le producteur (infos en jaune extrapolées).','',
+      'Codes affaire :'];
+    list.forEach(o=>L.push('- '+codeAffaire(o)));
+    L.push('','Informations principales :',
+      '- Puissance installée : voir fichier joint.',
+      '- Production : voir fichier joint.',
+      '- Latitude/longitude : voir fichier joint.',
+      '- Dates de démarrage du contrat (première injection → MSI, phase de test entre les deux) :');
+    byStart.forEach(o=>L.push('   - '+dateLine(o)));
+    L.push('- Durée : '+duree, '- Contexte du marché : '+ctx);
+    if(anyTest && anyCr){
+      L.push('- Prix d’achat par Selfee : Le producteur demande un prix pour la phase de test et un prix pour la période CR à partir de la MSI.',
+        '   - Prix phase de Test : SPOT', '   - Prix à partir de la MSI : Prix M0 CR',
+        '- Frais d’agrégation :', '   - Période de test : frais en €/MWh',
+        '   - Période CR : frais fixes en €/MWh, ou fixe + variable, ou autre structure à proposer, avec un prix par centrale');
+    } else {
+      L.push('- Prix d’achat par Selfee : '+(anyCr?'Prix M0 CR':'[À DÉFINIR]'),
+        '- Frais d’agrégation : frais fixes en €/MWh, ou fixe + variable, ou autre structure à proposer, avec un prix par centrale');
+    }
+    L.push('- Garanties de capacité : oui/non. Si oui indiquer les frais associés.',
+      '- Pilotage Prix négatifs : oui/non. Si oui, indiquer les frais associés et le seuil d’arrêt (0 €/MWh ou -0,10 €/MWh ou autre).',
+      '- Mécanisme d’ajustement : oui/non. Si oui, indiquer participation (hausse/baisse) et rémunération (partage de valeur, prime fixe d’activation, forfait annuel, autre).',
+      '- Programmation : oui/non',
+      '- Valorisation sur d’autres marchés : à indiquer si pertinent.',
+      '- REMIT reporting et programmation : oui/non. Si oui, frais associés.',
+      '- GAPD : coût et montant à indiquer.',
+      '- Disponibilité : proposition franchise de 30 heures d’indisponibilité (hors indispos programmés) et passage au SPOT si arrêt long (>5jours) pour le mois concerné par l’arrêt long.',
+      '- GO : '+(cr?'sans objet':'[À DÉFINIR]'));
+    if(eol.length) L.push('- Éolien : bridages chiroptères, avifaune et acoustiques : [À COMPLÉTER – voir le fichier de consultation du producteur]');
+    L.push('- Date de remise de l’offre : [À CONFIRMER – en attente du retour du producteur].','',
+      'Je reste disponible pour en discuter si nécessaire.','','Merci d’avance !');
+    return { subject, body:L.join('\n') };
   }
 
   // ----- Excel rows (tab-separated, pasted from column A) -----
@@ -6641,7 +6687,7 @@
   $('vcf-overlay').addEventListener('click', e=>{ if(e.target.id==='vcf-overlay') $('vcf-overlay').classList.add('hidden'); });
 
   // Test hooks (tests/smoke_test.py and the mail corpus set window.TODO_TEST_HOOKS before loading)
-  if(window.TODO_TEST_HOOKS) window.__todo={ parsePipeMail, parsePipeMailInstallations:parseMailInstallations, parseSignatureBlock, parseSignatureText, xlsxToInstallations:(rowsBySheet)=>pqRowsToInstallations(Object.keys(rowsBySheet), n=>rowsBySheet[n]), codeAffaire };
+  if(window.TODO_TEST_HOOKS) window.__todo={ parsePipeMail, parsePipeMailInstallations:parseMailInstallations, parseSignatureBlock, parseSignatureText, xlsxToInstallations:(rowsBySheet)=>pqRowsToInstallations(Object.keys(rowsBySheet), n=>rowsBySheet[n]), codeAffaire, pricingMail };
 
   // Phone version: bottom bar drives the sidebar tabs (which stay the single source of truth).
   if(window.TODO_LITE){
