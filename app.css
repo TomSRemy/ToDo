@@ -1393,3 +1393,26 @@ details.req-compare:not([open]) .req-compare-h::before{ transform:rotate(-90deg)
 .pq-form{ container-type:inline-size; container-name:pqform; }
 @container pqform (min-width: 560px){ .pq-grid.pq-grid5{ grid-template-columns:repeat(4,minmax(0,1fr)); } }
 @container pqform (min-width: 820px){ .pq-grid.pq-grid5{ grid-template-columns:repeat(5,minmax(0,1fr)); } }
+
+/* side-by-side table: the « Caractéristiques Centrales » lines, folding sections, cells edited in place */
+.req-hint{ margin-left:auto; font:400 11px var(--font-ui); color:var(--tx3); text-transform:none; letter-spacing:0; }
+.req-compare-scroll{ max-height:70vh; overflow:auto; }
+.req-table{ width:max-content; min-width:100%; }
+.req-table thead th{ position:sticky; top:0; z-index:2; }
+.req-table .req-lab{ position:sticky; left:0; z-index:1; background:var(--panel); min-width:210px; max-width:260px; white-space:normal; font-weight:500; color:var(--tx3); }
+.req-table thead th.req-lab{ z-index:3; background:var(--panel-3); }
+.req-table td{ padding:2px 4px; min-width:130px; }
+.req-in{ width:100%; min-width:0; box-sizing:border-box; background:transparent; border:1px solid transparent; border-radius:5px; padding:4px 6px; color:var(--tx1); font:400 12.5px var(--font-ui); }
+.req-in:hover{ border-color:var(--bd); }
+.req-in:focus{ outline:none; border-color:var(--accent); background:var(--panel-2); }
+.req-in::placeholder{ color:var(--tx3); opacity:.6; }
+select.req-in{ cursor:pointer; }
+.req-table td.empty .req-in::placeholder{ color:#E5B54F; opacity:1; font-style:italic; }
+.req-table td.saved .req-in{ border-color:var(--accent); }
+.req-table tr.req-sub th{ position:sticky; left:0; padding:0; }
+.req-sec-h{ display:flex; align-items:center; gap:6px; width:100%; padding:7px 10px; background:none; border:none; cursor:pointer; font:inherit; color:inherit; text-transform:inherit; letter-spacing:inherit; text-align:left; }
+.req-sec-h::before{ content:'▾'; font-size:10px; transition:transform .15s; }
+.req-sec-h span{ font:400 10.5px var(--font-ui); text-transform:none; letter-spacing:0; opacity:.7; }
+.req-sec-h:hover{ color:var(--tx1); }
+tbody.req-sec.folded tr:not(.req-sub){ display:none; }
+tbody.req-sec.folded .req-sec-h::before{ transform:rotate(-90deg); }

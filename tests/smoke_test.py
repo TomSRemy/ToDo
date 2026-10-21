@@ -434,7 +434,23 @@ with sync_playwright() as p:
     check(tabs == ["Installation 1 ALPHA PV1 299 kWc · 358 MWh · MES 20/07/2027", "Installation 2 BETA PV1 211 kWc"] and "ALPHA PV1" in page.inner_text("#opp-detail-title"),
           f"request: both installations shown as tabs in the sheet ({tabs})")
     table = page.inner_text("#opp-detail-body .req-compare")
-    check("358 MWh" in table and "à compléter" in table and "3 cases à compléter" in table, "request: side-by-side check, empty cells to complete flagged")
+    cellv = lambda oid, label: page.input_value(f"#opp-detail-body .req-in[data-id='{oid}'][data-l=\"{label}\"]")
+    check(cellv("t1", "P50 annuel (indicatif) (MWh/an)") == "358" and "3 cases à compléter" in table
+          and page.locator("#opp-detail-body .req-table td.empty").count() == 3, "request: side-by-side check, empty cells to complete flagged")
+    labels = page.eval_on_selector_all("#opp-detail-body .req-table tbody th.req-lab", "els=>els.map(e=>e.textContent)")
+    check(labels[:4] == ["Nom Installation", "Nom SPV", "SIRET SPV", "Adresse Installation"], f"request: lines in the order of the characteristics file ({labels[:4]})")
+    # a cell edited in the table goes to the installation (an app field, or the line of the producer's file)
+    page.fill("#opp-detail-body .req-in[data-id='t2'][data-l='Commune']", "VILLERS"); page.press("#opp-detail-body .req-in[data-id='t2'][data-l='Commune']", "Enter")
+    page.fill("#opp-detail-body .req-in[data-id='t2'][data-l='Latitude']", "47.21"); page.press("#opp-detail-body .req-in[data-id='t2'][data-l='Latitude']", "Enter")
+    page.fill("#opp-detail-body .req-in[data-id='t2'][data-l='Département']", "Lot"); page.press("#opp-detail-body .req-in[data-id='t2'][data-l='Département']", "Enter")
+    page.wait_for_timeout(200)
+    t2 = next(o for o in stored(page, "todo-widget-opportunities") if o["id"] == "t2")
+    check(t2.get("commune") == "VILLERS" and t2.get("caract", {}).get("Latitude") == "47.21" and t2.get("dept") == "46 - Lot",
+          f"request: edits in the table are saved on the installation ({t2.get('commune')}, {t2.get('caract')}, {t2.get('dept')})")
+    page.click("#opp-detail-body tbody[data-sec='Localisation'] .req-sec-h")
+    check(not page.is_visible("#opp-detail-body .req-in[data-id='t2'][data-l='Commune']") and page.is_visible("#opp-detail-body .req-in[data-id='t2'][data-l='Nom SPV']"),
+          "request: a sub-section folds on its own")
+    page.click("#opp-detail-body tbody[data-sec='Localisation'] .req-sec-h")
     check("caractéristiques centrales" in table.lower() and page.locator("#opp-detail-body .req-table td.none").count() > 10,
           "request: the table also lists every line of the plant characteristics file")
     page.click("#opp-detail-body .req-compare-h")

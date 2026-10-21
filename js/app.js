@@ -4586,14 +4586,7 @@
   function closeOppDetail(){ $('opp-detail-overlay').classList.add('hidden'); viewingOppId=null; }
   // Installation sheet: every column of the Pipe / BDD, grouped; empty values shown as "—" so gaps are visible.
   // ---------- Installations of one pricing request: tabs to go from one to the other, and a table to check them side by side ----------
-  const REQ_COMPARE_KEYS=['centrale','kwc','mwh','p90','mesPrev','install','contrat','dept','region','commune','cp','spv','siret','debut','fin','duree','particularites'];
   const pqFieldLabel=k=>{ const f=PQ_FIELDS.find(x=>x.k===k)||PQ_EXTRA_FIELDS.find(x=>x.k===k); return f?f.label:k; };
-  function reqCompareValue(o, k){
-    const v=o[k]; if(v==null || String(v).trim()==='') return '';
-    if(k==='kwc') return fmtKwc(v);
-    if(k==='mwh' || k==='p90'){ const n=pqNum(String(v)); return isNaN(n)?String(v):n.toLocaleString('fr-FR')+' MWh'; }
-    return String(v);
-  }
   // short description of an installation for its line: power · volume · commissioning · technology
   function instLineInfo(x){
     const mwh=x.mwh?Number(pqNum(String(x.mwh))).toLocaleString('fr-FR')+' MWh':'';
@@ -4610,27 +4603,74 @@
     });
     return t;
   }
+  // The installations side by side, in the order of the « Caractéristiques Centrales » file, by folding sub-sections;
+  // every cell can be corrected here (an app field when there is one, else the line of the producer's file).
+  const caractSections=()=>[['Identification',CARACT_ROWS.slice(0,3)], ['Localisation',CARACT_ROWS.slice(3,9)], ['Projet et raccordement',CARACT_ROWS.slice(9,21)],
+    ['Production',CARACT_ROWS.slice(21,24)]].concat([1,2,3,4].map(n=>['Champ '+n, CARACT_ROWS.slice(24+(n-1)*6, 24+n*6)]));
+  const REQ_APP_ROWS=['install','contrat','debut','fin','duree','particularites'];
+  const CARACT_FIELD={ nominstallation:'centrale', nomspv:'spv', siretspv:'siret', commune:'commune', puissanceinstalleekwc:'kwc', p50annuelindicatifmwhan:'mwh', p90annuelindicatifmwhan:'p90', productiblep50kwhkwcan:'productible' };
+  const REQ_NEEDED=new Set(['nominstallation','departement','commune','datedemiseenserviceeffectiveouprevisionnelle','puissanceinstalleekwc','p50annuelindicatifmwhan']);
+  function caractSet(o, label, v){
+    const k=caractKey(label);
+    if(CARACT_FIELD[k]) o[CARACT_FIELD[k]]=v;
+    else if(k==='departement'){ const d=v?pqDeptFromText(v):null; o.dept=d?pqDeptLabel(d):v; if(d) o.region=PQ_REGIONS[d[2]]; }
+    else if(k===caractKey('Date de mise en service (effective ou prévisionnelle)')){ if(o.mesEff) o.mesEff=v; else o.mesPrev=v; }
+    else {
+      const raw=Object.assign({}, o.caract||{}), hit=Object.keys(raw).find(l=>caractKey(l)===k);
+      if(v==='') { if(hit!==undefined) delete raw[hit]; } else raw[hit!==undefined?hit:label]=v;
+      o.caract=raw;
+    }
+  }
+  function reqSecOpen(name, def){ try{ const v=localStorage.getItem('req-sec-'+name); return v===null?def:v==='1'; }catch(e){ return def; } }
   function buildRequestCompare(list, currentId){
     // folds away with a click on its title; open or closed is remembered on this device
     const wrap=document.createElement('details'); wrap.className='req-compare';
     let open=true; try{ open=localStorage.getItem('req-compare-open')!=='0'; }catch(e){}
     wrap.open=open;
     wrap.addEventListener('toggle', ()=>{ try{ localStorage.setItem('req-compare-open', wrap.open?'1':'0'); }catch(e){} });
-    const missing=list.reduce((s,x)=>s+['centrale','kwc','mwh','mesPrev','dept','commune'].filter(k=>!reqCompareValue(x,k)).length,0);
-    wrap.innerHTML='<summary class="opp-phase-h req-compare-h">Vérifier les '+list.length+' installations côte à côte'+(missing?' <span class="req-miss">'+missing+' case'+(missing>1?'s':'')+' à compléter</span>':'')+'</summary>';
-    const keys=REQ_COMPARE_KEYS.filter(k=>['centrale','kwc','mwh','mesPrev','dept','commune'].includes(k) || list.some(x=>reqCompareValue(x,k)));
+    const missing=list.reduce((s,x)=>s+CARACT_ROWS.filter(l=>REQ_NEEDED.has(caractKey(l)) && caractValue(x,l)==='').length,0);
+    wrap.innerHTML='<summary class="opp-phase-h req-compare-h">Les '+list.length+' installations côte à côte'+(missing?' <span class="req-miss">'+missing+' case'+(missing>1?'s':'')+' à compléter</span>':'')+'<span class="req-hint">cliquer dans une case pour la modifier</span></summary>';
     const sc=document.createElement('div'); sc.className='req-compare-scroll';
-    let t='<table class="req-table"><thead><tr><th></th>'+list.map((x,i)=>'<th class="'+(x.id===currentId?'cur':'')+'"><button type="button" class="req-col" data-id="'+escapeHtml(x.id)+'">Installation '+(i+1)+'</button></th>').join('')+'</tr></thead><tbody>';
-    keys.forEach(k=>{ t+='<tr><th scope="row">'+escapeHtml(pqFieldLabel(k))+'</th>'+list.map(x=>{ const v=reqCompareValue(x,k); return '<td class="'+(x.id===currentId?'cur ':'')+(v?'':'empty')+'">'+(v?escapeHtml(v):'à compléter')+'</td>'; }).join('')+'</tr>'; });
-    // then every other line of the « Caractéristiques Centrales » sheet (the producer's file, kept with each installation)
-    const shown=new Set(['nominstallation','nomspv','siretspv','departement','commune','datedemiseenserviceeffectiveouprevisionnelle','puissanceinstalleekwc','p50annuelindicatifmwhan','p90annuelindicatifmwhan']);
-    const extra=CARACT_ROWS.filter(l=>!shown.has(caractKey(l)));
-    t+='<tr class="req-sub"><th colspan="'+(list.length+1)+'">Caractéristiques centrales</th></tr>';
-    extra.forEach(l=>{ const vals=list.map(x=>caractValue(x,l));
-      t+='<tr><th scope="row">'+escapeHtml(l)+'</th>'+vals.map((v,i)=>'<td class="'+(list[i].id===currentId?'cur ':'')+(v===''?'none':'')+'">'+(v===''?'—':escapeHtml(String(v)))+'</td>').join('')+'</tr>'; });
+    const cell=(x,v,attrs,need)=>'<td class="'+(x.id===currentId?'cur ':'')+(v===''?(need?'empty':'none'):'')+'"><input class="req-in" '+attrs+' value="'+escapeHtml(String(v))+'" placeholder="'+(need?'à compléter':'—')+'" aria-label="'+escapeHtml(oppName(x))+'"></td>';
+    let t='<table class="req-table"><thead><tr><th class="req-lab">Caractéristiques centrales</th>'+list.map((x,i)=>'<th class="'+(x.id===currentId?'cur':'')+'"><button type="button" class="req-col" data-id="'+escapeHtml(x.id)+'" title="Ouvrir la fiche">'+(i+1)+' · '+escapeHtml(oppName(x))+'</button></th>').join('')+'</tr></thead>';
+    const section=(name, rows, def)=>{
+      const filled=rows.some(r=>r.some(Boolean)), isOpen=reqSecOpen(name, def===undefined?filled:def);
+      t+='<tbody class="req-sec'+(isOpen?'':' folded')+'" data-sec="'+escapeHtml(name)+'"><tr class="req-sub"><th colspan="'+(list.length+1)+'"><button type="button" class="req-sec-h" aria-expanded="'+isOpen+'">'+escapeHtml(name)+(filled?'':' <span>vide</span>')+'</button></th></tr>';
+    };
+    caractSections().forEach(([name, labels])=>{
+      const vals=labels.map(l=>list.map(x=>caractValue(x,l)));
+      section(name, vals.map(r=>r.map(v=>v!=='')), name.startsWith('Champ')?undefined:true);
+      labels.forEach((l,li)=>{ const need=REQ_NEEDED.has(caractKey(l));
+        t+='<tr><th scope="row" class="req-lab">'+escapeHtml(l)+'</th>'+list.map((x,xi)=>cell(x, vals[li][xi], 'data-id="'+escapeHtml(x.id)+'" data-l="'+escapeHtml(l)+'"', need)).join('')+'</tr>'; });
+      t+='</tbody>';
+    });
+    // what the app adds for the contract (not in the producer's file)
+    const fr=v=>/^\d{4}-\d{2}-\d{2}$/.test(v||'')?pqIsoToFr(v):(v||'');
+    section('Contrat', [REQ_APP_ROWS.map(k=>list.some(x=>x[k]))], true);
+    REQ_APP_ROWS.forEach(k=>{
+      t+='<tr><th scope="row" class="req-lab">'+escapeHtml(pqFieldLabel(k))+'</th>'+list.map(x=>{
+        const v=fr(x[k]), opts=k==='install'?PQ_INSTALLS:k==='contrat'?PQ_CONTRATS:null;
+        if(opts) return '<td class="'+(x.id===currentId?'cur ':'')+(v?'':'none')+'"><select class="req-in" data-id="'+escapeHtml(x.id)+'" data-k="'+k+'"><option value=""></option>'+opts.concat(v && !opts.includes(v)?[v]:[]).map(o=>'<option'+(o===v?' selected':'')+'>'+escapeHtml(o)+'</option>').join('')+'</select></td>';
+        return cell(x, v, 'data-id="'+escapeHtml(x.id)+'" data-k="'+k+'"', false); }).join('')+'</tr>';
+    });
     t+='</tbody></table>';
     sc.innerHTML=t; wrap.appendChild(sc);
     sc.querySelectorAll('.req-col').forEach(b=>{ b.onclick=()=>openOppDetail(b.dataset.id); });
+    sc.querySelectorAll('.req-sec-h').forEach(b=>{ b.onclick=()=>{ const tb=b.closest('tbody'), f=!tb.classList.contains('folded'); tb.classList.toggle('folded', f); b.setAttribute('aria-expanded', String(!f)); try{ localStorage.setItem('req-sec-'+tb.dataset.sec, f?'0':'1'); }catch(e){} }; });
+    // edits: saved on Enter or when leaving the cell; Escape puts the value back
+    sc.querySelectorAll('.req-in').forEach(inp=>{
+      const start=inp.value;
+      inp.addEventListener('keydown', e=>{ if(e.key==='Enter'){ e.preventDefault(); inp.blur(); } if(e.key==='Escape'){ inp.value=start; inp.blur(); e.stopPropagation(); } });
+      inp.addEventListener('change', ()=>{
+        const o=opportunities.find(x=>x.id===inp.dataset.id); if(!o) return;
+        let v=inp.value.trim();
+        if(inp.dataset.k){ if(['debut','fin'].includes(inp.dataset.k) && v){ const f=pqFullDate(v); if(f) v=f; } o[inp.dataset.k]=v; }
+        else caractSet(o, inp.dataset.l, v);
+        touchCrm(o); saveCrm(); renderPipeline();
+        const td=inp.closest('td'); td.classList.remove('empty','none'); if(!v) td.classList.add(td.querySelector('[placeholder="à compléter"]')?'empty':'none');
+        td.classList.add('saved'); setTimeout(()=>td.classList.remove('saved'), 900);
+      });
+    });
     return wrap;
   }
   // Installation sheet: the key figures first, then Centrale / Contacts / Suivi with only what is filled in;
