@@ -1386,3 +1386,10 @@ details.req-compare:not([open]) .req-compare-h::before{ transform:rotate(-90deg)
 .meet-table tr[data-id]:hover td{ background:var(--panel-2); }
 .meet-table tr.meet-sec th{ text-align:left; padding:12px 10px 6px; font:700 10.5px var(--font-mono); text-transform:uppercase; letter-spacing:.5px; color:var(--accent); border-bottom:1px solid var(--bd); background:var(--panel); }
 .meet-table tr.meet-sec th span{ margin-left:10px; font:500 11.5px var(--font-ui); text-transform:none; letter-spacing:0; color:var(--tx2); }
+
+/* installation fields grouped by meaning, one group per line */
+.pq-grp{ margin:10px 0 4px; font:500 9.5px var(--font-mono); text-transform:uppercase; letter-spacing:.5px; color:var(--tx3); }
+.pq-inst .pq-grp:first-of-type{ margin-top:4px; }
+.pq-form{ container-type:inline-size; container-name:pqform; }
+@container pqform (min-width: 560px){ .pq-grid.pq-grid5{ grid-template-columns:repeat(4,minmax(0,1fr)); } }
+@container pqform (min-width: 820px){ .pq-grid.pq-grid5{ grid-template-columns:repeat(5,minmax(0,1fr)); } }

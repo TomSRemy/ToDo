@@ -2636,7 +2636,7 @@
     { k:'install', col:'U', label:'Type installation', type:'select', opts:PQ_INSTALLS, sec:'centrale' },
     { k:'contrat', col:'V', label:'Type contrat', type:'select', opts:PQ_CONTRATS, sec:'centrale' },
     { k:'kwc', col:'W', label:'Puissance (kWc)', type:'number', sec:'centrale' },
-    { k:'mwh', col:'X', label:'Vol. annuel P50 (MWh)', type:'number', sec:'centrale' },
+    { k:'mwh', col:'X', label:'P50 (MWh/an)', type:'number', sec:'centrale' },
     { k:'mesPrev', col:'Y', label:'MES prévisionnelle', type:'text', sec:'centrale', ph:'jj/mm/aaaa ou « 2027 »' },
     { k:'mesEff', col:'Z', label:'MES effective', type:'text', sec:'centrale', ph:'jj/mm/aaaa' },
     { k:'debut', col:'AA', label:'Date début', type:'text', sec:'centrale', ph:'jj/mm/aaaa' },
@@ -2654,13 +2654,15 @@
   const PQ_SHARED_KEYS=PQ_FIELDS.filter(f=>f.sec!=='centrale' && f.sec!=='none').map(f=>f.k);
   // Plant details that are not Pipe columns but feed the BDD (Nom_prod, SIRET_prod, CP, P90) and the sheet
   const PQ_EXTRA_FIELDS=[
-    { k:'spv', col:'BDD', label:'Société de projet (SPV)', type:'text', sec:'centrale' },
+    { k:'spv', col:'BDD', label:'SPV (société de projet)', type:'text', sec:'centrale' },
     { k:'siret', col:'BDD', label:'SIRET', type:'text', sec:'centrale' },
     { k:'commune', col:'BDD', label:'Commune', type:'text', sec:'centrale' },
     { k:'cp', col:'BDD', label:'Code postal', type:'text', sec:'centrale' },
     { k:'p90', col:'BDD', label:'P90 (MWh)', type:'number', sec:'centrale' },
-    { k:'productible', col:'kWh/kWc', label:'Productible P50 (kWh/kWc/an)', type:'number', sec:'centrale' }
+    { k:'productible', col:'BDD', label:'Productible (kWh/kWc)', type:'number', sec:'centrale' }
   ];
+  const PQ_INST_GROUPS=[['Centrale',['centrale','install','contrat','spv','siret']], ['Lieu',['region','dept','commune','cp']],
+    ['Production',['kwc','mwh','productible','p90']], ['Dates',['mesPrev','mesEff','debut','fin','duree']], ['',['particularites']]];
   const PQ_CENTRALE_KEYS=PQ_FIELDS.filter(f=>f.sec==='centrale').map(f=>f.k).concat(PQ_EXTRA_FIELDS.map(f=>f.k));
 
   const pqPad=n=>String(n).padStart(2,'0');
@@ -4061,11 +4063,15 @@
     st.installs.forEach((inst,i)=>{
       pqDerive(i);
       const fs=PQ_FIELDS.filter(f=>f.sec==='centrale').concat(PQ_EXTRA_FIELDS);
+      // grouped by meaning (not by Excel column): plant, place, production, dates, then the free notes
+      const byK=k=>fs.find(f=>f.k===k), used=new Set(PQ_INST_GROUPS.flatMap(g=>g[1]));
+      const groups=PQ_INST_GROUPS.map(([label,keys])=>[label, keys.map(byK).filter(Boolean)]);
+      const rest=fs.filter(f=>!used.has(f.k)); if(rest.length) groups[groups.length-1][1].push(...rest);
       const tag=!st.editId||st.installs.length<2?'':i===0?'<span class="pq-inst-tag">celle que tu modifies</span>':inst._oppId?'<span class="pq-inst-tag">déjà dans la demande</span>':'<span class="pq-inst-tag new">nouvelle : sera créée</span>';
       const many=st.installs.length>1, sub=[inst.centrale, fmtKwc(inst.kwc)].filter(Boolean).join(' · ');
       h+='<div class="pq-sec pq-inst'+(many?' many':'')+'" style="--inst-c:'+PROJECT_PALETTE[i%PROJECT_PALETTE.length]+'"><div class="pq-sec-h">'+(many?'<span class="pq-inst-n">'+(i+1)+'</span><span class="pq-inst-name">'+escapeHtml(sub||'Installation '+(i+1))+'</span>':'Installation')+tag
         +(st.installs.length>1 && !(st.editId && i===0)?'<button type="button" class="pq-link" data-remove="'+i+'">'+(st.editId && inst._oppId?'Ne pas modifier ici':'Retirer')+'</button>':'')+'</div>'
-        +'<div class="pq-grid">'+fs.map(f=>pqFieldHtml(f,String(i),inst[f.k],st.auto.has(i+'.'+f.k))).join('')+'</div></div>';
+        +groups.map(([label,gf])=>(label?'<div class="pq-grp">'+label+'</div>':'')+'<div class="pq-grid pq-grid5">'+gf.map(f=>pqFieldHtml(f,String(i),inst[f.k],st.auto.has(i+'.'+f.k))).join('')+'</div>').join('')+'</div>';
     });
     if(!st.editId) h+='<div class="pq-add-inst"><button type="button" class="pq-link" id="pq-add-inst">+ Ajouter une installation</button>'+(st.installs.length>1?'<span class="pq-hint">Les '+st.installs.length+' installations seront regroupées dans une même demande de pricing.</span>':'')+'</div>';
     h+=sec('suivi','Suivi',true)+sec('comment','Commentaires',true)+sec('suite','RDV et offre',false);
