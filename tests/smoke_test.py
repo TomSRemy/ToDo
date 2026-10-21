@@ -867,7 +867,7 @@ with sync_playwright() as p:
         h = {"Access-Control-Allow-Origin": "*", "Content-Type": "application/json"}
         if request.url.endswith("/status"):
             ok = request.headers.get("x-bridge-token") == "k1"
-            return route.fulfill(status=200, headers=h, body=json.dumps({"ok": True, "authorized": ok, "pipe": {"name": "Pipe.xlsx", "found": True}, "bdd": {"name": "Suivi.xlsx", "found": True}}))
+            return route.fulfill(status=200, headers=h, body=json.dumps({"ok": True, "version": "1.1", "authorized": ok, "pipe": {"name": "Pipe.xlsx", "found": True}, "bdd": {"name": "Suivi.xlsx", "found": True}}))
         sent.append((request.url.rsplit("/", 2)[-2], json.loads(request.post_data)))
         return route.fulfill(status=200, headers=h, body=json.dumps({"ok": True, "results": [{"ok": True, "action": "ajoutée", "row": 12}]}))
     inst = [{"id": "i1", "kind": "installation", "company": "SCEA", "producteur": "SCEA", "centrale": "Les Vignes", "title": "Les Vignes", "stage": "demande_prix",
@@ -880,12 +880,67 @@ with sync_playwright() as p:
     page.click('[data-tab="pipeline"]'); page.click(".pipe-card:has-text('Les Vignes')")
     page.click("#opp-detail-actions >> text=Envoyer au Pipe Excel"); page.wait_for_timeout(300)
     page.click("#opp-detail-actions >> text=Envoyer à la BDD Excel"); page.wait_for_timeout(300)
-    pipe_row = next(b["rows"][0] for k, b in sent if k == "pipe"); bdd_row = next(b["rows"][0] for k, b in sent if k == "bdd")
+    pipe_row = next(b["rows"][0]["values"] for k, b in sent if k == "pipe"); bdd_row = next(b["rows"][0]["values"] for k, b in sent if k == "bdd")
     check(len(pipe_row) == 37 and pipe_row[3] == {"d": "2026-10-12"} and pipe_row[22] == 2400 and pipe_row[1] is True and pipe_row[30] == "Transféré BDD",
           "bridge: Pipe row sent with real dates, numbers and booleans")
     check(len(bdd_row) == 91 and bdd_row[3] == {"d": "2026-10-19"} and bdd_row[33] == "Les Vignes" and bdd_row[24] == "En préparation", "bridge: BDD row sent")
     check("ajoutée" in page.inner_text("#bridge-msg"), "bridge: result shown")
     check(not errors, f"no page errors ({errors})")
+    page.close()
+
+    # --- Excel bridge, shared file: a cell changed by a colleague is shown, nothing replaced without a choice
+    sent2 = []
+    def bridge2(route, request):
+        if request.method == "OPTIONS":
+            return route.fulfill(status=204, headers={"Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "*", "Access-Control-Allow-Methods": "*"})
+        h = {"Access-Control-Allow-Origin": "*", "Content-Type": "application/json"}
+        if request.url.endswith("/status"):
+            return route.fulfill(status=200, headers=h, body=json.dumps({"ok": True, "version": "1.1", "authorized": True, "pipe": {"name": "Pipe.xlsx", "found": True}, "bdd": {"name": "Suivi.xlsx", "found": True}}))
+        body = json.loads(request.post_data); sent2.append(body)
+        if len(sent2) == 1:
+            res = {"ok": True, "action": "mise à jour", "row": 12, "key": "SCEA / Les Vignes", "cells": 2, "written": [3, 22], "mine": [0, 3, 22],
+                   "conflicts": [{"i": 30, "header": "Stade", "excel": "Perdu", "app": "Transféré BDD", "comment": False},
+                                 {"i": 35, "header": "Commentaires", "excel": "Vu au salon (Marie)", "app": "Relancer lundi", "comment": True}]}
+        else:
+            res = {"ok": True, "action": "mise à jour", "row": 12, "key": "SCEA / Les Vignes", "cells": 1, "written": [35], "mine": [35], "conflicts": []}
+        return route.fulfill(status=200, headers=h, body=json.dumps({"ok": True, "results": [res], "fileWasClosed": len(sent2) == 1}))
+    inst2 = [dict(inst[0], commentaires="Relancer lundi")]
+    page, errors = new_page(browser, {"todo_todo-widget-opportunities": json.dumps(inst2), "todo_bridge-config": json.dumps({"port": 8765, "token": "k1"})})
+    page.route("http://127.0.0.1:8765/**", bridge2)
+    page.goto(URL); page.click('[data-tab="pipeline"]'); page.click(".pipe-card:has-text('Les Vignes')")
+    page.click("#opp-detail-actions >> text=Envoyer au Pipe Excel")
+    page.wait_for_selector("#xl-review-overlay:not(.hidden)", timeout=5000)
+    first = sent2[0]["rows"][0]
+    review = page.inner_text("#xl-review-overlay")
+    check(len(first["values"]) == 37 and first["prev"] is None and "Vu au salon (Marie)" in review and "Perdu" in review
+          and "ouvre-le avant" in page.inner_text("#bridge-msg"), "shared Excel: changed cells shown, closed file reported")
+    opts = page.eval_on_selector_all("#xl-review-body select", "els=>els.map(e=>[...e.options].map(o=>o.value).join(','))")
+    check(opts == ["keep,replace", "keep,replace,merge"], f"shared Excel: « Fusionner » offered for comments only ({opts})")
+    page.select_option("#xr-0-35", "merge"); page.click("#xl-review-apply")
+    page.wait_for_function("document.getElementById('xl-review-overlay').classList.contains('hidden')")
+    page.wait_for_timeout(300)
+    second = sent2[1]["rows"][0] if len(sent2) > 1 else {}
+    o = stored(page, "todo-widget-opportunities")[0]
+    check(second.get("force") == {"35": "merge"} and second.get("target") == 12 and o["excelKeep"]["pipe"] == {"30": "Perdu"},
+          f"shared Excel: merge sent for the comment, the kept status remembered ({second.get('force')}, {o.get('excelKeep')})")
+    check(o["excelPrev"]["pipe"][3] == {"d": "2026-10-12"} and o["excelPrev"]["pipe"][35] == "Relancer lundi" and o["excelPrev"]["pipe"][30] is None,
+          "shared Excel: the app remembers what it wrote, cell by cell (never the kept ones)")
+    check(not errors, f"no page errors ({errors})")
+    page.close()
+    # an older bridge (could overwrite colleagues' cells) is refused until updated
+    posts = []
+    def old_bridge(route, request):
+        if request.method == "OPTIONS":
+            return route.fulfill(status=204, headers={"Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "*", "Access-Control-Allow-Methods": "*"})
+        h = {"Access-Control-Allow-Origin": "*", "Content-Type": "application/json"}
+        if request.url.endswith("/status"):
+            return route.fulfill(status=200, headers=h, body=json.dumps({"ok": True, "version": "1.0", "authorized": True, "pipe": {"name": "Pipe.xlsx", "found": True}, "bdd": {"name": "Suivi.xlsx", "found": True}}))
+        posts.append(request.url); return route.fulfill(status=200, headers=h, body=json.dumps({"ok": True, "results": []}))
+    page, errors = new_page(browser, {"todo_todo-widget-opportunities": json.dumps(inst), "todo_bridge-config": json.dumps({"port": 8765, "token": "k1"})})
+    page.route("http://127.0.0.1:8765/**", old_bridge)
+    page.goto(URL); page.click('[data-tab="pipeline"]'); page.click(".pipe-card:has-text('Les Vignes')")
+    page.click("#opp-detail-actions >> text=Envoyer au Pipe Excel"); page.wait_for_timeout(600)
+    check(not posts and "ancienne version" in page.inner_text("#bridge-msg"), "an older bridge is refused: nothing sent, update asked")
     page.close()
 
     # --- Réf. & data: clients grouped by company type, collapsed by default, search opens them

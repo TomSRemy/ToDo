@@ -384,6 +384,7 @@
             <li><b>Copier-coller</b> (partout) : « Copier ligne Pipe » (37 colonnes) ou « Copier ligne BDD » (91 colonnes), puis clic en colonne A d'une ligne vide et <kbd>Ctrl</kbd>+<kbd>V</kbd>.</li>
             <li><b>Pont Excel</b> (sur l'ordinateur) : « Envoyer au Pipe / à la BDD Excel » écrit directement dans les fichiers synchronisés avec SharePoint. Une ligne existante (même producteur + centrale) est mise à jour, sinon elle est ajoutée ; les formules ne sont jamais écrasées.</li>
             <li>Installation du pont : <b>Réf. &amp; data → Pont Excel</b>. Télécharge les deux fichiers dans un même dossier, double-clique sur le .bat, choisis les deux Excel, recopie la clé. Laisse la fenêtre ouverte (réduite).</li>
+            <li><b>Excel partagé avec des collègues</b> : le pont n'écrase jamais une case modifiée par quelqu'un d'autre ; il te la montre avec Garder / Remplacer (et Fusionner pour les commentaires). Une ligne Perdu, Abandonné, No Go ou Résilié n'est jamais modifiée : un re-pricing ajoute une ligne (question si la ligne a moins de 6 mois). Un renouvellement a sa propre ligne. Une copie du fichier est gardée avant chaque écriture (dossier « Sauvegardes pont », 3 dernières).</li>
           </ul>
         </section>
         <section data-g="parc" hidden>
@@ -527,6 +528,14 @@
     </div>
   </div>
 
+  <div id="xl-review-overlay" class="modal-overlay hidden">
+    <div class="modal-box wide" role="dialog" aria-labelledby="xl-review-title">
+      <h3 id="xl-review-title">À vérifier</h3>
+      <p class="modal-hint">Tout le reste a été écrit. Ici, rien n'a été touché dans l'Excel : par défaut, l'Excel garde ses valeurs.</p>
+      <div id="xl-review-body"></div>
+      <div class="crm-form-actions"><button type="button" class="ghost-btn" id="xl-review-later">Plus tard</button><button type="button" id="xl-review-apply">Appliquer mes choix</button></div>
+    </div>
+  </div>
   <div id="co-sheet-overlay" class="modal-overlay hidden">
     <div class="modal-box wide co-sheet" role="dialog" aria-labelledby="co-sheet-title">
       <div class="co-sheet-head">

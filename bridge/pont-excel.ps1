@@ -5,11 +5,17 @@
   Le pont les écrit dans les fichiers Excel du dossier synchronisé avec SharePoint, en passant par
   Excel lui-même : mise en forme, listes déroulantes et formules sont conservées. OneDrive synchronise ensuite.
 
-  Règles d'écriture :
+  Règles d'écriture (plusieurs personnes travaillent dans les mêmes fichiers) :
    - une ligne est retrouvée par sa clé (Pipe : Nom Producteur + Nom Centrale ; BDD : Nom_prod + Nom_Installation_prod) ;
-     si elle existe elle est mise à jour, sinon elle est ajoutée à la fin du tableau ;
-   - seules les valeurs non vides envoyées par l'app sont écrites (rien n'est effacé) ;
-   - une cellule qui contient une formule n'est jamais écrasée.
+   - une ligne close (Perdu, Abandonné, No Go, Résilié) n'est jamais modifiée : une nouvelle ligne est ajoutée.
+     Si elle a été close il y a moins de 6 mois (date d'entrée de la ligne), l'app demande : nouvelle ligne ou reprendre ?
+   - une ligne Gagné n'est mise à jour que pour la même affaire gagnée ; une nouvelle offre (renouvellement) a sa ligne ;
+   - plusieurs lignes ouvertes avec la même clé (doublon) : rien n'est écrit, l'app demande laquelle ;
+   - dans une ligne : une case vide est remplie ; une case qui contient encore ce que l'app y avait écrit est mise à jour ;
+     une case changée par quelqu'un d'autre est gardée et signalée (l'app propose Garder / Remplacer / Fusionner pour
+     les commentaires) ; rien n'est jamais vidé ; une cellule qui contient une formule n'est jamais écrasée ;
+   - une ligne n'est réutilisée que si elle est entièrement vide ;
+   - avant la première écriture, une copie du fichier est gardée dans « Sauvegardes pont » (les 3 dernières).
 
   Lancement : double-clic sur « Lancer-pont-excel.bat ». Au premier lancement, choisir les deux fichiers Excel
   et recopier la clé affichée dans l'app (Réf. & data → Pont Excel).
@@ -18,7 +24,7 @@
 param([int]$Port = 8765, [switch]$Reconfigurer, [switch]$Mock)
 
 $ErrorActionPreference = 'Stop'
-$Version = '1.0'
+$Version = '1.1'
 $Here = Split-Path -Parent $MyInvocation.MyCommand.Path
 $ConfigPath = Join-Path $Here 'pont-excel-config.json'
 $AllowedOrigins = @('https://tomsremy.github.io', 'null', 'http://localhost:8000', 'http://127.0.0.1:8000')
@@ -105,6 +111,10 @@ function New-ComAdapter($kind) {
   $a.Set = { param($a, $r, $c, $v) $cell = (& $a.Cell $a $r $c); if ($v -is [datetime]) { $cell.Value = $v } else { $cell.Value2 = $v } }
   $a.AddRow = { param($a) $null = $a.lo.ListRows.Add(); $a.lo.ListRows.Count }
   $a.ExcelRow = { param($a, $r) $a.lo.DataBodyRange.Row + $r - 1 }
+  $a.RowEmpty = { param($a, $r) $v = $a.lo.ListRows.Item($r).Range.Value2; if ($v -is [array]) { foreach ($x in $v) { if (-not (Is-Blank $x)) { return $false } }; return $true }; return (Is-Blank $v) }
+  $a.WasClosed = [bool]$book.opened
+  $a.Backup = { param($a, $dir, $stamp) $n = [IO.Path]::GetFileNameWithoutExtension($a.book.wb.Name); $e = [IO.Path]::GetExtension($a.book.wb.Name); $p = Join-Path $dir ($n + "-" + $stamp + $e); $a.book.wb.SaveCopyAs($p); $p }
+  $a.BackupPattern = { param($a) [IO.Path]::GetFileNameWithoutExtension($a.book.wb.Name) + "-*" + [IO.Path]::GetExtension($a.book.wb.Name) }
   $a.Save = { param($a) $a.book.wb.Save() }
   $a.Close = { param($a) if ($a.book.opened) { $a.book.wb.Close($false) } }
   return $a
@@ -127,6 +137,10 @@ function New-MockAdapter($kind) {
   $a.Set = { param($a, $r, $c, $v) $a.t.rows[$r - 1][$c - 1] = $v }
   $a.AddRow = { param($a) $null = $a.t.rows.Add((New-Object object[] $a.t.headers.Count)); $a.t.rows.Count }
   $a.ExcelRow = { param($a, $r) $r + 1 }
+  $a.RowEmpty = { param($a, $r) foreach ($v in $a.t.rows[$r - 1]) { if (-not (Is-Blank $v)) { return $false } }; return $true }
+  $a.WasClosed = [bool]$t.closed
+  $a.Backup = { param($a, $dir, $stamp) $p = Join-Path $dir ("mock-" + $a.kind + "-" + $stamp + ".json"); (ConvertTo-Json -InputObject @($a.t.rows) -Depth 4 -Compress) | Set-Content -Path $p -Encoding UTF8; $p }
+  $a.BackupPattern = { param($a) "mock-" + $a.kind + "-*.json" }
   $a.Save = { param($a) }
   $a.Close = { param($a) }
   return $a
@@ -134,6 +148,11 @@ function New-MockAdapter($kind) {
 function New-Adapter($kind) { if ($Mock) { return New-MockAdapter $kind } else { return New-ComAdapter $kind } }
 
 # ---------------- Upsert ----------------
+$ClosedStatus = @('perdu', 'abandonne', 'nogo', 'resilie')
+$RecentDays = 183
+$BackupDir = Join-Path $Here 'Sauvegardes pont'
+$KeepBackups = 3
+function Is-Blank($v) { return ($null -eq $v -or ([string]$v).Trim() -eq '') }
 function Convert-Cell($v) {
   if ($null -eq $v) { return $null }
   if ($v -is [string]) { if ($v.Trim() -eq '') { return $null } return $v }
@@ -141,8 +160,51 @@ function Convert-Cell($v) {
   if ($v -is [psobject] -and $v.PSObject.Properties['d']) { return [datetime]::ParseExact([string]$v.d, 'yyyy-MM-dd', [Globalization.CultureInfo]::InvariantCulture) }
   return [double]$v
 }
+function To-Date($v) {
+  if ($null -eq $v) { return $null }
+  if ($v -is [datetime]) { return $v }
+  if ($v -is [double] -or $v -is [int]) { if ($v -gt 1900 -and $v -lt 2200) { return (Get-Date -Year ([int]$v) -Month 7 -Day 1).Date }; try { return [DateTime]::FromOADate([double]$v) } catch { return $null } }
+  $s = ([string]$v).Trim(); $d = [datetime]::MinValue
+  if ([datetime]::TryParseExact($s, [string[]]@('dd/MM/yyyy', 'd/M/yyyy', 'yyyy-MM-dd'), [Globalization.CultureInfo]::InvariantCulture, [Globalization.DateTimeStyles]::None, [ref]$d)) { return $d }
+  if ($s -match '^\d{4}$') { return (Get-Date -Year ([int]$s) -Month 7 -Day 1).Date }
+  return $null
+}
+function Same-Value($excel, $v) {
+  if (Is-Blank $v) { return (Is-Blank $excel) }
+  if (Is-Blank $excel) { return $false }
+  if ($v -is [datetime]) { $e = To-Date $excel; return ($null -ne $e -and $e.Date -eq $v.Date) }
+  if ($v -is [double]) { try { return ([math]::Abs([double]$excel - $v) -lt 1e-6) } catch { return $false } }
+  if ($v -is [bool]) { return ([string]$excel).Trim().ToLowerInvariant() -eq ([string]$v).ToLowerInvariant() }
+  if (($excel -is [double] -or $excel -is [datetime]) -and $v -is [string]) {
+    # a value kept earlier comes back as text: compare it as a date, else as a number
+    $dv = To-Date $v; $de = To-Date $excel
+    if ($null -ne $dv -and $null -ne $de -and $v -match '/|-') { return ($dv.Date -eq $de.Date) }
+    $num = 0.0; if ([double]::TryParse($v.Replace(',', '.'), [Globalization.NumberStyles]::Float, [Globalization.CultureInfo]::InvariantCulture, [ref]$num) -and $excel -is [double]) { return ([math]::Abs($excel - $num) -lt 1e-6) }
+  }
+  return ([string]$excel).Trim() -eq ([string]$v).Trim()
+}
+function Show-Value($v) {
+  if (Is-Blank $v) { return '' }
+  if ($v -is [datetime]) { return $v.ToString('dd/MM/yyyy') }
+  return ([string]$v)
+}
+function Find-Col($a, [string[]]$exact, [string[]]$prefix, [string[]]$contains) {
+  for ($c = 0; $c -lt $a.Headers.Count; $c++) { $h = Norm $a.Headers[$c]; if ($exact -contains $h) { return $c + 1 } }
+  for ($c = 0; $c -lt $a.Headers.Count; $c++) { $h = Norm $a.Headers[$c]; foreach ($p in $prefix) { if ($p -and $h.StartsWith($p)) { return $c + 1 } } }
+  for ($c = 0; $c -lt $a.Headers.Count; $c++) { $h = Norm $a.Headers[$c]; foreach ($p in $contains) { if ($p -and $h.Contains($p)) { return $c + 1 } } }
+  return 0
+}
+function Is-CommentCol($a, $c) { $h = Norm $a.Headers[$c - 1]; return ($h -match 'comment|remarque|observation|particularit') }
+function Get-Prop($o, $name) { if ($null -eq $o) { return $null }; $p = $o.PSObject.Properties[[string]$name]; if ($p) { return $p.Value }; return $null }
+function Ensure-Backup($a, $state) {
+  if ($state.backup) { return }
+  if (-not (Test-Path $BackupDir)) { $null = New-Item -ItemType Directory -Path $BackupDir }
+  $state.backup = [IO.Path]::GetFileName((& $a.Backup $a $BackupDir (Get-Date -Format 'yyyyMMdd-HHmmss')))
+  Get-ChildItem -Path $BackupDir -Filter (& $a.BackupPattern $a) | Sort-Object LastWriteTime -Descending | Select-Object -Skip $KeepBackups | Remove-Item -Force -ErrorAction SilentlyContinue
+}
 function Upsert-Rows($kind, $rows) {
   $a = New-Adapter $kind
+  $state = @{ backup = $null }
   try {
     $keyCols = @()
     foreach ($kh in $Kinds[$kind].keys) {
@@ -150,42 +212,105 @@ function Upsert-Rows($kind, $rows) {
       if ($i -lt 0) { throw "Colonne « $kh » introuvable dans le tableau." }
       $keyCols += $i
     }
+    $statusCol = if ($kind -eq 'pipe') { Find-Col $a @('stade', 'stadepipe', 'statut') @('stade') @() } else { Find-Col $a @('statut') @('statut') @() }
+    $dateCol = Find-Col $a @() @('dateentree', 'datedentree', 'dateentre') @('entree')
+    if ($dateCol -eq 0) { $dateCol = Find-Col $a @('annee') @() @() }
+    $off = $a.FirstCol - 1
     $results = New-Object System.Collections.ArrayList
     foreach ($row in $rows) {
-      $vals = @($row)
-      # app rows start at sheet column A; table columns may start further right
-      $off = $a.FirstCol - 1
+      # a row is either the plain list of values (older app) or { values, prev, keep, won, force, target }
+      $isObj = ($row -isnot [array]) -and ($null -ne $row) -and ($row.PSObject.Properties['values'])
+      $vals = if ($isObj) { @($row.values) } else { @($row) }
+      $prev = if ($isObj -and $row.prev) { @($row.prev) } else { @() }
+      $keep = if ($isObj) { $row.keep } else { $null }
+      $force = if ($isObj) { $row.force } else { $null }
+      $won = $isObj -and [bool]$row.won
+      $target0 = if ($isObj) { $row.target } else { $null }
       $keyVals = @(); foreach ($kc in $keyCols) { $keyVals += (Norm $vals[$kc + $off - 1]) }
-      if (($keyVals | Where-Object { $_ -eq '' }).Count -gt 0) { [void]$results.Add(@{ ok = $false; message = 'Clé incomplète (producteur ou centrale vide) : ligne ignorée.' }); continue }
+      $keyText = (@($vals[$keyCols[0] + $off - 1], $vals[$keyCols[1] + $off - 1]) -join ' / ')
+      if (($keyVals | Where-Object { $_ -eq '' }).Count -gt 0) { [void]$results.Add(@{ ok = $false; key = $keyText; message = 'Clé incomplète (producteur ou centrale vide) : ligne ignorée.' }); continue }
       $n = & $a.RowCount $a
       $cols = @(); foreach ($kc in $keyCols) { $cols += ,(& $a.Column $a $kc) }
-      $target = 0; $lastFilled = 0
+      $found = @()
       for ($r = 1; $r -le $n; $r++) {
         $cur = @(); foreach ($col in $cols) { $cur += (Norm $col[$r]) }
-        if (($cur | Where-Object { $_ -ne '' }).Count -gt 0) { $lastFilled = $r }
-        if ((($cur -join '|') -eq ($keyVals -join '|'))) { $target = $r; break }
+        if ((($cur -join '|') -eq ($keyVals -join '|'))) { $found += $r }
+      }
+      $info = { param($r) $st = if ($statusCol) { & $a.Get $a $r $statusCol } else { $null }; $dt = if ($dateCol) { To-Date (& $a.Get $a $r $dateCol) } else { $null }
+        @{ row = (& $a.ExcelRow $a $r); statut = (Show-Value $st); date = $(if ($dt) { $dt.ToString('dd/MM/yyyy') } else { '' }); closed = ($ClosedStatus -contains (Norm $st)); won = ((Norm $st) -eq 'gagne'); dt = $dt; r = $r } }
+      $target = 0; $isNew = $false; $note = ''; $question = $null
+      if ($target0) {
+        if ([string]$target0 -eq 'new') { $isNew = $true; $note = 'Nouvelle ligne, comme demandé.' }
+        else {
+          $want = [int]$target0
+          foreach ($r in $found) { if ((& $a.ExcelRow $a $r) -eq $want) { $target = $r } }
+          if (-not $target) { [void]$results.Add(@{ ok = $false; key = $keyText; message = "La ligne $want ne correspond plus à cette centrale (le tableau a changé) : renvoie l'affaire." }); continue }
+        }
+      } else {
+        $infos = @(); foreach ($r in $found) { $infos += (& $info $r) }
+        $usable = @($infos | Where-Object { -not $_.closed -and (-not $_.won -or $won) })
+        if ($usable.Count -gt 1) {
+          $question = @{ type = 'duplicate'; rows = @($usable | ForEach-Object { @{ row = $_.row; statut = $_.statut; date = $_.date } }) }
+        } elseif ($usable.Count -eq 1) {
+          $target = $usable[0].r
+        } else {
+          $recent = @($infos | Where-Object { $_.closed -and ($null -eq $_.dt -or ((Get-Date) - $_.dt).TotalDays -lt $RecentDays) })
+          if ($recent.Count -gt 0) {
+            $question = @{ type = 'recent-closed'; rows = @($recent | ForEach-Object { @{ row = $_.row; statut = $_.statut; date = $_.date } }) }
+          } else {
+            $isNew = $true
+            $closedOld = @($infos | Where-Object { $_.closed }); $wonRows = @($infos | Where-Object { $_.won })
+            if ($wonRows.Count) { $note = 'Contrat gagné conservé (ligne ' + $wonRows[0].row + ') ; nouvelle ligne pour la nouvelle offre.' }
+            elseif ($closedOld.Count) { $note = 'Ancienne ligne ' + $closedOld[0].statut.ToLowerInvariant() + ' conservée (ligne ' + $closedOld[0].row + $(if ($closedOld[0].date) { ', ' + $closedOld[0].date } else { '' }) + ') ; nouvelle ligne.' }
+          }
+        }
+      }
+      if ($question) {
+        [void]$results.Add(@{ ok = $true; action = 'en attente'; key = $keyText; question = $question; cells = 0; written = @(); mine = @(); conflicts = @() })
+        Write-Info ("$($Kinds[$kind].label) : question posée (" + $keyText + ')') 'Yellow'
+        continue
       }
       $action = 'mise à jour'
-      if ($target -eq 0) {
+      if ($isNew) {
         $action = 'ajoutée'
-        # reuse an empty row left at the end of the table, else extend the table
-        if ($lastFilled -lt $n) { $target = $lastFilled + 1 } else { $target = & $a.AddRow $a }
+        # reuse a completely empty row at the end of the table, else extend the table
+        $n = & $a.RowCount $a
+        if ($n -ge 1 -and (& $a.RowEmpty $a $n)) {
+          $first = $n; while ($first -gt 1 -and (& $a.RowEmpty $a ($first - 1))) { $first-- }
+          $target = $first
+        } else { Ensure-Backup $a $state; $target = & $a.AddRow $a }
       }
-      $written = 0
+      $written = New-Object System.Collections.ArrayList; $mine = New-Object System.Collections.ArrayList; $conflicts = New-Object System.Collections.ArrayList
       for ($i = 0; $i -lt $vals.Count; $i++) {
         $c = $i + 1 - $off
         if ($c -lt 1 -or $c -gt $a.Headers.Count) { continue }
         $v = Convert-Cell $vals[$i]
         if ($null -eq $v) { continue }
         if (& $a.HasFormula $a $target $c) { continue }
-        & $a.Set $a $target $c $v
-        $written++
+        $e = & $a.Get $a $target $c
+        $toWrite = $null
+        if (Is-Blank $e) { $toWrite = $v }
+        elseif (Same-Value $e $v) { [void]$mine.Add($i); continue }
+        else {
+          $f = [string](Get-Prop $force $i)
+          $k = Get-Prop $keep $i
+          $p = if ($i -lt $prev.Count) { Convert-Cell $prev[$i] } else { $null }
+          if ($f -eq 'replace') { $toWrite = $v }
+          elseif ($f -eq 'merge' -and (Is-CommentCol $a $c)) { $es = Show-Value $e; $vs = Show-Value $v; $toWrite = $(if ($es.Contains($vs)) { $es } else { $es + "`n" + $vs + ' (' + (Get-Date -Format 'dd/MM/yyyy') + ')' }) }
+          elseif ($null -ne $k -and (Same-Value $e (Convert-Cell $k))) { continue }   # already chosen: keep the Excel value
+          elseif ($null -ne $p -and (Same-Value $e $p)) { $toWrite = $v }           # still what the app wrote last time: nobody else changed it
+          else { [void]$conflicts.Add(@{ i = $i; header = $a.Headers[$c - 1]; excel = (Show-Value $e); app = (Show-Value $v); comment = (Is-CommentCol $a $c) }); continue }
+        }
+        Ensure-Backup $a $state
+        & $a.Set $a $target $c $toWrite
+        [void]$written.Add($i); [void]$mine.Add($i)
       }
-      [void]$results.Add(@{ ok = $true; action = $action; row = (& $a.ExcelRow $a $target); cells = $written; key = (@($vals[$keyCols[0] + $off - 1], $vals[$keyCols[1] + $off - 1]) -join ' / ') })
-      Write-Info ("$($Kinds[$kind].label) : ligne $action (" + (@($vals[$keyCols[0] + $off - 1], $vals[$keyCols[1] + $off - 1]) -join ' / ') + ')') 'Green'
+      if (-not $isNew -and $written.Count -eq 0 -and $conflicts.Count -eq 0) { $action = 'aucun changement' }
+      [void]$results.Add(@{ ok = $true; action = $action; row = (& $a.ExcelRow $a $target); cells = $written.Count; key = $keyText; note = $note; written = @($written); mine = @($mine); conflicts = @($conflicts) })
+      Write-Info ("$($Kinds[$kind].label) : ligne $action (" + $keyText + ')' + $(if ($conflicts.Count) { ' — ' + $conflicts.Count + ' case(s) gardée(s)' } else { '' })) 'Green'
     }
-    & $a.Save $a
-    return @{ ok = $true; results = $results }
+    if ($state.backup) { & $a.Save $a }
+    return @{ ok = $true; results = $results; backup = $state.backup; fileWasClosed = [bool]$a.WasClosed }
   } finally { & $a.Close $a }
 }
 
@@ -266,6 +391,21 @@ function Handle($req) {
     $kind = $Matches[1]
     $data = $req.body | ConvertFrom-Json
     return @(200, (Upsert-Rows $kind @($data.rows)))
+  }
+  if ($Mock -and $req.method -eq 'POST' -and $req.path -match '^/mock/seed/(pipe|bdd)$') {
+    $kind = $Matches[1]; $data = $req.body | ConvertFrom-Json
+    $null = New-MockAdapter $kind
+    $t = $script:mockTables[$kind]
+    if ($data.headers) { $t.headers = @($data.headers | ForEach-Object { [string]$_ }) }
+    $t.rows = New-Object System.Collections.ArrayList
+    foreach ($r in @($data.rows)) { $line = New-Object object[] $t.headers.Count; $vals = @($r); for ($i = 0; $i -lt $vals.Count -and $i -lt $line.Count; $i++) { $line[$i] = $vals[$i] }; [void]$t.rows.Add($line) }
+    $t.formulas = @{}; foreach ($f in @($data.formulas)) { if ($null -ne $f) { $t.formulas[[int]$f] = $true } }
+    $t.closed = [bool]$data.closed
+    return @(200, @{ ok = $true })
+  }
+  if ($Mock -and $req.method -eq 'GET' -and $req.path -match '^/mock/dump/(pipe|bdd)$') {
+    $t = $script:mockTables[$Matches[1]]
+    return @(200, @{ ok = $true; headers = $t.headers; rows = @($t.rows | ForEach-Object { ,@($_ | ForEach-Object { Show-Value $_ }) }) })
   }
   if ($req.method -eq 'GET' -and $req.path -match '^/(pipe|bdd)/read$') {
     return @(200, @{ ok = $true; sheets = (Read-Sheets $Matches[1]) })

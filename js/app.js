@@ -4273,26 +4273,125 @@
     if(!bridgeConfigured()){ el.textContent='Pas encore configuré sur ce navigateur.'; el.className='bridge-status'; return; }
     if(!s.ok){ el.textContent=s.error||'Pont non détecté.'; el.className='bridge-status off'; return; }
     if(!s.authorized){ el.textContent='Pont détecté, mais la clé ne correspond pas.'; el.className='bridge-status off'; return; }
-    el.textContent='Connecté · Pipe : '+(s.info.pipe.found?s.info.pipe.name:'fichier introuvable')+' · BDD : '+(s.info.bdd.found?s.info.bdd.name:'fichier introuvable');
-    el.className='bridge-status on';
+    el.textContent='Connecté · Pipe : '+(s.info.pipe.found?s.info.pipe.name:'fichier introuvable')+' · BDD : '+(s.info.bdd.found?s.info.bdd.name:'fichier introuvable')
+      +(bridgeUpToDate(s.info)?'':' · ⚠ ancienne version du pont : télécharge pont-excel.ps1 ci-dessus, remplace l\u2019ancien fichier et relance le pont');
+    el.className='bridge-status '+(bridgeUpToDate(s.info)?'on':'off');
+  }
+  // ---------- Sending to the shared Excel files: the safe part is written at once, the rest is shown to decide ----------
+  // The bridge never overwrites what someone else typed: such cells are kept and reported, duplicates and plants lost
+  // recently are asked. What the app wrote last time in each cell (excelPrev) tells « my own value » from « a colleague's »;
+  // a value the user chose to keep (excelKeep) is not asked again while it stays the same in the Excel.
+  const xlWon=o=>stageIndex(o.stage)>=stageIndex('onboarding');
+  function xlRowFor(kind, o, extra){
+    const values=(kind==='pipe'?pipeCells:bddCells)(o);
+    return Object.assign({ values, prev:(o.excelPrev&&o.excelPrev[kind])||null, keep:(o.excelKeep&&o.excelKeep[kind])||null, won:xlWon(o) }, extra||{});
+  }
+  function xlRemember(kind, o, values, r){
+    if(!r || !r.ok || r.action==='en attente') return;
+    o.excelPrev=o.excelPrev||{}; const prev=(o.excelPrev[kind]||[]).slice();
+    (r.mine||[]).forEach(i=>{ prev[i]=values[i]; });
+    o.excelPrev[kind]=prev; touchCrm(o);
+  }
+  function xlSummary(kind, results, res){
+    const ok=results.filter(r=>r.ok), n=k=>ok.filter(r=>r.action===k).length;
+    const kept=ok.reduce((s,r)=>s+((r.conflicts||[]).length),0), asked=n('en attente'), errs=results.filter(r=>!r.ok);
+    const pl=(x,a,b)=>x+' '+(x>1?b:a);
+    const parts=[n('ajoutée')?pl(n('ajoutée'),'ligne ajoutée','lignes ajoutées'):'', n('mise à jour')?pl(n('mise à jour'),'ligne mise à jour','lignes mises à jour'):'',
+      n('aucun changement')?pl(n('aucun changement'),'ligne déjà à jour','lignes déjà à jour'):'', kept?pl(kept,'case gardée (modifiée par quelqu’un d’autre)','cases gardées (modifiées par quelqu’un d’autre)'):'',
+      asked?pl(asked,'question','questions'):''].filter(Boolean);
+    let msg=(kind==='pipe'?'Pipe':'BDD')+' : '+(parts.join(', ')||'rien à écrire')+'.';
+    ok.filter(r=>r.note).forEach(r=>{ msg+=' '+r.note; });
+    errs.forEach(r=>{ msg+=' '+(r.key?r.key+' : ':'')+(r.message||'ligne ignorée'); });
+    if(res && res.fileWasClosed) msg+=' Le fichier n’était pas ouvert dans Excel : ouvre-le avant d’envoyer pour que tes cases se fusionnent en direct avec celles des collègues.';
+    return msg;
+  }
+  // 1.1 = the bridge that never overwrites a colleague's cell; an older one is refused (it could)
+  const bridgeUpToDate=info=>{ const v=String(info&&info.version||'0').split('.').map(Number); return v[0]>1 || (v[0]===1 && (v[1]||0)>=1); };
+  async function xlSend(kind, list, rows){
+    if(!bridgeState.info || Date.now()-bridgeState.checkedAt>60000) await bridgeCheck();
+    if(bridgeState.ok && !bridgeUpToDate(bridgeState.info)) throw new Error('Ton pont Excel est une ancienne version, qui peut écraser les cases modifiées par tes collègues : rien n\u2019a été envoyé. Dans Réf. & data → Pont Excel, télécharge pont-excel.ps1, remplace l\u2019ancien fichier et relance le pont.');
+    const res=await bridgeCall('POST','/'+kind+'/upsert',{ rows }, 30000);
+    const results=res.results||[], pending=[];
+    results.forEach((r,i)=>{ const o=list[i]; xlRemember(kind, o, rows[i].values, r); if(r.ok && ((r.conflicts&&r.conflicts.length) || r.question)) pending.push({ o, r }); });
+    list.forEach(o=>{ o[kind==='pipe'?'pipeSentAt':'bddSentAt']=Date.now(); touchCrm(o); }); saveCrm();
+    return { res, results, pending };
   }
   async function sendToExcel(kind, list, btn){
     if(ON_PHONE) return;
     const label=btn?btn.textContent:'';
     if(btn){ btn.disabled=true; btn.textContent='Envoi…'; }
     try{
-      const res=await bridgeCall('POST','/'+kind+'/upsert',{ rows:list.map(kind==='pipe'?pipeCells:bddCells) }, 30000);
-      const done=(res.results||[]).filter(r=>r.ok), skipped=(res.results||[]).filter(r=>!r.ok);
-      const added=done.filter(r=>r.action==='ajoutée').length, updated=done.length-added;
-      const msg=(kind==='pipe'?'Pipe':'BDD')+' : '+[added?added+' ligne'+(added>1?'s':'')+' ajoutée'+(added>1?'s':''):'', updated?updated+' mise'+(updated>1?'s':'')+' à jour':''].filter(Boolean).join(', ')+(skipped.length?' · '+skipped.length+' ignorée(s) : '+skipped[0].message:'');
-      list.forEach(o=>{ o[kind==='pipe'?'pipeSentAt':'bddSentAt']=Date.now(); touchCrm(o); }); saveCrm();
-      if(btn){ btn.textContent='✓ Envoyé'; btn.title=msg; setTimeout(()=>{ btn.textContent=label; btn.disabled=false; },2500); }
+      const { res, results, pending }=await xlSend(kind, list, list.map(o=>xlRowFor(kind, o)));
+      const msg=xlSummary(kind, results, res);
+      if(btn){ btn.textContent=pending.length?'À vérifier':'✓ Envoyé'; btn.title=msg; setTimeout(()=>{ btn.textContent=label; btn.disabled=false; },2500); }
       showBridgeMsg(msg, true);
+      if(pending.length) openXlReview(kind, pending);
     }catch(e){
       if(btn){ btn.textContent=label; btn.disabled=false; }
       showBridgeMsg(e.message, false);
     }
   }
+  // What was not written: cells changed by someone else (Garder / Remplacer / Fusionner) and questions
+  // (duplicate lines, plant lost recently). « Garder » is the default everywhere.
+  function openXlReview(kind, pending){
+    const box=$('xl-review-body'); box.innerHTML='';
+    $('xl-review-title').textContent=(kind==='pipe'?'Pipe Excel':'Suivi Agrégation')+' : à vérifier';
+    pending.forEach((p,idx)=>{
+      const s=document.createElement('section'); s.className='xr-item';
+      const h=document.createElement('h4'); h.textContent=p.r.key; if(p.r.row){ const sp=document.createElement('span'); sp.textContent='ligne '+p.r.row; h.appendChild(sp); } s.appendChild(h);
+      if(p.r.question){
+        const q=p.r.question, intro=document.createElement('p'); intro.className='xr-intro';
+        intro.textContent=q.type==='duplicate'?'Plusieurs lignes ouvertes ont ce producteur et cette centrale. Rien n’a été écrit : laquelle mettre à jour ?'
+          :'Cette centrale a une ligne close récemment. Rien n’a été écrit : nouvelle ligne ou reprendre l’ancienne ?';
+        s.appendChild(intro);
+        const opts=q.type==='duplicate'
+          ? [...q.rows.map(r=>[String(r.row),'Ligne '+r.row+(r.statut?' · '+r.statut:'')+(r.date?' · '+r.date:'')]), ['new','Nouvelle ligne'], ['skip','Ne rien écrire']]
+          : [['new','Nouvelle ligne (l’ancienne reste telle quelle)'], ...q.rows.map(r=>[String(r.row),'Reprendre la ligne '+r.row+' ('+[r.statut,r.date].filter(Boolean).join(', ')+')']), ['skip','Ne rien écrire']];
+        const def=q.type==='duplicate'?'skip':'new';
+        opts.forEach(([v,l])=>{ const lab=document.createElement('label'); lab.className='xr-opt'; const i=document.createElement('input'); i.type='radio'; i.name='xq-'+idx; i.value=v; i.checked=v===def; lab.append(i, document.createTextNode(' '+l)); s.appendChild(lab); });
+      }
+      if(p.r.conflicts && p.r.conflicts.length){
+        const intro=document.createElement('p'); intro.className='xr-intro'; intro.textContent='Ces cases ont été modifiées dans l’Excel par quelqu’un d’autre ; elles n’ont pas été touchées.'; s.appendChild(intro);
+        const t=document.createElement('div'); t.className='xr-table';
+        p.r.conflicts.forEach(c=>{
+          const r=document.createElement('div'); r.className='xr-row';
+          r.innerHTML='<b></b><span class="xr-v"><i>Excel</i><span></span></span><span class="xr-v"><i>Appli</i><span></span></span>';
+          r.querySelector('b').textContent=c.header; r.querySelectorAll('.xr-v span')[0].textContent=c.excel; r.querySelectorAll('.xr-v span')[1].textContent=c.app;
+          const sel=document.createElement('select'); sel.id='xr-'+idx+'-'+c.i; sel.setAttribute('aria-label','Choix pour '+c.header);
+          [['keep','Garder l’Excel'],['replace','Remplacer par l’appli']].concat(c.comment?[['merge','Fusionner les deux']]:[]).forEach(([v,l])=>{ const o=document.createElement('option'); o.value=v; o.textContent=l; sel.appendChild(o); });
+          r.appendChild(sel); t.appendChild(r);
+        });
+        s.appendChild(t);
+      }
+      box.appendChild(s);
+    });
+    $('xl-review-apply').onclick=async ()=>{
+      const list=[], rows=[];
+      pending.forEach((p,idx)=>{
+        const force={}, o=p.o;
+        (p.r.conflicts||[]).forEach(c=>{
+          const v=$('xr-'+idx+'-'+c.i).value;
+          if(v==='keep'){ o.excelKeep=o.excelKeep||{}; o.excelKeep[kind]=Object.assign({}, o.excelKeep[kind]||{}, { [c.i]:c.excel }); touchCrm(o); }
+          else force[c.i]=v;
+        });
+        let target=null;
+        if(p.r.question){ const ch=document.querySelector('input[name="xq-'+idx+'"]:checked'); const v=ch?ch.value:'skip'; if(v==='skip') return; target=v==='new'?'new':+v; }
+        else if(!Object.keys(force).length) return;
+        list.push(o); rows.push(xlRowFor(kind, o, Object.assign({ force }, target!=null?{ target }:{}, p.r.row && !p.r.question?{ target:p.r.row }:{})));
+      });
+      saveCrm(); closeXlReview();
+      if(!rows.length){ showBridgeMsg('Rien de plus à écrire : l’Excel garde ses valeurs.', true); return; }
+      try{
+        const { res, results, pending:again }=await xlSend(kind, list, rows);
+        showBridgeMsg(xlSummary(kind, results, res), true);
+        if(again.length) openXlReview(kind, again);
+      }catch(e){ showBridgeMsg(e.message, false); }
+    };
+    $('xl-review-overlay').classList.remove('hidden');
+  }
+  function closeXlReview(){ $('xl-review-overlay').classList.add('hidden'); }
+  $('xl-review-later').onclick=closeXlReview;
+  $('xl-review-overlay').addEventListener('click', e=>{ if(e.target.id==='xl-review-overlay') closeXlReview(); });
   function showBridgeMsg(msg, ok){
     let el=$('bridge-msg');
     if(!el){ el=document.createElement('div'); el.id='bridge-msg'; el.setAttribute('role','status'); document.body.appendChild(el); }
