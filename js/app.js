@@ -3987,7 +3987,7 @@
     }
     if(f.k==='debut' && scope!=='s'){
       const inst=pqState.installs[+scope]||{}, mes=pqFullDate(inst.mesEff||inst.mesPrev), y=new Date().getFullYear();
-      extra='<div class="pq-dchips">'+(mes?'<button type="button" data-dset="debut" data-v="'+mes+'" data-s="'+scope+'" title="Début à la mise en service ('+mes+')">MES</button>':'')
+      extra='<div class="pq-dchips">'+(mes && pqState.installs.length<2?'<button type="button" data-dset="debut" data-v="'+mes+'" data-s="'+scope+'" title="Début à la mise en service ('+mes+')">MES</button>':'')
         +[y+1,y+2].map(Y=>'<button type="button" data-dset="debut" data-v="01/01/'+Y+'" data-s="'+scope+'" title="1er janvier '+Y+'">1/1/'+String(Y).slice(2)+'</button>').join('')
         +(pqState.installs.length>1?'<button type="button" data-dall="mes" data-s="'+scope+'" title="Chaque installation démarre à sa propre mise en service (date de début = MES de chacune)">MES toutes</button>':'')+'</div>';
     }

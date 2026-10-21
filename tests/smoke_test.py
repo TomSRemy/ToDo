@@ -657,6 +657,7 @@ with sync_playwright() as p:
     page.click("#pq-add-inst"); page.click("#pq-add-inst")
     page.fill("#pq-1-mesPrev", "01/03/2028"); page.locator("#pq-1-mesPrev").dispatch_event("change")
     page.fill("#pq-0-duree", "5"); page.locator("#pq-0-duree").dispatch_event("change")
+    check(page.locator("#pq-form button[data-dset='debut']:text-is('MES')").count() == 0, "dates: with several installations, only « MES toutes » (no single « MES »)")
     page.click("#pq-form button[data-toall='duree'][data-s='0']")
     check(page.is_visible("#choice-overlay") and "Durée" in page.inner_text("#choice-text"), "« → toutes »: a round button, confirmed before applying")
     page.click("#choice-btns >> text=Appliquer à toutes")
