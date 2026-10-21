@@ -888,6 +888,11 @@
   .parc-due-meta{ color:var(--tx3); font-size:11px; }
   .parc-due{ grid-template-columns:84px 1fr auto; }
   .parc-due-act{ grid-column:3; grid-row:1 / span 2; align-self:center; }
+  /* phone: the whole chart fits the screen (bigger figures to stay readable), due dates on two lines,
+     no « back to the pipeline » action (the pipeline is read-only on the phone) */
+  html.lite .parc-chart{ min-width:0; font-size:17px; }
+  html.lite .parc-due{ grid-template-columns:76px minmax(0,1fr); }
+  html.lite .parc-due-act{ display:none; }
   .parc-renew-setting{ margin-left:auto; font-size:11.5px; color:var(--tx2); display:flex; align-items:center; gap:6px; }
   .parc-renew-setting select{ background:var(--panel-2); border:1px solid var(--bd); color:var(--tx1); border-radius:6px; font-size:11.5px; padding:3px 6px; }
   .co-parc-h{ color:var(--tx1); font-weight:500; }

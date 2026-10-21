@@ -105,7 +105,7 @@
     fetchContactInbox();
     setInterval(fetchContactInbox, 5 * 60 * 1000);
     checkDailyDigestNotification();
-    if(syncConfig.enabled){ syncPull(); syncPullCrm(); syncPullNotes(); setInterval(syncPull, 5 * 60 * 1000); setInterval(syncPullCrm, 5 * 60 * 1000); setInterval(syncPullNotes, 5 * 60 * 1000); }
+    if(syncConfig.enabled){ syncPull(); syncPullCrm(); syncPullNotes(); syncPullParc(); setInterval(syncPull, 5 * 60 * 1000); setInterval(syncPullCrm, 5 * 60 * 1000); setInterval(syncPullNotes, 5 * 60 * 1000); setInterval(syncPullParc, 5 * 60 * 1000); }
   }
   async function saveTasksLocalOnly(){ try{ await window.storage.set(TASKS_KEY,JSON.stringify(tasks),false); }catch(e){ console.error(e); } }
   async function saveTasks(){ await saveTasksLocalOnly(); scheduleSyncPush(); }
@@ -251,7 +251,7 @@
       box.innerHTML=html;
     }catch(e){ box.innerHTML='<span class="muted">Espace non mesurable dans ce navigateur.</span>'; }
   }
-  function syncEverythingNow(){ syncPull(); syncPullCrm(); syncPullNotes(); }
+  function syncEverythingNow(){ syncPull(); syncPullCrm(); syncPullNotes(); syncPullParc(); }
   function onSyncPillClick(){
     const info=syncPillInfo();
     if(info.k==='off' && !syncConfig.enabled) return openSyncSettings();
@@ -538,6 +538,55 @@
     }catch(err){}
   });
   window.addEventListener('pagehide', flushPendingSync);
+  // ---------- Portefeuille through the private data repo (data/parc.json): loaded on the computer, read on the phone ----------
+  // Sent only once GitHub confirms the data repo is private. The most recent import wins (importedAt); an unchanged
+  // workbook (same lines) keeps its date, so the bridge's automatic refresh doesn't send it again for nothing.
+  const SYNC_PARC_PATH='data/parc.json';
+  let repoPrivate=null, parcSyncNote='';
+  async function syncRepoIsPrivate(){
+    if(repoPrivate!==null) return repoPrivate;
+    try{
+      const r=await fetch('https://api.github.com/repos/'+syncConfig.owner+'/'+syncConfig.repo, { headers:{ 'Authorization':'Bearer '+syncConfig.token, 'Accept':'application/vnd.github+json' }, cache:'no-store' });
+      if(!r.ok) return false;
+      const d=await r.json(); repoPrivate=d.private===true; return repoPrivate;
+    }catch(e){ return false; }
+  }
+  function parcHash(d){ const s=JSON.stringify(d&&d.items||[]); let x=2166136261; for(let i=0;i<s.length;i++){ x^=s.charCodeAt(i); x=Math.imul(x,16777619); } return (x>>>0).toString(36)+'.'+s.length; }
+  function parcChanged(){ if(!$('tab-parc').classList.contains('hidden')) renderParc(); renderToday(); if(!$('tab-pipeline').classList.contains('hidden')) renderPipeline(); }
+  async function syncPullParc(){
+    if(!syncConfig.enabled) return;
+    try{
+      const r=await ghGetJson(SYNC_PARC_PATH);
+      if(r.status===404){ if(parcData) await syncPushParc(null); return; }
+      if(!r.ok || !r.json || !Array.isArray(r.json.items)) return;
+      const remote=r.json, mine=parcData?(parcData.importedAt||0):0;
+      if(!parcData || (remote.importedAt||0)>mine){
+        parcData=remote; saveParc(); ensureRenewalTasks(); parcChanged();
+      } else if(mine>(remote.importedAt||0) && parcHash(parcData)!==parcHash(remote)) await syncPushParc(r.sha);
+    }catch(e){ console.error('parc sync pull failed', e); }
+  }
+  async function syncPushParc(sha){
+    if(!syncConfig.enabled || !parcData) return;
+    if(!(await syncRepoIsPrivate())){ parcSyncNote='Portefeuille gardé sur cet appareil : GitHub ne confirme pas que le repo de données est privé.'; setSyncStatus(parcSyncNote); return; }
+    try{
+      if(sha===undefined){
+        const g=await ghGetJson(SYNC_PARC_PATH);
+        if(g.ok && g.json){ if((g.json.importedAt||0)>=(parcData.importedAt||0) || parcHash(g.json)===parcHash(parcData)) return; sha=g.sha; }
+      }
+      const body={ message:'Sync Portefeuille', content:b64EncodeUtf8(JSON.stringify(parcData)), branch:'main' };
+      if(sha) body.sha=sha;
+      const res=await fetch(syncApiUrl(SYNC_PARC_PATH), { method:'PUT', headers:{ 'Authorization':'Bearer '+syncConfig.token, 'Accept':'application/vnd.github+json', 'Content-Type':'application/json' }, body:JSON.stringify(body) });
+      syncNote(res);
+    }catch(e){ console.error('parc sync push failed', e); syncNote(null); }
+  }
+  // a new import: same lines as before → keep the previous date (nothing new to send)
+  function parcImported(next){
+    if(parcData && parcHash(parcData)===parcHash(next)) next.importedAt=parcData.importedAt||next.importedAt;
+    const isNew=!parcData || (next.importedAt||0)!==(parcData.importedAt||0);
+    parcData=next; saveParc(); ensureRenewalTasks(); renderParc();
+    if(isNew) syncPushParc();
+  }
+
   async function syncPushNotesNow(){
     if(!syncConfig.enabled) return;
     flushPostit();
@@ -4653,7 +4702,7 @@
     syncConfig.enabled=true;
     await saveSyncConfig();
     setSyncStatus('Activation…');
-    syncPull();
+    repoPrivate=null; syncPull(); syncPullCrm(); syncPullNotes(); syncPullParc();
   };
   $('sync-token-exp').addEventListener('change', ()=>{ syncConfig.tokenExpires=$('sync-token-exp').value||''; saveSyncConfig(); paintSyncPill(); });
   $('sync-now-btn').onclick=()=>{ if(!syncConfig.enabled){ setSyncStatus('Active la synchro d\u2019abord.'); return; } setSyncStatus('Synchronisation…'); syncPushNow(); syncPushCrmNow(); syncPushNotesNow(); };
@@ -5126,8 +5175,7 @@
     try{
       await loadXlsxLib();
       const wb=XLSX.read(await file.arrayBuffer(),{type:'array',cellDates:true});
-      parcData=parseParcWorkbook(wb); parcData.fileName=file.name;
-      saveParc(); ensureRenewalTasks(); renderParc();
+      const next=parseParcWorkbook(wb); next.fileName=file.name; parcImported(next);
     }catch(e){ console.error(e); $('parc-info').textContent='Fichier illisible : '+(e.message||e); }
   }
 
@@ -5136,8 +5184,7 @@
     try{
       const res=await bridgeCall('GET','/bdd/read',null,60000);
       const names=Object.keys(res.sheets||{});
-      parcData=parseParcSheets(names, n=>res.sheets[n]||[]); parcData.fileName='Excel (pont local)';
-      saveParc(); ensureRenewalTasks(); renderParc();
+      const next=parseParcSheets(names, n=>res.sheets[n]||[]); next.fileName='Excel (pont local)'; parcImported(next);
     }catch(e){ if(!silent) $('parc-info').textContent=e.message; }
   }
   // A Parc contract (statut Gagné) of a company: matched on Nom_prod or Développeur
@@ -5199,12 +5246,13 @@
     if(parcData===null) loadParc();
     body.innerHTML='';
     if(!parcData || !parcData.items.length){
-      $('parc-info').textContent='';
+      $('parc-info').textContent=syncConfig.enabled?'Le Portefeuille chargé sur un autre appareil arrive ici à la synchro.':'';
       body.innerHTML='<div class="parc-empty"><b>Aucun portefeuille chargé.</b><br>Charge le fichier « Suivi Agrégation » (.xlsx) : l\u2019app lit l\u2019onglet « BDD Agrégation » et les objectifs du « Dashboard ». Le fichier reste sur cet appareil.</div>';
       return;
     }
     if(parcData.items.length && !parcData.items.some(i=>'siteDept' in i)){ const n=document.createElement('div'); n.className='parc-reload'; n.textContent='Recharge le fichier « Suivi Agrégation » une fois : la carte placera alors chaque centrale à son vrai département (colonne Département2), et non au siège du développeur.'; body.appendChild(n); }
-    $('parc-info').textContent=(parcData.fileName||'Fichier')+' · chargé le '+new Date(parcData.importedAt).toLocaleDateString('fr-FR')+' · '+parcData.items.length+' ligne'+(parcData.items.length>1?'s':'');
+    $('parc-info').textContent=(parcData.fileName||'Fichier')+' · chargé le '+new Date(parcData.importedAt).toLocaleDateString('fr-FR')+' · '+parcData.items.length+' ligne'+(parcData.items.length>1?'s':'')
+      +(parcSyncNote?' · '+parcSyncNote:(syncConfig.enabled?' · synchronisé avec tes autres appareils':''));
     const won=parcData.items.filter(p=>p.statut==='Gagné');
     const shown=parcYearsShown();
     if(parcYear!=='all' && !shown.includes(parcYear)) parcYear=shown[0];
@@ -5917,6 +5965,7 @@
   }
   syncPull=trackSync(syncPull); syncPushNow=trackSync(syncPushNow); syncPullCrm=trackSync(syncPullCrm);
   syncPushCrmNow=trackSync(syncPushCrmNow); syncPullNotes=trackSync(syncPullNotes); syncPushNotesNow=trackSync(syncPushNotesNow);
+  syncPullParc=trackSync(syncPullParc); syncPushParc=trackSync(syncPushParc);
   ['sync-pill','sync-pill-lite','sync-pill-w'].forEach(id=>{ const el=$(id); if(el) el.onclick=onSyncPillClick; });
   window.addEventListener('online', ()=>{ if(syncConfig.enabled) syncEverythingNow(); else paintSyncPill(); });
   window.addEventListener('offline', paintSyncPill);

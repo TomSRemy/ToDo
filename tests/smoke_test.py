@@ -67,7 +67,7 @@ def mock_github(page, files, put_ok=True, large=()):
 
     def handler(route, request):
         name = request.url.rsplit("/", 1)[-1]
-        if name not in files:
+        if name not in files and request.method == "GET":   # a PUT creates the file, like GitHub
             return route.fulfill(status=404, body="{}")
         if request.method == "GET":
             if "raw" in request.headers.get("accept", ""):
@@ -779,6 +779,35 @@ with sync_playwright() as p:
     page.click("#vcf-close"); page.click("#vcf-btn")
     check(page.inner_text("#vcf-new") == "0", "vcf: a second export only sends new contacts")
     check(not errors, f"no page errors ({errors})")
+    page.close()
+
+    # --- Portefeuille synced through the private data repo: loaded on the computer, read on the phone
+    def repo_meta(page, private):
+        page.route("**/api.github.com/repos/o/r", lambda r: r.fulfill(status=200, content_type="application/json", body=json.dumps({"private": private})))
+    files = {"tasks.json": [], "crm.json": {"companies": [], "contacts": [], "meetings": [], "opportunities": []}, "notes.json": []}
+    page, errors = new_page(browser, SYNC_ON, viewport={"width": 1300, "height": 850})
+    mock_github(page, files); repo_meta(page, True)
+    page.goto(URL); page.wait_for_timeout(500); page.click('[data-tab="parc"]')
+    page.set_input_files("#parc-file", str(parc)); page.wait_for_function("document.getElementById('parc-info').textContent.includes('lignes')", timeout=20000)
+    page.wait_for_timeout(1500)
+    check("parc.json" in files and len(files["parc.json"]["items"]) == 3, "portefeuille sync: the workbook loaded on the computer goes to the private data repo")
+    check(not errors, f"no page errors ({errors})")
+    page.close()
+    phone, errors = new_page(browser, SYNC_ON, viewport={"width": 390, "height": 800}, is_mobile=True, has_touch=True)
+    mock_github(phone, files); repo_meta(phone, True)
+    phone.goto(URL + "?lite"); phone.click("#lite-nav [data-go=parc]")
+    phone.wait_for_function("document.getElementById('parc-info').textContent.includes('3 lignes')", timeout=10000)
+    check(phone.locator(".parc-kpis .stat-card").count() >= 3 and "synchronisé" in phone.inner_text("#parc-info"), "portefeuille sync: the phone shows the Portefeuille without loading any file")
+    check(phone.evaluate("document.documentElement.scrollWidth") <= 392, "portefeuille sync: fits the phone width")
+    check(not errors, f"no page errors ({errors})")
+    phone.close()
+    files2 = {"tasks.json": [], "crm.json": {"companies": [], "contacts": [], "meetings": [], "opportunities": []}, "notes.json": []}
+    page, errors = new_page(browser, SYNC_ON, viewport={"width": 1300, "height": 850})
+    mock_github(page, files2); repo_meta(page, False)
+    page.goto(URL); page.wait_for_timeout(500); page.click('[data-tab="parc"]')
+    page.set_input_files("#parc-file", str(parc)); page.wait_for_function("document.getElementById('parc-info').textContent.includes('lignes')", timeout=20000)
+    page.wait_for_timeout(1500); page.click('[data-tab="lists"]'); page.click('[data-tab="parc"]')
+    check("parc.json" not in files2 and "gardé sur cet appareil" in page.inner_text("#parc-info"), "portefeuille sync: never sent if GitHub does not confirm the repo is private")
     page.close()
 
     # --- Pipeline ↔ Suivi Agrégation: each deal sent to the Suivi says whether it is there, with the right status
