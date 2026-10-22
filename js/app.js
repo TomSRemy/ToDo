@@ -137,7 +137,7 @@
   function undoDescribe(step){
     const byType={}; step.changes.forEach(c=>{ const t=c.key.split(':')[0]; byType[t]=(byType[t]||0)+1; });
     if(step.changes.length===1){ const c=step.changes[0], t=c.key.split(':')[0], o=JSON.parse(c.after||c.before), lab=(UNDO_LISTS.find(x=>x[0]===t)||[])[2]||t;
-      const name=o.title||o.centrale||o.name||[o.firstName,o.lastName].filter(Boolean).join(' ')||o.label||(o.text||'').slice(0,30); return lab+(name?' « '+name+' »':''); }
+      const name=plainLinks(o.title)||o.centrale||o.name||[o.firstName,o.lastName].filter(Boolean).join(' ')||o.label||(o.text||'').slice(0,30); return lab+(name?' « '+name+' »':''); }
     return Object.entries(byType).map(([t,n])=>n+' '+((UNDO_LISTS.find(x=>x[0]===t)||[])[2]||t)+(n>1?'s':'')).join(', ');
   }
   function undoApply(step, side){
@@ -2611,6 +2611,7 @@
     const companyName=$('ct-company').value.trim();
     let c;
     if(editingContactId){ c=contacts.find(x=>x.id===editingContactId); }
+    const oldFull=c?[c.firstName,c.lastName].filter(Boolean).join(' '):'';
     if(!c){
       c={ id:'ct_'+Date.now()+'_'+Math.random().toString(36).slice(2,7), createdAt:Date.now(), deleted:false };
       contacts.push(c);
@@ -2632,6 +2633,7 @@
       meetings.push(m);
     }
     saveCrm();
+    if(oldFull) rewriteLinks(oldFull, [c.firstName,c.lastName].filter(Boolean).join(' '));
     closeContactForm();
     renderContacts();
   }
@@ -5599,6 +5601,7 @@
       const dupCo=companies.find(x=>x.name===oldName);
       if(dupCo){ dupCo.deleted=true; touchCrm(dupCo); }
       clientsList=clientsList.filter(c=>c!==oldName);
+      rewriteLinks(oldName, existing);
       saveClients(); saveTasks(); saveCrm(); render(); renderLists();
       return;
     }
@@ -5608,6 +5611,7 @@
     renameOppCompany(oldName, trimmed);
     const co=companies.find(x=>x.name===oldName);
     if(co){ co.name=trimmed; touchCrm(co); }
+    rewriteLinks(oldName, trimmed);
     saveClients(); saveTasks(); saveCrm(); render(); renderLists();
   }
   function renameProject(oldName){
@@ -7061,6 +7065,18 @@
   function resolveLink(name, T){ const f=pqFold(String(name).trim()); return (T||linkTargets()).find(x=>pqFold(x.name)===f)||null; }
   function linksIn(text, T){ const out=[]; String(text||'').replace(LINK_RE,(m,n)=>{ const r=resolveLink(n,T); if(r && !out.includes(r.id)) out.push(r.id); return m; }); return out; }
   window.todoLinksOf=text=>linksIn(text);
+  // a contact or a company renamed: its [[links]] follow (tasks, the note and its past days, comments)
+  function rewriteLinks(oldName, newName){
+    oldName=String(oldName||'').trim(); newName=String(newName||'').trim(); if(!oldName || !newName || oldName===newName) return 0;
+    const f=pqFold(oldName); let n=0;
+    const fix=txt=>{ if(!txt || !String(txt).includes('[[')) return txt; return String(txt).replace(LINK_RE,(m,name)=>pqFold(name.trim())===f?(n++, '[['+newName+']]'):m); };
+    tasks.forEach(t=>{ const a=fix(t.title), b=fix(t.description); if(a!==t.title || b!==t.description){ t.title=a; t.description=b; touch(t); } });
+    notes.forEach(x=>{ let ch=false; Object.keys(x).forEach(k=>{ if(k==='text' || k.startsWith('day_')){ const v=fix(x[k]); if(v!==x[k]){ x[k]=v; ch=true; } } }); if(ch) touch(x); });
+    contacts.forEach(c=>{ const v=fix(c.comment); if(v!==c.comment){ c.comment=v; touchCrm(c); } });
+    opportunities.forEach(o=>{ const v=fix(o.commentaires); if(v!==o.commentaires){ o.commentaires=v; touchCrm(o); } });
+    if(n){ saveTasks(); saveNotes(); renderNotes(); }
+    return n;
+  }
   // shows a text with its links clickable (a link to nothing known stays as text, dotted)
   function renderLinked(el, text){
     el.textContent=''; const str=String(text||''); let last=0, T=null;

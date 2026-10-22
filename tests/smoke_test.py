@@ -416,6 +416,17 @@ with sync_playwright() as p:
     check([s_["text"] for s_ in subs] == ["Écrite ailleurs", "Normale"] and not errors, f"sub-tasks without « text » kept when the task is saved ({subs}, {errors})")
     page.close()
 
+    # --- [[links]] follow a renamed contact
+    page, errors = new_page(browser, {"todo_todo-widget-tasks": json.dumps([task("lk", "Appeler [[Paul Durand]] demain")]),
+                                      "todo_todo-widget-contacts": json.dumps([{"id": "lc1", "firstName": "Paul", "lastName": "Durand", "company": "Solaris", "createdAt": 1, "updatedAt": 1, "deleted": False}])},
+                            viewport={"width": 1300, "height": 850})
+    page.goto(URL); page.click('[data-tab="contacts"]'); page.wait_for_timeout(200)
+    page.locator('#contacts-list [data-cid="lc1"] .edit-btn').first.click(); page.wait_for_timeout(200)
+    page.fill("#ct-last", "Durant"); page.click("#contact-save-btn"); page.wait_for_timeout(300)
+    lk = next(x for x in stored(page, "todo-widget-tasks") if x["id"] == "lk")["title"]
+    check(lk == "Appeler [[Paul Durant]] demain" and not errors, f"links: renaming a contact updates the links to it ({lk!r})")
+    page.close()
+
     # --- Recurring tasks: monthly keeps its day (31 jan → 28 feb → 31 mar), done late → the next one after today
     ny = TODAY.year + 1
     page, errors = new_page(browser, {"todo_todo-widget-tasks": json.dumps([
