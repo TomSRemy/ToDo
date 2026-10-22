@@ -3732,7 +3732,7 @@
 
 
   // ----- Board -----
-  let pipeShowExited=false, pipeDash=false, pipeMeet=false;
+  let pipeShowExited=false, pipeDash=false, pipeMeet=false, pipeList=false; try{ pipeList=localStorage.getItem('pipe-list')==='1'; }catch(e){}
   // ---------- Pipeline dashboard: MWc by phase, time spent at each step, deals that drag ----------
   const kwcNum=o=>parseFloat(String(o.kwc||'').replace(/\s/g,'').replace(',','.'))||0;
   function stageDurations(){
@@ -3797,6 +3797,39 @@
     stalled.slice(0,10).forEach(o=>{ const d=Math.floor((now-lastMove(o))/864e5); const r=document.createElement('button'); r.type='button'; r.className='tw-row'+(d>=30?' late':'');
       r.innerHTML='<span class="k"><b></b><span></span></span><span class="v"></span>'; r.querySelector('b').textContent=o.kind==='prequal'?o.company+' (pré-qualif)':oppName(o);
       r.querySelector('.k span').textContent=[o.kind==='prequal'?'':o.company, stageLabel(o.stage)].filter(Boolean).join(' · '); r.querySelector('.v').textContent=d+' j'; r.onclick=()=>openOppDetail(o.id); c3.appendChild(r); });
+  }
+  // ----- List view: every installation in one sortable table (search, saved view and « Sorties » apply) -----
+  const PL_COLS=[
+    ['company','Producteur',o=>o.company||''],['bloc','Bloc',o=>{ const r=o.requestId&&opportunities.find(x=>x.id===o.requestId); return r&&!r.deleted?(r.label||requestInstalls(r.id).length+' inst.'):''; }],
+    ['name','Installation',o=>oppName(o)],['stage','Étape',o=>stageIndex(o.stage)],['kwc','Puissance',o=>kwcNum(o)],['mwh','P50 (MWh/an)',o=>pqNum(String(o.mwh||''))||0],
+    ['mes','MES',o=>{ const d=pqToDate(o.mesEff||o.mesPrev); return d?d.getTime():9e15; }],['contrat','Contrat',o=>o.contrat||''],['dept','Dépt',o=>o.dept||''],
+    ['charge','Chargé',o=>o.charge||''],['upd','Modifiée',o=>lastMove(o)]];
+  function renderPipeList(board, q){
+    board.classList.add('pipe-list');
+    let sort={ k:'stage', dir:-1 }; try{ const v=JSON.parse(localStorage.getItem('pipe-list-sort')||'null'); if(v && PL_COLS.some(c=>c[0]===v.k)) sort=v; }catch(e){}
+    const vp=savedViewState.pipeline && savedViewState.pipeline.pred;
+    const rows=opportunities.filter(o=>!o.deleted && o.kind==='installation' && (pipeShowExited || !isExited(o)))
+      .filter(o=>!q || pqFold([o.company,o.centrale,o.title,o.dept,o.commune,o.contrat].join(' ')).includes(q)).filter(o=>!vp || vp(o));
+    const col=PL_COLS.find(c=>c[0]===sort.k), val=col[2];
+    rows.sort((a,b)=>{ const x=val(a), y=val(b); const c=typeof x==='number'&&typeof y==='number'?x-y:String(x).localeCompare(String(y),'fr',{ numeric:true }); return c*sort.dir || (a.company||'').localeCompare(b.company||'','fr') || oppName(a).localeCompare(oppName(b),'fr',{ numeric:true }); });
+    const kw=rows.reduce((t,o)=>t+kwcNum(o),0), mwh=rows.reduce((t,o)=>t+(pqNum(String(o.mwh||''))||0),0);
+    const head=document.createElement('div'); head.className='pl-head';
+    head.textContent=rows.length+' installation'+(rows.length>1?'s':'')+(kw?' · '+fmtKwc(kw):'')+(mwh?' · '+Math.round(mwh).toLocaleString('fr-FR')+' MWh/an':'');
+    board.appendChild(head);
+    const wrap=document.createElement('div'); wrap.className='pl-wrap';
+    const t=document.createElement('table'); t.className='pl-table';
+    const th=document.createElement('tr');
+    PL_COLS.forEach(([k,label])=>{ const c=document.createElement('th'); c.scope='col'; const b=document.createElement('button'); b.type='button'; b.textContent=label+(sort.k===k?(sort.dir>0?' ▲':' ▼'):''); b.dataset.k=k;
+      b.onclick=()=>{ const n=sort.k===k?{ k, dir:-sort.dir }:{ k, dir:(k==='stage'||k==='kwc'||k==='mwh'||k==='upd')?-1:1 }; try{ localStorage.setItem('pipe-list-sort', JSON.stringify(n)); }catch(e){} renderPipeline(); };
+      c.appendChild(b); th.appendChild(c); });
+    const thead=document.createElement('thead'); thead.appendChild(th); t.appendChild(thead);
+    const tb=document.createElement('tbody');
+    rows.forEach(o=>{ const tr=document.createElement('tr'); tr.dataset.id=o.id; if(isExited(o)) tr.className='out';
+      const cells=[o.company||'', PL_COLS[1][2](o), oppName(o), null, fmtKwc(o.kwc), o.mwh?Math.round(pqNum(String(o.mwh))||0).toLocaleString('fr-FR'):'', o.mesEff||o.mesPrev||'', o.contrat||'', (o.dept||'').replace(/\s+-\s+.*/,''), o.charge||'', (()=>{ const t0=lastMove(o); return t0>1e12?new Date(t0).toLocaleDateString('fr-FR'):''; })()];
+      cells.forEach((v,i)=>{ const td=document.createElement('td'); if(i===3) td.appendChild(stageChip(o)); else td.textContent=v; if(i===0){ td.style.color=clientColor(o.company); if(o.company) td.dataset.peek='co:'+o.company; } if(i===2) td.className='pl-name'; if(i===4||i===5) td.className='pl-num'; tr.appendChild(td); });
+      tr.onclick=()=>openOppDetail(o.id); tb.appendChild(tr); });
+    t.appendChild(tb); wrap.appendChild(t); board.appendChild(wrap);
+    if(!rows.length){ const e=document.createElement('p'); e.className='modal-hint'; e.textContent='Aucune installation'+(q?' pour cette recherche':'')+'.'; board.appendChild(e); }
   }
   // ----- Meeting view: what is coming, one line per installation, to share with the pricing team -----
   const MEET_PHASES=[{ key:'qualif', label:'Qualification · à venir' }, { key:'offre', label:'Offre · pricing en cours' }, { key:'contrat', label:'Contrat · pricing ferme' }];
@@ -3969,10 +4002,13 @@
     board.innerHTML=''; board.classList.remove('pipe-dash','pipe-meet');
     $('pipe-dash-toggle').setAttribute('aria-pressed', String(pipeDash)); $('pipe-dash-toggle').classList.toggle('on', pipeDash);
     $('pipe-meet-toggle').setAttribute('aria-pressed', String(pipeMeet)); $('pipe-meet-toggle').classList.toggle('on', pipeMeet);
+    $('pipe-list-toggle').setAttribute('aria-pressed', String(pipeList && !pipeDash && !pipeMeet)); $('pipe-list-toggle').classList.toggle('on', pipeList && !pipeDash && !pipeMeet);
+    board.classList.remove('pipe-list');
     $('pipe-exited-toggle').classList.toggle('hidden', pipeDash||pipeMeet);
     if(pipeDash){ renderPipeDash(board); return; }
     const q=pqFold($('opp-search').value.trim());
     if(pipeMeet){ renderPipeMeet(board, q); return; }
+    if(pipeList){ renderPipeList(board, q); return; }
     const vp=savedViewState.pipeline && savedViewState.pipeline.pred;
     const items=opportunities.filter(o=>!o.deleted && o.kind!=='request' && o.stage!=='converti')
       .filter(o=>!q || pqFold([o.company,o.centrale,o.title,o.prenom,o.nom,o.dept].join(' ')).includes(q))
@@ -6633,6 +6669,7 @@
   $('tasks-views-btn').onclick=e=>{ e.stopPropagation(); openViewsMenu('tasks', e.currentTarget); };
   $('pipe-views-btn').onclick=e=>{ e.stopPropagation(); openViewsMenu('pipeline', e.currentTarget); };
   $('pipe-meet-toggle').onclick=()=>{ pipeMeet=!pipeMeet; if(pipeMeet) pipeDash=false; renderPipeline(); };
+  $('pipe-list-toggle').onclick=()=>{ pipeList=!(pipeList && !pipeDash && !pipeMeet); pipeDash=false; pipeMeet=false; try{ localStorage.setItem('pipe-list', pipeList?'1':'0'); }catch(e){} renderPipeline(); };
   $('pq-save-btn').onclick=saveOpp;
   $('pq-next-btn').onclick=pqNext;
   $('pq-back-btn').onclick=()=>{ pqShowStep(1); pqStep1Render(); };
@@ -7857,6 +7894,7 @@
       { t:'Nouvelle pré-qualif', k:'prequalif prospect', go:clickEl('prequal-add-btn','pipeline') },
       { t:'Nouveau contact', k:'ajouter contact personne', go:clickEl('contact-add-btn','contacts') },
       { t:'Coller une signature de mail', k:'contact signature', go:clickEl('sig-paste-btn','contacts') },
+      { t:'Pipeline en liste', k:'liste tableau installations toutes', go:()=>{ gsTab('pipeline'); setTimeout(()=>{ pipeList=true; pipeDash=false; pipeMeet=false; try{ localStorage.setItem('pipe-list','1'); }catch(e){} renderPipeline(); },40); } },
       { t:'Vue réunion du pipeline', k:'reunion pricing partager', go:()=>{ gsTab('pipeline'); setTimeout(()=>{ if(!pipeMeet){ pipeMeet=true; pipeDash=false; renderPipeline(); } },40); } },
       { t:'Tableau de bord du pipeline', k:'dashboard stats', go:()=>{ gsTab('pipeline'); setTimeout(()=>{ if(!pipeDash){ pipeDash=true; pipeMeet=false; renderPipeline(); } },40); } },
       { t:'Ouvrir la note (post-it)', k:'postit calepin note', go:()=>openPostit(true) },
@@ -7892,16 +7930,19 @@
       hits.forEach(add0); if(!hits.length){ const e=document.createElement('div'); e.className='gs-empty'; e.textContent='Aucune commande.'; box.appendChild(e); }
       gsActive=0; gsPaint(); return;
     }
-    if(!q){ box.innerHTML='<div class="gs-empty">Tape un nom, une société, une centrale, un département…<br>Entrée sans choisir : crée la tâche. « &gt; » au début (ou Ctrl+P) : les commandes.</div>'; return; }
+    if(!q){ box.innerHTML='<div class="gs-empty">Tape un nom, une société, une centrale, un département…<br>Entrée : ouvre le premier résultat (sans résultat : crée la tâche). « &gt; » au début (ou Ctrl+P) : les commandes.</div>'; return; }
     const groups=gsSearch(q);
     const cmds=gsCommandHits(q).slice(0,3); if(cmds.length) groups.push(['Commandes',cmds]);
     const add=(it,cls)=>{ const i=gsList.length; gsList.push(it); const b=document.createElement('button'); b.type='button'; b.className='gs-item'+(cls?' '+cls:''); b.setAttribute('role','option'); b.id='gs-opt-'+i;
       b.innerHTML='<span class="gs-ic"></span><span class="gs-t"><b></b><span></span></span><span class="gs-r"></span>';
       b.querySelector('.gs-ic').textContent=it.ic; b.querySelector('b').textContent=it.title; b.querySelector('.gs-t span').textContent=it.sub||''; b.querySelector('.gs-r').textContent=it.right||'';
       b.onmousemove=()=>{ if(gsActive!==i){ gsActive=i; gsPaint(); } }; b.onclick=()=>gsGo(i); box.appendChild(b); };
-    add({ ic:'+', title:'Créer la tâche « '+q+' »', sub:'Entrée', go:()=>{ quickAddInput.value=q; quickAdd(); gsTab('tasks'); } }, 'create');
+    // something found: Enter opens the first result, « Créer la tâche » waits at the bottom; nothing found: Enter creates the task
+    const create={ ic:'+', title:'Créer la tâche « '+q+' »', sub:groups.length?'':'Entrée', go:()=>{ quickAddInput.value=q; quickAdd(); gsTab('tasks'); } };
+    if(!groups.length) add(create, 'create');
     groups.forEach(([label,items])=>{ const g=document.createElement('div'); g.className='gs-group'; g.textContent=label; box.appendChild(g); items.forEach(it=>add(it)); });
-    if(!groups.length){ const e=document.createElement('div'); e.className='gs-empty'; e.textContent='Rien trouvé ailleurs.'; box.appendChild(e); }
+    if(groups.length){ const g=document.createElement('div'); g.className='gs-group'; g.textContent='Nouvelle tâche'; box.appendChild(g); add(create, 'create'); }
+    else { const e=document.createElement('div'); e.className='gs-empty'; e.textContent='Rien trouvé ailleurs.'; box.appendChild(e); }
     gsActive=0; gsPaint();
   }
   function gsPaint(){ document.querySelectorAll('#gs-results .gs-item').forEach((b,i)=>b.classList.toggle('on', i===gsActive)); $('gs-input').setAttribute('aria-activedescendant','gs-opt-'+gsActive); const on=$('gs-opt-'+gsActive); if(on) on.scrollIntoView({ block:'nearest' }); }

@@ -313,19 +313,19 @@ with sync_playwright() as p:
     check(page.is_visible("#gs-overlay") and page.evaluate("document.activeElement.id") == "gs-input", "search: Ctrl+K opens the global search")
     page.keyboard.type("durand")
     groups = page.eval_on_selector_all("#gs-results .gs-group", "els=>els.map(e=>e.textContent)")
-    check(groups == ["Tâches", "Contacts", "Pipeline"] and page.locator("#gs-results .gs-item").count() == 5,
+    check(groups == ["Tâches", "Contacts", "Pipeline", "Nouvelle tâche"] and page.locator("#gs-results .gs-item").count() == 5,
           f"search: tasks (archived too), contacts and pipeline found at once ({groups})")
     page.fill("#gs-input", "0612000099")
     check("Paul Durand" in page.inner_text("#gs-results"), "search: a contact found by phone number")
     page.locator("#gs-results .gs-item", has_text="Paul Durand").click(); page.wait_for_timeout(200)
     check(page.is_hidden("#gs-overlay") and page.is_visible("#tab-contacts") and page.is_visible("#contacts-list .contact-info-card, #contacts-list .contact-detail-links"),
           "search: choosing a contact opens its card in Contacts")
-    page.keyboard.press("Control+k"); page.keyboard.type("toit"); page.keyboard.press("ArrowDown"); page.keyboard.press("Enter"); page.wait_for_timeout(300)
-    check(page.is_visible("#opp-detail-overlay") and "Toit Durand" in page.inner_text("#opp-detail-title"), "search: arrows + Enter open the opportunity")
+    page.keyboard.press("Control+k"); page.keyboard.type("toit durand"); page.keyboard.press("Enter"); page.wait_for_timeout(300)
+    check(page.is_visible("#opp-detail-overlay") and "Toit Durand" in page.inner_text("#opp-detail-title"), "search: Enter opens the first result (here the installation)")
     page.keyboard.press("Escape"); page.wait_for_timeout(100)
     if page.is_visible("#opp-detail-overlay"): page.click("#opp-detail-actions >> text=Fermer")
     page.keyboard.press("Control+k"); page.keyboard.type("Appeler le notaire"); page.keyboard.press("Enter"); page.wait_for_timeout(200)
-    check(any(t["title"] == "Appeler le notaire" for t in stored(page, "todo-widget-tasks")), "search: Enter without choosing still creates the task (old Ctrl+K habit)")
+    check(any(t["title"] == "Appeler le notaire" for t in stored(page, "todo-widget-tasks")), "search: nothing found, Enter creates the task (old Ctrl+K habit)")
     # saved views: ready-made ones and the user's own
     page.keyboard.press("Escape"); page.click('[data-tab="tasks"]')
     page.click("#tasks-views-btn"); page.click(".views-menu .views-item >> text=Sans date")
@@ -714,6 +714,22 @@ with sync_playwright() as p:
     page.goto(URL); page.click('[data-tab="pipeline"]'); page.click(".pipe-card[data-id=one]")
     check(page.is_visible("#opp-detail-body #opp-mail-body") and "SEULE SAS_Hangar" in page.input_value("#opp-mail-body") and "SEULE SAS" in page.input_value("#opp-mail-subject"),
           "single plant: its sheet has the pricing mail (open at « Demande de prix »)")
+    check(not errors, f"no page errors ({errors})")
+    page.close()
+
+    # --- Pipeline as a list: every installation in one sortable table, a click opens its sheet
+    li = [{"id": f"l{i}", "kind": "installation", "company": c, "centrale": n, "title": n, "kwc": k, "stage": st, "createdAt": 1, "updatedAt": 1, "deleted": False}
+          for i, (c, n, k, st) in enumerate([("ALPHA", "Toit A", "500", "collecte"), ("BETA", "Sol B", "4000", "offre_attente"), ("GAMMA", "Parc C", "1200", "kyc")])]
+    page, errors = new_page(browser, {"todo_todo-widget-opportunities": json.dumps(li)}, viewport={"width": 1400, "height": 900})
+    page.goto(URL); page.click('[data-tab="pipeline"]'); page.click("#pipe-list-toggle")
+    names = page.eval_on_selector_all(".pl-table tbody td.pl-name", "els=>els.map(e=>e.textContent)")
+    check(names == ["Parc C", "Sol B", "Toit A"] and "3 installations · 5,7 mwc" in page.inner_text(".pl-head").lower(), f"pipeline list: every installation, most advanced first, with totals ({names})")
+    page.click(".pl-table th button[data-k=kwc]")
+    check(page.eval_on_selector_all(".pl-table tbody td.pl-name", "els=>els.map(e=>e.textContent)") == ["Sol B", "Parc C", "Toit A"], "pipeline list: a click on a column sorts by it")
+    page.fill("#opp-search", "alpha"); page.wait_for_timeout(200)
+    check(page.locator(".pl-table tbody tr").count() == 1, "pipeline list: the search filters it")
+    page.click(".pl-table tbody tr"); page.wait_for_timeout(200)
+    check(page.is_visible("#opp-detail-overlay") and "Toit A" in page.inner_text("#opp-detail-title"), "pipeline list: a click opens the sheet")
     check(not errors, f"no page errors ({errors})")
     page.close()
 
