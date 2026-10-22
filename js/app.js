@@ -7214,6 +7214,7 @@
   function openInNetwork(id){ networkFocusNext=id; gsTab('network'); }
   window.todoOpenInNetwork=openInNetwork;
   window.todoNetworkState=()=>networkView?networkView._state():null;
+  window.todoNetworkPos=id=>networkView?networkView._pos(id):null;
   if(!window.TODO_LITE) window.todoExtraCommands=(window.todoExtraCommands||[]).concat([{ t:'Ouvrir le réseau', k:'graphe reseau connexions liens neuronal', go:()=>gsTab('network') }]);
 
   // ---------- Company sheet: everything about one client on one screen, with its history ----------

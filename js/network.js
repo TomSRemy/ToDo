@@ -15,11 +15,14 @@
   function mount(root, getData, opts){
     opts=opts||{};
     let hidden=new Set(); try{ hidden=new Set(JSON.parse(localStorage.getItem('network-hidden')||'["meeting"]')); }catch(e){}
+    // points put down by hand stay where they were left (kept on this device) until « Libérer les points »
+    let pins=new Map(); try{ pins=new Map(Object.entries(JSON.parse(localStorage.getItem('network-pins')||'{}'))); }catch(e){}
+    const savePins=()=>{ try{ localStorage.setItem('network-pins', JSON.stringify(Object.fromEntries(pins))); }catch(e){} paintPins(); };
     root.innerHTML='<div class="nw-bar"><div class="nw-search"><input type="text" placeholder="Trouver dans le réseau…" aria-label="Trouver dans le réseau"></div><div class="nw-types"></div>'
       +'<label class="nw-local"><input type="checkbox"> Voisinage seulement</label><button type="button" class="nw-fit">Recentrer</button></div>'
-      +'<div class="nw-stage"><canvas role="img" aria-label="Graphe des connexions. Utilise la recherche pour trouver un élément : ses liens s’affichent dans le panneau."></canvas><div class="nw-tip" hidden></div><div class="nw-side" hidden></div><div class="nw-hint">Molette : zoom · glisser : déplacer · clic : détails · double-clic : ouvrir la fiche</div></div>';
+      +'<div class="nw-stage"><canvas role="img" aria-label="Graphe des connexions. Utilise la recherche pour trouver un élément : ses liens s’affichent dans le panneau."></canvas><div class="nw-tip" hidden></div><div class="nw-side" hidden></div><button type="button" class="nw-unpin" hidden>Libérer les points</button><div class="nw-hint">Molette : zoom · glisser : déplacer · clic : détails · double-clic : ouvrir la fiche · glisser un point : il reste où tu le poses</div></div>';
     const canvas=root.querySelector('canvas'), ctx=canvas.getContext('2d'), stage=root.querySelector('.nw-stage'), tip=root.querySelector('.nw-tip'), side=root.querySelector('.nw-side');
-    const search=root.querySelector('.nw-search input'), typesBox=root.querySelector('.nw-types'), localBox=root.querySelector('.nw-local input');
+    const search=root.querySelector('.nw-search input'), typesBox=root.querySelector('.nw-types'), localBox=root.querySelector('.nw-local input'), unpinBtn=root.querySelector('.nw-unpin');
     let nodes=[], edges=[], byId=new Map(), adj=new Map(), pos=new Map();   // positions kept between refreshes
     let view={ x:0, y:0, k:1 }, hover=null, selected=null, alpha=1, raf=0, dpr=1, W=0, H=0, dragging=null, panning=null, moved=false, matches=null, follow=0;
 
@@ -30,17 +33,20 @@
     }
     function build(){
       const d=getData(); byId=new Map(); adj=new Map();
-      nodes=d.nodes.map(n=>{ const p=pos.get(n.id)||{ x:(Math.random()-.5)*600, y:(Math.random()-.5)*600, vx:0, vy:0 }; pos.set(n.id,p); const o=Object.assign({}, n, { p }); byId.set(n.id,o); adj.set(n.id,[]); return o; });
+      nodes=d.nodes.map(n=>{ const p=pos.get(n.id)||{ x:(Math.random()-.5)*600, y:(Math.random()-.5)*600, vx:0, vy:0 }; pos.set(n.id,p); const pin=pins.get(n.id); if(pin){ p.x=pin[0]; p.y=pin[1]; } const o=Object.assign({}, n, { p }); byId.set(n.id,o); adj.set(n.id,[]); return o; });
       edges=d.edges.filter(([a,b])=>byId.has(a) && byId.has(b) && a!==b);
       const seen=new Set(); edges=edges.filter(([a,b])=>{ const k=a<b?a+'|'+b:b+'|'+a; if(seen.has(k)) return false; seen.add(k); return true; });
       edges.forEach(([a,b])=>{ adj.get(a).push(b); adj.get(b).push(a); });
       nodes.forEach(n=>{ n.deg=adj.get(n.id).length; n.r=(TYPES[n.type]||TYPES.task).r+Math.min(9, Math.sqrt(n.deg)*1.6); });
       if(selected) selected=byId.get(selected.id)||null;
-      paintTypes(); alpha=Math.max(alpha,.6); kick();
+      paintTypes(); paintPins(); alpha=Math.max(alpha,.6); kick();
       let empty=stage.querySelector('.nw-empty');
       if(!nodes.length){ if(!empty){ empty=document.createElement('div'); empty.className='nw-empty'; empty.innerHTML='Rien à relier pour l’instant.<br>Les sociétés, contacts, opportunités et tâches apparaîtront ici avec leurs liens.'; stage.appendChild(empty); } }
       else if(empty) empty.remove();
     }
+    function paintPins(){ const n=[...pins.keys()].filter(id=>byId.has(id)).length; unpinBtn.hidden=!n; unpinBtn.textContent='Libérer les points ('+n+')'; unpinBtn.title='Les points posés à la main reprennent leur place automatique'; }
+    function unpin(ids){ (ids||[...pins.keys()]).forEach(id=>pins.delete(id)); savePins(); alpha=Math.max(alpha,.6); if(selected) showSide(selected); kick(); }
+    unpinBtn.onclick=()=>unpin();
     function paintTypes(){
       const count={}; nodes.forEach(n=>{ count[n.type]=(count[n.type]||0)+1; });
       typesBox.innerHTML='';
@@ -64,7 +70,7 @@
       edges.forEach(([a,b])=>{ const A=byId.get(a), B=byId.get(b); if(!ok(A)||!ok(B)) return;
         const L=(A.type==='company'||B.type==='company')?60:40, x=B.p.x-A.p.x, y=B.p.y-A.p.y, d=Math.sqrt(x*x+y*y)||1, f=(d-L)/d*.06*alpha;
         A.p.vx+=x*f; A.p.vy+=y*f; B.p.vx-=x*f; B.p.vy-=y*f; });
-      vis.forEach(n=>{ n.p.vx-=n.p.x*.0025*alpha; n.p.vy-=n.p.y*.0025*alpha; if(n===dragging) return; n.p.vx*=.82; n.p.vy*=.82; n.p.x+=n.p.vx; n.p.y+=n.p.vy; });
+      vis.forEach(n=>{ n.p.vx-=n.p.x*.0025*alpha; n.p.vy-=n.p.y*.0025*alpha; if(n===dragging || pins.has(n.id)){ n.p.vx=n.p.vy=0; return; } n.p.vx*=.82; n.p.vy*=.82; n.p.x+=n.p.vx; n.p.y+=n.p.vy; });
       alpha*=big?.97:.985;   // a big graph settles sooner
     }
     const toScreen=(x,y)=>[(x*view.k+view.x)+W/2, (y*view.k+view.y)+H/2];
@@ -87,6 +93,7 @@
         if(showLabel && !dim) labels.push([n,x,y,r]); });
       groups.forEach((p,key)=>{ const [color,d]=key.split('|'); ctx.globalAlpha=d?.18:1; ctx.fillStyle=color; ctx.fill(p); });
       ctx.globalAlpha=1;
+      if(pins.size){ ctx.strokeStyle='rgba(232,238,245,.55)'; ctx.lineWidth=1; ctx.setLineDash([2,2]); nodes.forEach(n=>{ if(!pins.has(n.id) || !ok(n)) return; const [x,y]=toScreen(n.p.x,n.p.y), r=n.r*Math.max(.6,Math.min(1.6,view.k))+3; ctx.beginPath(); ctx.arc(x,y,r,0,Math.PI*2); ctx.stroke(); }); ctx.setLineDash([]); }
       if(selected && ok(selected)){ const [x,y]=toScreen(selected.p.x,selected.p.y), r=selected.r*Math.max(.6,Math.min(1.6,view.k)); ctx.strokeStyle='#fff'; ctx.lineWidth=2; ctx.beginPath(); ctx.arc(x,y,r,0,Math.PI*2); ctx.stroke(); ctx.lineWidth=1; }
       ctx.fillStyle='rgba(232,238,245,.92)';
       labels.forEach(([n,x,y,r])=>{ ctx.font=(n.type==='company'||n.type==='project'?'600 ':'')+'11px system-ui, sans-serif'; ctx.fillText(n.label.length>34?n.label.slice(0,33)+'…':n.label, x+r+3, y+4); });
@@ -113,6 +120,7 @@
       side.hidden=false;
       side.querySelector('.nw-x').onclick=()=>{ selected=null; showSide(null); kick(); };
       const ob=side.querySelector('.nw-open'); if(ob) ob.onclick=()=>n.open();
+      if(pins.has(n.id)){ const u=document.createElement('button'); u.type='button'; u.className='nw-unpin-one'; u.textContent='Libérer ce point'; u.onclick=()=>unpin([n.id]); side.querySelector('.nw-count').before(u); }
       side.querySelectorAll('.nw-n').forEach(b=>b.onclick=()=>focus(b.dataset.id));
     }
     function focus(id, o){
@@ -127,17 +135,19 @@
     canvas.addEventListener('wheel', e=>{ e.preventDefault(); follow=0; const r=canvas.getBoundingClientRect(), sx=e.clientX-r.left, sy=e.clientY-r.top, [wx,wy]=toWorld(sx,sy);
       view.k=Math.max(.15, Math.min(4, view.k*(e.deltaY<0?1.12:1/1.12))); view.x=(sx-W/2)-wx*view.k; view.y=(sy-H/2)-wy*view.k; kick(); }, { passive:false });
     canvas.addEventListener('pointerdown', e=>{ follow=0; const r=canvas.getBoundingClientRect(), sx=e.clientX-r.left, sy=e.clientY-r.top, n=nodeAt(sx,sy); moved=false; canvas.setPointerCapture(e.pointerId);
-      if(n){ dragging=n; alpha=Math.max(alpha,.3); } else panning={ sx, sy, x:view.x, y:view.y }; kick(); });
+      if(n){ dragging=n; hover=n; alpha=Math.max(alpha,.3); canvas.style.cursor='grabbing'; tip.hidden=true; } else panning={ sx, sy, x:view.x, y:view.y }; kick(); });
     canvas.addEventListener('pointermove', e=>{ const r=canvas.getBoundingClientRect(), sx=e.clientX-r.left, sy=e.clientY-r.top;
-      if(dragging){ const [wx,wy]=toWorld(sx,sy); dragging.p.x=wx; dragging.p.y=wy; dragging.p.vx=dragging.p.vy=0; moved=true; kick(); return; }
+      // like Obsidian: the point follows the mouse, its links light up and pull its neighbours along (the layout stays « warm » while held)
+      if(dragging){ const [wx,wy]=toWorld(sx,sy); dragging.p.x=wx; dragging.p.y=wy; dragging.p.vx=dragging.p.vy=0; moved=true; hover=dragging; tip.hidden=true; alpha=Math.max(alpha,.3); kick(); return; }
       if(panning){ view.x=panning.x+(sx-panning.sx); view.y=panning.y+(sy-panning.sy); if(Math.abs(sx-panning.sx)+Math.abs(sy-panning.sy)>3) moved=true; kick(); return; }
       const n=nodeAt(sx,sy); if(n!==hover){ hover=n; kick(); }
       canvas.style.cursor=n?'pointer':'grab';
       if(n){ tip.hidden=false; tip.innerHTML='<b>'+esc(n.label)+'</b>'+(n.sub?'<span>'+esc(n.sub)+'</span>':''); tip.style.left=Math.min(W-220, sx+14)+'px'; tip.style.top=(sy+14)+'px'; } else tip.hidden=true; });
     canvas.addEventListener('pointerup', e=>{ const r=canvas.getBoundingClientRect(), n=nodeAt(e.clientX-r.left, e.clientY-r.top);
       if(!moved){ selected=n||null; showSide(selected); if(localBox.checked) { alpha=Math.max(alpha,.4); } kick(); }
-      dragging=null; panning=null; });
-    canvas.addEventListener('pointerleave', ()=>{ hover=null; tip.hidden=true; kick(); });
+      if(dragging && moved){ pins.set(dragging.id, [Math.round(dragging.p.x), Math.round(dragging.p.y)]); savePins(); alpha=Math.max(alpha,.25); if(selected===dragging) showSide(selected); }   // let go: it stays there, its neighbours settle around it
+      dragging=null; panning=null; canvas.style.cursor=n?'pointer':'grab'; kick(); });
+    canvas.addEventListener('pointerleave', ()=>{ if(!dragging) hover=null; tip.hidden=true; kick(); });
     canvas.addEventListener('dblclick', e=>{ const r=canvas.getBoundingClientRect(), n=nodeAt(e.clientX-r.left, e.clientY-r.top); if(n && n.open) n.open(); });
     search.addEventListener('input', ()=>{ const q=fold(search.value.trim()); matches=q?new Set(nodes.filter(n=>fold(n.label+' '+(n.sub||'')).includes(q)).map(n=>n.id)):null; kick(); });
     search.addEventListener('keydown', e=>{ if(e.key==='Enter' && matches && matches.size){ const first=nodes.find(n=>matches.has(n.id) && visibleSet()(n)) || nodes.find(n=>matches.has(n.id)); if(first) focus(first.id); } });
@@ -146,7 +156,7 @@
     new ResizeObserver(resize).observe(stage);
     resize(); build();
     let first=true; setTimeout(()=>{ if(first){ fit(); first=false; } }, 900);
-    return { refresh:build, focus, fit, _state:()=>({ nodes:nodes.length, edges:edges.length, selected:selected&&selected.id, visible:nodes.filter(visibleSet()).length }) };
+    return { refresh:build, focus, fit, _pos:id=>{ const n=byId.get(id); return n?toScreen(n.p.x,n.p.y):null; }, _state:()=>({ nodes:nodes.length, edges:edges.length, selected:selected&&selected.id, visible:nodes.filter(visibleSet()).length }) };
   }
   window.todoNetwork={ mount, TYPES };
 })();
