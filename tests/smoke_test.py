@@ -1134,6 +1134,24 @@ with sync_playwright() as p:
     check(not errors, f"no page errors ({errors})")
     page.close()
 
+    # --- Sync: a call noted on each device, a box ticked on each: both kept (logs and ticks are merged, not one side lost)
+    def op(log, checks, at):
+        return {"id": "sy", "kind": "installation", "company": "SY", "centrale": "Toit", "title": "Toit", "stage": "kyc", "notesLog": log, "checks": checks, "createdAt": 1, "updatedAt": at, "deleted": False}
+    n0 = {"at": 1000, "kind": "note", "text": "base"}
+    base_o = op([n0], {"kyc": {}}, 10)
+    loc_o = op([n0, {"at": 2000, "kind": "appel", "text": "appel PC"}], {"kyc": {"docs": 2000}}, 20)
+    files = {"crm.json": {"companies": [], "contacts": [], "meetings": [], "opportunities": [op([n0, {"at": 3000, "kind": "appel", "text": "appel téléphone"}], {"kyc": {"solva": 3000}}, 30)]},
+             "tasks.json": [], "notes.json": []}
+    page, errors = new_page(browser, dict(SYNC_ON, **{"todo_todo-widget-opportunities": json.dumps([loc_o]), "todo_sync-crm-base": json.dumps({"companies": [], "contacts": [], "meetings": [], "opportunities": [base_o]})}),
+                            viewport={"width": 1300, "height": 850})
+    mock_github(page, files); page.goto(URL)
+    page.wait_for_function(f"({PEEK}('todo-widget-opportunities')||'').includes('appel téléphone')", timeout=10000)
+    o = stored(page, "todo-widget-opportunities")[0]
+    check([n["text"] for n in o["notesLog"]] == ["base", "appel PC", "appel téléphone"] and o["checks"]["kyc"] == {"docs": 2000, "solva": 3000},
+          f"sync: calls and ticks from both devices kept ({[n['text'] for n in o['notesLog']]}, {o['checks']})")
+    check(not errors, f"no page errors ({errors})")
+    page.close()
+
     # --- Settings shared between devices (saved views, network layout, goals) through the note
     tel_views = json.dumps([{"name": "Vue téléphone", "filter": "all"}])
     n_at = int(time.time() * 1000) - 60000   # written today: no morning roll in the way

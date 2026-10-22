@@ -407,6 +407,13 @@
           result[field]=field==='text'?mergeNoteLines(base[field], local[field], remote[field]):field.startsWith('pref_')?mergePrefValue(local[field], remote[field]):((remote.updatedAt||0)>(local.updatedAt||0)?remote[field]:local[field]);
           return;
         }
+        // logs only ever grow (calls, notes, steps), ticks are per step: both devices' entries are kept, not one of them
+        if(localChanged && remoteChanged && (field==='notesLog' || field==='stageLog') && Array.isArray(local[field]) && Array.isArray(remote[field])){
+          const seen=new Set(), all=[]; local[field].concat(remote[field]).forEach(e=>{ const k=JSON.stringify(e); if(!seen.has(k)){ seen.add(k); all.push(e); } });
+          result[field]=all.sort((x,y)=>((x&&x.at)||0)-((y&&y.at)||0)); return; }
+        if(localChanged && remoteChanged && field==='checks' && local[field] && remote[field] && typeof local[field]==='object' && typeof remote[field]==='object'){
+          const m={}; new Set([...Object.keys(remote[field]), ...Object.keys(local[field])]).forEach(k=>{ m[k]=Object.assign({}, remote[field][k]||{}, local[field][k]||{}); });
+          result[field]=m; return; }
         if(localChanged && remoteChanged){
           const takeRemote=(remote.updatedAt||0) > (local.updatedAt||0);
           result[field]=takeRemote?remote[field]:local[field];
@@ -5225,7 +5232,7 @@
   const pqFieldLabel=k=>{ const f=PQ_FIELDS.find(x=>x.k===k)||PQ_EXTRA_FIELDS.find(x=>x.k===k); return f?f.label:k; };
   // short description of an installation for its line: power · volume · commissioning · technology
   function instLineInfo(x){
-    const mwh=x.mwh?Number(pqNum(String(x.mwh))).toLocaleString('fr-FR')+' MWh':'';
+    const mwh=mwhText(x.mwh);
     return [fmtKwc(x.kwc), mwh, x.mesPrev||x.mesEff?'MES '+(x.mesEff||x.mesPrev):'', x.install].filter(Boolean).join(' · ');   // no address: power, volume, commissioning, technology
   }
   function buildRequestTabs(list, currentId){
@@ -5349,7 +5356,7 @@
   // what is missing is listed in one line per block. Phones and mails copy on click.
   function buildInstallSheet(o){
     const fr=v=>/^\d{4}-\d{2}-\d{2}$/.test(v||'')?pqIsoToFr(v):(v||'');
-    const mwh=v=>v?Number(pqNum(v)).toLocaleString('fr-FR')+' MWh':'';
+    const mwh=v=>mwhText(v);
     const phones=s=>String(s||'').split(/\s*\/\s*|\n|;/).map(x=>x.trim()).filter(Boolean);
     const wrap=document.createElement('div'); wrap.className='os';
     // key figures
@@ -5713,7 +5720,8 @@
   const DUP_LEGAL=/\b(sas|sasu|sarl|sa|scea|earl|gaec|sci|eurl|snc|sem|spl|scic|cuma|selarl|ste|societe|groupe|holding|et|the|la|le|les|l|de|du|des|d)\b/g;
   const coDupKey=n=>pqFold(n).replace(/[^a-z0-9 ]/g,' ').replace(DUP_LEGAL,' ').replace(/[^a-z0-9]/g,'');
   const instDupKey=o=>{ const n=pqFold(oppName(o)).replace(/[^a-z0-9 ]/g,' ').replace(/\b(centrale|centrales|cs|parc|projet|pv|photovoltaique|solaire|toit|toiture|de|du|des|la|le|les|l|d)\b/g,' ').replace(/[^a-z0-9]/g,'');
-    return n.length>=2?coDupKey(o.company||'')+'|'+n:null; };
+    const full=pqFold(oppName(o)).replace(/[^a-z0-9]/g,'');   // « Toit A » / « Toit B » : too short once the usual words are gone, the whole name decides
+    const k=n.length>=3?n:full.length>=3?full:''; return k?coDupKey(o.company||'')+'|'+k:null; };
   function dupIgnored(){ try{ return JSON.parse(localStorage.getItem('dup-ignore')||'[]'); }catch(e){ return []; } }
   function dupIgnore(sig){ const l=dupIgnored(); if(!l.includes(sig)){ l.push(sig); try{ localStorage.setItem('dup-ignore', JSON.stringify(l)); }catch(e){} } }
   function instDupGroups(){
@@ -5732,7 +5740,9 @@
   // the plant kept takes what the others knew and it did not, their tasks, notes and request
   function mergeInstallations(keep, others){
     others.forEach(x=>{
-      Object.keys(x).forEach(k=>{ if(['id','createdAt','updatedAt','deleted','stage','stageLog','kind','notesLog','notDupOf','checks'].includes(k)) return; if((keep[k]==null || keep[k]==='') && x[k]!=null && x[k]!=='') keep[k]=x[k]; });
+      // where the plant sits (request, lot, step, exit) stays the kept one's; a plant on its own joins the other's request
+      Object.keys(x).forEach(k=>{ if(['id','createdAt','updatedAt','deleted','stage','stageLog','kind','notesLog','notDupOf','checks','lot','requestId','taskId','lostAt','stageBeforeExit'].includes(k)) return; if((keep[k]==null || keep[k]==='') && x[k]!=null && x[k]!=='') keep[k]=x[k]; });
+      if(!keep.requestId && x.requestId && opportunities.some(r=>r.id===x.requestId && !r.deleted)){ keep.requestId=x.requestId; keep.lot=x.lot||''; }
       if((x.notesLog||[]).length) keep.notesLog=(keep.notesLog||[]).concat(x.notesLog).sort((a,b)=>a.at-b.at);
       if(x.createdAt && (!keep.createdAt || x.createdAt<keep.createdAt)) keep.createdAt=x.createdAt;
       tasks.forEach(t=>{ if(t.opportunityId===x.id){ t.opportunityId=keep.id; touch(t); } });
@@ -5765,7 +5775,7 @@
       if(ig.length){ const h=document.createElement('h4'); h.className='dup-h'; h.textContent='Installations saisies deux fois · '+ig.length; body.appendChild(h);
         ig.forEach((g,gi)=>{ const sec=document.createElement('section'); sec.className='dup-group';
           g.forEach((o,i)=>{ const l=document.createElement('label'); l.className='dup-row'; l.innerHTML='<input type="radio" name="dupi'+gi+'"><b></b><span></span>'; l.querySelector('input').checked=i===0; l.querySelector('input').value=o.id;
-            l.querySelector('b').textContent=(o.company||'')+' — '+oppName(o); l.querySelector('span').textContent=[stageLabel(o.stage, o), fmtKwc(o.kwc), o.mwh?Math.round(pqNum(String(o.mwh))).toLocaleString('fr-FR')+' MWh':'', o.createdAt>1e12?'créée le '+new Date(o.createdAt).toLocaleDateString('fr-FR'):''].filter(Boolean).join(' · ');
+            l.querySelector('b').textContent=(o.company||'')+' — '+oppName(o); l.querySelector('span').textContent=[stageLabel(o.stage, o), fmtKwc(o.kwc), mwhText(o.mwh), o.createdAt>1e12?'créée le '+new Date(o.createdAt).toLocaleDateString('fr-FR'):''].filter(Boolean).join(' · ');
             sec.appendChild(l); });
           const acts=document.createElement('div'); acts.className='dup-acts';
           const m=document.createElement('button'); m.type='button'; m.className='dup-merge'; m.textContent='Garder celle cochée, fusionner';
@@ -5783,15 +5793,18 @@
     contrat:'Type de contrat', duree:'Durée (ans)', debut:'Début du contrat', install:'Technologie', rdv1:'RDV 1', rdv2:'RDV 2', nature:'Offre demandée', spv:'SPV', siret:'SIRET',
     tel:'Téléphone', mail:'Mail', relance:'Relance', particularites:'Particularités' };
   const QN_PER_PLANT=new Set(['kwc','mwh','p90','mesPrev','mesEff','dept','commune','cp','contrat','duree','debut','install','spv','siret','particularites']);
+  // a production for the eye: « 1 200 MWh », nothing when the value is not a number (« abc », « n/c »)
+  function mwhText(v){ const n=pqNum(String(v==null?'':v)); return isFinite(n) && n?Math.round(n).toLocaleString('fr-FR')+' MWh':''; }
   function qnShow(k, v){ if(v==null || v==='') return '—';
-    if(k==='kwc') return fmtKwc(v); if(k==='mwh' || k==='p90') return Math.round(pqNum(String(v))).toLocaleString('fr-FR')+' MWh/an';
+    if(k==='kwc') return fmtKwc(v); if(k==='mwh' || k==='p90') return mwhText(v)?mwhText(v)+'/an':String(v);
     if(/^\d{4}-\d{2}-\d{2}$/.test(String(v))) return pqIsoToFr(v); return String(v); }
   function parseQuickNotes(text){
     const t=String(text||'').replace(/ /g,' '), f=pqFold(t), out={};
     if(!t.trim()) return out;
     const P=parsePipeMail(t);
-    ['kwc','mesPrev','dept','region','contrat','duree','install','debut','tel','mail'].forEach(k=>{ if(P[k]) out[k]=P[k]; });   // the production: read here (a P90 is not a P50)
-    const qty='(?<![\\w,.])(\\d{1,3}(?:[ .]\\d{3})+(?:,\\d+)?|\\d+(?:,\\d+)?)';
+    ['kwc','mesPrev','dept','region','contrat','duree','install','debut','tel','mail'].forEach(k=>{ if(P[k]) out[k]=P[k]; });
+    if(out.kwc && !(pqNum(out.kwc)>0)) delete out.kwc;   // the production: read here (a P90 is not a P50)
+    const qty='(?<![\\w,.-])(\\d{1,3}(?:[ .]\\d{3})+(?:,\\d+)?|\\d+(?:,\\d+)?)(?![\\d.,]*e\\d)';
     let m;
     // a power or a production written short, as in notes: « 1,2 MWc », « 900 kWc », « P50 1200 », « 1 400 MWh »
     if(!out.kwc && (m=new RegExp(qty+'\\s*(mwc|mwp|mw|kwc|kwp|kw)\\b','i').exec(t))){ const v=pqQty(m[1], m[2]); if(v>0) out.kwc=String(/^m/i.test(m[2])?Math.round(v*1000):Math.round(v)); }
@@ -5803,7 +5816,7 @@
     // where: « 49300 Cholet », « à Cholet (49) »
     if((m=/\b((?:0[1-9]|[1-8]\d|9[0-5])\d{3})\s+([A-ZÉÈÀÂÎÔ][\p{L}'’ -]{1,40}?)(?=[\n,.;)]|\s{2}|$)/u.exec(t))){ out.cp=m[1]; out.commune=pqTitleCase(m[2].trim()); const d=pqDeptFromPostal(m[1]); if(d){ out.dept=pqDeptLabel(d); out.region=PQ_REGIONS[d[2]]; } }
     // meetings and follow-ups: « RDV 2 le 12/11 », « rdv1 : 05/11/2026 », « relance le 3/12 »
-    const isoOf=s2=>{ let d=/^(\d{1,2})\/(\d{1,2})(?:\/(\d{2,4}))?$/.exec(s2); if(!d) return null; let y=d[3]?+d[3]:new Date().getFullYear(); if(y<100) y+=2000; const dt=new Date(y, +d[2]-1, +d[1]); if(!d[3] && dt<new Date(Date.now()-30*864e5)) dt.setFullYear(y+1); return toISO(dt); };
+    const isoOf=s2=>{ let d=/^(\d{1,2})\/(\d{1,2})(?:\/(\d{2,4}))?$/.exec(s2); if(!d || +d[1]<1 || +d[1]>31 || +d[2]<1 || +d[2]>12) return null; let y=d[3]?+d[3]:new Date().getFullYear(); if(y<100) y+=2000; const dt=new Date(y, +d[2]-1, +d[1]); if(dt.getDate()!==+d[1]) return null; if(!d[3] && dt<new Date(Date.now()-30*864e5)) dt.setFullYear(y+1); return toISO(dt); };
     [['rdv1',/\brdv\s*(?:1|un)\b[^\d\n]{0,12}(\d{1,2}\/\d{1,2}(?:\/\d{2,4})?)/],['rdv2',/\brdv\s*(?:2|deux)\b[^\d\n]{0,12}(\d{1,2}\/\d{1,2}(?:\/\d{2,4})?)/],['relance',/\brelan\w*[^\d\n]{0,12}(\d{1,2}\/\d{1,2}(?:\/\d{2,4})?)/]]
       .forEach(([k,re])=>{ const r=re.exec(f); const v=r && isoOf(r[1]); if(v) out[k]=v; });
     if(/\b(offre|prix|pricing)\s+engageant/.test(f) || /\bengageante?\b/.test(f)) out.nature='Engageante';
