@@ -6319,7 +6319,9 @@
   document.addEventListener('keydown',e=>{
     if((e.ctrlKey||e.metaKey)&&!e.shiftKey&&e.key.toLowerCase()==='p' && !window.TODO_WIDGET){ e.preventDefault(); if($('gs-overlay').hidden) gsOpen('>'); else gsClose(); return; }   // command palette
     if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='k'){ e.preventDefault(); if(window.TODO_WIDGET){ if(!window.TODO_PIP && !document.documentElement.classList.contains('widget-open')){ window.__widgetToggle(); return; } quickAddInput.focus(); return; } if($('gs-overlay').hidden) gsOpen(); else gsClose(); return; }
-    if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='f'){ e.preventDefault(); searchInput.focus(); return; }
+    if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='f'){   // the search box of the tab on screen; none there → the browser's own search
+      const box=['search-input','contact-search','opp-search','archive-search','client-list-search'].map(id=>$(id)).find(el=>el && el.offsetParent);
+      if(box){ e.preventDefault(); box.focus(); box.select(); } return; }
     if(e.key==='Escape'){ if(snoozePopover.style.display==='flex'){ closeSnoozePopover(); return; } if(editingId){ editingId=null; render(); return; } if(document.activeElement&&document.activeElement.id==='f-title'){ closeAddForm(); return; } if(document.activeElement===quickAddInput){ quickAddInput.blur(); return; } if(document.activeElement===searchInput&&searchQuery){ searchInput.value=''; searchQuery=''; searchClear.classList.remove('show'); render(); return; } return; }
     const tag=document.activeElement.tagName; if(tag==='INPUT'||tag==='TEXTAREA'||tag==='SELECT')return;
     if(e.key==='n'){ e.preventDefault(); quickAddInput.focus(); }

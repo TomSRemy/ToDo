@@ -349,6 +349,10 @@ with sync_playwright() as p:
     page.click('[data-tab="contacts"]'); page.click("#sig-paste-btn"); page.keyboard.press("Escape")
     page.click("#vcf-btn"); page.wait_for_timeout(100); page.keyboard.press("Escape")
     check(not page.is_visible("#sig-paste-overlay") and not page.is_visible("#vcf-overlay"), "Escape closes the small windows (signature, contacts to the phone)")
+    page.keyboard.press("Control+f")
+    check(page.evaluate("document.activeElement.id") == "contact-search", "Ctrl+F: the search of the tab on screen (Contacts)")
+    page.click('[data-tab="pipeline"]'); page.keyboard.press("Control+f")
+    check(page.evaluate("document.activeElement.id") == "opp-search", "Ctrl+F: the search of the tab on screen (Pipeline)")
     check(not errors, f"no page errors ({errors})")
     page.close()
 
