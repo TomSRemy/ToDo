@@ -4971,29 +4971,23 @@
       actions.appendChild(oppActionBtn('Projet identifié → créer l\u2019installation', ()=>{ closeOppDetail(); openOppForm({ company:o.company, prequalId:o.id }); }));
       actions.appendChild(oppActionBtn('Sans suite', ()=>{ o.stage='abandonne'; o.lostAt=Date.now(); touchCrm(o); saveCrm(); closeOppDetail(); renderPipeline(); }, 'ghost-btn'));
     } else {
-      const s=oppStage(o.stage);
-      const head=document.createElement('div'); head.className='opp-sheet-head';
-      head.appendChild(stageChip(o));
-      const meta=document.createElement('span'); meta.className='opp-sheet-meta';
-      meta.textContent=[o.install, o.contrat].filter(Boolean).join(' · ');   // the figures are in the sheet just below
-      head.appendChild(meta);
+      // the same order as a request's sheet: key figures, « Maintenant », the steps, then the plant's details, the file, the mail
       const siblings=o.requestId?requestInstalls(o.requestId):[];
       if(siblings.length>1) box.appendChild(buildRequestTabs(siblings, o.id));
-      box.appendChild(head);
-      { const f=stageFocus([o]); if(f) box.appendChild(f); }
-      box.appendChild(buildInstallSheet(o));
-      box.appendChild(buildRequestCompare(siblings.length>1?siblings:[o], o.id));   // every line of the « Caractéristiques Centrales » file, to fill in place
-      if(!o.requestId) appendPricingMail(box, { company:o.company }, [o]);   // a plant on its own has its pricing mail too
+      const sheet=buildInstallSheet(o), factsEl=sheet.querySelector('.os-facts'); box.appendChild(sheet);
+      const after=[];
+      { const f=stageFocus([o]); if(f) after.push(f); }
       // installations of one request usually move together: the stage applies to all of them, or to this one only
       const batch=o.requestId?requestInstalls(o.requestId).filter(x=>!isExited(x)):[];
       const many=batch.length>1 && !isExited(o);
+      const sc=document.createElement('div'); sc.className='stage-scope';
       if(many){
-        const sc=document.createElement('div'); sc.className='stage-scope'; sc.setAttribute('role','group'); sc.setAttribute('aria-label','Changer l\u2019étape de');
+        sc.setAttribute('role','group'); sc.setAttribute('aria-label','Changer l\u2019étape de');
         sc.innerHTML='<span>Changer l\u2019étape de</span>';
         [[true,'Toutes les installations ('+batch.length+')'],[false,'Seulement celle-ci']].forEach(([v,l])=>{ const b=document.createElement('button'); b.type='button'; b.textContent=l; b.className=stageScopeAll===v?'on':''; b.setAttribute('aria-pressed', String(stageScopeAll===v)); b.onclick=()=>{ stageScopeAll=v; openOppDetail(o.id); }; sc.appendChild(b); });
-        box.appendChild(sc);
-      }
-      box.appendChild(buildStageTrack(many&&stageScopeAll?batch:[o], key=>{
+      } else sc.innerHTML='<span>Étape de l\u2019installation</span>';
+      after.push(sc);
+      after.push(buildStageTrack(many&&stageScopeAll?batch:[o], key=>{
         const targets=many&&stageScopeAll?batch:[o];
         targets.forEach(x=>{ if(x.stage!==key) setOppStage(x, key); });
         openOppDetail(o.id);
@@ -5010,8 +5004,11 @@
           const w=document.createElement('span'); w.className='pipe-who'; w.textContent=stp.who; lab.appendChild(w);
           ob.appendChild(lab);
         });
-        box.appendChild(ob);
+        after.push(ob);
       }
+      (factsEl||sheet.firstChild).after(...after);
+      box.appendChild(buildRequestCompare(siblings.length>1?siblings:[o], o.id));   // every line of the « Caractéristiques Centrales » file, to fill in place
+      if(!o.requestId) appendPricingMail(box, { company:o.company }, [o]);   // a plant on its own has its pricing mail too
       if(isExited(o)){
         actions.appendChild(oppActionBtn('Réactiver', ()=>{ o.stage=o.stageBeforeExit||'a_qualifier'; o.lostAt=null; touchCrm(o); saveCrm(); renderPipeline(); openOppDetail(o.id); }));
       } else {
