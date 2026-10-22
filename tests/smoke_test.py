@@ -346,6 +346,9 @@ with sync_playwright() as p:
     page.click("#quick-add-input"); page.keyboard.type("?")
     check(not page.is_visible("#guide-overlay") and page.input_value("#quick-add-input") == "?", "« ? » typed in a field stays a character")
     page.fill("#quick-add-input", "")
+    page.click('[data-tab="contacts"]'); page.click("#sig-paste-btn"); page.keyboard.press("Escape")
+    page.click("#vcf-btn"); page.wait_for_timeout(100); page.keyboard.press("Escape")
+    check(not page.is_visible("#sig-paste-overlay") and not page.is_visible("#vcf-overlay"), "Escape closes the small windows (signature, contacts to the phone)")
     check(not errors, f"no page errors ({errors})")
     page.close()
 

@@ -6995,6 +6995,15 @@
   });
   $('vcf-go').onclick=doVcfExport;
   $('vcf-close').onclick=()=>$('vcf-overlay').classList.add('hidden');
+  // Escape closes the small windows like their « Annuler / Fermer » button — the one on top only, never the sheet under it.
+  // (The opportunity form is left out on purpose: Escape must not throw away what was typed.)
+  window.addEventListener('keydown', e=>{
+    if(e.key!=='Escape') return;
+    const top=[['stage-advance-overlay',closeStageAdvance],['company-edit-overlay',closeCompanyEditForm],['ct-merge-overlay',()=>$('ct-merge-close').click()],
+      ['sig-paste-overlay',()=>$('sig-paste-cancel').click()],['vcf-overlay',()=>$('vcf-close').click()]].find(([id])=>{ const o=$(id); return o && !o.classList.contains('hidden'); });
+    if(!top || !$('choice-overlay').classList.contains('hidden')) return;
+    e.preventDefault(); e.stopImmediatePropagation(); top[1]();
+  }, true);
   $('vcf-mode-all').onchange=()=>{ if($('vcf-mode-all').checked) $('vcf-mode-changed').checked=false; };
   $('vcf-mode-changed').onchange=()=>{ if($('vcf-mode-changed').checked) $('vcf-mode-all').checked=false; };
   $('vcf-overlay').addEventListener('click', e=>{ if(e.target.id==='vcf-overlay') $('vcf-overlay').classList.add('hidden'); });
