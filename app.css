@@ -1583,7 +1583,7 @@ html.lite .pipe-col.empty{ width:100%; }
 .nw-n:hover{ background:var(--panel-2); } .nw-n i{ width:8px; height:8px; border-radius:50%; flex-shrink:0; }
 .nw-more{ font-size:11px; color:var(--tx3); padding:2px 6px; }
 .nw-hint{ position:absolute; left:12px; bottom:10px; font-size:11px; color:var(--tx3); pointer-events:none; }
-html.lite .nw-local{ margin-left:0; } html.lite .nw-side{ left:12px; width:auto; top:auto; height:45%; }
+html.lite .nw-hint{ display:none; } html.lite .nw-local{ margin-left:0; } html.lite .nw-side{ left:12px; width:auto; top:auto; height:45%; }
 body.postit-open .nw-side{ bottom:300px; }
 
 /* [[links]]: clickable in the text, proposed while typing, « Mentionné dans » on the sheets */
@@ -1622,7 +1622,6 @@ body.postit-open .nw-side{ bottom:300px; }
 /* inline task edit: the status menu keeps its normal height next to the date and its shortcuts */
 .edit-form .form-row{ align-items:flex-start; }
 /* the network is not on the phone view: no button to it there */
-html.lite .contact-net-link, html.lite #co-sheet-net, html.lite .opp-net-btn{ display:none !important; }
 
 /* Réf. & data: the sync and bridge fields look like every other field of the app */
 .list-manager input[type=text], .list-manager input[type=password], .list-manager input[type=date]{ background:var(--panel-2); border:1px solid var(--bd); border-radius:var(--radius); color:var(--tx1); font:400 13px var(--font-ui); padding:8px 10px; box-sizing:border-box; }

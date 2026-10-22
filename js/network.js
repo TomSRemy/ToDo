@@ -20,7 +20,7 @@
     const savePins=()=>{ try{ localStorage.setItem('network-pins', JSON.stringify(Object.fromEntries(pins))); }catch(e){} if(window.todoSettingsChanged) window.todoSettingsChanged(); paintPins(); };
     root.innerHTML='<div class="nw-bar"><div class="nw-search"><input type="text" placeholder="Trouver dans le réseau…" aria-label="Trouver dans le réseau"></div><div class="nw-types"></div>'
       +'<label class="nw-local"><input type="checkbox"> Voisinage seulement</label><button type="button" class="nw-fit">Recentrer</button></div>'
-      +'<div class="nw-stage"><canvas role="img" aria-label="Graphe des connexions. Utilise la recherche pour trouver un élément : ses liens s’affichent dans le panneau."></canvas><div class="nw-tip" hidden></div><div class="nw-side" hidden></div><button type="button" class="nw-unpin" hidden>Libérer les points</button><div class="nw-hint">Molette : zoom · glisser : déplacer · clic : détails · double-clic : ouvrir la fiche · glisser un point : il reste où tu le poses</div></div>';
+      +'<div class="nw-stage"><canvas role="img" aria-label="Graphe des connexions. Utilise la recherche pour trouver un élément : ses liens s’affichent dans le panneau."></canvas><div class="nw-tip" hidden></div><div class="nw-side" hidden></div><button type="button" class="nw-unpin" hidden>Libérer les points</button><div class="nw-hint">'+(window.matchMedia && matchMedia('(pointer:coarse)').matches?'Pincer : zoom · glisser : déplacer · toucher : détails · toucher deux fois : la fiche · glisser un point : il reste où tu le poses':'Molette : zoom · glisser : déplacer · clic : détails · double-clic : ouvrir la fiche · glisser un point : il reste où tu le poses')+'</div></div>';
     const canvas=root.querySelector('canvas'), ctx=canvas.getContext('2d'), stage=root.querySelector('.nw-stage'), tip=root.querySelector('.nw-tip'), side=root.querySelector('.nw-side');
     const search=root.querySelector('.nw-search input'), typesBox=root.querySelector('.nw-types'), localBox=root.querySelector('.nw-local input'), unpinBtn=root.querySelector('.nw-unpin');
     let nodes=[], edges=[], byId=new Map(), adj=new Map(), pos=new Map();   // positions kept between refreshes
@@ -101,11 +101,12 @@
       labels.forEach(([n,x,y,r])=>{ ctx.font=(n.type==='company'||n.type==='project'?'600 ':'')+'11px system-ui, sans-serif'; ctx.fillText(n.label.length>34?n.label.slice(0,33)+'…':n.label, x+r+3, y+4); });
     }
     // the selected point in the middle of the free space (left of the side panel); followed while the layout settles
-    function centerOn(n){ const off=side.hidden?0:-(side.offsetWidth+12)/2; view.x=-n.p.x*view.k+off; view.y=-n.p.y*view.k; }
+    function centerOn(n){ const below=!side.hidden && side.offsetLeft<40;   // phone: the panel lies across the bottom
+      const ox=side.hidden||below?0:-(side.offsetWidth+12)/2, oy=below?-(side.offsetHeight+12)/2:0; view.x=-n.p.x*view.k+ox; view.y=-n.p.y*view.k+oy; }
     function loop(){ raf=0; if(alpha>.02 || dragging) tick(); if(follow && selected && !panning && !dragging && performance.now()<follow) centerOn(selected); draw(); if(alpha>.02 || dragging) raf=requestAnimationFrame(loop); }
     function kick(){ if(!raf) raf=requestAnimationFrame(loop); }
     function resize(){ const r=stage.getBoundingClientRect(); dpr=window.devicePixelRatio||1; W=r.width; H=r.height; canvas.width=W*dpr; canvas.height=H*dpr; canvas.style.width=W+'px'; canvas.style.height=H+'px'; kick(); }
-    function nodeAt(sx,sy){ const ok=visibleSet(); let best=null, bd=1e9; nodes.forEach(n=>{ if(!ok(n)) return; const [x,y]=toScreen(n.p.x,n.p.y), d=(x-sx)**2+(y-sy)**2, r=Math.max(8,n.r*view.k+4); if(d<r*r && d<bd){ bd=d; best=n; } }); return best; }
+    function nodeAt(sx,sy,finger){ const ok=visibleSet(); let best=null, bd=1e9; nodes.forEach(n=>{ if(!ok(n)) return; const [x,y]=toScreen(n.p.x,n.p.y), d=(x-sx)**2+(y-sy)**2, r=Math.max(finger?18:8,n.r*view.k+4); if(d<r*r && d<bd){ bd=d; best=n; } }); return best; }
     function fit(){ follow=0;
       const ok=visibleSet(), vis=nodes.filter(ok); if(!vis.length) return;
       let x0=1e9,y0=1e9,x1=-1e9,y1=-1e9; vis.forEach(n=>{ x0=Math.min(x0,n.p.x); y0=Math.min(y0,n.p.y); x1=Math.max(x1,n.p.x); y1=Math.max(y1,n.p.y); });
@@ -136,17 +137,29 @@
     // ---- interactions
     canvas.addEventListener('wheel', e=>{ e.preventDefault(); follow=0; const r=canvas.getBoundingClientRect(), sx=e.clientX-r.left, sy=e.clientY-r.top, [wx,wy]=toWorld(sx,sy);
       view.k=Math.max(.15, Math.min(4, view.k*(e.deltaY<0?1.12:1/1.12))); view.x=(sx-W/2)-wx*view.k; view.y=(sy-H/2)-wy*view.k; kick(); }, { passive:false });
-    canvas.addEventListener('pointerdown', e=>{ follow=0; const r=canvas.getBoundingClientRect(), sx=e.clientX-r.left, sy=e.clientY-r.top, n=nodeAt(sx,sy); moved=false; canvas.setPointerCapture(e.pointerId);
+    // touch: two fingers pinch to zoom, a double tap opens the sheet
+    const touches=new Map(); let pinch=null, lastTap={ id:null, t:0 };
+    const pinchState=()=>{ const [a,b]=[...touches.values()]; return { d:Math.hypot(a.x-b.x, a.y-b.y)||1, mx:(a.x+b.x)/2, my:(a.y+b.y)/2 }; };
+    canvas.addEventListener('pointerdown', e=>{ follow=0; const r=canvas.getBoundingClientRect(), sx=e.clientX-r.left, sy=e.clientY-r.top;
+      touches.set(e.pointerId, { x:sx, y:sy });
+      if(touches.size===2){ dragging=null; panning=null; moved=true; const p=pinchState(), [wx,wy]=toWorld(p.mx,p.my); pinch={ d:p.d, k:view.k, wx, wy }; return; }
+      const n=nodeAt(sx,sy,e.pointerType==='touch'); moved=false; canvas.setPointerCapture(e.pointerId);
       if(n){ dragging=n; hover=n; alpha=Math.max(alpha,.3); canvas.style.cursor='grabbing'; tip.hidden=true; } else panning={ sx, sy, x:view.x, y:view.y }; kick(); });
     canvas.addEventListener('pointermove', e=>{ const r=canvas.getBoundingClientRect(), sx=e.clientX-r.left, sy=e.clientY-r.top;
+      if(touches.has(e.pointerId)) touches.set(e.pointerId, { x:sx, y:sy });
+      if(pinch && touches.size>=2){ const p=pinchState(); view.k=Math.max(.15, Math.min(4, pinch.k*p.d/pinch.d)); view.x=(p.mx-W/2)-pinch.wx*view.k; view.y=(p.my-H/2)-pinch.wy*view.k; kick(); return; }
+      if(e.pointerType==='touch' && !dragging && !panning) return;
       // like Obsidian: the point follows the mouse, its links light up and pull its neighbours along (the layout stays « warm » while held)
       if(dragging){ const [wx,wy]=toWorld(sx,sy); dragging.p.x=wx; dragging.p.y=wy; dragging.p.vx=dragging.p.vy=0; moved=true; hover=dragging; tip.hidden=true; alpha=Math.max(alpha,.3); kick(); return; }
       if(panning){ view.x=panning.x+(sx-panning.sx); view.y=panning.y+(sy-panning.sy); if(Math.abs(sx-panning.sx)+Math.abs(sy-panning.sy)>3) moved=true; kick(); return; }
       const n=nodeAt(sx,sy); if(n!==hover){ hover=n; kick(); }
       canvas.style.cursor=n?'pointer':'grab';
       if(n){ tip.hidden=false; tip.innerHTML='<b>'+esc(n.label)+'</b>'+(n.sub?'<span>'+esc(n.sub)+'</span>':''); tip.style.left=Math.min(W-220, sx+14)+'px'; tip.style.top=(sy+14)+'px'; } else tip.hidden=true; });
-    canvas.addEventListener('pointerup', e=>{ const r=canvas.getBoundingClientRect(), n=nodeAt(e.clientX-r.left, e.clientY-r.top);
-      if(!moved){ selected=n||null; showSide(selected); if(localBox.checked) { alpha=Math.max(alpha,.4); } kick(); }
+    const endTouch=e=>{ touches.delete(e.pointerId); if(pinch){ if(touches.size<2) pinch=null; dragging=null; panning=null; return true; } return false; };
+    canvas.addEventListener('pointercancel', e=>{ endTouch(e); dragging=null; panning=null; });
+    canvas.addEventListener('pointerup', e=>{ if(endTouch(e)) return; const r=canvas.getBoundingClientRect(), n=nodeAt(e.clientX-r.left, e.clientY-r.top, e.pointerType==='touch');
+      if(!moved){ selected=n||null; showSide(selected); if(localBox.checked) { alpha=Math.max(alpha,.4); } kick();
+        if(e.pointerType==='touch' && n){ const now=Date.now(); if(lastTap.id===n.id && now-lastTap.t<400){ lastTap={ id:null, t:0 }; if(n.open) n.open(); } else lastTap={ id:n.id, t:now }; } }
       if(dragging && moved){ pins.set(dragging.id, [Math.round(dragging.p.x), Math.round(dragging.p.y)]); savePins(); alpha=Math.max(alpha,.25); if(selected===dragging) showSide(selected); }   // let go: it stays there, its neighbours settle around it
       dragging=null; panning=null; canvas.style.cursor=n?'pointer':'grab'; kick(); });
     canvas.addEventListener('pointerleave', ()=>{ if(!dragging) hover=null; tip.hidden=true; kick(); });
@@ -158,7 +171,7 @@
     new ResizeObserver(resize).observe(stage);
     resize(); build();
     let first=true; setTimeout(()=>{ if(first){ fit(); first=false; } }, 900);
-    return { refresh:build, focus, fit, _pos:id=>{ const n=byId.get(id); return n?toScreen(n.p.x,n.p.y):null; }, _state:()=>({ nodes:nodes.length, edges:edges.length, selected:selected&&selected.id, visible:nodes.filter(visibleSet()).length }) };
+    return { refresh:build, focus, fit, _pos:id=>{ const n=byId.get(id); return n?toScreen(n.p.x,n.p.y):null; }, _state:()=>({ k:Math.round(view.k*100)/100, nodes:nodes.length, edges:edges.length, selected:selected&&selected.id, visible:nodes.filter(visibleSet()).length }) };
   }
   window.todoNetwork={ mount, TYPES };
 })();

@@ -1266,13 +1266,27 @@ with sync_playwright() as p:
     check(not page.is_visible("#opp-add-btn"), "phone version: no opportunity form")
     page.click(".pipe-card:has-text('Moulin Neuf')")
     visible = page.eval_on_selector_all("#opp-detail-actions button", "els=>els.filter(e=>e.offsetParent).map(e=>e.textContent)")
-    check(visible == ["Fermer"], f"phone version: installation sheet is read-only ({visible})")
+    check(visible == ["Voir dans le réseau", "Fermer"], f"phone version: installation sheet is read-only, the network one tap away ({visible})")
     page.click("#opp-detail-actions >> text=Fermer"); page.locator(".pipe-req-card .pipe-card-title", has_text="Demande").click()
     ro = page.evaluate("""[[...document.querySelectorAll('#opp-detail-body .req-inst-ed, #opp-detail-body .req-inst-rm, #opp-detail-body .stage-scope')].filter(e=>e.offsetParent).length,
       [...document.querySelectorAll('#opp-detail-body .req-in')].every(i=>i.readOnly||i.disabled), document.querySelectorAll('#opp-detail-body .req-in').length]""")
     check(ro[0] == 0 and ro[1] and ro[2] > 0, f"phone version: the request sheet is read-only too ({ro})")
     page.click("#opp-detail-actions >> text=Fermer")
     check(page.evaluate("document.documentElement.scrollWidth") <= 390, "phone version fits the screen")
+    # the network on the phone: in the bottom bar, pinch to zoom
+    page.click("#lite-nav [data-go=network]"); page.wait_for_timeout(800)
+    check(page.is_visible("#tab-network") and page.evaluate("window.todoNetworkState().nodes") >= 3, "phone version: the network is in the bottom bar")
+    box = page.locator(".nw-stage canvas").bounding_box()
+    check(box["width"] <= 390 and box["height"] > 250, f"phone version: the network fills the screen ({box})")
+    cdp = page.context.new_cdp_session(page)
+    cx, cy = box["x"] + box["width"] / 2, box["y"] + box["height"] / 2
+    def touch(kind, pts): cdp.send("Input.dispatchTouchEvent", {"type": kind, "touchPoints": [{"x": x, "y": y, "id": i} for i, (x, y) in enumerate(pts)]})
+    k0 = page.evaluate("window.todoNetworkState().k")
+    touch("touchStart", [(cx - 30, cy), (cx + 30, cy)])
+    for i in range(1, 8): touch("touchMove", [(cx - 30 - 10 * i, cy), (cx + 30 + 10 * i, cy)]); page.wait_for_timeout(20)
+    touch("touchEnd", []); page.wait_for_timeout(200)
+    k1 = page.evaluate("window.todoNetworkState().k")
+    check(k1 > k0 * 1.8, f"phone version: pinching zooms the network ({k0} → {k1})")
     check(not errors, f"no page errors ({errors})")
     page.close()
 
