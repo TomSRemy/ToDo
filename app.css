@@ -1244,6 +1244,7 @@ details.req-compare:not([open]) .req-compare-h::before{ transform:rotate(-90deg)
 .req-line-name b{ font-weight:600; color:var(--tx1); }
 .req-line-name span{ font-size:12px; color:var(--tx3); }
 .req-tab .k{ text-align:right; white-space:normal; }
+@media (max-width:600px){ .req-tab{ flex-wrap:wrap; row-gap:1px; } .req-tab .n{ width:auto; } .req-tab b{ flex:1; min-width:0; } .req-tab .k{ flex-basis:100%; margin-left:0; text-align:left; } }   /* phone: the name gets the line, the figures go under it */
 
 /* installation sheet: back to its pricing request, and to the client */
 .opp-nav{ display:flex; flex-wrap:wrap; gap:6px 18px; margin:-6px 0 10px; }
