@@ -7916,7 +7916,7 @@
       v.names.slice().sort((a,b)=>b.kwc-a.kwc).forEach((p,i)=>{
         // spiral around the centre of the département, spaced wider than the biggest dot: no overlap
         const ang=i*2.39996, rad=5*Math.sqrt(i);
-        dots.push({ p, code, x:dep[3]+Math.cos(ang)*rad, y:dep[4]+Math.sin(ang)*rad, r:1.9+1.7*Math.sqrt((p.kwc||0)/maxKwc) });
+        dots.push({ p, code, x:dep[3]+Math.cos(ang)*rad, y:dep[4]+Math.sin(ang)*rad, r:1.9+1.7*Math.sqrt(Math.max(0, p.kwc||0)/maxKwc) });   // a power typed wrong (« -5 », « abc ») gives the smallest dot
       });
     });
     dots.forEach((d,i)=>{ svg+='<circle cx="'+d.x.toFixed(1)+'" cy="'+d.y.toFixed(1)+'" r="'+d.r.toFixed(1)+'" data-r0="'+d.r.toFixed(2)+'" vector-effect="non-scaling-stroke" style="--c:'+color(d.p.tech)+'" class="dot'+(parcMapSel && parcMapSel!==d.code?' dim':'')+'" data-dep="'+d.code+'" data-i="'+i+'"></circle>'; });
@@ -8197,7 +8197,9 @@
   // (The opportunity form is left out on purpose: Escape must not throw away what was typed.)
   window.addEventListener('keydown', e=>{
     if(e.key!=='Escape') return;
-    const top=[['stage-advance-overlay',cancelStageAdvance],['company-edit-overlay',closeCompanyEditForm],['ct-merge-overlay',()=>$('ct-merge-close').click()],
+    const top=[['stage-advance-overlay',cancelStageAdvance],['pq-overlay',async()=>{   // the new-opportunity form: closed at once when empty, asked first when something was typed
+        const typed=['pq-mail','pq1-company'].some(id=>$(id) && $(id).value.trim()) || [...document.querySelectorAll('#pq-overlay input[id^="pq-"]:not([type=checkbox]):not([type=radio])')].some(i=>i.value.trim() && i.defaultValue!==i.value);
+        if(!typed || await askChoice('Fermer sans enregistrer ?', 'Ce qui a été saisi dans cette opportunité sera perdu.', [{ label:'Fermer', value:'y' }])==='y') closeOppForm(); }],['company-edit-overlay',closeCompanyEditForm],['ct-merge-overlay',()=>$('ct-merge-close').click()],
       ['sig-paste-overlay',()=>$('sig-paste-cancel').click()],['week-overlay',()=>$('week-overlay').classList.add('hidden')],['daynotes-overlay',()=>$('daynotes-overlay').classList.add('hidden')],['vcf-overlay',()=>$('vcf-close').click()]].find(([id])=>{ const o=$(id); return o && !o.classList.contains('hidden'); });
     if(!top || !$('choice-overlay').classList.contains('hidden')) return;
     e.preventDefault(); e.stopImmediatePropagation(); top[1]();

@@ -1908,6 +1908,18 @@ with sync_playwright() as p:
     check(not errors, f"no page errors ({errors})")
     page.close()
 
+    # --- New opportunity: Escape closes an empty form at once, asks first when something was typed
+    page, errors = new_page(browser, {}, viewport={"width": 1300, "height": 850})
+    page.goto(URL); page.click('[data-tab="pipeline"]'); page.click("#opp-add-btn"); page.wait_for_timeout(150)
+    page.keyboard.press("Escape"); page.wait_for_timeout(150)
+    check(not page.is_visible("#pq-overlay"), "new opportunity: Escape closes the empty form")
+    page.click("#opp-add-btn"); page.fill("#pq1-company", "TEST SAS"); page.keyboard.press("Escape"); page.wait_for_timeout(150)
+    check(page.is_visible("#choice-overlay") and page.is_visible("#pq-overlay"), "new opportunity: Escape asks before losing what was typed")
+    page.click("#choice-btns button:has-text('Fermer')"); page.wait_for_timeout(150)
+    check(not page.is_visible("#pq-overlay"), "new opportunity: « Fermer » closes it")
+    check(not errors, f"no page errors ({errors})")
+    page.close()
+
     # --- Keyboard in a sheet: 1 ticks the first box, Entrée moves on and confirms, n opens the notes
     kb = [{"id": "k1", "kind": "installation", "company": "KB", "centrale": "Toit", "title": "Toit", "stage": "kyc", "createdAt": 1, "updatedAt": 1, "deleted": False}]
     page, errors = new_page(browser, {"todo_todo-widget-opportunities": json.dumps(kb)}, viewport={"width": 1400, "height": 900})
