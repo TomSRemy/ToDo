@@ -4005,7 +4005,30 @@
   window.todoExtraCommands=(window.todoExtraCommands||[]).concat(
     PRESET_VIEWS.tasks.map(p=>({ t:'Vue tâches : '+p.name, k:'vue filtre taches', go:()=>applySavedView('tasks',{ id:p.id, name:p.name, preset:p.id }) })),
     PRESET_VIEWS.pipeline.map(p=>({ t:'Vue pipeline : '+p.name, k:'vue filtre pipeline', go:()=>applySavedView('pipeline',{ id:p.id, name:p.name, preset:p.id }) })));
-  function renderPipeline(){ renderPipelineInner(); if(typeof paintPicks==='function') paintPicks(); paintXsCount(); }
+  function renderPipeline(){ renderPipelineInner(); if(typeof paintPicks==='function') paintPicks(); paintXsCount(); paintPipeSummary(); }
+  // « À moi · En attente des autres · Bloqués » over the board, counted per block
+  let pipeTallyN={ me:0, others:0, stuck:0, on:false };
+  function pipeTallyReset(){ pipeTallyN={ me:0, others:0, stuck:0, on:true }; }
+  function pipeTally(g){ const o=g[0]; if(o.kind!=='installation' || isExited(o)) return; const st=oppStage(o.stage); if(!st) return;
+    if(st.who==='Com') pipeTallyN.me++; else pipeTallyN.others++; const d=daysInStage(o); if(d!=null && d>15) pipeTallyN.stuck++; }
+  function paintPipeSummary(){ let el=$('pipe-summary'); const bar=document.querySelector('#tab-pipeline .quick-add-bar'); if(!bar) return;
+    if(!el){ el=document.createElement('span'); el.id='pipe-summary'; el.className='pipe-summary'; const ref=$('pipe-exited-toggle'); bar.insertBefore(el, ref); }
+    const show=pipeTallyN.on && !pipeDash && !pipeMeet && !pipeList; el.hidden=!show; if(!show) return;
+    el.innerHTML='À moi <b></b> · En attente des autres <b></b>'+(pipeTallyN.stuck?' · Bloqués &gt; 15 j <b class="late"></b>':'');
+    const bs=el.querySelectorAll('b'); bs[0].textContent=pipeTallyN.me; bs[1].textContent=pipeTallyN.others; if(bs[2]) bs[2].textContent=pipeTallyN.stuck; }
+  // the card's « what's next »: the linked open task, else what the step asks; who has it and since when; its request
+  function cardStepInfo(card, group, reqId){
+    const o=group[0], st=oppStage(o.stage); if(!st || isExited(o)) return;
+    const ids=new Set(group.map(x=>x.id).concat(reqId?[reqId]:[]));
+    const tk=activeTasks().filter(t=>t.opportunityId && ids.has(t.opportunityId)).sort((a,b)=>(a.due||'9').localeCompare(b.due||'9'))[0];
+    const nx=document.createElement('div'); nx.className='pipe-next'; const what=tk?plainLinks(tk.title).replace(/\s+—\s+.*$/,''):stageTaskOf(st, o); nx.textContent='→ '+(st.who!=='Com' && (!tk || tk.status==='en_attente')?'En attente '+(st.who==='Ops'?'d\u2019Ops':st.who==='Jur'?'du Juridique':st.who==='Client'?'du producteur':'de la Direction')+' : '+what.charAt(0).toLowerCase()+what.slice(1):what); card.appendChild(nx);
+    const m=document.createElement('div'); m.className='pipe-who-row';
+    const w=document.createElement('span'); w.className='who-chip who-'+String(st.who).toLowerCase(); w.textContent=WHO[st.who]||st.who; m.appendChild(w);
+    const d=daysInStage(o); if(d!=null){ const sp=document.createElement('span'); sp.className='pipe-days'+(d>15?' late':''); sp.textContent=d===0?'aujourd’hui':'depuis '+d+' j'; m.appendChild(sp); }
+    card.appendChild(m);
+    if(o.requestId){ const all=requestInstalls(o.requestId).filter(x=>!isExited(x)); if(all.length>group.length){ const req=opportunities.find(x=>x.id===o.requestId)||{};
+      const a=document.createElement('button'); a.type='button'; a.className='pipe-origin'; a.textContent='↳ demande '+(req.label||req.company||'')+' · '+all.length+' install.'; a.onclick=e=>{ e.stopPropagation(); openRequestDetail(o.requestId); }; card.appendChild(a); } }
+  }
   // how many lines wait for the Excel files (or changed there), on the « Excel ⇄ » button
   function paintXsCount(){ const b=$('pipe-xs-btn'); if(!b || ON_PHONE) return; let n=0;
     try{ xsList().forEach(o=>{ if(xsTodo(xsState('pipe',o)) || (xsBddApplies(o) && xsTodo(xsState('bdd',o)))) n++; }); }catch(e){}
@@ -4029,6 +4052,7 @@
       .filter(o=>!vp || vp(o));
     const live=items.filter(o=>!isExited(o)), exited=items.filter(isExited);
     $('pipe-exited-toggle').textContent=pipeShowExited?'Masquer les sorties':('Sorties ('+exited.length+')');
+    pipeTallyReset();
     PIPE_PHASES.forEach(ph=>{
       const col=document.createElement('div'); col.className='pipe-col'; col.dataset.phase=ph.key;
       const inPhase=live.filter(o=>oppPhase(o)===ph.key).sort((a,b)=>(a.company||'').localeCompare(b.company||'','fr'));
@@ -4036,15 +4060,17 @@
       const kwc=inPhase.reduce((s,o)=>s+(parseFloat(String(o.kwc||'').replace(',','.'))||0),0);
       head.innerHTML='<span>'+ph.label+'</span><span>'+inPhase.length+(kwc?' · '+(kwc>=1000?(Math.round(kwc/100)/10).toLocaleString('fr-FR')+' MWc':Math.round(kwc)+' kWc'):'')+'</span>';
       col.appendChild(head);
-      // installations of one pricing request in the same phase share one card
-      const done=new Set();
-      inPhase.forEach(o=>{
-        if(done.has(o.id)) return;
-        if(o.requestId){
-          const group=inPhase.filter(x=>x.requestId===o.requestId);
-          if(group.length>1){ group.forEach(x=>done.add(x.id)); col.appendChild(buildRequestCard(o.requestId, group)); return; }
-        }
-        done.add(o.id); col.appendChild(buildPipeCard(o));
+      // one block per request, lot and step (an installation moved on alone gets its own card); a small title per step
+      const blocks=new Map();
+      inPhase.forEach(o=>{ const k=o.requestId?'r'+o.requestId+'|'+(o.lot||'')+'|'+o.stage:'o'+o.id; if(!blocks.has(k)) blocks.set(k, []); blocks.get(k).push(o); });
+      const ordered=[...blocks.values()].sort((a,b)=>stageIndex(a[0].stage)-stageIndex(b[0].stage) || (a[0].company||'').localeCompare(b[0].company||'','fr'));
+      const many=ph.key!=='prequal' && OPP_STAGES.filter(st=>st.phase===ph.key).length>1;
+      let prev=null;
+      ordered.forEach(g=>{
+        if(many && g[0].stage!==prev){ prev=g[0].stage; const n=ordered.filter(x=>x[0].stage===prev).length, h=document.createElement('div'); h.className='pipe-sub-h';
+          h.textContent=(prev==='pricing_indicatif'?'Pricing':stageLabel(prev))+' · '+n; col.appendChild(h); }
+        pipeTally(g);
+        col.appendChild(g.length>1 && g[0].requestId?buildRequestCard(g[0].requestId, g):buildPipeCard(g[0]));
       });
       if(!inPhase.length){ const e=document.createElement('div'); e.className='pipe-empty'; e.textContent='—'; col.appendChild(e); col.classList.add('empty'); }   // empty columns stay narrow
       board.appendChild(col);
@@ -4224,13 +4250,14 @@
       const k=fmtKwc(o.kwc); if(k){ const s=document.createElement('span'); s.textContent=k; meta.appendChild(s); }
       const sb=suiviBadge(o); if(sb) meta.appendChild(sb);
       card.appendChild(meta);
+      if(o.kind==='installation') cardStepInfo(card, [o], null);
     }
     card.onclick=()=>openOppDetail(o.id);
     return card;
   }
   // A request's block: the producer, a name of one's own, the totals on the right; long blocks fold to their first lines
   function pickBox(){ const b=document.createElement('span'); b.className='pipe-pick'; b.setAttribute('role','checkbox'); b.setAttribute('aria-checked','false'); b.title='Sélectionner (pour grouper) — ou Ctrl+clic'; return b; }
-  const REQ_FOLD_AT=6;
+  const REQ_FOLD_AT=3;
   function reqTotals(group){ const kw=group.reduce((t,o)=>t+kwcNum(o),0); return group.length+(kw?' · '+fmtKwc(kw):' inst.'); }
   function reqDisplayName(req, list){ return (req.label?req.label:(list.length+' installation'+(list.length>1?'s':''))); }
   function buildRequestCard(reqId, group){
@@ -4241,27 +4268,29 @@
     card.style.borderLeft='3px solid '+clientColor(company);
     const head=document.createElement('div'); head.className='pipe-card-title pipe-req-head';
     const c=document.createElement('span'); c.className='pipe-card-company'; c.style.color=clientColor(company); c.textContent=company; if(company) c.dataset.peek='co:'+company;
-    const lab=document.createElement('span'); lab.className='pipe-req-label'; lab.textContent=req.label||'';
+    const lotName=group.every(x=>(x.lot||'')===(group[0].lot||''))?group[0].lot||'':'';
+    const lab=document.createElement('span'); lab.className='pipe-req-label'; lab.textContent=lotName||req.label||'';
     const tot=document.createElement('span'); tot.className='pipe-req-tot'; tot.textContent=reqTotals(group); tot.title=group.length+' installations au total';
     head.append(c, lab);
     if(!window.TODO_LITE){
       const ren=document.createElement('button'); ren.type='button'; ren.className='pipe-req-rename'; ren.title='Nommer ce bloc (texte après le producteur)'; ren.setAttribute('aria-label','Renommer');
       ren.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>';
       ren.onclick=ev=>{ ev.stopPropagation(); card.dataset.renaming='1';
-        const inp=document.createElement('input'); inp.className='pipe-req-label-in'; inp.value=req.label||''; inp.placeholder='ex. Lot toitures 2027'; lab.replaceWith(inp); ren.hidden=true; inp.focus(); inp.select();
-        const done=save=>{ if(save){ const v=inp.value.trim(); if((req.label||'')!==v){ req.label=v; touchCrm(req); saveCrm(); } } renderPipeline(); };
+        const inp=document.createElement('input'); inp.className='pipe-req-label-in'; inp.value=lotName||req.label||''; inp.placeholder='ex. Lot toitures 2027'; lab.replaceWith(inp); ren.hidden=true; inp.focus(); inp.select();
+        const done=save=>{ if(save){ const v=inp.value.trim(); if(lotName){ if(v && v!==lotName){ group.forEach(x=>{ x.lot=v; touchCrm(x); }); saveCrm(); } } else if((req.label||'')!==v){ req.label=v; touchCrm(req); saveCrm(); } } renderPipeline(); };
         inp.onclick=x=>x.stopPropagation(); inp.onkeydown=x=>{ if(x.key==='Enter'){ x.preventDefault(); done(true); } if(x.key==='Escape'){ x.stopPropagation(); done(false); } }; inp.onblur=()=>done(true); };
       head.appendChild(tot); head.appendChild(ren);
     } else head.appendChild(tot);
     card.appendChild(head);
     const same=group.every(o=>o.stage===group[0].stage);
-    const meta=document.createElement('div'); meta.className='pipe-card-meta'; if(same) meta.appendChild(stageChip(group[0]));
+    cardStepInfo(card, group, reqId);   // the step is the column's small title
     if(!window.TODO_LITE){ const ug=document.createElement('button'); ug.type='button'; ug.className='pipe-ungroup'; ug.textContent='Dégrouper'; ug.title='Séparer les installations de ce bloc';
-      ug.onclick=ev=>{ ev.stopPropagation(); ungroupRequest(reqId); }; meta.appendChild(ug); }
-    card.appendChild(meta);
-    let open=group.length<=REQ_FOLD_AT; try{ const v=JSON.parse(localStorage.getItem('pipe-req-open')||'{}')[reqId]; if(v!=null) open=v; }catch(err){}
+      ug.onclick=ev=>{ ev.stopPropagation(); ungroupRequest(reqId); };
+      const row=card.querySelector('.pipe-who-row'); if(row) row.appendChild(ug); else { const meta=document.createElement('div'); meta.className='pipe-card-meta'; meta.appendChild(ug); card.appendChild(meta); } }
+    const foldKey=reqId+'|'+(lotName||'')+'|'+group[0].stage;
+    let open=group.length<=REQ_FOLD_AT; try{ const v=JSON.parse(localStorage.getItem('pipe-req-open')||'{}')[foldKey]; if(v!=null) open=v; }catch(err){}
     group.forEach((o,i)=>{
-      const r=document.createElement('div'); r.className='pipe-req-line'; if(!open && i>=4) r.hidden=true;
+      const r=document.createElement('div'); r.className='pipe-req-line'; if(!open) r.hidden=true;
       const n=document.createElement('span'); n.className='pipe-req-name'; n.textContent=oppName(o); n.title=[oppName(o), fmtKwc(o.kwc), stageLabel(o.stage, o)].filter(Boolean).join(' · ');
       r.appendChild(n);
       if(same){ const k=document.createElement('span'); k.className='pipe-req-kwc'; k.textContent=fmtKwc(o.kwc); r.appendChild(k); } else r.appendChild(stageChip(o));
@@ -4269,11 +4298,11 @@
       card.appendChild(r);
     });
     if(group.length>REQ_FOLD_AT){
-      const t=document.createElement('button'); t.type='button'; t.className='pipe-req-more'; t.textContent=open?'Replier ▴':'+ '+(group.length-4)+' autres ▾';
-      t.onclick=ev=>{ ev.stopPropagation(); let m={}; try{ m=JSON.parse(localStorage.getItem('pipe-req-open')||'{}'); }catch(err){} m[reqId]=!open; try{ localStorage.setItem('pipe-req-open', JSON.stringify(m)); }catch(err){} renderPipeline(); };
+      const t=document.createElement('button'); t.type='button'; t.className='pipe-req-more'; t.textContent=open?'▴ Replier':'▾ '+group.length+' installations';
+      t.onclick=ev=>{ ev.stopPropagation(); let m={}; try{ m=JSON.parse(localStorage.getItem('pipe-req-open')||'{}'); }catch(err){} m[foldKey]=!open; try{ localStorage.setItem('pipe-req-open', JSON.stringify(m)); }catch(err){} renderPipeline(); };
       card.appendChild(t);
     }
-    card.onclick=()=>openRequestDetail(reqId);
+    card.onclick=()=>openRequestDetail(reqId, group.map(x=>x.id));
     return card;
   }
 
@@ -5007,7 +5036,7 @@
   // ----- Detail (installation, pre-qualif) -----
   let viewingOppId=null;
   // the sheet's buttons used now and then go in a « Plus ▾ » menu: the bar keeps the everyday ones
-  const ACT_MORE=/^(Copier lignes? Pipe|Copier lignes? BDD|Voir dans le réseau|Dégrouper|Supprimer|Demande de pricing)$/;
+  const ACT_MORE=/^(Copier lignes? Pipe|Copier lignes? BDD|Voir dans le réseau|Dégrouper|Supprimer|Demande de pricing|Abandonner)$/;
   function foldActions(bar){
     if(!bar || window.TODO_LITE) return;
     const more=[...bar.children].filter(b=>b.tagName==='BUTTON' && ACT_MORE.test(b.textContent.trim()));
@@ -5021,6 +5050,7 @@
   function openOppDetail(id){
     const o=opportunities.find(x=>x.id===id); if(!o) return;
     if(o.kind==='request'){ openRequestDetail(id); return; }
+    const toTop=viewingOppId!==id;
     viewingOppId=id;
     const box=$('opp-detail-body'); box.innerHTML='';
     $('opp-detail-title').textContent=o.kind==='prequal'?o.company+' — pré-qualif':o.company+' — '+oppName(o);
@@ -5042,14 +5072,11 @@
       actions.appendChild(oppActionBtn('Projet identifié → créer l\u2019installation', ()=>{ closeOppDetail(); openOppForm({ company:o.company, prequalId:o.id }); }));
       actions.appendChild(oppActionBtn('Sans suite', ()=>{ o.stage='abandonne'; o.lostAt=Date.now(); touchCrm(o); saveCrm(); closeOppDetail(); renderPipeline(); }, 'ghost-btn'));
     } else {
-      // the same order as a request's sheet: key figures, « Maintenant », the steps, then the plant's details, the file, the mail
+      // step by step: the progress bar, « Étape en cours » (checklist, one button), then the plant's details, the file, the mail
       const siblings=o.requestId?requestInstalls(o.requestId):[];
       if(siblings.length>1) box.appendChild(buildRequestTabs(siblings, o.id));
-      const sheet=buildInstallSheet(o), factsEl=sheet.querySelector('.os-facts'); box.appendChild(sheet);
-      const after=[];
-      { const f=stageFocus([o]); if(f) after.push(f); }
-      // installations of one request usually move together: the stage applies to all of them, or to this one only
-      const batch=o.requestId?requestInstalls(o.requestId).filter(x=>!isExited(x)):[];
+      // installations of one request usually move together (those of its lot): the stage applies to all of them, or to this one only
+      const batch=o.requestId?requestInstalls(o.requestId).filter(x=>!isExited(x) && (x.lot||'')===(o.lot||'')):[];
       const many=batch.length>1 && !isExited(o);
       const sc=document.createElement('div'); sc.className='stage-scope';
       if(many){
@@ -5057,45 +5084,17 @@
         sc.innerHTML='<span>Changer l\u2019étape de</span>';
         [[true,'Toutes les installations ('+batch.length+')'],[false,'Seulement celle-ci']].forEach(([v,l])=>{ const b=document.createElement('button'); b.type='button'; b.textContent=l; b.className=stageScopeAll===v?'on':''; b.setAttribute('aria-pressed', String(stageScopeAll===v)); b.onclick=()=>{ stageScopeAll=v; openOppDetail(o.id); }; sc.appendChild(b); });
       } else sc.innerHTML='<span>Étape de l\u2019installation</span>';
-      after.push(sc);
-      after.push(buildStageTrack(many&&stageScopeAll?batch:[o], key=>{
-        const targets=many&&stageScopeAll?batch:[o];
-        targets.forEach(x=>{ if(x.stage!==key) setOppStage(x, key); });
-        openOppDetail(o.id);
-      }));
-      const cur=stageIndex(o.stage);
-      if(o.stage==='onboarding'){
-        const ob=document.createElement('div'); ob.className='opp-onb';
-        const h=document.createElement('div'); h.className='opp-phase-h'; h.textContent='Onboarding'; ob.appendChild(h);
-        ONBOARDING_STEPS.forEach(stp=>{
-          const lab=document.createElement('label');
-          const cb=document.createElement('input'); cb.type='checkbox'; cb.checked=!!o['onb_'+stp.k];
-          cb.onchange=()=>{ o['onb_'+stp.k]=cb.checked; touchCrm(o); saveCrm(); };
-          lab.appendChild(cb); lab.appendChild(document.createTextNode(' '+stp.label+' '));
-          const w=document.createElement('span'); w.className='pipe-who'; w.textContent=stp.who; lab.appendChild(w);
-          ob.appendChild(lab);
-        });
-        after.push(ob);
-      }
-      (factsEl||sheet.firstChild).after(...after);
+      const scopeList=many&&stageScopeAll?batch:[o];
+      box.appendChild(buildStageTrack(scopeList, key=>{ scopeList.forEach(x=>{ if(x.stage!==key) setOppStage(x, key); }); openOppDetail(o.id); }));
+      box.appendChild(buildStepPanel(scopeList, { scope:many?sc:null, reopen:()=>openOppDetail(o.id) }));
+      const sheet=buildInstallSheet(o);
+      box.appendChild(sheetSection('Détails de la centrale', [o.install, o.contrat, fmtKwc(o.kwc)].filter(Boolean).join(' · '), stageIndex(o.stage)<=stageIndex('qualif_en_cours') || isExited(o), sheet));
       const cmp=buildRequestCompare(siblings.length>1?siblings:[o], o.id);   // every line of the « Caractéristiques Centrales » file, to fill in place
       if(!o.requestId){ const fr=document.createElement('div'), pm=appendPricingMail(fr, { company:o.company }, [o]);   // a plant on its own has its pricing mail too, first at the pricing steps
         if(pm.mailNow){ box.append(...fr.childNodes); box.appendChild(cmp); } else { box.appendChild(cmp); box.append(...fr.childNodes); } }
       else box.appendChild(cmp);
       { const h=buildHistory(o.requestId?requestInstalls(o.requestId):[o]); if(h) box.appendChild(h); }
-      if(isExited(o)){
-        actions.appendChild(oppActionBtn('Réactiver', ()=>{ o.stage=o.stageBeforeExit||'a_qualifier'; o.lostAt=null; touchCrm(o); saveCrm(); renderPipeline(); openOppDetail(o.id); }));
-      } else {
-        if(o.stage==='qualif_en_cours'){
-          actions.appendChild(oppActionBtn('Go', ()=>{ closeOppDetail(); offerStageAdvance([o], 'pricing_indicatif'); }));
-          actions.appendChild(oppActionBtn('No Go', ()=>exitOpp(o,'no_go'), 'ghost-btn'));
-        } else if(o.stage==='offre_attente'){
-          actions.appendChild(oppActionBtn('Offre acceptée', ()=>{ closeOppDetail(); offerStageAdvance([o], 'kyc'); }));
-          actions.appendChild(oppActionBtn('Offre refusée', ()=>loseOpps([o]), 'ghost-btn'));
-        } else if(cur>=0 && cur<OPP_STAGES.length-1){
-          actions.appendChild(oppActionBtn('Étape suivante', ()=>{ closeOppDetail(); offerStageAdvance([o]); }));
-        }
-      }
+      // moving on (Go, offer accepted, next step, lost…) is in « Étape en cours »; the bar keeps the files and copies
       excelButtons(actions, [o]);
       actions.appendChild(oppActionBtn('Fichier caractéristiques (.xlsx)', e=>downloadCaract(o.requestId?requestInstalls(o.requestId).filter(x=>!isExited(x)):[o], e.target), 'ghost-btn'));
       actions.appendChild(oppActionBtn('Copier ligne Pipe', e=>copyPipeLines(o.requestId?requestInstalls(o.requestId).filter(x=>!isExited(x)):[o], e.target), 'ghost-btn'));
@@ -5105,17 +5104,16 @@
         opportunities.push({ id:reqId, kind:'request', company:o.company, title:'Demande de pricing', createdAt:Date.now(), updatedAt:Date.now(), deleted:false });
         o.requestId=reqId; touchCrm(o); saveCrm(); renderPipeline(); openRequestDetail(reqId);
       }, 'ghost-btn'));
-      if(!isExited(o)){
-        if(stageIndex(o.stage)>=stageIndex('pricing_indicatif') && o.stage!=='offre_attente'){ actions.appendChild(oppActionBtn('Perdu', ()=>loseOpps([o]), 'ghost-btn danger-btn')); }
-        actions.appendChild(oppActionBtn('Abandonner', ()=>exitOpp(o,'abandonne'), 'ghost-btn danger-btn'));
-      }
+      if(!isExited(o) && stageIndex(o.stage)>=stageIndex('pricing_indicatif')) actions.appendChild(oppActionBtn('Abandonner', ()=>exitOpp(o,'abandonne'), 'ghost-btn danger-btn'));
     }
     actions.appendChild(oppActionBtn('Voir dans le réseau', ()=>{ closeOppDetail(); openInNetwork('op:'+o.id); }, 'ghost-btn opp-net-btn lite-keep'));
     { const mb=mentionsBlock('op:'+o.id); if(mb) $('opp-detail-body').appendChild(mb); }
     actions.appendChild(oppActionBtn('Supprimer', ()=>{ if(!confirm('Supprimer cette fiche du pipeline ?')) return; o.deleted=true; touchCrm(o); saveCrm(); closeOppDetail(); renderPipeline(); }, 'ghost-btn danger-btn'));
     actions.appendChild(oppActionBtn('Fermer', closeOppDetail, 'ghost-btn lite-keep'));
-    foldActions($('opp-detail-actions')); $('opp-detail-overlay').classList.remove('hidden');
+    foldActions($('opp-detail-actions')); $('opp-detail-overlay').classList.remove('hidden'); if(toTop) sheetToTop();
   }
+  // a sheet opened on another deal starts at its top (a refresh of the same one keeps the place); only once visible, a hidden box ignores scrollTop
+  function sheetToTop(){ const ov=$('opp-detail-overlay'); [ov, ov.querySelector('.modal-box')].forEach(x=>{ if(x) x.scrollTop=0; }); }
   function closeOppDetail(){ $('opp-detail-overlay').classList.add('hidden'); viewingOppId=null; }
   // Installation sheet: every column of the Pipe / BDD, grouped; empty values shown as "—" so gaps are visible.
   // ---------- Installations of one pricing request: tabs to go from one to the other, and a table to check them side by side ----------
@@ -5314,6 +5312,11 @@
       ['Commentaires',o.commentaires,{wide:true,optional:true}]], 'os-suivi');
     return wrap;
   }
+  function exitList(list, kind){
+    if(list.length===1) return exitOpp(list[0], kind);
+    if(!confirm(list.length+' installations ('+(list[0].company||'')+') : '+OPP_EXITS[kind]+' ?')) return;
+    list.forEach(o=>{ o.stageBeforeExit=o.stage; o.stage=kind; o.lostAt=Date.now(); touchCrm(o); }); saveCrm(); closeOppDetail(); renderPipeline();
+  }
   function exitOpp(o, kind){
     if(!confirm('« '+oppName(o)+' » : '+OPP_EXITS[kind]+' ?')) return;
     o.stageBeforeExit=o.stage; o.stage=kind; o.lostAt=Date.now(); touchCrm(o); saveCrm();
@@ -5362,8 +5365,16 @@
     const allOut=list.every(isExited);
     PIPE_PHASES.filter(p=>p.key!=='prequal').forEach(ph=>{
       const g=document.createElement('div'); g.className='opp-phase';
-      const h=document.createElement('div'); h.className='opp-phase-h'; h.textContent=ph.label; g.appendChild(h);
-      OPP_STAGES.filter(st=>st.phase===ph.key).forEach(st=>{
+      const steps=OPP_STAGES.filter(st=>st.phase===ph.key), idxs=steps.map(st=>stageIndex(st.key));
+      const phState=allOut?'upcoming':idxs.some(i=>list.some(x=>stageIndex(x.stage)===i))?'current':Math.max(...idxs)<lo?'done':'upcoming';
+      g.classList.add('ph-'+phState);
+      const num=PIPE_PHASES.filter(p=>p.key!=='prequal').indexOf(ph)+1;
+      const h=document.createElement('div'); h.className='opp-phase-h'; h.innerHTML='<span class="ph-dot"></span><span class="ph-name"></span>';
+      h.firstChild.textContent=phState==='done'?'✓':String(num); h.lastChild.textContent=ph.label; g.appendChild(h);
+      const bar=document.createElement('div'); bar.className='ph-bar';
+      steps.forEach(st=>{ const i=stageIndex(st.key), seg=document.createElement('span'); seg.className=list.some(x=>x.stage===st.key)?'on':i<lo||phState==='done'?'done':''; bar.appendChild(seg); });
+      g.appendChild(bar);
+      steps.forEach(st=>{
         const i=stageIndex(st.key), n=list.filter(x=>x.stage===st.key).length;
         const row=document.createElement('button'); row.type='button';
         row.className='opp-stage-step '+(allOut?'upcoming':(n?'current':(i<lo?'done':'upcoming')));
@@ -5467,6 +5478,104 @@
 
   // ----- Pricing requests (several installations, one mail) -----
   // « Maintenant » : what the current step asks for, with the dates that matter at that step
+  // ---------- « Étape en cours » : the step, who has it and since when, its checklist, one button to move on ----------
+  const WHO={ Com:'À moi', Ops:'Ops', Jur:'Juridique', Client:'Client', Dir:'Direction' };
+  function daysInStage(o){ const log=(o.stageLog||[]).filter(e=>e && e.stage===o.stage && e.at>1e12); const t=log.length?log[log.length-1].at:(o.updatedAt>1e12?o.updatedAt:0); return t?Math.max(0,Math.floor((Date.now()-t)/864e5)):null; }
+  const reqMissing=list=>list.reduce((s,x)=>s+CARACT_ROWS.filter(l=>REQ_NEEDED.has(caractKey(l)) && caractValue(x,l)==='').length,0);
+  // each step's checklist: auto = known by the app (ticked by itself), else ticked by hand (kept per installation)
+  const STEP_CHECKS={
+    a_qualifier:[['contact','Contact principal renseigné',l=>l.every(o=>o.prenom||o.nom||o.mail||o.tel)],['appel','Premier appel fait']],
+    prise_contact:[['rdv1','RDV 1 fixé',l=>l.every(o=>o.rdv1)]],
+    collecte:[['oblig','Infos obligatoires complètes',l=>!reqMissing(l)],['fichier','Fichier Caractéristiques reçu du producteur',l=>l.every(o=>o.caract && Object.keys(o.caract).length)]],
+    qualif_en_cours:[['rdv2','RDV 2 fait',l=>l.every(o=>o.rdv2)],['decision','Décision Go / No Go prise']],
+    pricing_indicatif:[['mail','Mail de demande envoyé',l=>l.every(o=>o.mailSentAt)],['caract','Fichier Caractéristiques joint',l=>l.every(o=>o.caractSentAt)],['ops','Retour d’Ops reçu'],['prix','Prix noté dans la fiche']],
+    offre_remise:[['prete','Offre préparée'],['envoyee','Offre envoyée au producteur']],
+    offre_attente:[['relance','Relance faite'],['reponse','Réponse du producteur reçue']],
+    kyc:[['docs','Documents KYC reçus'],['solva','Solvabilité validée (Juridique)']],
+    negociation:[['points','Points de négociation réglés']],
+    pricing_ferme:[['ferme','Prix ferme reçu d’Ops']],
+    mise_signature:[['docusign','DocuSign envoyé']],
+    signature:[['selfee','Signé par Selfee'],['prod','Signé par le producteur']],
+    actif:[['valo','Valorisation démarrée',()=>true]]
+  };
+  function stepChecklist(list, stage){
+    if(stage==='onboarding') return ONBOARDING_STEPS.map(stp=>({ id:'onb_'+stp.k, label:stp.label, who:stp.who, done:list.every(o=>o['onb_'+stp.k]), auto:false, onb:true }));
+    return (STEP_CHECKS[stage]||[]).map(([id,label,auto])=>({ id, label, auto:!!auto, done:auto?!!auto(list):list.every(o=>o.checks && o.checks[stage] && o.checks[stage][id]) }));
+  }
+  function toggleCheck(list, stage, item, on){
+    list.forEach(o=>{ if(item.onb) o[item.id]=on; else { o.checks=Object.assign({}, o.checks||{}); o.checks[stage]=Object.assign({}, o.checks[stage]||{}, { [item.id]:on }); } touchCrm(o); });
+    saveCrm();
+  }
+  function buildStepPanel(list, opts){
+    opts=opts||{};
+    const live=list.filter(x=>!isExited(x)), reopen=opts.reopen||(()=>{});
+    const wrap=document.createElement('div'); wrap.className='step-panel';
+    const main=document.createElement('section'); main.className='sp-main'; wrap.appendChild(main);
+    if(!live.length){
+      const o=list[0]; main.innerHTML='<div class="sp-k">Sorti du pipeline</div><div class="sp-title"></div>'; main.querySelector('.sp-title').textContent=stageLabel(o.stage, o)+(o.lostAt?' le '+new Date(o.lostAt).toLocaleDateString('fr-FR'):'');
+      if(!window.TODO_LITE){ const r=document.createElement('button'); r.type='button'; r.className='sp-next'; r.textContent='Réactiver'; r.onclick=()=>{ list.forEach(x=>{ x.stage=x.stageBeforeExit||'a_qualifier'; x.lostAt=null; touchCrm(x); }); saveCrm(); renderPipeline(); reopen(); }; main.appendChild(r); }
+      return wrap; }
+    const lo=Math.min(...live.map(x=>stageIndex(x.stage)).filter(i=>i>=0)), st=OPP_STAGES[lo]||OPP_STAGES[0], same=live.every(x=>x.stage===live[0].stage), first=live.find(x=>x.stage===st.key)||live[0];
+    const days=daysInStage(first);
+    // header: step, since when, who
+    const k=document.createElement('div'); k.className='sp-k';
+    k.innerHTML='<span>Étape en cours</span><span class="sp-meta"></span>';
+    k.querySelector('.sp-meta').textContent=[days!=null?'depuis '+(days===0?'aujourd’hui':days+' jour'+(days>1?'s':'')):'', st.who!=='Com'?'porté par '+(WHO[st.who]||st.who):''].filter(Boolean).join(' · ');
+    main.appendChild(k);
+    const t=document.createElement('div'); t.className='sp-title'; t.textContent=same?stageLabel(st.key, first):live.length+' installations à des étapes différentes'; main.appendChild(t);
+    if(days!=null && days>15) t.classList.add('late');
+    // offer asked: indicative or engageante (from the qualification to the offer)
+    if(!window.TODO_LITE && lo>=stageIndex('qualif_en_cours') && lo<=stageIndex('offre_attente')){
+      const eng=live.every(isEngageant), sw=document.createElement('div'); sw.className='sf-nature'; sw.innerHTML='<span>Offre demandée :</span>';
+      [['Non engageante','Indicative'],['Engageante','Engageante']].forEach(([v,l])=>{ const b=document.createElement('button'); b.type='button'; b.textContent=l; b.classList.toggle('on', (v==='Engageante')===eng);
+        b.onclick=()=>{ live.forEach(x=>{ if(x.nature!==v){ x.nature=v; touchCrm(x); } }); saveCrm(); renderPipeline(); reopen(); }; sw.appendChild(b); });
+      main.appendChild(sw); }
+    // the checklist
+    if(same){ const items=stepChecklist(live, st.key);
+      if(items.length){ const ul=document.createElement('div'); ul.className='sp-checks';
+        items.forEach(it=>{ const lab=document.createElement('label'); lab.className='sp-check'+(it.done?' done':''); const cb=document.createElement('input'); cb.type='checkbox'; cb.checked=it.done; cb.disabled=it.auto || !!window.TODO_LITE;
+          cb.onchange=()=>{ toggleCheck(live, st.key, it, cb.checked); reopen(); }; const sp=document.createElement('span'); sp.textContent=it.label+(it.auto?' ·  auto':''); if(it.who && it.who!=='Com'){ const w=document.createElement('em'); w.textContent=WHO[it.who]||it.who; sp.appendChild(w); }
+          lab.append(cb, sp); ul.appendChild(lab); });
+        main.appendChild(ul);
+        const left=items.filter(i=>!i.done).length;
+        if(left){ const n=document.createElement('div'); n.className='sp-note'; n.textContent=left+' point'+(left>1?'s restent':' reste')+' à cocher — le bouton marche quand même.'; main.appendChild(n); } } }
+    // one button to move on, the way out next to it
+    if(!window.TODO_LITE){
+      const row=document.createElement('div'); row.className='sp-actions';
+      const btn=(label, cls, fn)=>{ const b=document.createElement('button'); b.type='button'; b.className=cls; b.textContent=label; b.onclick=fn; row.appendChild(b); return b; };
+      const nextKey=nextStageKey(first), next=nextKey?oppStage(nextKey):null;
+      if(!same) btn('→ Avancer chaque installation', 'sp-next', ()=>{ closeOppDetail(); offerStageAdvance(live); });
+      else if(st.key==='qualif_en_cours'){ btn('Go → Pricing', 'sp-next', ()=>{ closeOppDetail(); offerStageAdvance(live, 'pricing_indicatif'); }); btn('No Go', 'sp-alt', ()=>exitList(live,'no_go')); }
+      else if(st.key==='offre_attente'){ btn('Offre acceptée → KYC', 'sp-next', ()=>{ closeOppDetail(); offerStageAdvance(live, 'kyc'); }); btn('Offre refusée', 'sp-alt', ()=>loseOpps(live)); }
+      else { if(next) btn('→ Passer à « '+stageLabel(next.key, first)+' »', 'sp-next', ()=>{ closeOppDetail(); offerStageAdvance(live); });
+        if(lo>=stageIndex('pricing_indicatif')) btn('Perdu', 'sp-alt', ()=>loseOpps(live)); else btn('Abandonner', 'sp-alt', ()=>exitList(live,'abandonne')); }
+      main.appendChild(row);
+      if(opts.scope){ main.appendChild(opts.scope); }
+    }
+    // the side: next task, contact, key figures
+    const side=document.createElement('aside'); side.className='sp-side'; wrap.appendChild(side);
+    const box=(title)=>{ const b=document.createElement('div'); b.className='sp-box'; const h=document.createElement('div'); h.className='sp-k'; h.textContent=title; b.appendChild(h); side.appendChild(b); return b; };
+    const ids=new Set(list.flatMap(x=>[x.id, x.requestId].filter(Boolean)));
+    const tk=activeTasks().filter(x=>x.opportunityId && ids.has(x.opportunityId)).sort((a,b)=>(a.due||'9').localeCompare(b.due||'9'))[0];
+    { const b=box('Prochaine tâche'); const d=document.createElement('div'); d.className='sp-big'; d.textContent=tk?plainLinks(tk.title):'Aucune tâche liée'; b.appendChild(d);
+      if(tk){ const m=document.createElement('div'); m.className='sp-sub'+(tk.status==='en_attente'?' wait':''); m.textContent=[tk.status==='en_attente'?'En attente':'', tk.due?'pour le '+pqIsoToFr(tk.due):''].filter(Boolean).join(' · '); b.appendChild(m);
+        b.classList.add('click'); b.onclick=()=>{ closeOppDetail(); openTaskEverywhere(tk.id); }; } }
+    { const o=first, mail=(o.mail||'').toLowerCase(), crm=mail && contacts.find(c=>!c.deleted && (c.email||'').toLowerCase()===mail);
+      const name=[o.prenom,(o.nom||'')].filter(Boolean).join(' ')||(crm?[crm.firstName,crm.lastName].filter(Boolean).join(' '):''), tel=o.tel||(crm?crm.phone1:''), role=o.qualite||(crm&&crm.role)||'';
+      if(name||tel||mail){ const b=box('Contact'); const d=document.createElement('div'); d.className='sp-big'; d.textContent=[name, role].filter(Boolean).join(' · ')||'—'; b.appendChild(d);
+        if(tel){ const a=document.createElement('a'); a.className='os-link'; a.href='tel:'+tel.replace(/[^\d+]/g,''); a.textContent=tel; b.appendChild(a); }
+        if(mail){ const a=document.createElement('a'); a.className='os-link'; a.href='mailto:'+mail; a.textContent=mail; b.appendChild(a); } } }
+    { const kw=live.reduce((s2,x)=>s2+kwcNum(x),0), mwh=live.reduce((s2,x)=>s2+(pqNum(String(x.mwh||''))||0),0), b=box('Chiffres'); const g=document.createElement('div'); g.className='sp-figs';
+      [['Puissance',kw?fmtKwc(kw):'—'],['P50',mwh?Math.round(mwh).toLocaleString('fr-FR')+' MWh':'—'],['Contrat',[first.contrat, first.duree?first.duree+' ans':''].filter(Boolean).join(' · ')||'—']].forEach(([l,v])=>{ const c=document.createElement('div'); c.innerHTML='<span></span><b></b>'; c.firstChild.textContent=l; c.lastChild.textContent=v; g.appendChild(c); });
+      b.appendChild(g); }
+    return wrap;
+  }
+  // a folded section of the sheet (open when the step needs it)
+  function sheetSection(title, sub, open, content){
+    const d=document.createElement('details'); d.className='sheet-sec'; d.open=!!open;
+    const s2=document.createElement('summary'); s2.innerHTML='<b></b><span></span>'; s2.firstChild.textContent=title; s2.lastChild.textContent=sub||''; d.appendChild(s2);
+    if(content) d.appendChild(content); return d;
+  }
   // « Historique » : when what happened (created, Go, offer, steps, signature, tasks done), newest first
   function buildHistory(list){
     const ids=new Set(list.flatMap(o=>[o.id, o.requestId].filter(Boolean))), ev=[], seen=new Set();
@@ -5521,100 +5630,96 @@
       const chips=document.createElement('div'); chips.className='mail-scope'; chips.setAttribute('role','group'); chips.setAttribute('aria-label','Mail pour');
       const pick=(sub, b)=>{ ml=pricingMail(req, sub); subj.value=ml.subject; body.value=ml.body; chips.querySelectorAll('button').forEach(x=>x.classList.toggle('on', x===b)); };
       const mk=(label, sub)=>{ const b=document.createElement('button'); b.type='button'; b.textContent=label; b.onclick=()=>pick(sub, b); chips.appendChild(b); return b; };
-      mk('Toutes ('+list.length+')', list).classList.add('on'); list.forEach(o=>mk(oppName(o), [o]));
+      mk('Toutes ('+list.length+')', list).classList.add('on');
+      const lots=[...new Set(list.map(o=>o.lot).filter(Boolean))]; if(lots.length) lots.forEach(l=>{ const sub=list.filter(o=>o.lot===l); if(sub.length>1 && sub.length<list.length) mk(l+' ('+sub.length+')', sub); });
+      list.forEach(o=>mk(oppName(o), [o]));
       mailBox.appendChild(chips);
     }
     const hint=document.createElement('p'); hint.className='modal-hint'; hint.textContent='Joins le fichier « Caractéristiques Centrales » créé par le bouton ci-dessous : toutes les lignes du modèle, remplies avec ce que l\u2019appli connaît (et tout ce que contenait l\u2019Excel du producteur).';
     mailBox.appendChild(subj); mailBox.appendChild(body); mailBox.appendChild(hint);
     // the pricing mail only matters from the Go to the indicative pricing: later, it folds away (still there, one click)
-    const loM=Math.min(...(list.filter(x=>!isExited(x)).length?list.filter(x=>!isExited(x)):list).map(x=>stageIndex(x.stage)).filter(i=>i>=0)), mailNow=loM>=stageIndex('qualif_en_cours') && loM<=stageIndex('pricing_indicatif');
+    const loM=Math.min(...(list.filter(x=>!isExited(x)).length?list.filter(x=>!isExited(x)):list).map(x=>stageIndex(x.stage)).filter(i=>i>=0)), mailNow=loM>=stageIndex('qualif_en_cours') && loM<=stageIndex('pricing_indicatif') && !list.every(x=>x.mailSentAt);
     if(mailNow) box.appendChild(mailBox);
     else { const d=document.createElement('details'); d.className='opp-mail-fold'; const sm=document.createElement('summary'); sm.textContent='Mail de demande de pricing'; d.appendChild(sm);
       mailBox.querySelector('.opp-phase-h').remove();
       const cp=document.createElement('div'); cp.className='opp-mail-copy';
-      [['Copier l\u2019objet',()=>ml.subject],['Copier le mail',()=>ml.body]].forEach(([t,f])=>{ const b=document.createElement('button'); b.type='button'; b.className='ghost-btn'; b.textContent=t; b.onclick=e=>copyToClipboard(f(), e.target); cp.appendChild(b); });
+      [['Copier l\u2019objet',()=>ml.subject],['Copier le mail',()=>ml.body]].forEach(([t,f])=>{ const b=document.createElement('button'); b.type='button'; b.className='ghost-btn'; b.textContent=t; b.onclick=e=>{ copyToClipboard(f(), e.target); if(t==='Copier le mail') markMailSent(list); }; cp.appendChild(b); });
       mailBox.appendChild(cp); d.appendChild(mailBox); box.appendChild(d); }
     return { mailNow, ml:()=>ml };
   }
-  function openRequestDetail(reqId){
+  // A request's sheet, for one of its blocks (a lot, or the installations at one step) or for all of it
+  function openRequestDetail(reqId, ids){
     const req=opportunities.find(x=>x.id===reqId); if(!req) return;
+    const toTop=viewingOppId!==reqId;
     viewingOppId=reqId;
-    const list=requestInstalls(reqId);
-    $('opp-detail-title').textContent=req.company+' — '+reqDisplayName(req, list);
-    $('opp-detail-sum').textContent=oppSummary(requestInstalls(reqId).filter(x=>!isExited(x)));
-    // edit from the global view: the form shows all the installations of the request (this one first)
-    { const first=requestInstalls(reqId).filter(x=>!isExited(x))[0]||requestInstalls(reqId)[0]; const ed=$('opp-detail-edit');
+    const all=requestInstalls(reqId);
+    let list=ids?all.filter(o=>ids.includes(o.id)):all; if(!list.length) list=all;
+    const reopen=()=>openRequestDetail(reqId, ids);
+    const lot=list.length && list.every(o=>(o.lot||'')===(list[0].lot||''))?list[0].lot||'':'';
+    $('opp-detail-title').textContent=req.company+' — '+(lot||reqDisplayName(req, all));
+    $('opp-detail-sum').textContent=oppSummary(list.filter(x=>!isExited(x)))+(list.length<all.length?' · demande de '+all.length+' installations':'');
+    { const first=list.filter(x=>!isExited(x))[0]||list[0]; const ed=$('opp-detail-edit');
       ed.hidden=!first; ed.textContent='Modifier les fiches'; ed.onclick=()=>{ closeOppDetail(); openOppForm({ editId:first.id }); }; }
     const box=$('opp-detail-body'); box.innerHTML='';
-    const liveReq=list.filter(o=>!isExited(o));
-    // key figures, as on an installation's sheet
-    const num=v=>pqNum(String(v||''))||0, kwc=liveReq.reduce((s,x)=>s+num(x.kwc),0), mwh=liveReq.reduce((s,x)=>s+num(x.mwh),0);
-    const mes=[...new Set(liveReq.map(x=>x.mesEff||x.mesPrev).filter(Boolean))].map(m=>({ m, d:pqDateOf(m) })).filter(x=>x.d).sort((a,b)=>a.d-b.d);
-    const stages=[...new Set(liveReq.map(x=>x.stage))];
-    const facts=document.createElement('div'); facts.className='os-facts';
-    [['Installations',String(liveReq.length)+(list.length>liveReq.length?' (+'+(list.length-liveReq.length)+' sorties)':'')],['Puissance totale',kwc?fmtKwc(kwc):''],['Volume total',mwh?Math.round(mwh).toLocaleString('fr-FR')+' MWh':''],
-     ['Mise en service',mes.length?(mes.length>1?mes[0].m+' → '+mes[mes.length-1].m:mes[0].m):''],['Étape',stages.length===1?stageLabel(stages[0]):(stages.length?stages.length+' étapes':'')]]
-      .forEach(([l,v])=>{ const d=document.createElement('div'); d.className='os-fact'+(v?'':' empty'); d.innerHTML='<span></span><b></b>'; d.firstChild.textContent=l; d.lastChild.textContent=v||'à compléter'; facts.appendChild(d); });
-    box.appendChild(facts);
-    { const f=stageFocus(list); if(f) box.appendChild(f); }
-    // the installations, one line each
-    const card=document.createElement('section'); card.className='os-card req-insts';
-    card.innerHTML='<h4>Installations</h4>';
-    list.forEach((o,i)=>{
-      const r=document.createElement('div'); r.className='req-inst'+(isExited(o)?' out':'');
-      r.innerHTML='<span class="n"></span><button type="button" class="req-inst-name"><b></b><span></span></button>';
-      r.querySelector('.n').textContent=String(i+1); r.querySelector('b').textContent=oppName(o); r.querySelector('.req-inst-name span').textContent=instLineInfo(o);
-      r.querySelector('.req-inst-name').onclick=()=>openOppDetail(o.id);
+    const live=list.filter(o=>!isExited(o));
+    // the progress bar and « Étape en cours », for this block
+    if(live.length) box.appendChild(buildStageTrack(live, key=>{ live.forEach(o=>{ if(o.stage!==key) setOppStage(o, key); }); reopen(); }));
+    box.appendChild(buildStepPanel(list, { reopen }));
+    // the installations of the whole request: lots made here (tick some, name the lot)
+    const card=document.createElement('div'); card.className='req-insts';
+    const picked=new Set();
+    all.forEach((o,i)=>{
+      const r=document.createElement('div'); r.className='req-inst'+(isExited(o)?' out':'')+(list.includes(o)?'':' other');
+      if(!window.TODO_LITE){ const cb=document.createElement('input'); cb.type='checkbox'; cb.className='req-pick'; cb.setAttribute('aria-label','Choisir '+oppName(o)); cb.onchange=()=>{ cb.checked?picked.add(o):picked.delete(o); paintLotTools(); }; r.appendChild(cb); }
+      const n=document.createElement('span'); n.className='n'; n.textContent=String(i+1); r.appendChild(n);
+      const nb=document.createElement('button'); nb.type='button'; nb.className='req-inst-name'; nb.innerHTML='<b></b><span></span>'; nb.querySelector('b').textContent=oppName(o); nb.querySelector('span').textContent=instLineInfo(o);
+      nb.onclick=()=>openOppDetail(o.id); r.appendChild(nb);
+      if(o.lot){ const lc=document.createElement('span'); lc.className='req-lot'; lc.textContent=o.lot; r.appendChild(lc); }
       r.appendChild(stageChip(o));
       const ed=document.createElement('button'); ed.type='button'; ed.className='req-inst-ed'; ed.title='Modifier'; ed.setAttribute('aria-label','Modifier '+oppName(o));
       ed.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>';
-      ed.onclick=()=>{ closeOppDetail(); openOppForm({ editId:o.id }); };
-      r.appendChild(ed);
-      const rm=document.createElement('button'); rm.type='button'; rm.className='req-inst-rm'; rm.title='Retirer de la demande (l\u2019installation reste dans le pipeline)'; rm.setAttribute('aria-label','Retirer '+oppName(o)+' de la demande'); rm.textContent='✕';
-      rm.onclick=()=>{ o.requestId=null; touchCrm(o); saveCrm(); renderPipeline(); openRequestDetail(reqId); };
-      r.appendChild(rm); card.appendChild(r);
+      ed.onclick=()=>{ closeOppDetail(); openOppForm({ editId:o.id }); }; r.appendChild(ed);
+      const rm=document.createElement('button'); rm.type='button'; rm.className='req-inst-rm'; rm.title='Retirer de la demande (l’installation reste dans le pipeline)'; rm.setAttribute('aria-label','Retirer '+oppName(o)+' de la demande'); rm.textContent='×';
+      rm.onclick=()=>{ o.requestId=null; o.lot=''; touchCrm(o); saveCrm(); renderPipeline(); reopen(); }; r.appendChild(rm);
+      card.appendChild(r);
     });
+    const tools=document.createElement('div'); tools.className='req-lot-tools';
+    const lotName=document.createElement('input'); lotName.type='text'; lotName.placeholder='Nom du lot (ex. Lot 1 — toitures)'; lotName.className='req-lot-name';
+    const mk=document.createElement('button'); mk.type='button'; mk.className='req-lot-make'; mk.textContent='Faire un lot';
+    const un=document.createElement('button'); un.type='button'; un.className='req-lot-undo ghost-btn'; un.textContent='Retirer du lot';
+    const hint=document.createElement('span'); hint.className='req-lot-hint'; hint.textContent='Coche des installations pour en faire un lot : il avance à son rythme, dans la même demande.';
+    tools.append(hint, lotName, mk, un);
+    function paintLotTools(){ const n=picked.size; mk.disabled=!n; mk.textContent=n?'Faire un lot ('+n+')':'Faire un lot'; un.hidden=![...picked].some(o=>o.lot); lotName.hidden=!n; hint.hidden=!!n; }
+    mk.onclick=()=>{ const name=lotName.value.trim()||('Lot '+(new Set(all.map(o=>o.lot).filter(Boolean)).size+1)); [...picked].forEach(o=>{ o.lot=name; touchCrm(o); }); saveCrm(); renderPipeline(); openRequestDetail(reqId, [...picked].map(o=>o.id)); };
+    un.onclick=()=>{ [...picked].forEach(o=>{ o.lot=''; touchCrm(o); }); saveCrm(); renderPipeline(); reopen(); };
+    if(!window.TODO_LITE){ card.appendChild(tools); paintLotTools(); }
     const candidates=opportunities.filter(o=>!o.deleted && o.kind==='installation' && !o.requestId && o.company===req.company && !isExited(o));
     if(candidates.length){
       const sel=document.createElement('select'); sel.className='opp-req-add';
       sel.innerHTML='<option value="">+ Ajouter une installation de '+escapeHtml(req.company)+'…</option>'+candidates.map(o=>'<option value="'+o.id+'">'+escapeHtml(oppName(o))+'</option>').join('');
-      sel.onchange=()=>{ const o=opportunities.find(x=>x.id===sel.value); if(o){ o.requestId=reqId; touchCrm(o); saveCrm(); renderPipeline(); openRequestDetail(reqId); } };
+      sel.onchange=()=>{ const o=opportunities.find(x=>x.id===sel.value); if(o){ o.requestId=reqId; o.lot=lot; touchCrm(o); saveCrm(); renderPipeline(); reopen(); } };
       card.appendChild(sel);
     }
-    box.appendChild(card);
-    // the same step track as an installation, for all of them at once
-    if(liveReq.length){
-      const sh=document.createElement('div'); sh.className='stage-scope'; sh.innerHTML='<span></span>';
-      sh.firstChild.textContent=liveReq.length>1?'Étape des '+liveReq.length+' installations (un clic les place toutes à l\u2019étape)':'Étape de l\u2019installation';
-      box.appendChild(sh);
-      box.appendChild(buildStageTrack(liveReq, key=>{ liveReq.forEach(o=>{ if(o.stage!==key) setOppStage(o, key); }); openRequestDetail(reqId); }));
-    }
-    // at the pricing steps the mail is the thing to do: it comes before the long characteristics table
+    const lots=[...new Set(all.map(o=>o.lot).filter(Boolean))];
+    box.appendChild(sheetSection('Installations', all.length+' installation'+(all.length>1?'s':'')+(lots.length?' · '+lots.length+' lot'+(lots.length>1?'s':''):'')+' · '+all.slice(0,3).map(o=>oppName(o)+(o.kwc?' '+fmtKwc(o.kwc):'')).join(' · ')+(all.length>3?'…':''), all.length<=6, card));
+    // the characteristics file and the pricing mail (open when the step needs them), the history
     const mailFrag=document.createElement('div'), pm=appendPricingMail(mailFrag, req, list), mailNow=pm.mailNow, cmp=list.length?buildRequestCompare(list, null):null;
     if(mailNow){ box.append(...mailFrag.childNodes); if(cmp) box.appendChild(cmp); } else { if(cmp) box.appendChild(cmp); box.append(...mailFrag.childNodes); }
-    { const h=buildHistory(list); if(h) box.appendChild(h); }
+    { const h=buildHistory(all); if(h) box.appendChild(h); }
     const actions=$('opp-detail-actions'); actions.innerHTML='';
-    const live=list.filter(o=>!isExited(o));
-    if(live.length){
-      const same=live.every(o=>o.stage===live[0].stage);
-      const waiting=live.filter(o=>o.stage==='offre_attente');
-      if(waiting.length){
-        actions.appendChild(oppActionBtn('Offre acceptée'+(waiting.length>1?' ('+waiting.length+')':''), ()=>{ closeOppDetail(); offerStageAdvance(waiting, 'kyc'); }));
-        actions.appendChild(oppActionBtn('Offre refusée'+(waiting.length>1?' ('+waiting.length+')':''), ()=>loseOpps(waiting), 'ghost-btn'));
-      }
-      if(!same || !waiting.length) actions.appendChild(oppActionBtn(same?'Tout passer à l\u2019étape suivante':'Avancer chaque installation', ()=>{ closeOppDetail(); offerStageAdvance(live, live.every(o=>o.stage==='qualif_en_cours')?'pricing_indicatif':null); }));
-    }
-    if(!window.TODO_LITE && list.length>1) actions.appendChild(oppActionBtn('Dégrouper', async()=>{ if(await ungroupRequest(reqId)) closeOppDetail(); }, 'ghost-btn'));
-    if(mailNow){ actions.appendChild(oppActionBtn('Copier l\u2019objet', e=>copyToClipboard(pm.ml().subject, e.target), 'ghost-btn'));
-    actions.appendChild(oppActionBtn('Copier le mail', e=>copyToClipboard(pm.ml().body, e.target), 'ghost-btn')); }
-    actions.appendChild(oppActionBtn('Fichier caractéristiques (.xlsx)', e=>downloadCaract(list.filter(o=>!isExited(o)), e.target), 'ghost-btn'));
+    if(mailNow){ actions.appendChild(oppActionBtn('Copier l’objet', e=>{ copyToClipboard(pm.ml().subject, e.target); }, 'ghost-btn'));
+      actions.appendChild(oppActionBtn('Copier le mail', e=>{ copyToClipboard(pm.ml().body, e.target); markMailSent(list); }, 'ghost-btn')); }
+    actions.appendChild(oppActionBtn('Fichier caractéristiques (.xlsx)', e=>downloadCaract(live, e.target), 'ghost-btn'));
     excelButtons(actions, list);
-    actions.appendChild(oppActionBtn('Copier lignes Pipe', e=>copyPipeLines(list.filter(o=>!isExited(o)), e.target), 'ghost-btn'));
+    actions.appendChild(oppActionBtn('Copier lignes Pipe', e=>copyPipeLines(live, e.target), 'ghost-btn'));
     actions.appendChild(oppActionBtn('Copier lignes BDD', e=>copyToClipboard(list.map(bddRow).join('\n'), e.target), 'ghost-btn'));
+    if(!window.TODO_LITE && all.length>1) actions.appendChild(oppActionBtn('Dégrouper', async()=>{ if(await ungroupRequest(reqId)) closeOppDetail(); }, 'ghost-btn'));
     actions.appendChild(oppActionBtn('Voir dans le réseau', ()=>{ closeOppDetail(); openInNetwork('rq:'+reqId); }, 'ghost-btn opp-net-btn lite-keep'));
     actions.appendChild(oppActionBtn('Fermer', closeOppDetail, 'ghost-btn lite-keep'));
-    foldActions($('opp-detail-actions')); $('opp-detail-overlay').classList.remove('hidden');
+    foldActions($('opp-detail-actions')); $('opp-detail-overlay').classList.remove('hidden'); if(toTop) sheetToTop();
   }
+  // the pricing mail copied: noted on the installations (the checklist ticks « Mail de demande envoyé »)
+  function markMailSent(list){ const now=Date.now(); list.forEach(o=>{ if(!o.mailSentAt){ o.mailSentAt=now; touchCrm(o); } }); saveCrm(); }
   function pqMonthYear(s){
     const t=String(s||'').trim(); let m;
     if((m=/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(t))) return { y:+m[3], m:+m[2], d:+m[1] };
@@ -5718,6 +5823,7 @@
   async function downloadCaract(list, btn){
     try{
       const blob=await caractWorkbookBlob(list), url=URL.createObjectURL(blob);
+      { const now=Date.now(); list.forEach(o=>{ o.caractSentAt=now; touchCrm(o); }); saveCrm(); }
       const a=document.createElement('a'); a.href=url; a.download=caractFileName(list); document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(url), 2000);
       if(btn){ const t=btn.textContent; btn.textContent='✓ Fichier créé'; setTimeout(()=>{ btn.textContent=t; },2000); }
     }catch(e){ console.error(e); showBridgeMsg('Fichier non créé : '+(e.message||e), false); }

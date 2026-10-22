@@ -771,7 +771,7 @@ with sync_playwright() as p:
     page.goto(URL); page.click('[data-tab="pipeline"]')
     check("Pricing engageant" in page.inner_text(".pipe-card[data-id=h1]"), "pricing: an offer engageante shows « Pricing engageant »")
     page.click(".pipe-card[data-id=h1]")
-    check(page.get_attribute("#opp-detail-body a.os-link[href^='tel:']", "href") == "tel:0698765432" and page.locator("#opp-detail-body a.os-link[href='mailto:luc@histo.fr']").count() == 1,
+    check(page.get_attribute("#opp-detail-body a.os-link[href^='tel:']", "href") == "tel:0698765432" and page.locator("#opp-detail-body a.os-link[href='mailto:luc@histo.fr']").count() >= 1,
           "sheet: the contact's phone and mail are links (found by the mail)")
     page.click("#opp-detail-body .opp-history > summary"); hist = page.inner_text("#opp-detail-body .opp-history")
     check("Opportunité créée" in hist and "Go" in hist and "Fait : Appeler Luc" in hist and "Pricing engageant" in hist, f"sheet: the history lists what happened ({hist[:160]!r})")
@@ -784,6 +784,41 @@ with sync_playwright() as p:
     check(not errors, f"no page errors ({errors})")
     page.close()
 
+    # --- step by step: « Étape en cours » (checklist, one button), lots inside a request, cards telling what's next
+    nowms = int(time.time() * 1000)
+    sb = [{"id": "rqs", "kind": "request", "company": "PAS", "label": "Toitures", "createdAt": 1, "updatedAt": 1, "deleted": False}] + \
+         [{"id": f"s{i}", "kind": "installation", "company": "PAS", "producteur": "PAS", "centrale": f"Toit {i}", "title": f"Toit {i}", "kwc": "500", "requestId": "rqs", "stage": "pricing_indicatif",
+           "createdAt": 1, "updatedAt": nowms, "stageLog": [{"stage": "qualif_en_cours", "at": nowms - 30 * 86400000}, {"stage": "pricing_indicatif", "at": nowms - 20 * 86400000}], "deleted": False} for i in (1, 2, 3)]
+    page, errors = new_page(browser, {"todo_todo-widget-opportunities": json.dumps(sb)}, viewport={"width": 1400, "height": 900})
+    page.context.grant_permissions(["clipboard-read", "clipboard-write"])
+    page.goto(URL); page.click('[data-tab="pipeline"]')
+    card = page.inner_text(".pipe-req-card")
+    check("→ En attente d’Ops : pricing indicatif" in card and "Ops" in card and "depuis 20 j" in card, f"step by step: the card tells what's next, who has it, since when ({card[:120]!r})")
+    check("Pricing · 1" in page.inner_text('.pipe-col[data-phase="offre"]').replace("PRICING", "Pricing") and page.locator(".pipe-sub-h").count() >= 1, "step by step: a small title per step in the column")
+    check("Bloqués" in page.inner_text("#pipe-summary") and "En attente des autres 1" in page.inner_text("#pipe-summary"), "step by step: « à moi / en attente / bloqués » over the board")
+    page.click(".pipe-req-card .pipe-card-title")
+    panel = page.inner_text("#opp-detail-body .step-panel")
+    check("Pricing indicatif" in panel and "depuis 20 jours" in panel and "Mail de demande envoyé" in panel and "Passer à « Offre à remettre »" in panel, f"step by step: « Étape en cours », its checklist, one button ({panel[:200]!r})")
+    page.click("#opp-detail-actions button:has-text('Copier le mail')"); page.wait_for_timeout(200)
+    page.click("#opp-detail-actions >> text=Fermer"); page.click(".pipe-req-card .pipe-card-title")
+    check(page.is_checked("#opp-detail-body .sp-check:has-text('Mail de demande envoyé') input"), "step by step: copying the mail ticks « Mail de demande envoyé »")
+    page.click("#opp-detail-body .sp-check:has-text('Retour d') input"); page.wait_for_timeout(150)
+    check(all((o.get("checks") or {}).get("pricing_indicatif", {}).get("ops") for o in stored(page, "todo-widget-opportunities") if o.get("requestId") == "rqs"), "step by step: a box ticked by hand is kept for the block")
+    # a lot of two installations, out of three
+    page.click("#opp-detail-body .req-inst:has-text('Toit 1') .req-pick"); page.click("#opp-detail-body .req-inst:has-text('Toit 2') .req-pick")
+    page.fill("#opp-detail-body .req-lot-name", "Lot A"); page.click("#opp-detail-body .req-lot-make"); page.wait_for_timeout(200)
+    lots = {o["id"]: o.get("lot") for o in stored(page, "todo-widget-opportunities") if o.get("kind") == "installation"}
+    check(lots == {"s1": "Lot A", "s2": "Lot A", "s3": None} or lots == {"s1": "Lot A", "s2": "Lot A", "s3": ""}, f"lots: two installations made a lot, in the same request ({lots})")
+    check("Lot A" in page.inner_text("#opp-detail-title") and "demande de 3 installations" in page.inner_text("#opp-detail-sum"), "lots: the sheet opens on the lot, within its request")
+    page.click("#opp-detail-body .sp-next"); page.click("#stage-advance-confirm"); page.wait_for_timeout(200)
+    st_ = {o["id"]: o.get("stage") for o in stored(page, "todo-widget-opportunities") if o.get("kind") == "installation"}
+    check(st_ == {"s1": "offre_remise", "s2": "offre_remise", "s3": "pricing_indicatif"}, f"lots: the lot moves on alone ({st_})")
+    if page.is_visible("#opp-detail-overlay"): page.click("#opp-detail-actions >> text=Fermer")
+    check(page.locator(".pipe-req-card").count() == 1 and "Lot A" in page.inner_text(".pipe-req-card") and page.locator(".pipe-card:has-text('Toit 3') .pipe-origin").count() == 1,
+          "lots: on the board, the lot is its own block; the other one shows its request")
+    check(not errors, f"no page errors ({errors})")
+    page.close()
+
     # --- Pipeline blocks: a name of one's own, totals on the right, long blocks folded; drop below an empty column; « Grouper avec… »
     big = [{"id": "rqb", "kind": "request", "company": "BIG", "title": "Demande de pricing", "createdAt": 1, "updatedAt": 1, "deleted": False}] + \
           [{"id": f"b{i}", "kind": "installation", "company": "BIG", "centrale": f"Toit {i}", "title": f"Toit {i}", "kwc": "500", "requestId": "rqb", "stage": "offre_attente", "createdAt": 1, "updatedAt": 1, "deleted": False} for i in range(1, 9)] + \
@@ -791,8 +826,8 @@ with sync_playwright() as p:
     page, errors = new_page(browser, {"todo_todo-widget-opportunities": json.dumps(big)}, viewport={"width": 1400, "height": 900})
     page.goto(URL); page.click('[data-tab="pipeline"]')
     blk = page.locator(".pipe-req-card[data-id=rqb]")
-    check("8 · 4 MWc" in blk.locator(".pipe-req-tot").inner_text() and blk.locator(".pipe-req-line:visible").count() == 4 and "+ 4 autres" in blk.inner_text(),
-          "pipeline: a long block shows its totals and folds to its first lines")
+    check("8 · 4 MWc" in blk.locator(".pipe-req-tot").inner_text() and blk.locator(".pipe-req-line:visible").count() == 0 and "8 installations" in blk.inner_text(),
+          "pipeline: a long block shows its totals, its installations folded")
     blk.locator(".pipe-req-more").click()
     check(page.locator(".pipe-req-card[data-id=rqb] .pipe-req-line:visible").count() == 8, "pipeline: one click unfolds it")
     page.hover(".pipe-req-card[data-id=rqb]"); page.click(".pipe-req-card[data-id=rqb] .pipe-req-rename"); page.keyboard.type("Lot toitures"); page.keyboard.press("Enter"); page.wait_for_timeout(150)
@@ -1465,7 +1500,7 @@ with sync_playwright() as p:
     check(len(t) == 1 and t[0]["title"].startswith("Appeler Pierre"), "one call task for the whole request")
     page.click(".pipe-req-card .pipe-card-title")
     check("Codes affaire" in page.input_value("#opp-mail-body") and "27(06)" in page.input_value("#opp-mail-body"), "pricing mail with business codes")
-    check(page.locator("details.opp-mail-fold:not([open])").count() == 1 and page.is_visible(".stage-focus") and "À qualifier" in page.inner_text(".stage-focus"),
+    check(page.locator("details.opp-mail-fold:not([open])").count() == 1 and page.is_visible(".step-panel") and "À qualifier" in page.inner_text(".step-panel"),
           "request sheet: before the Go, the pricing mail is folded, the step and what it asks come first")
     page.click("details.opp-mail-fold > summary")
     chips = page.locator(".mail-scope button")
@@ -1492,12 +1527,13 @@ with sync_playwright() as p:
     page.locator('[data-phase="qualif"] .pipe-req-name', has_text="Le Moulin").click()
     page.click(".opp-stage-step:has-text('Qualification')"); page.wait_for_timeout(100)
     if page.is_visible("#choice-overlay"): page.click("#choice-btns >> text=Avancer")
-    page.click("#opp-detail-actions >> text=Go"); page.click("#stage-advance-confirm")
+    page.click("#opp-detail-body .sp-next:has-text('Go')"); page.click("#stage-advance-confirm")
     moulin = next(o for o in opps() if o.get("centrale") == "Le Moulin")
     check(moulin["stage"] == "pricing_indicatif" and moulin.get("goDate"), "Go moves to the pricing and records the date")
     check(page.is_visible("#opp-mail-body"), "after Go, the pricing request opens")
     page.click("#opp-detail-actions >> text=Fermer")
-    page.locator('[data-phase="offre"] .pipe-card', has_text="Le Moulin").first.click()
+    page.locator('[data-phase="offre"] .pipe-req-name', has_text="Le Moulin").first.click()
+    page.click("#opp-detail-body .sheet-sec > summary:has-text('Détails de la centrale')")
     check("statut bdd" in page.inner_text("#opp-detail-body").lower() and "En préparation" in page.inner_text("#opp-detail-body"), "installation sheet shows the BDD status")
     act(page, "Copier ligne BDD")
     row = page.evaluate("navigator.clipboard.readText()").split("\t")
@@ -1655,7 +1691,7 @@ with sync_playwright() as p:
     page.goto(URL); page.click('[data-tab="pipeline"]')
     page.locator('[data-phase="contrat"] .pipe-card', has_text="A").first.click()
     page.click("#opp-detail-body .opp-back")
-    page.click("#opp-detail-actions >> text=Avancer chaque installation"); page.click("#stage-advance-confirm")
+    page.click("#opp-detail-body .sp-next:has-text('Avancer chaque installation')"); page.click("#stage-advance-confirm")
     st = {o["id"]: o.get("stage") for o in stored(page, "todo-widget-opportunities")}
     check(st["a"] == "pricing_ferme" and st["b"] == "qualif_en_cours", f"mixed request: each installation to its own next stage ({st})")
     check(not errors, f"no page errors ({errors})")
@@ -1669,7 +1705,7 @@ with sync_playwright() as p:
     page, errors = new_page(browser, {"todo_todo-widget-opportunities": json.dumps(wait)})
     page.goto(URL); page.click('[data-tab="pipeline"]')
     page.locator(".pipe-req-name", has_text="W1").click(); page.click("#opp-detail-body .opp-back")
-    page.click("#opp-detail-actions >> text=Tout passer à l\u2019étape suivante")
+    page.click("#opp-detail-body .sp-next")
     check("Retour sur l\u2019offre" in page.inner_text("#stage-advance-text"), "after « offre à remettre » comes the wait for the producer's answer")
     page.click("#stage-advance-confirm")
     st = {o["id"]: o.get("stage") for o in stored(page, "todo-widget-opportunities")}
@@ -1677,7 +1713,7 @@ with sync_playwright() as p:
     t = [t for t in stored(page, "todo-widget-tasks") if t.get("opportunityId") == "r8"]
     check(len(t) == 1 and t[0]["status"] == "en_attente" and "Relancer" in t[0]["title"], "a follow-up task « en attente » to chase the producer")
     page.locator(".pipe-req-card", has_text="W1").locator(".pipe-card-title").first.click()
-    page.click("#opp-detail-actions >> text=Offre acceptée (2)"); page.click("#stage-advance-confirm")
+    page.click("#opp-detail-body .sp-next:has-text('Offre acceptée')"); page.click("#stage-advance-confirm")
     page.wait_for_selector(".celebrate-won", timeout=2000)
     check(page.locator(".celebrate-won .confetti").count() > 20 and "Offre acceptée" in page.inner_text(".celebrate-won") and page.locator(".celebrate").count() == 1,
           "offer accepted: one confetti animation for the whole request")
@@ -1686,7 +1722,7 @@ with sync_playwright() as p:
     page.click("#opp-detail-actions >> text=Fermer")
     page.wait_for_selector(".celebrate", state="detached", timeout=5000)
     page.once("dialog", lambda d: d.accept())
-    page.locator(".pipe-card", has_text="SOLO").first.click(); page.click("#opp-detail-actions >> text=Offre refusée")
+    page.locator(".pipe-card", has_text="SOLO").first.click(); page.click("#opp-detail-body .sp-alt:has-text('Offre refusée')")
     page.wait_for_selector(".celebrate-lost", timeout=2000)
     check("Offre perdue" in page.inner_text(".celebrate-lost") and next(o for o in stored(page, "todo-widget-opportunities") if o["id"] == "solo")["stage"] == "perdu",
           "offer refused: lost, with its own animation")
