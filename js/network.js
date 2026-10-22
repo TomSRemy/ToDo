@@ -83,13 +83,13 @@
       nodes.forEach(n=>{ if(!ok(n)) return; const [x,y]=toScreen(n.p.x,n.p.y), r=n.r*Math.max(.6,Math.min(1.6,view.k)); if(x<-30||y<-30||x>W+30||y>H+30) return;
         const dim=(near && !near.has(n.id)) || (matches && !matches.has(n.id)), key=(TYPES[n.type]||TYPES.task).color+(dim?'|d':'');
         let g=groups.get(key); if(!g){ g=new Path2D(); groups.set(key,g); } g.moveTo(x+r,y); g.arc(x,y,r,0,Math.PI*2);
-        const showLabel=(n.type==='company' && view.k>.55) || view.k>1.6 || (near && near.has(n.id)) || (matches && matches.has(n.id));
+        const showLabel=((n.type==='company'||n.type==='project') && view.k>.55) || view.k>1.6 || (near && near.has(n.id)) || (matches && matches.has(n.id));
         if(showLabel && !dim) labels.push([n,x,y,r]); });
       groups.forEach((p,key)=>{ const [color,d]=key.split('|'); ctx.globalAlpha=d?.18:1; ctx.fillStyle=color; ctx.fill(p); });
       ctx.globalAlpha=1;
       if(selected && ok(selected)){ const [x,y]=toScreen(selected.p.x,selected.p.y), r=selected.r*Math.max(.6,Math.min(1.6,view.k)); ctx.strokeStyle='#fff'; ctx.lineWidth=2; ctx.beginPath(); ctx.arc(x,y,r,0,Math.PI*2); ctx.stroke(); ctx.lineWidth=1; }
       ctx.fillStyle='rgba(232,238,245,.92)';
-      labels.forEach(([n,x,y,r])=>{ ctx.font=(n.type==='company'?'600 ':'')+'11px system-ui, sans-serif'; ctx.fillText(n.label.length>34?n.label.slice(0,33)+'…':n.label, x+r+3, y+4); });
+      labels.forEach(([n,x,y,r])=>{ ctx.font=(n.type==='company'||n.type==='project'?'600 ':'')+'11px system-ui, sans-serif'; ctx.fillText(n.label.length>34?n.label.slice(0,33)+'…':n.label, x+r+3, y+4); });
     }
     function loop(){ raf=0; if(alpha>.02 || dragging) tick(); draw(); if(alpha>.02 || dragging) raf=requestAnimationFrame(loop); }
     function kick(){ if(!raf) raf=requestAnimationFrame(loop); }

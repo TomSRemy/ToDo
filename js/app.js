@@ -7001,6 +7001,8 @@
     const nav=$('lite-nav');
     const sync=()=>{ const act=document.querySelector('.tab.active'); nav.querySelectorAll('button').forEach(b=>b.classList.toggle('active', !!act && b.dataset.go===act.dataset.tab)); };
     nav.querySelectorAll('button').forEach(b=>{ b.onclick=()=>{ document.querySelector('.tab[data-tab="'+b.dataset.go+'"]').click(); window.scrollTo(0,0); }; });
+    // short placeholders: the long ones were cut off on a phone screen
+    [['contact-search','Contact ou société'],['opp-search','Producteur, centrale…']].forEach(([id,ph])=>{ const el=$(id); if(el){ el.title=el.placeholder; el.placeholder=ph; } });
     document.addEventListener('click', e=>{ if(e.target.closest('.tab')) setTimeout(sync,0); }, true);
     sync();
   }
