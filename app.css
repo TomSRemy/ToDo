@@ -1954,3 +1954,53 @@ html.lite .pipe-summary{ display:none; }
 .pipe-who-row .pipe-ungroup{ margin-left:auto; flex-shrink:0; }
 .pipe-req-head .pipe-card-company{ flex:1 1 0; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .pipe-days{ white-space:nowrap; }
+/* every folded part of a sheet looks the same: a panel with « ▸ Title  details » */
+details.req-compare, .opp-mail-fold, .opp-history{ background:var(--panel); border:1px solid var(--bd); border-radius:10px; padding:10px 14px; margin:8px 0; }
+.opp-mail-fold > summary, .opp-history > summary{ list-style:none; display:flex; align-items:baseline; gap:10px; font:600 13.5px var(--font-ui); text-transform:none; letter-spacing:0; color:var(--tx1); }
+.opp-mail-fold > summary::-webkit-details-marker, .opp-history > summary::-webkit-details-marker{ display:none; }
+.opp-mail-fold > summary::before, .opp-history > summary::before{ content:'▸'; color:var(--tx3); font-weight:400; }
+.opp-mail-fold[open] > summary::before, .opp-history[open] > summary::before{ content:'▾'; }
+.opp-history[open] > summary{ margin-bottom:8px; }
+details.req-compare > .req-compare-h{ font-size:13.5px; }
+details.req-compare > .req-compare-h::before{ content:'▸'; transform:none; } details.req-compare[open] > .req-compare-h::before{ content:'▾'; }
+/* stage advance popup: one line per choice */
+#stage-advance-overlay label{ display:flex; align-items:flex-start; gap:8px; line-height:1.35; }
+#stage-advance-overlay label + label, #stage-close-row{ margin-top:6px; }
+details.req-compare:not([open]) > .req-compare-h::before{ transform:none; }
+/* phone: the sheet takes the whole screen; the progress shrinks to dots and only the current phase shows its steps */
+@media (max-width:760px){
+  #opp-detail-overlay{ padding:0; }
+  #opp-detail-overlay .modal-box.wide{ width:100vw; max-height:100dvh; height:100dvh; border-radius:0; border:none; padding-left:14px; padding-right:14px; }
+  #opp-detail-overlay .opp-detail-head{ margin:0 -14px 10px; padding:12px 54px 10px 14px; flex-wrap:wrap; }
+  #opp-detail-overlay .opp-detail-head h3{ font-size:16px; }
+  #opp-detail-overlay .opp-detail-edit{ order:3; padding:5px 10px; font-size:12px; }
+  .opp-stage-track{ display:flex; gap:8px; padding:10px 12px 6px; }
+  .opp-stage-track .opp-phase{ flex:0 0 26px; min-width:0; }
+  .opp-stage-track .opp-phase.ph-current{ flex:1 1 auto; }
+  .opp-stage-track .opp-phase:not(.ph-current) .ph-name, .opp-stage-track .opp-phase:not(.ph-current) .opp-stage-step{ display:none; }
+  .opp-stage-track .opp-phase:not(.ph-current) .ph-bar span{ flex:1 1 0; }
+  .step-panel{ gap:10px; }
+  .sp-actions{ position:sticky; bottom:0; background:var(--panel); padding:8px 0 4px; z-index:2; }
+  .sp-actions .sp-next{ font-size:15px; padding:14px 16px; }
+  .sp-figs{ grid-template-columns:repeat(2,minmax(0,1fr)); }
+}
+.sheet-sec .req-inst-name{ overflow:hidden; }
+@media (max-width:760px){
+  .sheet-sec .req-inst{ flex-wrap:wrap; row-gap:4px; }
+  .sheet-sec .req-inst-name{ flex:1 1 calc(100% - 60px); flex-direction:column; gap:0; }
+  .sheet-sec .req-inst > .req-lot{ margin-left:52px; }
+  .sheet-sec .req-inst > .req-inst-ed{ margin-left:auto; }
+  .req-compare-h .req-hint{ display:none; }
+  .req-compare-h{ flex-wrap:wrap; }
+}
+/* checklist rows: tick + label, then a date to type, a little info, a button doing the thing */
+.sp-check{ cursor:default; flex-wrap:wrap; row-gap:4px; }
+.sp-check > label{ display:flex; align-items:center; gap:9px; cursor:pointer; min-width:0; }
+.sp-check input[type=checkbox]{ width:17px; height:17px; accent-color:var(--accent); flex-shrink:0; }
+.sp-date{ background:var(--panel-2); border:1px solid var(--bd); border-radius:6px; color:var(--tx1); font:12.5px var(--font-ui); padding:3px 6px; color-scheme:dark; }
+.sp-info{ font-size:11.5px; color:var(--tx3); }
+.sp-check:not(.done) .sp-info{ color:var(--warn, #E5B54F); }
+.sp-act{ margin-left:auto; background:none; border:1px solid var(--accent); color:var(--accent); border-radius:999px; font:600 11.5px var(--font-ui); padding:3px 10px; cursor:pointer; }
+.sp-act:hover{ background:color-mix(in srgb, var(--accent) 14%, transparent); }
+.pd-who-row{ grid-template-columns:100px minmax(0,1fr) minmax(150px,auto); }
+.pd-who-row .pd-v{ white-space:nowrap; } .pd-who-row.late .pd-v{ color:var(--warn, #E5B54F); }

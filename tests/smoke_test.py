@@ -819,6 +819,32 @@ with sync_playwright() as p:
     check(not errors, f"no page errors ({errors})")
     page.close()
 
+    # --- Checklists: a date typed in the list, a box ticked with its day, « Compléter » opens the table; the whole way to « Signature »
+    ck = [{"id": "c1", "kind": "installation", "company": "CK", "centrale": "Toit", "title": "Toit", "stage": "prise_contact", "kwc": "500", "createdAt": 1, "updatedAt": 1, "deleted": False},
+          {"id": "c2", "kind": "installation", "company": "CK2", "centrale": "Hangar", "title": "Hangar", "stage": "collecte", "kwc": "500", "createdAt": 1, "updatedAt": 1, "deleted": False},
+          {"id": "c3", "kind": "installation", "company": "CK3", "centrale": "Sol", "title": "Sol", "stage": "mise_signature", "kwc": "500", "createdAt": 1, "updatedAt": 1, "deleted": False}]
+    page, errors = new_page(browser, {"todo_todo-widget-opportunities": json.dumps(ck)}, viewport={"width": 1400, "height": 900})
+    page.goto(URL); page.click('[data-tab="pipeline"]')
+    page.locator(".pipe-card", has_text="Toit").first.click()
+    page.fill("#opp-detail-body .sp-check:has-text('RDV 1') .sp-date", "2026-11-03"); page.dispatch_event("#opp-detail-body .sp-check:has-text('RDV 1') .sp-date", "change"); page.wait_for_timeout(150)
+    c1 = next(o for o in stored(page, "todo-widget-opportunities") if o["id"] == "c1")
+    check(c1.get("rdv1") == "2026-11-03" and page.is_checked("#opp-detail-body .sp-check:has-text('RDV 1') input[type=checkbox]"), f"checklist: the RDV date typed in the list fills the sheet and ticks it ({c1.get('rdv1')})")
+    page.click("#opp-detail-actions >> text=Fermer")
+    page.locator(".pipe-card", has_text="Hangar").first.click()
+    check("à compléter" in page.inner_text("#opp-detail-body .sp-check:has-text('Infos obligatoires')"), "checklist: the missing boxes are counted next to the line")
+    page.click("#opp-detail-body .sp-act:has-text('Compléter')"); page.wait_for_timeout(300)
+    check(page.evaluate("document.querySelector('#opp-detail-body details.req-compare').open"), "checklist: « Compléter » opens the table of the plant")
+    page.click("#opp-detail-actions >> text=Fermer")
+    page.locator(".pipe-card", has_text="Sol").first.click()
+    page.click("#opp-detail-body .sp-check:has-text('DocuSign') input"); page.wait_for_timeout(150)
+    check("le " in page.inner_text("#opp-detail-body .sp-check:has-text('DocuSign')"), "checklist: a box ticked by hand shows the day")
+    page.click("#opp-detail-body .sp-next"); page.click("#stage-advance-confirm"); page.wait_for_timeout(200)
+    page.reload(); page.click('[data-tab="pipeline"]'); page.wait_for_timeout(200)
+    c3 = next(o for o in stored(page, "todo-widget-opportunities") if o["id"] == "c3")
+    check(c3["stage"] == "signature", f"« Signature » is reached and stays after a reload ({c3['stage']})")
+    check(not errors, f"no page errors ({errors})")
+    page.close()
+
     # --- Pipeline blocks: a name of one's own, totals on the right, long blocks folded; drop below an empty column; « Grouper avec… »
     big = [{"id": "rqb", "kind": "request", "company": "BIG", "title": "Demande de pricing", "createdAt": 1, "updatedAt": 1, "deleted": False}] + \
           [{"id": f"b{i}", "kind": "installation", "company": "BIG", "centrale": f"Toit {i}", "title": f"Toit {i}", "kwc": "500", "requestId": "rqb", "stage": "offre_attente", "createdAt": 1, "updatedAt": 1, "deleted": False} for i in range(1, 9)] + \
@@ -860,10 +886,12 @@ with sync_playwright() as p:
     page, errors = new_page(browser, {"todo_todo-widget-opportunities": json.dumps(pd_opps)}, viewport={"width": 1300, "height": 900})
     page.goto(URL); page.click('[data-tab="pipeline"]'); page.click("#pipe-dash-toggle")
     dash = page.inner_text("#pipeline-board")
-    check("2,5 MWc" in dash and "sortis en" in dash.lower() and page.locator(".pd-bar-row").count() == 5, "pipeline dashboard: MWc in progress, exits of the year, one bar per phase")
+    check("2,5 MWc" in dash and "sortis en" in dash.lower() and page.locator(".pd-bar-row:not(.pd-who-row)").count() == 5, "pipeline dashboard: MWc in progress, exits of the year, one bar per phase")
     rows = page.eval_on_selector_all(".pd-trow", "els=>els.map(e=>e.innerText.replace(/\\s+/g,' '))")
     check(any(r.startswith("Pricing indicatif 11 j") for r in rows) and any(r.startswith("Négociation 20 j") for r in rows), f"pipeline dashboard: average days per step from the history ({rows})")
     check("Alpha" in page.inner_text(".pd-card:has-text('Dossiers qui traînent')"), "pipeline dashboard: the deal stuck for 20 days is listed")
+    who = page.eval_on_selector_all(".pd-who-row", "els=>els.map(e=>e.innerText.replace(/\\s+/g,' '))")
+    check(len(who) == 2 and any(r.startswith("À moi 1 · 2 MWc · 20 j") and "1 > 15 j" in r for r in who) and any(r.startswith("Ops 1 · 0,5 MWc · 2 j") for r in who), f"pipeline dashboard: who holds the deals, for how long ({who})")
     check("Fixe un objectif" in page.inner_text(".pd-goal"), "pipeline goal: invites to set the year's goal")
     page.fill(".pd-goal-in", "10"); page.press(".pd-goal-in", "Enter"); page.wait_for_timeout(200)
     gt = page.inner_text(".pd-goal-t")
@@ -1712,12 +1740,13 @@ with sync_playwright() as p:
     check(st["w1"] == st["w2"] == "offre_attente", f"both installations wait for the answer ({st})")
     t = [t for t in stored(page, "todo-widget-tasks") if t.get("opportunityId") == "r8"]
     check(len(t) == 1 and t[0]["status"] == "en_attente" and "Relancer" in t[0]["title"], "a follow-up task « en attente » to chase the producer")
-    page.locator(".pipe-req-card", has_text="W1").locator(".pipe-card-title").first.click()
+    check(page.is_visible("#opp-detail-overlay") and "Retour sur l\u2019offre" in page.inner_text("#opp-detail-body .sp-title"), "after moving on from a sheet, the sheet opens again on the new step")
     page.click("#opp-detail-body .sp-next:has-text('Offre acceptée')"); page.click("#stage-advance-confirm")
     page.wait_for_selector(".celebrate-won", timeout=2000)
     check(page.locator(".celebrate-won .confetti").count() > 20 and "Offre acceptée" in page.inner_text(".celebrate-won") and page.locator(".celebrate").count() == 1,
           "offer accepted: one confetti animation for the whole request")
     check(all(o["stage"] == "kyc" for o in stored(page, "todo-widget-opportunities") if o.get("requestId") == "r8"), "accepted: the installations move to KYC")
+    page.click("#opp-detail-actions >> text=Fermer")
     page.locator('[data-phase="contrat"] .pipe-card').first.click()   # the animation never blocks a click
     page.click("#opp-detail-actions >> text=Fermer")
     page.wait_for_selector(".celebrate", state="detached", timeout=5000)

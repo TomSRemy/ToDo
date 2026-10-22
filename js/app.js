@@ -2785,7 +2785,7 @@
     {key:'contrat',label:'Contrat'},{key:'onboarding',label:'Onboarding'},{key:'actif',label:'En service'}
   ];
   const OPP_EXITS={ no_go:'No Go', perdu:'Perdu', abandonne:'Abandonné' };
-  const LEGACY_STAGE={ demarchage:'a_qualifier', prospect:'a_qualifier', pricing:'pricing_indicatif', demande_prix:'pricing_indicatif', signature:'mise_signature', encodage:'onboarding', bascule:'actif' };
+  const LEGACY_STAGE={ demarchage:'a_qualifier', prospect:'a_qualifier', pricing:'pricing_indicatif', demande_prix:'pricing_indicatif', encodage:'onboarding', bascule:'actif' };
   const ONBOARDING_STEPS=[
     {k:'clauses',label:'Clauses communiquées pour paramétrage (prix, PN, dispo, pénalités)',who:'Com'},
     {k:'wattee_contrat',label:'Contrat créé dans WATTEE',who:'Com'},
@@ -3801,6 +3801,17 @@
       const r=document.createElement('div'); r.className='pd-trow'+(avg>=30?' slow':''); r.innerHTML='<span></span><b></b><span class="m"></span>';
       r.firstChild.textContent=s.label; r.querySelector('b').textContent=Math.round(avg)+' j'; r.querySelector('.m').textContent=v.length+' dossier'+(v.length>1?'s':'')+' · max '+Math.round(mx)+' j'; t.appendChild(r); });
     if(t.children.length) c2.appendChild(t);
+    // who holds the deals now: me, Ops, the legal team, the producer, the management — and how long they wait there
+    { const by={}; live.filter(o=>o.kind==='installation' && o.stage!=='actif').forEach(o=>{ const st=oppStage(o.stage); if(!st) return; const w=st.who==='SC'?'Ops':st.who; (by[w]=by[w]||[]).push(o); });
+      const order=['Com','Ops','Jur','Client','Dir'].filter(w=>by[w]);
+      const c4=card('Qui a la main', order.length?'Dossiers en cours selon qui doit agir à leur étape ; jours = depuis l\u2019entrée dans l\u2019étape.':'Aucun dossier en cours.');
+      const maxN=Math.max(1,...order.map(w=>by[w].length));
+      order.forEach(w=>{ const l=by[w], ds=l.map(daysInStage).filter(d=>d!=null), avg=ds.length?Math.round(ds.reduce((x,y)=>x+y,0)/ds.length):null, late=ds.filter(d=>d>15).length;
+        const r=document.createElement('div'); r.className='pd-bar-row pd-who-row'; r.innerHTML='<span class="pd-l"><span class="who-chip"></span></span><span class="pd-bar"><span></span></span><span class="pd-v"></span>';
+        const ch=r.querySelector('.who-chip'); ch.classList.add('who-'+w.toLowerCase()); ch.textContent=WHO[w]||w;
+        r.querySelector('.pd-bar span').style.width=Math.max(4,l.length/maxN*100)+'%';
+        r.querySelector('.pd-v').textContent=l.length+' · '+fmtMwc(l.reduce((x,o)=>x+kwcNum(o),0))+(avg!=null?' · '+avg+' j en moy.':'')+(late?' · '+late+' > 15 j':'');
+        if(late) r.classList.add('late'); c4.appendChild(r); }); }
     // deals that drag
     const now=Date.now(), stalled=live.filter(o=>o.stage!=='actif' && lastMove(o)>1e12 && now-lastMove(o)>=STALL_DAYS*864e5).sort((a,b)=>lastMove(a)-lastMove(b));
     const c3=card('Dossiers qui traînent', stalled.length?'Sans étape ni modification depuis '+STALL_DAYS+' jours ou plus.':'Aucun dossier sans mouvement depuis '+STALL_DAYS+' jours.');
@@ -5427,20 +5438,20 @@
     let n=OPP_STAGES[stageIndex(o.stage)+1]; if(n && n.key==='pricing_ferme' && isEngageant(o)) n=OPP_STAGES[stageIndex('pricing_ferme')+1];
     return n?n.key:null;
   };
-  function offerStageAdvance(list, forcedKey){
+  function offerStageAdvance(list, forcedKey, back){
     const moves=list.map(o=>({ o, key:nextStageKey(o, forcedKey) })).filter(m=>m.key);
     if(!moves.length) return;
     // the open tasks of the step being left (linked to these installations or their request): closed with the move, if ticked
     const linkIds=new Set(moves.flatMap(m=>[m.o.id, m.o.requestId].filter(Boolean)));
     const oldTasks=tasks.filter(t=>!t.deleted && !t.archived && t.opportunityId && linkIds.has(t.opportunityId));
-    pendingAdvance={ moves:moves.map(m=>({ id:m.o.id, key:m.key })), closeIds:oldTasks.map(t=>t.id) };
+    pendingAdvance={ moves:moves.map(m=>({ id:m.o.id, key:m.key })), closeIds:oldTasks.map(t=>t.id), back };
     $('stage-close-row').hidden=!oldTasks.length; $('stage-close-tasks').checked=true;
     $('stage-close-text').textContent=oldTasks.length===1?'Clore « '+plainLinks(oldTasks[0].title)+' »':'Clore les '+oldTasks.length+' tâches en cours de ce dossier';
     const o=moves[0].o, next=oppStage(moves[0].key);
     const same=moves.every(m=>m.key===moves[0].key && m.o.stage===o.stage);
     const label=moves.length>1?moves.length+' installations ('+o.company+')':'« '+o.company+' — '+oppName(o)+' »';
     $('stage-advance-text').textContent=same
-      ? label+' : passer de « '+stageLabel(o.stage, o)+' » à « '+next.label+' »'+(next.who!=='Com'?' (porté par '+next.who+', la tâche sera « en attente »)':'')+' ?'
+      ? label+' : passer de « '+stageLabel(o.stage, o)+' » à « '+next.label+' »'+(next.who!=='Com'?' (porté par '+(WHO[next.who]||next.who)+', la tâche sera « en attente »)':'')+' ?'
       : label+' : chaque installation passe à son étape suivante ('+moves.map(m=>oppName(m.o)+' → '+oppStage(m.key).label).join(', ')+') ?';
     $('stage-advance-nogo').classList.toggle('hidden', !moves.every(m=>m.o.stage==='qualif_en_cours'));
     $('stage-create-task').checked=true; $('stage-due').value=next.who!=='Com'?pqAddDays(7):''; $('stage-urgency').value='moyenne'; $('stage-due-row').style.display='flex';
@@ -5466,15 +5477,18 @@
         target.taskId=task.id; touchCrm(target);
       });
     }
-    saveCrm(); closeStageAdvance(); render(); renderPipeline();
-    if(moves.some(m=>m.key==='pricing_indicatif')){ const reqId=list[0].requestId; if(reqId) openRequestDetail(reqId); else openOppDetail(list[0].id); }
+    const back=closeStageAdvance(); saveCrm(); render(); renderPipeline();
+    if(moves.some(m=>m.key==='pricing_indicatif')){ const reqId=list[0].requestId; if(reqId) openRequestDetail(reqId, list.map(x=>x.id)); else openOppDetail(list[0].id); }
+    else if(back) back();   // started from a sheet: back to it, on the new step
   }
   function noGoFromAdvance(){
     if(!pendingAdvance) return;
     pendingAdvance.moves.map(m=>opportunities.find(x=>x.id===m.id)).filter(Boolean).forEach(o=>{ o.stageBeforeExit=o.stage; o.stage='no_go'; o.lostAt=Date.now(); touchCrm(o); });
-    saveCrm(); closeStageAdvance(); renderPipeline();
+    const back=closeStageAdvance(); saveCrm(); renderPipeline(); if(back) back();
   }
-  function closeStageAdvance(){ $('stage-advance-overlay').classList.add('hidden'); pendingAdvance=null; }
+  // returns the way back to the sheet the move was started from (if any)
+  function closeStageAdvance(){ const back=pendingAdvance && pendingAdvance.back; $('stage-advance-overlay').classList.add('hidden'); pendingAdvance=null; return back||null; }
+  function cancelStageAdvance(){ const back=closeStageAdvance(); if(back) back(); }
 
   // ----- Pricing requests (several installations, one mail) -----
   // « Maintenant » : what the current step asks for, with the dates that matter at that step
@@ -5482,28 +5496,44 @@
   const WHO={ Com:'À moi', Ops:'Ops', Jur:'Juridique', Client:'Client', Dir:'Direction' };
   function daysInStage(o){ const log=(o.stageLog||[]).filter(e=>e && e.stage===o.stage && e.at>1e12); const t=log.length?log[log.length-1].at:(o.updatedAt>1e12?o.updatedAt:0); return t?Math.max(0,Math.floor((Date.now()-t)/864e5)):null; }
   const reqMissing=list=>list.reduce((s,x)=>s+CARACT_ROWS.filter(l=>REQ_NEEDED.has(caractKey(l)) && caractValue(x,l)==='').length,0);
-  // each step's checklist: auto = known by the app (ticked by itself), else ticked by hand (kept per installation)
+  // each step's checklist. auto: known by the app (ticked by itself) · date: a date of the sheet, typed right there
+  // (ticking it puts today) · act: a button doing the thing next to it · else ticked by hand, with the day it was ticked
+  const sheetBody=()=>$('opp-detail-body');
+  const openCompare=()=>{ const d=sheetBody().querySelector('details.req-compare'); if(d){ d.open=true; d.scrollIntoView({ block:'start', behavior:'smooth' }); } };
+  const reqOfList=l=>{ const id=l[0] && l[0].requestId; return (id && opportunities.find(x=>x.id===id)) || { company:l[0]?l[0].company:'' }; };
   const STEP_CHECKS={
-    a_qualifier:[['contact','Contact principal renseigné',l=>l.every(o=>o.prenom||o.nom||o.mail||o.tel)],['appel','Premier appel fait']],
-    prise_contact:[['rdv1','RDV 1 fixé',l=>l.every(o=>o.rdv1)]],
-    collecte:[['oblig','Infos obligatoires complètes',l=>!reqMissing(l)],['fichier','Fichier Caractéristiques reçu du producteur',l=>l.every(o=>o.caract && Object.keys(o.caract).length)]],
-    qualif_en_cours:[['rdv2','RDV 2 fait',l=>l.every(o=>o.rdv2)],['decision','Décision Go / No Go prise']],
-    pricing_indicatif:[['mail','Mail de demande envoyé',l=>l.every(o=>o.mailSentAt)],['caract','Fichier Caractéristiques joint',l=>l.every(o=>o.caractSentAt)],['ops','Retour d’Ops reçu'],['prix','Prix noté dans la fiche']],
-    offre_remise:[['prete','Offre préparée'],['envoyee','Offre envoyée au producteur']],
-    offre_attente:[['relance','Relance faite'],['reponse','Réponse du producteur reçue']],
-    kyc:[['docs','Documents KYC reçus'],['solva','Solvabilité validée (Juridique)']],
-    negociation:[['points','Points de négociation réglés']],
-    pricing_ferme:[['ferme','Prix ferme reçu d’Ops']],
-    mise_signature:[['docusign','DocuSign envoyé']],
-    signature:[['selfee','Signé par Selfee'],['prod','Signé par le producteur']],
-    actif:[['valo','Valorisation démarrée',()=>true]]
+    a_qualifier:[{ id:'contact', label:'Contact principal renseigné', auto:l=>l.every(o=>o.prenom||o.nom||o.mail||o.tel) },{ id:'appel', label:'Premier appel fait' }],
+    prise_contact:[{ id:'rdv1', label:'RDV 1', date:'rdv1' }],
+    collecte:[{ id:'oblig', label:'Infos obligatoires complètes', auto:l=>!reqMissing(l), note:l=>{ const n=reqMissing(l); return n?n+' case'+(n>1?'s':'')+' à compléter':''; }, act:{ label:'Compléter', show:l=>reqMissing(l)>0, fn:()=>openCompare() } },
+      { id:'fichier', label:'Fichier Caractéristiques reçu du producteur', auto:l=>l.every(o=>o.caract && Object.keys(o.caract).length) }],
+    qualif_en_cours:[{ id:'rdv2', label:'RDV 2', date:'rdv2' },{ id:'decision', label:'Décision Go / No Go prise' }],
+    pricing_indicatif:[{ id:'mail', label:'Mail de demande envoyé', auto:l=>l.every(o=>o.mailSentAt), act:{ label:'Copier le mail', show:l=>!l.every(o=>o.mailSentAt), fn:(l,btn)=>{ const ml=pricingMail(reqOfList(l), l); copyToClipboard(ml.subject+'\n\n'+ml.body, btn); markMailSent(l); } } },
+      { id:'caract', label:'Fichier Caractéristiques joint', auto:l=>l.every(o=>o.caractSentAt), act:{ label:'Créer le fichier', show:l=>!l.every(o=>o.caractSentAt), fn:(l,btn)=>downloadCaract(l, btn) } },
+      { id:'ops', label:'Retour d’Ops reçu' },{ id:'prix', label:'Prix noté dans la fiche' }],
+    offre_remise:[{ id:'prete', label:'Offre préparée' },{ id:'envoyee', label:'Offre remise au producteur', date:'dateOffre' }],
+    offre_attente:[{ id:'relance', label:'Relance faite', note:l=>{ const t=pqDateOf(l[0].dateOffre); if(!t) return ''; const n=Math.floor((Date.now()-t)/864e5); return n>0?'offre remise il y a '+n+' jour'+(n>1?'s':''):''; } },{ id:'reponse', label:'Réponse du producteur reçue' }],
+    kyc:[{ id:'docs', label:'Documents KYC reçus' },{ id:'solva', label:'Solvabilité validée (Juridique)' }],
+    negociation:[{ id:'points', label:'Points de négociation réglés' }],
+    pricing_ferme:[{ id:'ferme', label:'Prix ferme reçu d’Ops' }],
+    mise_signature:[{ id:'docusign', label:'DocuSign envoyé' }],
+    signature:[{ id:'selfee', label:'Signé par Selfee' },{ id:'prod', label:'Signé par le producteur' }],
+    actif:[{ id:'valo', label:'Valorisation démarrée', auto:()=>true }]
   };
   function stepChecklist(list, stage){
     if(stage==='onboarding') return ONBOARDING_STEPS.map(stp=>({ id:'onb_'+stp.k, label:stp.label, who:stp.who, done:list.every(o=>o['onb_'+stp.k]), auto:false, onb:true }));
-    return (STEP_CHECKS[stage]||[]).map(([id,label,auto])=>({ id, label, auto:!!auto, done:auto?!!auto(list):list.every(o=>o.checks && o.checks[stage] && o.checks[stage][id]) }));
+    return (STEP_CHECKS[stage]||[]).map(c=>{
+      const at=list.map(o=>o.checks && o.checks[stage] && o.checks[stage][c.id]);
+      const done=c.auto?!!c.auto(list):c.date?list.every(o=>o[c.date]):at.every(Boolean);
+      const when=!c.auto && !c.date && done && at.every(v=>typeof v==='number')?Math.max(...at):null;
+      return { id:c.id, label:c.label, auto:!!c.auto, date:c.date||null, act:c.act && (!c.act.show || c.act.show(list))?c.act:null, note:c.note?c.note(list):'', done, when };
+    });
   }
   function toggleCheck(list, stage, item, on){
-    list.forEach(o=>{ if(item.onb) o[item.id]=on; else { o.checks=Object.assign({}, o.checks||{}); o.checks[stage]=Object.assign({}, o.checks[stage]||{}, { [item.id]:on }); } touchCrm(o); });
+    const today=toISO(new Date());
+    list.forEach(o=>{ if(item.onb) o[item.id]=on;
+      else if(item.date){ if(on){ if(!o[item.date]) o[item.date]=today; } else o[item.date]=''; }
+      else { o.checks=Object.assign({}, o.checks||{}); o.checks[stage]=Object.assign({}, o.checks[stage]||{}, { [item.id]:on?Date.now():false }); }
+      touchCrm(o); });
     saveCrm();
   }
   function buildStepPanel(list, opts){
@@ -5533,9 +5563,16 @@
     // the checklist
     if(same){ const items=stepChecklist(live, st.key);
       if(items.length){ const ul=document.createElement('div'); ul.className='sp-checks';
-        items.forEach(it=>{ const lab=document.createElement('label'); lab.className='sp-check'+(it.done?' done':''); const cb=document.createElement('input'); cb.type='checkbox'; cb.checked=it.done; cb.disabled=it.auto || !!window.TODO_LITE;
-          cb.onchange=()=>{ toggleCheck(live, st.key, it, cb.checked); reopen(); }; const sp=document.createElement('span'); sp.textContent=it.label+(it.auto?' ·  auto':''); if(it.who && it.who!=='Com'){ const w=document.createElement('em'); w.textContent=WHO[it.who]||it.who; sp.appendChild(w); }
-          lab.append(cb, sp); ul.appendChild(lab); });
+        items.forEach(it=>{ const row=document.createElement('div'); row.className='sp-check'+(it.done?' done':'');
+          const lab=document.createElement('label'); const cb=document.createElement('input'); cb.type='checkbox'; cb.checked=it.done; cb.disabled=it.auto || !!window.TODO_LITE;
+          cb.onchange=()=>{ toggleCheck(live, st.key, it, cb.checked); renderPipeline(); reopen(); }; const sp=document.createElement('span'); sp.textContent=it.label; lab.append(cb, sp); row.appendChild(lab);
+          if(it.who && it.who!=='Com'){ const w=document.createElement('em'); w.textContent=WHO[it.who]||it.who; sp.appendChild(w); }
+          if(it.date){ const di=document.createElement('input'); di.type='date'; di.className='sp-date'; di.value=first[it.date]||''; di.disabled=!!window.TODO_LITE; di.setAttribute('aria-label', it.label+' (date)');
+            di.onchange=()=>{ live.forEach(o=>{ o[it.date]=di.value; touchCrm(o); }); saveCrm(); renderPipeline(); reopen(); }; row.appendChild(di); }
+          const info=it.when?'le '+new Date(it.when).toLocaleDateString('fr-FR',{ day:'2-digit', month:'2-digit' }):it.auto && it.done?'fait':it.note||'';
+          if(info){ const m=document.createElement('small'); m.className='sp-info'; m.textContent=info; row.appendChild(m); }
+          if(it.act && !window.TODO_LITE){ const ab=document.createElement('button'); ab.type='button'; ab.className='sp-act'; ab.textContent=it.act.label; ab.onclick=()=>{ Promise.resolve(it.act.fn(live, ab)).then(()=>{ if(!ab.closest('#opp-detail-body')) return; setTimeout(()=>{ renderPipeline(); reopen(); }, 900); }); }; row.appendChild(ab); }
+          ul.appendChild(row); });
         main.appendChild(ul);
         const left=items.filter(i=>!i.done).length;
         if(left){ const n=document.createElement('div'); n.className='sp-note'; n.textContent=left+' point'+(left>1?'s restent':' reste')+' à cocher — le bouton marche quand même.'; main.appendChild(n); } } }
@@ -5544,10 +5581,10 @@
       const row=document.createElement('div'); row.className='sp-actions';
       const btn=(label, cls, fn)=>{ const b=document.createElement('button'); b.type='button'; b.className=cls; b.textContent=label; b.onclick=fn; row.appendChild(b); return b; };
       const nextKey=nextStageKey(first), next=nextKey?oppStage(nextKey):null;
-      if(!same) btn('→ Avancer chaque installation', 'sp-next', ()=>{ closeOppDetail(); offerStageAdvance(live); });
-      else if(st.key==='qualif_en_cours'){ btn('Go → Pricing', 'sp-next', ()=>{ closeOppDetail(); offerStageAdvance(live, 'pricing_indicatif'); }); btn('No Go', 'sp-alt', ()=>exitList(live,'no_go')); }
-      else if(st.key==='offre_attente'){ btn('Offre acceptée → KYC', 'sp-next', ()=>{ closeOppDetail(); offerStageAdvance(live, 'kyc'); }); btn('Offre refusée', 'sp-alt', ()=>loseOpps(live)); }
-      else { if(next) btn('→ Passer à « '+stageLabel(next.key, first)+' »', 'sp-next', ()=>{ closeOppDetail(); offerStageAdvance(live); });
+      if(!same) btn('→ Avancer chaque installation', 'sp-next', ()=>{ closeOppDetail(); offerStageAdvance(live, null, reopen); });
+      else if(st.key==='qualif_en_cours'){ btn('Go → Pricing', 'sp-next', ()=>{ closeOppDetail(); offerStageAdvance(live, 'pricing_indicatif', reopen); }); btn('No Go', 'sp-alt', ()=>exitList(live,'no_go')); }
+      else if(st.key==='offre_attente'){ btn('Offre acceptée → KYC', 'sp-next', ()=>{ closeOppDetail(); offerStageAdvance(live, 'kyc', reopen); }); btn('Offre refusée', 'sp-alt', ()=>loseOpps(live)); }
+      else { if(next) btn('→ Passer à « '+stageLabel(next.key, first)+' »', 'sp-next', ()=>{ closeOppDetail(); offerStageAdvance(live, null, reopen); });
         if(lo>=stageIndex('pricing_indicatif')) btn('Perdu', 'sp-alt', ()=>loseOpps(live)); else btn('Abandonner', 'sp-alt', ()=>exitList(live,'abandonne')); }
       main.appendChild(row);
       if(opts.scope){ main.appendChild(opts.scope); }
@@ -5608,7 +5645,7 @@
     const tk=activeTasks().filter(t=>live.some(x=>t.opportunityId===x.id || (x.requestId && t.opportunityId===x.requestId))).sort((a,b)=>(a.due||'9').localeCompare(b.due||'9'))[0];
     const box=document.createElement('div'); box.className='stage-focus';
     box.innerHTML='<div class="sf-k">Maintenant</div><div class="sf-main"><b></b><span class="sf-who"></span></div><div class="sf-todo"></div><ul class="sf-facts"></ul>';
-    box.querySelector('b').textContent=st.label; box.querySelector('.sf-who').textContent=st.who==='Com'?'':'porté par '+st.who;
+    box.querySelector('b').textContent=st.label; box.querySelector('.sf-who').textContent=st.who==='Com'?'':'porté par '+(WHO[st.who]||st.who);
     box.querySelector('.sf-todo').textContent=tk?'Tâche : '+plainLinks(tk.title)+(tk.due?' · '+pqIsoToFr(tk.due):''):'À faire : '+stageTaskOf(st, first);
     facts.forEach(f=>{ const li=document.createElement('li'); li.textContent=f; box.querySelector('.sf-facts').appendChild(li); });
     if(!window.TODO_LITE && lo>=stageIndex('qualif_en_cours') && lo<=stageIndex('offre_attente')){
@@ -7091,11 +7128,11 @@
   $('opp-search').addEventListener('input', ()=>{ $('opp-search-clear').classList.toggle('show', !!$('opp-search').value); renderPipeline(); });
   $('opp-search-clear').onclick=()=>{ $('opp-search').value=''; $('opp-search-clear').classList.remove('show'); renderPipeline(); };
   $('stage-advance-confirm').onclick=confirmStageAdvance;
-  $('stage-advance-skip').onclick=closeStageAdvance;
+  $('stage-advance-skip').onclick=cancelStageAdvance;
   $('stage-advance-nogo').onclick=noGoFromAdvance;
   $('prequal-overlay').addEventListener('click', e=>{ if(e.target.id==='prequal-overlay') closePrequalForm(); });
   $('opp-detail-overlay').addEventListener('click', e=>{ if(e.target.id==='opp-detail-overlay') closeOppDetail(); });
-  $('stage-advance-overlay').addEventListener('click', e=>{ if(e.target.id==='stage-advance-overlay') closeStageAdvance(); });
+  $('stage-advance-overlay').addEventListener('click', e=>{ if(e.target.id==='stage-advance-overlay') cancelStageAdvance(); });
   document.addEventListener('keydown', e=>{
     if(e.key!=='Escape') return;
     if(!$('guide-overlay').classList.contains('hidden')) $('guide-overlay').classList.add('hidden');
@@ -7804,7 +7841,7 @@
   // (The opportunity form is left out on purpose: Escape must not throw away what was typed.)
   window.addEventListener('keydown', e=>{
     if(e.key!=='Escape') return;
-    const top=[['stage-advance-overlay',closeStageAdvance],['company-edit-overlay',closeCompanyEditForm],['ct-merge-overlay',()=>$('ct-merge-close').click()],
+    const top=[['stage-advance-overlay',cancelStageAdvance],['company-edit-overlay',closeCompanyEditForm],['ct-merge-overlay',()=>$('ct-merge-close').click()],
       ['sig-paste-overlay',()=>$('sig-paste-cancel').click()],['week-overlay',()=>$('week-overlay').classList.add('hidden')],['daynotes-overlay',()=>$('daynotes-overlay').classList.add('hidden')],['vcf-overlay',()=>$('vcf-close').click()]].find(([id])=>{ const o=$(id); return o && !o.classList.contains('hidden'); });
     if(!top || !$('choice-overlay').classList.contains('hidden')) return;
     e.preventDefault(); e.stopImmediatePropagation(); top[1]();
