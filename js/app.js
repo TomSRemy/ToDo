@@ -3693,6 +3693,24 @@
     [[live.length,'dossiers en cours'],[mw(live.filter(o=>o.kind==='installation' && o.stage!=='actif')),'à signer ou en cours'],[signedYr.length+' · '+mw(signedYr),'signés en '+year],[lostYr.length,'sortis en '+year+' (perdu, no go, abandon)']]
       .forEach(([v,l])=>{ const d=document.createElement('div'); d.className='stat-card'; d.innerHTML='<div class="stat-card-num"></div><div class="stat-card-label"></div>'; d.firstChild.textContent=v; d.lastChild.textContent=l; k.appendChild(d); });
     board.appendChild(k);
+    // the year's goal in MWc signed, set by hand: signed so far, and what is in the contract phase on top
+    { let goals={}; try{ goals=JSON.parse(localStorage.getItem('pipe-goals')||'{}')||{}; }catch(e){}
+      const goal=parseFloat(String(goals[year]||'').replace(',','.'))||0, sMw=signedYr.reduce((s,o)=>s+kwcNum(o),0)/1000;
+      const cMw=live.filter(o=>o.kind==='installation' && oppPhase(o)==='contrat').reduce((s,o)=>s+kwcNum(o),0)/1000;
+      const f1=n=>(Math.round(n*10)/10).toLocaleString('fr-FR');
+      const g=document.createElement('section'); g.className='pd-goal';
+      g.innerHTML='<div class="pd-goal-h"><b>Objectif '+year+'</b><label><input type="text" inputmode="decimal" class="pd-goal-in" aria-label="Objectif de l\u2019année en MWc signés" placeholder="à fixer"> MWc signés</label></div>'
+        +'<div class="pd-goal-bar"><span class="s"></span><span class="c"></span></div><div class="pd-goal-t"></div>';
+      const inp=g.querySelector('input'); inp.value=goal?f1(goal):'';
+      const top=Math.max(goal, sMw+cMw, .001);
+      g.querySelector('.s').style.width=(goal?Math.min(100,sMw/top*100):0)+'%'; g.querySelector('.c').style.width=(goal?Math.min(100-Math.min(100,sMw/top*100),cMw/top*100):0)+'%';
+      g.querySelector('.pd-goal-t').textContent=goal
+        ? f1(sMw)+' MWc signés sur '+f1(goal)+' ('+Math.round(sMw/goal*100)+' %)'+(cMw?' · + '+f1(cMw)+' MWc en contrat':'')+(sMw>=goal?' — objectif atteint 🎉':' — reste '+f1(goal-sMw)+' MWc')
+        : f1(sMw)+' MWc signés en '+year+(cMw?' · '+f1(cMw)+' MWc en contrat':'')+'. Fixe un objectif pour suivre ta progression.';
+      inp.addEventListener('keydown', e=>{ if(e.key==='Enter') inp.blur(); });
+      inp.addEventListener('change', ()=>{ const v=parseFloat(inp.value.replace(/\s/g,'').replace(',','.')); if(v>0) goals[year]=v; else delete goals[year];
+        try{ localStorage.setItem('pipe-goals', JSON.stringify(goals)); }catch(e){} if(window.todoSettingsChanged) window.todoSettingsChanged(); renderPipeline(); });
+      board.appendChild(g); }
     const grid=document.createElement('div'); grid.className='pd-grid'; board.appendChild(grid);
     const card=(title,hint)=>{ const c=document.createElement('section'); c.className='pd-card'; const h=document.createElement('h4'); h.textContent=title; c.appendChild(h); if(hint){ const p=document.createElement('p'); p.className='pd-hint'; p.textContent=hint; c.appendChild(p); } grid.appendChild(c); return c; };
     // MWc by phase, bars to one scale

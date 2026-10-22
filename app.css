@@ -1650,3 +1650,14 @@ html.lite .wk-card{ display:none; }
 .wk-sec h4{ font:600 11px var(--font-mono); text-transform:uppercase; letter-spacing:.05em; color:var(--tx3); margin:12px 0 4px; }
 .wk-sec ul{ margin:0; padding-left:18px; } .wk-sec li{ font-size:13px; color:var(--tx2); margin:2px 0; } .wk-sec li.wk-more{ list-style:none; color:var(--tx3); }
 @media (max-width:640px){ .wk-kpis{ grid-template-columns:repeat(2,minmax(0,1fr)); } .wk-head{ flex-wrap:wrap; } }
+
+/* pipeline dashboard: the year's goal */
+.pd-goal{ align-self:stretch; background:var(--panel); border:1px solid var(--bd); border-radius:10px; padding:14px 16px; display:flex; flex-direction:column; gap:8px; }
+.pd-goal-h{ display:flex; align-items:center; gap:14px; flex-wrap:wrap; }
+.pd-goal-h b{ font:600 11px var(--font-mono); text-transform:uppercase; letter-spacing:.05em; color:var(--tx3); }
+.pd-goal-h label{ font-size:12.5px; color:var(--tx2); display:flex; align-items:center; gap:6px; }
+.pd-goal-in{ width:70px; background:var(--panel-2); border:1px solid var(--bd); border-radius:var(--radius); color:var(--tx1); font:600 13px var(--font-mono); padding:4px 8px; text-align:right; }
+.pd-goal-in:focus{ outline:none; border-color:var(--accent); }
+.pd-goal-bar{ display:flex; height:10px; background:var(--panel-2); border-radius:999px; overflow:hidden; }
+.pd-goal-bar .s{ background:var(--accent); } .pd-goal-bar .c{ background:var(--accent); opacity:.35; }
+.pd-goal-t{ font-size:12.5px; color:var(--tx2); }
