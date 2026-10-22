@@ -5261,7 +5261,7 @@
       if(f.type==='date') return dateCell(v);
       if(f.type==='number') return numCell(v);
       if(f.k==='mesPrev'||f.k==='mesEff'||f.k==='debut'||f.k==='fin') return looseDateCell(v);
-      return v;
+      return typeof v==='string'?plainLinks(v):v;   // [[liens]] become plain names in the Excel
     });
   }
   function pipeRow(o){ return cellsToTsv(pipeCells(o)); }

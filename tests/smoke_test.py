@@ -900,7 +900,7 @@ with sync_playwright() as p:
     # --- Copy for the Pipe: one line per installation or one line for all; « → toutes » asks before replacing
     cp_opps = [{"id": "rqc", "kind": "request", "company": "COPY", "title": "Demande de pricing", "createdAt": 1, "updatedAt": 1, "deleted": False}] + \
               [{"id": f"c{i}", "kind": "installation", "company": "COPY", "producteur": "COPY", "centrale": f"Toit {i}", "title": f"Toit {i}", "kwc": str(100 * i), "mwh": str(120 * i),
-                "contrat": "AO CRE" if i == 2 else "", "requestId": "rqc", "stage": "collecte", "createdAt": 1, "updatedAt": 1, "deleted": False} for i in (1, 2)]
+                "contrat": "AO CRE" if i == 2 else "", "commentaires": "Voir [[Paul Durand]]" if i == 1 else "", "requestId": "rqc", "stage": "collecte", "createdAt": 1, "updatedAt": 1, "deleted": False} for i in (1, 2)]
     ctx = browser.new_context(viewport={"width": 1300, "height": 900}, permissions=["clipboard-read", "clipboard-write"])
     page = ctx.new_page(); errors = []; page.on("pageerror", lambda e: errors.append(str(e)))
     page.route("**/fonts.g*/**", lambda r: r.abort())
@@ -913,6 +913,8 @@ with sync_playwright() as p:
     check(clip.count("\n") == 0 and "Toit 1 + Toit 2" in clip and "\t300\t" in clip.replace(",", "."), f"pipe copy: one line, names joined, powers added ({clip[:80]!r})")
     page.click("#opp-detail-actions >> text=Copier lignes Pipe"); page.click("#choice-btns >> text=Une ligne par installation"); page.wait_for_timeout(200)
     check(page.evaluate("navigator.clipboard.readText()").count("\n") == 1, "pipe copy: or one line each")
+    clip = page.evaluate("navigator.clipboard.readText()")
+    check("[[" not in clip and "Voir Paul Durand" in clip, "pipe copy: [[links]] go to the Excel as plain names")
     page.click("#opp-detail-edit")
     page.select_option("#pq-0-contrat", "PPA Spot"); page.click("#pq-form button[data-toall='contrat'][data-s='0']")
     check(page.is_visible("#choice-overlay") and "AO CRE" in page.inner_text("#choice-text"), "« → toutes »: asks before replacing a value already filled")
