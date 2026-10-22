@@ -1536,10 +1536,11 @@
     const n=notes.find(x=>x.id===POSTIT_ID && !x.deleted); if(!n || !String(n.text||'').trim()) return false;
     const today=toISO(new Date()), lastDay=n.updatedAt?toISO(new Date(n.updatedAt)):today;
     if(lastDay>=today || n.rolledFor===today) return false;
+    if(undoBase) undoCommit();   // the morning roll is not an action of the user: not a Ctrl+Z step
     const key=DAY_PREFIX+lastDay, prev=n[key]?String(n[key]).split('\n'):[];
     const lines=String(n.text).split('\n'); n[key]=prev.concat(lines.filter(l=>!prev.includes(l))).join('\n').replace(/\n{3,}/g,'\n\n').trim();
     n.text=lines.filter(l=>!PI_DONE.test(l)).join('\n').replace(/\n{3,}/g,'\n\n').replace(/^\n+/,'');
-    n.rolledFor=today; touch(n); saveNotes(); return true;
+    n.rolledFor=today; touch(n); saveNotes(); if(undoBase) undoRebase(); return true;
   }
   document.addEventListener('visibilitychange', ()=>{ if(!document.hidden && rollDailyNote()) renderNotes(); });
   function openDayNotes(focusDay){
