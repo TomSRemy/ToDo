@@ -1299,6 +1299,9 @@ with sync_playwright() as p:
     check(len(t) == 1 and t[0]["title"].startswith("Appeler Pierre"), "one call task for the whole request")
     page.click(".pipe-req-card .pipe-card-title")
     check("Codes affaire" in page.input_value("#opp-mail-body") and "27(06)" in page.input_value("#opp-mail-body"), "pricing mail with business codes")
+    check(page.locator("details.opp-mail-fold:not([open])").count() == 1 and page.is_visible(".stage-focus") and "À qualifier" in page.inner_text(".stage-focus"),
+          "request sheet: before the Go, the pricing mail is folded, the step and what it asks come first")
+    page.click("details.opp-mail-fold > summary")
     chips = page.locator(".mail-scope button")
     if chips.count() >= 3:
         both = page.input_value("#opp-mail-body").count(" – A"); name = chips.nth(1).inner_text(); chips.nth(1).click()

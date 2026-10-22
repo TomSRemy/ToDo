@@ -1715,3 +1715,16 @@ html.lite .wk-card{ display:none; }
 .pq-restart{ align-self:flex-start; color:var(--tx3); text-decoration:underline; margin:2px 0 6px; }
 .pq-restart:hover{ color:var(--crit, #ED6965); }
 .pq-restart[hidden]{ display:none; }
+
+/* opportunity sheet: what the current step asks for */
+.stage-focus{ display:grid; grid-template-columns:auto 1fr; gap:2px 14px; align-items:baseline; margin:12px 0; padding:11px 14px; border:1px solid var(--bd); border-left:3px solid var(--accent); border-radius:8px; background:var(--panel-2); }
+.stage-focus .sf-k{ grid-row:span 3; font:600 10px var(--font-mono); text-transform:uppercase; letter-spacing:.06em; color:var(--accent); }
+.stage-focus .sf-main b{ font-size:14px; color:var(--tx1); } .stage-focus .sf-who{ margin-left:8px; font-size:12px; color:var(--tx3); }
+.stage-focus .sf-todo{ font-size:13px; color:var(--tx2); }
+.stage-focus .sf-facts{ margin:2px 0 0; padding:0; list-style:none; display:flex; flex-wrap:wrap; gap:4px 16px; font-size:12px; color:var(--tx3); }
+.stage-focus .sf-facts:empty{ display:none; }
+.opp-mail-fold{ margin:14px 0 4px; border:1px solid var(--bd); border-radius:8px; padding:8px 12px; }
+.opp-mail-fold > summary{ cursor:pointer; font:600 11px var(--font-mono); text-transform:uppercase; letter-spacing:.05em; color:var(--tx3); }
+.opp-mail-fold[open] > summary{ margin-bottom:8px; }
+.opp-mail-copy{ display:flex; gap:8px; margin-top:8px; }
+.opp-mail-copy button{ font:600 12px var(--font-ui); padding:6px 12px; border-radius:var(--radius); border:1px solid var(--bd); background:var(--panel-2); color:var(--tx1); cursor:pointer; }

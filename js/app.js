@@ -4842,6 +4842,7 @@
       const siblings=o.requestId?requestInstalls(o.requestId):[];
       if(siblings.length>1) box.appendChild(buildRequestTabs(siblings, o.id));
       box.appendChild(head);
+      { const f=stageFocus([o]); if(f) box.appendChild(f); }
       box.appendChild(buildInstallSheet(o));
       if(siblings.length>1) box.appendChild(buildRequestCompare(siblings, o.id));
       // installations of one request usually move together: the stage applies to all of them, or to this one only
@@ -4947,9 +4948,11 @@
   function buildRequestCompare(list, currentId){
     // folds away with a click on its title; open or closed is remembered on this device
     const wrap=document.createElement('details'); wrap.className='req-compare';
-    let open=true; try{ open=localStorage.getItem('req-compare-open')!=='0'; }catch(e){}
+    // open while the plants' details are collected and priced, folded once the offer is out (each choice remembered on this device)
+    const lo=Math.min(...list.filter(x=>!isExited(x)).map(x=>stageIndex(x.stage)).filter(i=>i>=0)), early=!(lo>stageIndex('pricing_indicatif')), key='req-compare-open'+(early?'':'-late');
+    let open=early; try{ const v=localStorage.getItem(key); if(v!=null) open=v!=='0'; }catch(e){}
     wrap.open=open;
-    wrap.addEventListener('toggle', ()=>{ try{ localStorage.setItem('req-compare-open', wrap.open?'1':'0'); }catch(e){} });
+    wrap.addEventListener('toggle', ()=>{ try{ localStorage.setItem(key, wrap.open?'1':'0'); }catch(e){} });
     const missing=list.reduce((s,x)=>s+CARACT_ROWS.filter(l=>REQ_NEEDED.has(caractKey(l)) && caractValue(x,l)==='').length,0);
     wrap.innerHTML='<summary class="opp-phase-h req-compare-h">Les '+list.length+' installations côte à côte'+(missing?' <span class="req-miss">'+missing+' case'+(missing>1?'s':'')+' à compléter</span>':'')+'<span class="req-hint">cliquer dans une case pour la modifier</span></summary>';
     const sc=document.createElement('div'); sc.className='req-compare-scroll';
@@ -5188,6 +5191,25 @@
   function closeStageAdvance(){ $('stage-advance-overlay').classList.add('hidden'); pendingAdvance=null; }
 
   // ----- Pricing requests (several installations, one mail) -----
+  // « Maintenant » : what the current step asks for, with the dates that matter at that step
+  function stageFocus(list){
+    const live=list.filter(x=>!isExited(x)); if(!live.length) return null;
+    const lo=Math.min(...live.map(x=>stageIndex(x.stage)).filter(i=>i>=0)); const st=OPP_STAGES[lo]; if(!st) return null;
+    const first=live.find(x=>x.stage===st.key)||live[0], ago=d=>{ const t=pqDateOf(d); if(!t) return ''; const n=Math.floor((Date.now()-t)/864e5); return n<=0?'aujourd\u2019hui':n===1?'hier':'il y a '+n+' jours'; };
+    const facts=[];
+    if(lo<=stageIndex('qualif_en_cours')){ const miss=live.reduce((s,x)=>s+CARACT_ROWS.filter(l=>REQ_NEEDED.has(caractKey(l)) && caractValue(x,l)==='').length,0); if(miss) facts.push(miss+' case'+(miss>1?'s':'')+' à compléter avant la demande de prix'); }
+    if(first.goDate && lo>=stageIndex('demande_prix') && lo<=stageIndex('offre_remise')) facts.push('Go le '+pqIsoToFr(first.goDate)+' ('+ago(first.goDate)+')');
+    if(first.dateOffre && lo>=stageIndex('offre_attente') && lo<stageIndex('kyc')) facts.push('Offre remise le '+pqIsoToFr(first.dateOffre)+' ('+ago(first.dateOffre)+')');
+    if(lo>=stageIndex('kyc') && lo<=stageIndex('signature') && first.dateOffre) facts.push('Offre acceptée après une remise le '+pqIsoToFr(first.dateOffre));
+    if(first.signDate && lo>=stageIndex('onboarding')) facts.push('Signé le '+pqIsoToFr(first.signDate));
+    const tk=activeTasks().filter(t=>live.some(x=>t.opportunityId===x.id || (x.requestId && t.opportunityId===x.requestId))).sort((a,b)=>(a.due||'9').localeCompare(b.due||'9'))[0];
+    const box=document.createElement('div'); box.className='stage-focus';
+    box.innerHTML='<div class="sf-k">Maintenant</div><div class="sf-main"><b></b><span class="sf-who"></span></div><div class="sf-todo"></div><ul class="sf-facts"></ul>';
+    box.querySelector('b').textContent=st.label; box.querySelector('.sf-who').textContent=st.who==='Com'?'':'porté par '+st.who;
+    box.querySelector('.sf-todo').textContent=tk?'Tâche : '+plainLinks(tk.title)+(tk.due?' · '+pqIsoToFr(tk.due):''):'À faire : '+st.task;
+    facts.forEach(f=>{ const li=document.createElement('li'); li.textContent=f; box.querySelector('.sf-facts').appendChild(li); });
+    return box;
+  }
   function openRequestDetail(reqId){
     const req=opportunities.find(x=>x.id===reqId); if(!req) return;
     viewingOppId=reqId;
@@ -5208,6 +5230,7 @@
      ['Mise en service',mes.length?(mes.length>1?mes[0].m+' → '+mes[mes.length-1].m:mes[0].m):''],['Étape',stages.length===1?stageLabel(stages[0]):(stages.length?stages.length+' étapes':'')]]
       .forEach(([l,v])=>{ const d=document.createElement('div'); d.className='os-fact'+(v?'':' empty'); d.innerHTML='<span></span><b></b>'; d.firstChild.textContent=l; d.lastChild.textContent=v||'à compléter'; facts.appendChild(d); });
     box.appendChild(facts);
+    { const f=stageFocus(list); if(f) box.appendChild(f); }
     // the installations, one line each
     const card=document.createElement('section'); card.className='os-card req-insts';
     card.innerHTML='<h4>Installations</h4>';
@@ -5256,7 +5279,14 @@
     }
     const hint=document.createElement('p'); hint.className='modal-hint'; hint.textContent='Joins le fichier « Caractéristiques Centrales » créé par le bouton ci-dessous : toutes les lignes du modèle, remplies avec ce que l\u2019appli connaît (et tout ce que contenait l\u2019Excel du producteur).';
     mailBox.appendChild(subj); mailBox.appendChild(body); mailBox.appendChild(hint);
-    box.appendChild(mailBox);
+    // the pricing mail only matters from the Go to the indicative pricing: later, it folds away (still there, one click)
+    const loM=Math.min(...(liveReq.length?liveReq:list).map(x=>stageIndex(x.stage)).filter(i=>i>=0)), mailNow=loM>=stageIndex('qualif_en_cours') && loM<=stageIndex('pricing_indicatif');
+    if(mailNow) box.appendChild(mailBox);
+    else { const d=document.createElement('details'); d.className='opp-mail-fold'; const sm=document.createElement('summary'); sm.textContent='Mail de demande de pricing'; d.appendChild(sm);
+      mailBox.querySelector('.opp-phase-h').remove();
+      const cp=document.createElement('div'); cp.className='opp-mail-copy';
+      [['Copier l\u2019objet',()=>ml.subject],['Copier le mail',()=>ml.body]].forEach(([t,f])=>{ const b=document.createElement('button'); b.type='button'; b.className='ghost-btn'; b.textContent=t; b.onclick=e=>copyToClipboard(f(), e.target); cp.appendChild(b); });
+      mailBox.appendChild(cp); d.appendChild(mailBox); box.appendChild(d); }
     const actions=$('opp-detail-actions'); actions.innerHTML='';
     const live=list.filter(o=>!isExited(o));
     if(live.length){
@@ -5268,8 +5298,8 @@
       }
       if(!same || !waiting.length) actions.appendChild(oppActionBtn(same?'Tout passer à l\u2019étape suivante':'Avancer chaque installation', ()=>{ closeOppDetail(); offerStageAdvance(live, live.every(o=>o.stage==='qualif_en_cours')?'demande_prix':null); }));
     }
-    actions.appendChild(oppActionBtn('Copier l\u2019objet', e=>copyToClipboard(ml.subject, e.target), 'ghost-btn'));
-    actions.appendChild(oppActionBtn('Copier le mail', e=>copyToClipboard(ml.body, e.target), 'ghost-btn'));
+    if(mailNow){ actions.appendChild(oppActionBtn('Copier l\u2019objet', e=>copyToClipboard(ml.subject, e.target), 'ghost-btn'));
+    actions.appendChild(oppActionBtn('Copier le mail', e=>copyToClipboard(ml.body, e.target), 'ghost-btn')); }
     actions.appendChild(oppActionBtn('Fichier caractéristiques (.xlsx)', e=>downloadCaract(list.filter(o=>!isExited(o)), e.target), 'ghost-btn'));
     excelButtons(actions, list);
     actions.appendChild(oppActionBtn('Copier lignes Pipe', e=>copyPipeLines(list.filter(o=>!isExited(o)), e.target), 'ghost-btn'));
