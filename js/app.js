@@ -5710,8 +5710,12 @@
     createTask({ title, description:$('f-description').value.trim(), client:clientInput.value.trim(), project:projectInput.value.trim(), urgency:$('f-urgency').value, status:$('f-status').value, reminder:$('f-reminder').value, link:$('f-link').value.trim(), due, recur });
     render(); renderLists(); closeAddForm();
   }
-  function openAddForm(){ addSection.classList.add('open'); $('f-title').focus(); }
-  function closeAddForm(){ addSection.classList.remove('open'); resetAddForm(); }
+  // the note steps aside while the full form is open if it would hide the form's buttons (small screens), and comes back after
+  let postitAsideForForm=false;
+  function openAddForm(){ addSection.classList.add('open'); $('f-title').focus();
+    if(postitEl && !postitEl.classList.contains('hidden')){ const a=cancelTaskBtn.parentElement.getBoundingClientRect(), b=postitEl.getBoundingClientRect();
+      if(a.bottom>b.top && a.top<b.bottom && a.right>b.left && a.left<b.right){ setPostitOpen(false); postitAsideForForm=true; } } }
+  function closeAddForm(){ addSection.classList.remove('open'); resetAddForm(); if(postitAsideForForm){ postitAsideForForm=false; setPostitOpen(true); } }
   function quickAdd(){
     const title=quickAddInput.value.trim(); if(!title) return;
     createTask({ title, urgency:'moyenne', status:'a_faire' });

@@ -349,6 +349,17 @@ with sync_playwright() as p:
     check(not errors, f"no page errors ({errors})")
     page.close()
 
+    # --- small screen: the note steps aside while the full task form would be hidden behind it
+    page, errors = new_page(browser, viewport={"width": 1100, "height": 720})
+    page.goto(URL); page.click('[data-tab="tasks"]')
+    check(page.is_visible("#postit"), "small screen: the note is open")
+    page.click("text=Tâche complète")
+    check(not page.is_visible("#postit") and page.is_visible("#submit-task"), "small screen: the note steps aside so « Ajouter » shows")
+    page.click("#cancel-task")
+    check(page.is_visible("#postit"), "small screen: the note comes back when the form closes")
+    check(not errors, f"no page errors ({errors})")
+    page.close()
+
     # --- Réseau: every connection between companies, contacts, installations, tasks, meetings
     page, errors = new_page(browser, cs_seed if False else {
         "todo_todo-widget-tasks": json.dumps([task("n1", "Relancer pour le CR", client="Solaris")]),
