@@ -6974,6 +6974,14 @@
   $('help-btn').onclick=()=>$('guide-overlay').classList.remove('hidden');
   $('guide-close').onclick=()=>$('guide-overlay').classList.add('hidden');
   $('guide-overlay').addEventListener('click', e=>{ if(e.target.id==='guide-overlay') $('guide-overlay').classList.add('hidden'); });
+  // « ? » outside a field: the guide, straight on the shortcuts
+  function openGuideKeys(){ $('guide-nav').querySelector('[data-g="taches"]').click(); $('guide-overlay').classList.remove('hidden'); const h=$('guide-keys'); if(h) h.scrollIntoView({ block:'start' }); }
+  document.addEventListener('keydown', e=>{
+    if(e.key!=='?' || e.ctrlKey || e.metaKey || e.altKey || window.TODO_WIDGET) return;
+    const t=e.target; if(t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName))) return;
+    if(document.querySelector('.modal-overlay:not(.hidden)') || !$('gs-overlay').hidden) return;
+    e.preventDefault(); openGuideKeys();
+  });
   $('guide-nav').addEventListener('click', e=>{
     const b=e.target.closest('[data-g]'); if(!b) return;
     $('guide-nav').querySelectorAll('button').forEach(x=>x.classList.toggle('on', x===b));
