@@ -1708,6 +1708,7 @@
   }
   window.todoOpenWeek=openWeek;
   window.todoWeekText=w=>weekText(weekData(w||'this'));
+  window.todoExtraCommands=(window.todoExtraCommands||[]).concat([{ t:'Chercher les doublons (installations, sociétés)', k:'doublons double fusion fusionner meme installation societe', go:()=>{ openDupes(); } }]);
   window.todoExtraCommands=(window.todoExtraCommands||[]).concat([{ t:'Ma semaine : résumé à copier', k:'semaine resume hebdo bilan rapport manager mail', go:()=>openWeek('this') }]);
   function updatePostitTab(){
     const n=notes.find(x=>x.id===POSTIT_ID && !x.deleted);
@@ -4048,7 +4049,7 @@
   function pipeTallyReset(){ pipeTallyN={ me:0, others:0, stuck:0, on:true }; }
   function pipeTally(g){ const o=g[0]; if(o.kind!=='installation' || isExited(o)) return; const st=oppStage(o.stage); if(!st) return;
     if(st.who==='Com') pipeTallyN.me++; else pipeTallyN.others++; const d=daysInStage(o); if(d!=null && d>15) pipeTallyN.stuck++; }
-  function paintPipeSummary(){ let el=$('pipe-summary'); const bar=document.querySelector('#tab-pipeline .quick-add-bar'); if(!bar) return;
+  function paintPipeSummary(){ try{ paintDupBtn(); }catch(e){} let el=$('pipe-summary'); const bar=document.querySelector('#tab-pipeline .quick-add-bar'); if(!bar) return;
     if(!el){ el=document.createElement('span'); el.id='pipe-summary'; el.className='pipe-summary'; const ref=$('pipe-exited-toggle'); bar.insertBefore(el, ref); }
     const show=pipeTallyN.on && !pipeDash && !pipeMeet && !pipeList; el.hidden=!show; if(!show) return;
     el.innerHTML='À moi <b></b> · En attente des autres <b></b>'+(pipeTallyN.stuck?' · Bloqués &gt; 15 j <b class="late"></b>':'');
@@ -5531,7 +5532,7 @@
   const STEP_CHECKS={
     a_qualifier:[{ id:'contact', label:'Contact principal renseigné', auto:l=>l.every(o=>o.prenom||o.nom||o.mail||o.tel) },{ id:'appel', label:'Premier appel fait' }],
     prise_contact:[{ id:'rdv1', label:'RDV 1', date:'rdv1' }],
-    collecte:[{ id:'oblig', label:'Infos obligatoires complètes', auto:l=>!reqMissing(l), note:l=>{ const n=reqMissing(l); return n?n+' case'+(n>1?'s':'')+' à compléter':''; }, act:{ label:'Compléter', show:l=>reqMissing(l)>0, fn:()=>openCompare() } },
+    collecte:[{ id:'oblig', label:'Infos obligatoires complètes', auto:l=>!reqMissing(l), note:l=>{ const n=reqMissing(l); return n?n+' case'+(n>1?'s':'')+' à compléter':''; }, act:{ label:'Compléter', show:l=>reqMissing(l)>0, fn:()=>openCompare(), stay:true } },
       { id:'fichier', label:'Fichier Caractéristiques reçu du producteur', auto:l=>l.every(o=>o.caract && Object.keys(o.caract).length) }],
     qualif_en_cours:[{ id:'rdv2', label:'RDV 2', date:'rdv2' },{ id:'decision', label:'Décision Go / No Go prise' }],
     pricing_indicatif:[{ id:'mail', label:'Mail de demande envoyé', auto:l=>l.every(o=>o.mailSentAt), act:{ label:'Copier le mail', show:l=>!l.every(o=>o.mailSentAt), fn:(l,btn)=>{ const ml=pricingMail(reqOfList(l), l); copyToClipboard(ml.subject+'\n\n'+ml.body, btn); markMailSent(l); } } },
@@ -5598,7 +5599,7 @@
             di.onchange=()=>{ live.forEach(o=>{ o[it.date]=di.value; touchCrm(o); }); saveCrm(); renderPipeline(); reopen(); }; row.appendChild(di); }
           const info=it.when?'le '+new Date(it.when).toLocaleDateString('fr-FR',{ day:'2-digit', month:'2-digit' }):it.auto && it.done?'fait':it.note||'';
           if(info){ const m=document.createElement('small'); m.className='sp-info'; m.textContent=info; row.appendChild(m); }
-          if(it.act && !window.TODO_LITE){ const ab=document.createElement('button'); ab.type='button'; ab.className='sp-act'; ab.textContent=it.act.label; ab.onclick=()=>{ Promise.resolve(it.act.fn(live, ab)).then(()=>{ if(!ab.closest('#opp-detail-body')) return; setTimeout(()=>{ renderPipeline(); reopen(); }, 900); }); }; row.appendChild(ab); }
+          if(it.act && !window.TODO_LITE){ const ab=document.createElement('button'); ab.type='button'; ab.className='sp-act'; ab.textContent=it.act.label; ab.onclick=()=>{ Promise.resolve(it.act.fn(live, ab)).then(()=>{ if(it.act.stay) return; setTimeout(()=>{ if(!ab.isConnected || $('opp-detail-overlay').classList.contains('hidden')) return; renderPipeline(); reopen(); }, 900); }); }; row.appendChild(ab); }
           ul.appendChild(row); });
         main.appendChild(ul);
         const left=items.filter(i=>!i.done).length;
@@ -5640,6 +5641,75 @@
     const d=document.createElement('details'); d.className='sheet-sec'; d.open=!!open;
     const s2=document.createElement('summary'); s2.innerHTML='<b></b><span></span>'; s2.firstChild.textContent=title; s2.lastChild.textContent=sub||''; d.appendChild(s2);
     if(content) d.appendChild(content); return d;
+  }
+  // ---------- Doublons : the same plant entered twice, the same company written two ways ----------
+  const DUP_LEGAL=/\b(sas|sasu|sarl|sa|scea|earl|gaec|sci|eurl|snc|sem|spl|scic|cuma|selarl|ste|societe|groupe|holding|et|the|la|le|les|l|de|du|des|d)\b/g;
+  const coDupKey=n=>pqFold(n).replace(/[^a-z0-9 ]/g,' ').replace(DUP_LEGAL,' ').replace(/[^a-z0-9]/g,'');
+  const instDupKey=o=>{ const n=pqFold(oppName(o)).replace(/[^a-z0-9 ]/g,' ').replace(/\b(centrale|centrales|cs|parc|projet|pv|photovoltaique|solaire|toit|toiture|de|du|des|la|le|les|l|d)\b/g,' ').replace(/[^a-z0-9]/g,'');
+    return n.length>=2?coDupKey(o.company||'')+'|'+n:null; };
+  function dupIgnored(){ try{ return JSON.parse(localStorage.getItem('dup-ignore')||'[]'); }catch(e){ return []; } }
+  function dupIgnore(sig){ const l=dupIgnored(); if(!l.includes(sig)){ l.push(sig); try{ localStorage.setItem('dup-ignore', JSON.stringify(l)); }catch(e){} } }
+  function instDupGroups(){
+    const by=new Map(); opportunities.filter(o=>!o.deleted && o.kind==='installation').forEach(o=>{ const k=instDupKey(o); if(!k) return; (by.get(k)||by.set(k,[]).get(k)).push(o); });
+    return [...by.values()].filter(g=>g.length>1 && !g.every(x=>(x.notDupOf||[]).length && g.every(y=>y===x || (x.notDupOf||[]).includes(y.id))))
+      .map(g=>g.sort((a,b)=>stageIndex(b.stage)-stageIndex(a.stage) || (b.updatedAt||0)-(a.updatedAt||0)));
+  }
+  function coDupGroups(){
+    const names=new Map(), add=n=>{ n=String(n||'').trim(); if(!n) return; names.set(n,(names.get(n)||0)+1); };
+    companies.filter(c=>!c.deleted).forEach(c=>add(c.name)); opportunities.filter(o=>!o.deleted).forEach(o=>add(o.company)); contacts.filter(c=>!c.deleted).forEach(c=>add(c.company)); clientsList.forEach(add);
+    const by=new Map(); [...names.keys()].forEach(n=>{ const k=coDupKey(n); if(k.length<3) return; (by.get(k)||by.set(k,[]).get(k)).push(n); });
+    const ign=dupIgnored();
+    return [...by.values()].filter(g=>g.length>1 && !ign.includes('co:'+g.slice().sort().join('|'))).map(g=>g.sort((a,b)=>(names.get(b)-names.get(a)) || a.localeCompare(b)));
+  }
+  function dupCount(){ return instDupGroups().length+coDupGroups().length; }
+  // the plant kept takes what the others knew and it did not, their tasks, notes and request
+  function mergeInstallations(keep, others){
+    others.forEach(x=>{
+      Object.keys(x).forEach(k=>{ if(['id','createdAt','updatedAt','deleted','stage','stageLog','kind','notesLog','notDupOf','checks'].includes(k)) return; if((keep[k]==null || keep[k]==='') && x[k]!=null && x[k]!=='') keep[k]=x[k]; });
+      if((x.notesLog||[]).length) keep.notesLog=(keep.notesLog||[]).concat(x.notesLog).sort((a,b)=>a.at-b.at);
+      if(x.createdAt && (!keep.createdAt || x.createdAt<keep.createdAt)) keep.createdAt=x.createdAt;
+      tasks.forEach(t=>{ if(t.opportunityId===x.id){ t.opportunityId=keep.id; touch(t); } });
+      x.deleted=true; touchCrm(x); });
+    touchCrm(keep); saveTasks(); saveCrm(); renderPipeline(); render();
+  }
+  function paintDupBtn(){ const bar=document.querySelector('#tab-pipeline .quick-add-bar'); if(!bar || window.TODO_LITE) return; let b=$('pipe-dup-btn');
+    const n=dupCount(); if(!n){ if(b) b.hidden=true; return; }
+    if(!b){ b=document.createElement('button'); b.type='button'; b.id='pipe-dup-btn'; b.className='pipe-bar-btn pipe-dup-btn'; b.title='Même installation saisie deux fois, même société écrite de deux façons'; b.onclick=()=>openDupes(); bar.insertBefore(b, $('pipe-exited-toggle')); }
+    b.hidden=false; b.textContent='Doublons · '+n; }
+  function openDupes(){
+    let ov=$('dup-overlay'); if(ov) ov.remove();
+    ov=document.createElement('div'); ov.id='dup-overlay'; ov.className='modal-overlay';
+    ov.innerHTML='<div class="modal-box wide dup-box" role="dialog" aria-labelledby="dup-title"><div class="opp-detail-head"><h3 id="dup-title">Doublons</h3></div><div class="dup-body"></div><div class="crm-form-actions"><button type="button" class="ghost-btn dup-close">Fermer</button></div></div>';
+    document.body.appendChild(ov);
+    const close=()=>{ ov.remove(); renderPipeline(); };
+    ov.querySelector('.dup-close').onclick=close; ov.addEventListener('click', e=>{ if(e.target===ov) close(); }); ov.addEventListener('keydown', e=>{ if(e.key==='Escape'){ e.stopPropagation(); close(); } });
+    const paint=()=>{ const body=ov.querySelector('.dup-body'); body.innerHTML='';
+      const ig=instDupGroups(), cg=coDupGroups(), ctg=contactDupGroups();
+      if(!ig.length && !cg.length){ const p=document.createElement('p'); p.className='modal-hint'; p.textContent='Aucune installation ni société en double.'; body.appendChild(p); }
+      if(cg.length){ const h=document.createElement('h4'); h.className='dup-h'; h.textContent='Sociétés écrites de plusieurs façons · '+cg.length; body.appendChild(h);
+        cg.forEach((g,gi)=>{ const sec=document.createElement('section'); sec.className='dup-group';
+          g.forEach((n,i)=>{ const l=document.createElement('label'); l.className='dup-row'; const nb=opportunities.filter(o=>!o.deleted && o.company===n).length+contacts.filter(c=>!c.deleted && c.company===n).length+tasks.filter(t=>!t.deleted && t.client===n).length;
+            l.innerHTML='<input type="radio" name="dupc'+gi+'"><b></b><span></span>'; l.querySelector('input').checked=i===0; l.querySelector('input').value=n; l.querySelector('b').textContent=n; l.querySelector('span').textContent=nb+' fiche'+(nb>1?'s':'')+' et tâche'+(nb>1?'s':''); sec.appendChild(l); });
+          const acts=document.createElement('div'); acts.className='dup-acts';
+          const m=document.createElement('button'); m.type='button'; m.className='dup-merge'; m.textContent='Garder le nom coché, fusionner';
+          m.onclick=()=>{ const keep=sec.querySelector('input:checked').value; g.filter(n=>n!==keep).forEach(n=>mergeCompanyInto(n, keep)); paint(); };
+          const no=document.createElement('button'); no.type='button'; no.className='ghost-btn'; no.textContent='Ce sont deux sociétés différentes'; no.onclick=()=>{ dupIgnore('co:'+g.slice().sort().join('|')); paint(); };
+          acts.append(m, no); sec.appendChild(acts); body.appendChild(sec); }); }
+      if(ig.length){ const h=document.createElement('h4'); h.className='dup-h'; h.textContent='Installations saisies deux fois · '+ig.length; body.appendChild(h);
+        ig.forEach((g,gi)=>{ const sec=document.createElement('section'); sec.className='dup-group';
+          g.forEach((o,i)=>{ const l=document.createElement('label'); l.className='dup-row'; l.innerHTML='<input type="radio" name="dupi'+gi+'"><b></b><span></span>'; l.querySelector('input').checked=i===0; l.querySelector('input').value=o.id;
+            l.querySelector('b').textContent=(o.company||'')+' — '+oppName(o); l.querySelector('span').textContent=[stageLabel(o.stage, o), fmtKwc(o.kwc), o.mwh?Math.round(pqNum(String(o.mwh))).toLocaleString('fr-FR')+' MWh':'', o.createdAt>1e12?'créée le '+new Date(o.createdAt).toLocaleDateString('fr-FR'):''].filter(Boolean).join(' · ');
+            sec.appendChild(l); });
+          const acts=document.createElement('div'); acts.className='dup-acts';
+          const m=document.createElement('button'); m.type='button'; m.className='dup-merge'; m.textContent='Garder celle cochée, fusionner';
+          m.title='Celle gardée reprend ce que les autres savaient en plus (cases vides), leurs tâches et leurs notes ; les autres disparaissent';
+          m.onclick=()=>{ const id=sec.querySelector('input:checked').value, keep=g.find(o=>o.id===id); mergeInstallations(keep, g.filter(o=>o!==keep)); paint(); };
+          const no=document.createElement('button'); no.type='button'; no.className='ghost-btn'; no.textContent='Ce sont des centrales différentes';
+          no.onclick=()=>{ g.forEach(o=>{ o.notDupOf=[...new Set((o.notDupOf||[]).concat(g.filter(x=>x!==o).map(x=>x.id)))]; touchCrm(o); }); saveCrm(); paint(); };
+          acts.append(m, no); sec.appendChild(acts); body.appendChild(sec); }); }
+      if(ctg.length){ const p=document.createElement('p'); p.className='modal-hint dup-ct'; p.innerHTML='<span></span> <button type="button" class="pq-link">Vérifier les contacts</button>'; p.firstChild.textContent=ctg.length+' contact'+(ctg.length>1?'s':'')+' en double possible'+(ctg.length>1?'s':'')+'.'; p.querySelector('button').onclick=()=>{ close(); openContactMerge(); }; body.appendChild(p); }
+    };
+    paint();
   }
   // ---------- Notes express / mode appel: notes typed in bulk, the app spots the figures and offers to fill the sheet ----------
   const QN_LABELS={ kwc:'Puissance', mwh:'P50', p90:'P90', mesPrev:'MES prévisionnelle', mesEff:'MES effective', dept:'Département', commune:'Commune', cp:'Code postal',
@@ -6589,6 +6659,17 @@
       if(ch) touchCrm(o);
     });
   }
+  // one company written two ways: everything goes to the name kept, the other one disappears
+  function mergeCompanyInto(oldName, existing){
+    tasks.forEach(t=>{ if(t.client===oldName){ t.client=existing; touch(t); } });
+    contacts.forEach(c=>{ if(c.company===oldName){ c.company=existing; touchCrm(c); } });
+    renameOppCompany(oldName, existing);
+    const dupCo=companies.find(x=>x.name===oldName && !x.deleted), keep=companies.find(x=>x.name===existing && !x.deleted);
+    if(dupCo){ if(!keep){ dupCo.name=existing; } else { Object.keys(dupCo).forEach(k=>{ if(!['id','name','createdAt','updatedAt','deleted'].includes(k) && (keep[k]==null || keep[k]==='') && dupCo[k]!=null && dupCo[k]!=='') keep[k]=dupCo[k]; }); touchCrm(keep); dupCo.deleted=true; } touchCrm(dupCo); }
+    if(!clientsList.includes(existing) && clientsList.includes(oldName)) clientsList=clientsList.map(c=>c===oldName?existing:c); else clientsList=clientsList.filter(c=>c!==oldName);
+    rewriteLinks(oldName, existing);
+    saveClients(); saveTasks(); saveCrm(); render(); renderLists();
+  }
   function renameClient(oldName){
     const newName=prompt('Renommer "'+oldName+'" en :', oldName);
     if(newName===null) return;
@@ -6600,14 +6681,7 @@
       const affectedContacts=contacts.filter(c=>c.company===oldName && !c.deleted).length;
       const affectedOpps=opportunities.filter(o=>!o.deleted && (o.company===oldName || o.producteur===oldName)).length;
       if(!confirm('"'+existing+'" existe déjà. Fusionner "'+oldName+'" dedans ? ('+affected+' tâche(s), '+affectedContacts+' contact(s) et '+affectedOpps+' opportunité(s) transférés, le doublon disparaît)')) return;
-      tasks.forEach(t=>{ if(t.client===oldName){ t.client=existing; touch(t); } });
-      contacts.forEach(c=>{ if(c.company===oldName){ c.company=existing; touchCrm(c); } });
-      renameOppCompany(oldName, existing);
-      const dupCo=companies.find(x=>x.name===oldName);
-      if(dupCo){ dupCo.deleted=true; touchCrm(dupCo); }
-      clientsList=clientsList.filter(c=>c!==oldName);
-      rewriteLinks(oldName, existing);
-      saveClients(); saveTasks(); saveCrm(); render(); renderLists();
+      mergeCompanyInto(oldName, existing);
       return;
     }
     clientsList=clientsList.map(c=>c===oldName?trimmed:c);

@@ -1837,6 +1837,30 @@ with sync_playwright() as p:
     check(not errors, f"no page errors ({errors})")
     page.close()
 
+    # --- Doublons: a company written two ways, a plant entered twice; merged in one click, or marked as different
+    du = [{"id": "d1", "kind": "installation", "company": "GAEC Dupont", "centrale": "Hangar Est", "title": "Hangar Est", "stage": "pricing_indicatif", "kwc": "900", "createdAt": 1, "updatedAt": 5, "deleted": False},
+          {"id": "d2", "kind": "installation", "company": "Gaec Dupont SARL", "centrale": "Centrale Hangar Est", "title": "Centrale Hangar Est", "stage": "collecte", "mwh": "1100", "commune": "Cholet",
+           "createdAt": 1, "updatedAt": 3, "deleted": False},
+          {"id": "d3", "kind": "installation", "company": "GAEC Dupont", "centrale": "Toit 2", "title": "Toit 2", "stage": "collecte", "createdAt": 1, "updatedAt": 1, "deleted": False},
+          {"id": "d4", "kind": "installation", "company": "Autre", "centrale": "Toit 3", "title": "Toit 3", "stage": "collecte", "createdAt": 1, "updatedAt": 1, "deleted": False}]
+    page, errors = new_page(browser, {"todo_todo-widget-opportunities": json.dumps(du), "todo_todo-widget-tasks": json.dumps([dict(task("dt", "Relancer"), opportunityId="d2")])}, viewport={"width": 1400, "height": 900})
+    page.goto(URL); page.click('[data-tab="pipeline"]')
+    check(page.is_visible("#pipe-dup-btn") and "Doublons · 2" in page.inner_text("#pipe-dup-btn"), f"doublons: the pipeline says there are some ({page.inner_text('#pipe-dup-btn') if page.is_visible('#pipe-dup-btn') else ''})")
+    page.click("#pipe-dup-btn")
+    check("Gaec Dupont SARL" in page.inner_text("#dup-overlay") and "GAEC Dupont" in page.inner_text("#dup-overlay"), "doublons: the company written two ways")
+    page.click("#dup-overlay .dup-group:has-text('Gaec Dupont SARL') .dup-merge"); page.wait_for_timeout(200)
+    check("installations saisies deux fois · 1" in page.inner_text("#dup-overlay").lower() and "sociétés écrites" not in page.inner_text("#dup-overlay").lower(), "doublons: the company merged, the plant entered twice is still there")
+    page.click("#dup-overlay .dup-group:has-text('Hangar Est') .dup-merge"); page.wait_for_timeout(200)
+    ops = {o["id"]: o for o in stored(page, "todo-widget-opportunities")}
+    tk = stored(page, "todo-widget-tasks")[0]
+    check(ops["d2"]["deleted"] and not ops["d1"]["deleted"] and ops["d1"]["company"] == "GAEC Dupont" and ops["d1"].get("mwh") == "1100" and ops["d1"].get("commune") == "Cholet"
+          and ops["d1"]["stage"] == "pricing_indicatif" and tk["opportunityId"] == "d1", "doublons: the most advanced plant is kept, takes the other's figures and task")
+    check("Aucune installation ni société en double" in page.inner_text("#dup-overlay"), "doublons: nothing left")
+    page.click("#dup-overlay .dup-close"); page.wait_for_timeout(150)
+    check(not page.is_visible("#pipe-dup-btn"), "doublons: the button goes away")
+    check(not errors, f"no page errors ({errors})")
+    page.close()
+
     # --- Meeting view: a lot keeps its installations together under one title line (who, since when); a click opens the lot
     ml = [{"id": "mr", "kind": "request", "company": "LOTS", "createdAt": 1, "updatedAt": 1, "deleted": False}] + [
           {"id": "ml%d" % i, "kind": "installation", "company": "LOTS", "centrale": "Toit %d" % i, "title": "Toit %d" % i, "kwc": "1000", "requestId": "mr", "lot": "Lot Nord" if i < 3 else "",
