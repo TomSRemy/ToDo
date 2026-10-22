@@ -384,6 +384,19 @@ with sync_playwright() as p:
     check(not errors, f"no page errors ({errors})")
     page.close()
 
+    # --- backup reminder: no sync and no export for a month
+    page, errors = new_page(browser, {"todo_todo-widget-tasks": json.dumps([task("bk", "Une tâche")])}, viewport={"width": 1300, "height": 850})
+    page.add_init_script("if(!sessionStorage.getItem('bk')){ localStorage.setItem('first-seen-at', String(Date.now()-40*864e5)); sessionStorage.setItem('bk','1'); }")
+    page.goto(URL); page.wait_for_timeout(300)
+    check(page.is_visible("#backup-banner") and "40 jours" in page.inner_text("#backup-banner"), "backup reminder: shown after a month without sync nor export")
+    with page.expect_download() as dl: page.click("#backup-banner .bk-go")
+    check(dl.value.suggested_filename.startswith("todo-backup-") and not page.is_visible("#backup-banner"), "backup reminder: one click exports, then it goes away")
+    page.evaluate("localStorage.setItem('last-export-at', String(Date.now()-35*864e5))"); page.click('[data-tab="tasks"]'); page.click('[data-tab="today"]'); page.wait_for_timeout(100)
+    page.click("#backup-banner .bk-later")
+    check(not page.is_visible("#backup-banner"), "backup reminder: « Plus tard » puts it away for a week")
+    check(not errors, f"no page errors ({errors})")
+    page.close()
+
     # --- hover preview: a mini sheet on a company, a contact ([[link]]) or in the pipeline
     page, errors = new_page(browser, {
         "todo_todo-widget-tasks": json.dumps([task("pk1", "Rappeler [[Paul Durand]] pour l'offre", client="Solaris", due=(TODAY + datetime.timedelta(days=3)).isoformat())]),

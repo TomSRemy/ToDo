@@ -1420,8 +1420,28 @@
 
   $('inbox-refresh').onclick = fetchInbox;
 
+  // no GitHub sync and no backup file for a month: a gentle reminder at the top of Today (« Plus tard » = a week of peace)
+  const BACKUP_DAYS=30;
+  function backupDueDays(){
+    if(syncConfig.enabled || window.TODO_LITE || window.TODO_WIDGET) return 0;
+    const get=k=>{ try{ return +localStorage.getItem(k)||0; }catch(e){ return 0; } };
+    let first=get('first-seen-at'); if(!first){ first=Date.now(); try{ localStorage.setItem('first-seen-at', String(first)); }catch(e){} }
+    if(Date.now()<get('backup-snooze-until') || !(tasks.length+contacts.length+opportunities.length)) return 0;
+    const days=Math.floor((Date.now()-(get('last-export-at')||first))/864e5);
+    return days>=BACKUP_DAYS?days:0;
+  }
+  function renderBackupBanner(){
+    let b=$('backup-banner'); const days=backupDueDays();
+    if(!days){ if(b) b.remove(); return; }
+    if(!b){ b=document.createElement('div'); b.id='backup-banner'; b.className='backup-banner'; $('today-stats-row').before(b); }
+    b.innerHTML='<span></span><button type="button" class="bk-go">Exporter maintenant</button><button type="button" class="bk-later">Plus tard</button>';
+    b.firstChild.textContent=('Aucune copie de sécurité depuis '+days+' jours, et la synchro GitHub n\u2019est pas activée : un export garde tes données à l\u2019abri (fichier .json).');
+    b.querySelector('.bk-go').onclick=()=>{ exportData(); renderBackupBanner(); };
+    b.querySelector('.bk-later').onclick=()=>{ try{ localStorage.setItem('backup-snooze-until', String(Date.now()+7*864e5)); }catch(e){} renderBackupBanner(); };
+  }
   function renderToday(){
     const statsRow=$('today-stats-row'), list=$('today-list');
+    renderBackupBanner();
     const open=activeTasks();
     const overdueTasks=open.filter(t=>dueStatus(t.due)==='overdue');
     const now=new Date(); now.setHours(0,0,0,0);
@@ -5934,6 +5954,7 @@
     const blob=new Blob([JSON.stringify(payload,null,2)],{type:'application/json'});
     const url=URL.createObjectURL(blob);
     const a=document.createElement('a'); a.href=url; a.download='todo-backup-'+toISO(new Date())+'.json'; a.click();
+    try{ localStorage.setItem('last-export-at', String(Date.now())); }catch(e){}
     setTimeout(()=>URL.revokeObjectURL(url),1000);
   }
   function importData(file){
