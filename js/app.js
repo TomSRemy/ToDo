@@ -7329,20 +7329,29 @@
   ['quick-add-input','f-title','f-description','postit-text','ct-comment'].forEach(id=>attachLinkAutocomplete($(id)));
   // ---------- Réseau: every connection between everything, as a graph (js/network.js draws it) ----------
   let networkView=null, networkFocusNext=null;
+  const CO_FORMS=new Set(['sas','sasu','sa','sarl','eurl','sci','snc','scop','sem','spl','sca','selarl','ste','societe','groupe','group','ltd','gmbh','inc','llc']);
+  const FREE_MAIL=/^(gmail|googlemail|hotmail|outlook|live|msn|yahoo|icloud|me|orange|wanadoo|free|sfr|neuf|laposte|bbox|aol|gmx|protonmail|proton)\./;
   function networkData(){
     const nodes=[], edges=[], seen=new Set();
     const node=(id, type, label, sub, open)=>{ if(seen.has(id)) return id; seen.add(id); nodes.push({ id, type, label:String(label||'(sans nom)'), sub:sub||'', open }); return id; };
-    const perCo=new Map(); activeContacts().forEach(c=>{ const k=pqFold(c.company); if(k) perCo.set(k,(perCo.get(k)||0)+1); });   // counted once
-    const coId=name=>{ name=String(name||'').trim(); if(!name) return null; const id='co:'+pqFold(name).replace(/[^a-z0-9]/g,''); if(id==='co:') return null;
+    // « Solaris SAS » and « SOLARIS » are the same company: legal forms and punctuation left out of the key
+    const coKey=name=>pqFold(String(name||'')).replace(/[^a-z0-9]+/g,' ').split(' ').filter(w=>w && !CO_FORMS.has(w)).join('');
+    const perCo=new Map(); activeContacts().forEach(c=>{ const k=coKey(c.company); if(k) perCo.set(k,(perCo.get(k)||0)+1); });   // counted once
+    const coId=name=>{ name=String(name||'').trim(); if(!name) return null; const key=coKey(name)||pqFold(name).replace(/[^a-z0-9]/g,''); if(!key) return null; const id='co:'+key;
       if(seen.has(id)) return id;
-      const nC=perCo.get(pqFold(name))||0;
-      return node(id, 'company', name, nC?nC+' contact'+(nC>1?'s':''):'Société', ()=>openCompany(name)); };
+      const nC=perCo.get(coKey(name))||0;
+      const co=companies.find(c=>!c.deleted && coKey(c.name)===key);
+      const r=node(id, 'company', name, [co && co.type, nC?nC+' contact'+(nC>1?'s':''):''].filter(Boolean).join(' · ')||'Société', ()=>openCompany(name)); if(co && co.type) nodes[nodes.length-1].ctype=co.type; return r; };
     const link=(a,b)=>{ if(a && b) edges.push([a,b]); };
     allCompanyNames().forEach(coId);
     const byMail=new Map();
+    // a contact with no company: the one of the colleagues sharing its mail domain (personal mailboxes left out)
+    const dom=m=>{ const d=String(m||'').toLowerCase().split('@')[1]||''; return d && !FREE_MAIL.test(d)?d:''; }, coByDom=new Map();
+    activeContacts().forEach(c=>{ const d=dom(c.email); if(d && c.company && !coByDom.has(d)) coByDom.set(d, c.company); });
     activeContacts().forEach(c=>{ const name=[c.firstName,c.lastName].filter(Boolean).join(' ')||c.email||'(sans nom)';
-      const id=node('ct:'+c.id, 'contact', name, [c.role,c.company].filter(Boolean).join(' · '), ()=>openContactEverywhere(c.id));
-      link(id, coId(c.company)); if(c.email) byMail.set(String(c.email).toLowerCase(), id); });
+      const co=c.company || coByDom.get(dom(c.email)) || '';
+      const id=node('ct:'+c.id, 'contact', name, [c.role, co].filter(Boolean).join(' · '), ()=>openContactEverywhere(c.id));
+      link(id, coId(co)); if(c.email) byMail.set(String(c.email).toLowerCase(), id); });
     const live=opportunities.filter(o=>!o.deleted);
     live.filter(o=>o.kind==='request').forEach(r=>{ const n=live.filter(o=>o.requestId===r.id).length; if(!n) return;
       link(node('rq:'+r.id, 'request', 'Demande · '+(r.company||''), n+' installation'+(n>1?'s':''), ()=>{ gsTab('pipeline'); setTimeout(()=>openRequestDetail(r.id),30); }), coId(r.company)); });
@@ -7487,7 +7496,13 @@
       eyebrow='Installation'; title=oppName(o);
       L.push(['', [o.company, stageLabel(o.stage)].filter(Boolean).join(' · ')]);
       const f=[mw([o]), o.install, o.contrat].filter(Boolean).join(' · '); if(f) L.push(['', f]);
+      if(o.mwh) L.push(['P50', Math.round(pqNum(String(o.mwh))||0).toLocaleString('fr-FR')+' MWh/an']);
+      if(o.dept) L.push(['Lieu', o.dept]);
       if(o.mesPrev||o.mesEff) L.push(['MES', o.mesEff||o.mesPrev]);
+      if(o.debut||o.fin) L.push(['Contrat', [o.debut, o.fin].filter(Boolean).join(' → ')]);
+      if(o.charge) L.push(['Chargé', o.charge]);
+      const nt=activeTasks().filter(t=>t.opportunityId===o.id || (o.requestId && t.opportunityId===o.requestId)).sort((a,b)=>(a.due||'9').localeCompare(b.due||'9'))[0];
+      if(nt) L.push(['Tâche', plainLinks(nt.title)+(nt.due?' · '+pqIsoToFr(nt.due).slice(0,5):'')]);
     } else return null;
     return { eyebrow, title, L };
   }
@@ -7508,6 +7523,22 @@
     ['scroll','mousedown','keydown'].forEach(t=>document.addEventListener(t, hidePeek, true));
     window.addEventListener('blur', hidePeek);
   }
+  // the network's tooltip and panel: a few lines of the sheet for every kind of point
+  window.todoNetworkInfo=(id, label)=>{
+    const k=id.slice(0,3), v=id.slice(3);
+    if(k==='co:'){ const d=peekLines('co:'+label); return d?d.L:[]; }
+    if(k==='ct:'||k==='op:'){ const d=peekLines(id); return d?d.L.filter(x=>!(k==='op:' && !x[0] && x===d.L[0])):[]; }
+    if(k==='rq:'){ const l=opportunities.filter(o=>!o.deleted && o.requestId===v && o.kind==='installation'), kw=l.reduce((s,o)=>s+kwcNum(o),0), st=[...new Set(l.map(o=>stageLabel(o.stage)))];
+      return [['Installations', l.length+(kw?' · '+(Math.round(kw/100)/10).toLocaleString('fr-FR')+' MWc':'')], ['Étape', st.join(', ')]].concat(l.slice(0,5).map((o,i)=>[i?'':'Centrales', oppName(o)+(o.kwc?' · '+fmtKwc(o.kwc):'')])); }
+    if(k==='tk:'){ const t=tasks.find(x=>x.id===v); if(!t) return []; const L=[];
+      if(t.client) L.push(['Client', t.client]); L.push(['Statut', (STATUS_META[t.status]||{}).label||t.status||'']); if(t.urgency) L.push(['Urgence', t.urgency]);
+      if(t.due) L.push(['Échéance', pqIsoToFr(t.due)]); if(t.description) L.push(['Détail', plainLinks(t.description).slice(0,120)]); return L; }
+    if(k==='mt:'){ const m=meetings.find(x=>x.id===v); if(!m) return []; const c=contacts.find(x=>x.id===m.contactId);
+      return [['Date', m.date?pqIsoToFr(m.date):'']].concat(c?[['Avec', [[c.firstName,c.lastName].filter(Boolean).join(' '), c.company].filter(Boolean).join(' · ')]]:[]).filter(x=>x[1]); }
+    if(k==='pc:'){ const p=parcData && parcData.items && parcData.items[+v]; if(!p) return [];
+      return [['Producteur', p.prod], ['Statut', p.statut], ['Puissance', p.kwc?fmtKwc(p.kwc):''], ['P50', p.p50?Math.round(p.p50).toLocaleString('fr-FR')+' MWh/an':''], ['Techno', p.enr||p.typeInst], ['MES', p.mes?pqIsoToFr(p.mes):''], ['Fin', p.fin?pqIsoToFr(p.fin):'']].filter(x=>x[1]); }
+    return [];
+  };
   window.todoPeek=key=>{ const d=peekLines(key); return d?[d.eyebrow, d.title].concat(d.L.map(x=>x.filter(Boolean).join(' : '))).join('\n'):null; };
 
   function allCompanyNames(){

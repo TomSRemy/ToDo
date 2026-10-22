@@ -430,12 +430,13 @@ with sync_playwright() as p:
     page.close()
 
     # --- Réseau: every connection between companies, contacts, installations, tasks, meetings
-    page, errors = new_page(browser, cs_seed if False else {
+    nw_seed = {
         "todo_todo-widget-tasks": json.dumps([task("n1", "Relancer pour le CR", client="Solaris")]),
         "todo_todo-widget-contacts": json.dumps([{"id": "nc1", "firstName": "Paul", "lastName": "Durand", "company": "Solaris", "email": "p@solaris.fr", "createdAt": 1, "updatedAt": 1, "deleted": False},
                                                  {"id": "nc2", "firstName": "Marie", "lastName": "Leroy", "company": "Ventus", "email": "m@ventus.fr", "createdAt": 1, "updatedAt": 1, "deleted": False}]),
         "todo_todo-widget-meetings": json.dumps([{"id": "nm1", "contactId": "nc1", "label": "Salon", "date": TODAY.isoformat(), "createdAt": 1, "updatedAt": 1, "deleted": False}]),
-        "todo_todo-widget-opportunities": json.dumps([{"id": "no1", "kind": "installation", "company": "Solaris", "centrale": "Toit Durand", "title": "Toit Durand", "stage": "collecte", "mail": "p@solaris.fr", "createdAt": 1, "updatedAt": 1, "deleted": False}])},
+        "todo_todo-widget-opportunities": json.dumps([{"id": "no1", "kind": "installation", "company": "Solaris", "centrale": "Toit Durand", "title": "Toit Durand", "stage": "collecte", "mail": "p@solaris.fr", "createdAt": 1, "updatedAt": 1, "deleted": False}])}
+    page, errors = new_page(browser, nw_seed,
         viewport={"width": 1300, "height": 850})
     page.goto(URL); page.click('[data-tab="network"]'); page.wait_for_timeout(600)
     st = page.evaluate("window.todoNetworkState()")
@@ -464,12 +465,48 @@ with sync_playwright() as p:
     page.click(".nw-unpin"); page.wait_for_timeout(1500)
     p3 = page.evaluate("window.todoNetworkPos('op:no1')")
     check(not page.is_visible(".nw-unpin") and (abs(p3[0] - p2[0]) + abs(p3[1] - p2[1])) > 5, f"network: « Libérer les points » gives back the automatic layout ({p2} → {p3})")
+    # a few lines of the sheet on every point; one kind put forward; a rectangle picks several points; « Vue d'ensemble » resets
+    page.fill(".nw-search input", "solaris"); page.press(".nw-search input", "Enter"); page.wait_for_timeout(200)
+    info = page.inner_text(".nw-side .nw-info") if page.locator(".nw-side .nw-info").count() else ""
+    check("Paul Durand" in info and "Pipeline" in info, f"network: the panel shows a few lines of the sheet ({info!r})")
+    page.locator(".nw-type", has_text="Contacts").hover(); page.wait_for_timeout(100)
+    check(page.evaluate("window.todoNetworkState().lit") == "contact", "network: hovering a kind puts it forward")
+    page.locator(".nw-type", has_text="Contacts").locator(".nw-lit").click(); page.mouse.move(box["x"] + 5, box["y"] + 5); page.wait_for_timeout(100)
+    check(page.evaluate("window.todoNetworkState().lit") == "contact" and page.locator(".nw-type.lit").count() == 1, "network: ◎ keeps that kind put forward")
+    page.click(".nw-fit"); page.wait_for_timeout(700)
+    st = page.evaluate("window.todoNetworkState()")
+    check(st["lit"] is None and st["selected"] is None and page.input_value(".nw-search input") == "" and page.is_disabled(".nw-local input"), f"network: « Vue d'ensemble » clears everything ({st})")
+    box = page.locator(".nw-stage canvas").bounding_box()
+    page.keyboard.down("Shift"); page.mouse.move(box["x"] + 4, box["y"] + 4); page.mouse.down()
+    page.mouse.move(box["x"] + box["width"] / 2, box["y"] + box["height"] / 2, steps=5); page.mouse.move(box["x"] + box["width"] - 300, box["y"] + box["height"] - 4, steps=5)
+    page.mouse.up(); page.keyboard.up("Shift"); page.wait_for_timeout(200)
+    picked = page.evaluate("window.todoNetworkState().multi")
+    check(len(picked) >= 2 and "sélectionnés" in page.inner_text(".nw-side"), f"network: Maj + glisser picks several points ({picked})")
+    page.keyboard.press("Escape"); page.wait_for_timeout(100)
+    check(page.evaluate("window.todoNetworkState().multi") == [], "network: Escape clears the selection")
+    page.fill(".nw-search input", "toit"); page.press(".nw-search input", "Enter"); page.wait_for_timeout(200)
     page.click(".nw-side .nw-open"); page.wait_for_timeout(300)
     check(page.is_visible("#opp-detail-overlay") and "Toit Durand" in page.inner_text("#opp-detail-title"), "network: « Ouvrir la fiche » opens the installation")
     page.click("#opp-detail-actions >> text=Voir dans le réseau"); page.wait_for_timeout(500)
     page.wait_for_timeout(300)
     check(page.is_visible("#tab-network") and page.evaluate("window.todoNetworkState().selected") == "op:no1" and page.is_checked(".nw-local input")
           and page.evaluate("window.todoNetworkState().visible") < page.evaluate("window.todoNetworkState().nodes"), "network: « Voir dans le réseau » from a sheet shows its neighbourhood")
+    st = page.evaluate("window.todoNetworkState()")
+    page.close()
+    # contacts joined to their company even when written « Solaris SAS », or with no company but the colleagues' mail domain
+    page, errors = new_page(browser, {"todo_todo-widget-contacts": json.dumps([
+        {"id": "a1", "firstName": "Anne", "lastName": "Un", "company": "Solaris", "email": "anne@solaris-energie.fr", "createdAt": 1, "updatedAt": 1, "deleted": False},
+        {"id": "a2", "firstName": "Bob", "lastName": "Deux", "company": "SOLARIS SAS", "email": "bob@solaris-energie.fr", "createdAt": 1, "updatedAt": 1, "deleted": False},
+        {"id": "a3", "firstName": "Cléo", "lastName": "Trois", "company": "", "email": "cleo@solaris-energie.fr", "createdAt": 1, "updatedAt": 1, "deleted": False},
+        {"id": "a4", "firstName": "Dan", "lastName": "Quatre", "company": "", "email": "dan@gmail.com", "createdAt": 1, "updatedAt": 1, "deleted": False}])},
+        viewport={"width": 1300, "height": 850})
+    page.goto(URL); page.click('[data-tab="network"]'); page.wait_for_timeout(500)
+    st = page.evaluate("window.todoNetworkState()")
+    check(st["nodes"] == 5 and st["edges"] == 3, f"network: one Solaris, its three contacts joined (form « SAS » and mail domain), the gmail one alone ({st})")
+    check(not errors, f"no page errors ({errors})")
+    page.close()
+    page, errors = new_page(browser, nw_seed, viewport={"width": 1300, "height": 850})
+    page.goto(URL)
     # [[links]]: typed in a task, proposed while typing, clickable, and « Mentionné dans » on the sheet
     page.click('[data-tab="tasks"]'); page.click("#quick-add-input"); page.keyboard.type("Rappeler [[pau")
     check(page.is_visible(".wl-ac") and "Paul Durand" in page.inner_text(".wl-ac"), "links: « [[ » proposes the matching contacts")
