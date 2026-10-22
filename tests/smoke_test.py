@@ -12,6 +12,7 @@ import tempfile
 import openpyxl
 import re
 import datetime
+import os
 import time
 import json
 import pathlib
@@ -23,12 +24,19 @@ URL = (pathlib.Path(__file__).resolve().parent.parent / "index.html").as_uri()
 TODAY = datetime.date.today()
 TOMORROW = (TODAY + datetime.timedelta(days=1)).isoformat()
 failures = []
+if os.environ.get("GITHUB_ACTIONS"):   # a crash too goes to the annotations, with the line of the test
+    import traceback
+    def _hook(t, v, tb):
+        last = traceback.extract_tb(tb)[-1] if tb else None
+        print("::error title=smoke crash::" + f"{t.__name__}: {str(v)[:300]} (line {last.lineno if last else '?'})"); sys.__excepthook__(t, v, tb)
+    sys.excepthook = _hook
 
 
 def check(cond, msg):
     print(("ok   " if cond else "FAIL ") + msg)
     if not cond:
         failures.append(msg)
+        if os.environ.get("GITHUB_ACTIONS"): print("::error title=smoke::" + msg.replace("\n", " ")[:400])   # readable in the run's annotations
 
 
 def task(tid, title, archived=False, updated=1000, **kw):
@@ -698,6 +706,14 @@ with sync_playwright() as p:
     ops = stored(page, "todo-widget-opportunities")
     check(all(not o.get("requestId") for o in ops if o.get("kind") == "installation") and all(o.get("deleted") for o in ops if o.get("kind") == "request")
           and page.locator(".pipe-req-card").count() == 0 and page.locator(".pipe-card[data-id=g1], .pipe-card[data-id=g2]").count() == 2, "pipeline: « Dégrouper » gives back separate cards")
+    check(not errors, f"no page errors ({errors})")
+    page.close()
+
+    # --- a plant on its own (no request) has its pricing mail too, open at the pricing steps
+    page, errors = new_page(browser, {"todo_todo-widget-opportunities": json.dumps([{"id": "one", "kind": "installation", "company": "SEULE SAS", "producteur": "SEULE SAS", "centrale": "Hangar", "title": "Hangar", "kwc": "300", "install": "PV", "stage": "demande_prix", "createdAt": 1, "updatedAt": 1, "deleted": False}])}, viewport={"width": 1300, "height": 900})
+    page.goto(URL); page.click('[data-tab="pipeline"]'); page.click(".pipe-card[data-id=one]")
+    check(page.is_visible("#opp-detail-body #opp-mail-body") and "SEULE SAS_Hangar" in page.input_value("#opp-mail-body") and "SEULE SAS" in page.input_value("#opp-mail-subject"),
+          "single plant: its sheet has the pricing mail (open at « Demande de prix »)")
     check(not errors, f"no page errors ({errors})")
     page.close()
 

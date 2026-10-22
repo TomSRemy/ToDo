@@ -4983,6 +4983,7 @@
       { const f=stageFocus([o]); if(f) box.appendChild(f); }
       box.appendChild(buildInstallSheet(o));
       box.appendChild(buildRequestCompare(siblings.length>1?siblings:[o], o.id));   // every line of the « Caractéristiques Centrales » file, to fill in place
+      if(!o.requestId) appendPricingMail(box, { company:o.company }, [o]);   // a plant on its own has its pricing mail too
       // installations of one request usually move together: the stage applies to all of them, or to this one only
       const batch=o.requestId?requestInstalls(o.requestId).filter(x=>!isExited(x)):[];
       const many=batch.length>1 && !isExited(o);
@@ -5379,6 +5380,33 @@
     facts.forEach(f=>{ const li=document.createElement('li'); li.textContent=f; box.querySelector('.sf-facts').appendChild(li); });
     return box;
   }
+  // The pricing request mail (subject + body, one plant or all), open from the Go to the indicative pricing, folded otherwise
+  function appendPricingMail(box, req, list){
+    const mailBox=document.createElement('div'); mailBox.className='opp-mail';
+    let ml=pricingMail(req, list);
+    mailBox.innerHTML='<div class="opp-phase-h">Mail de demande de pricing</div>';
+    const subj=document.createElement('input'); subj.readOnly=true; subj.value=ml.subject; subj.id='opp-mail-subject';
+    const body=document.createElement('textarea'); body.readOnly=true; body.value=ml.body; body.rows=12; body.id='opp-mail-body';
+    // all the plants together, or one only (a click on its name)
+    if(list.length>1){
+      const chips=document.createElement('div'); chips.className='mail-scope'; chips.setAttribute('role','group'); chips.setAttribute('aria-label','Mail pour');
+      const pick=(sub, b)=>{ ml=pricingMail(req, sub); subj.value=ml.subject; body.value=ml.body; chips.querySelectorAll('button').forEach(x=>x.classList.toggle('on', x===b)); };
+      const mk=(label, sub)=>{ const b=document.createElement('button'); b.type='button'; b.textContent=label; b.onclick=()=>pick(sub, b); chips.appendChild(b); return b; };
+      mk('Toutes ('+list.length+')', list).classList.add('on'); list.forEach(o=>mk(oppName(o), [o]));
+      mailBox.appendChild(chips);
+    }
+    const hint=document.createElement('p'); hint.className='modal-hint'; hint.textContent='Joins le fichier « Caractéristiques Centrales » créé par le bouton ci-dessous : toutes les lignes du modèle, remplies avec ce que l\u2019appli connaît (et tout ce que contenait l\u2019Excel du producteur).';
+    mailBox.appendChild(subj); mailBox.appendChild(body); mailBox.appendChild(hint);
+    // the pricing mail only matters from the Go to the indicative pricing: later, it folds away (still there, one click)
+    const loM=Math.min(...(list.filter(x=>!isExited(x)).length?list.filter(x=>!isExited(x)):list).map(x=>stageIndex(x.stage)).filter(i=>i>=0)), mailNow=loM>=stageIndex('qualif_en_cours') && loM<=stageIndex('pricing_indicatif');
+    if(mailNow) box.appendChild(mailBox);
+    else { const d=document.createElement('details'); d.className='opp-mail-fold'; const sm=document.createElement('summary'); sm.textContent='Mail de demande de pricing'; d.appendChild(sm);
+      mailBox.querySelector('.opp-phase-h').remove();
+      const cp=document.createElement('div'); cp.className='opp-mail-copy';
+      [['Copier l\u2019objet',()=>ml.subject],['Copier le mail',()=>ml.body]].forEach(([t,f])=>{ const b=document.createElement('button'); b.type='button'; b.className='ghost-btn'; b.textContent=t; b.onclick=e=>copyToClipboard(f(), e.target); cp.appendChild(b); });
+      mailBox.appendChild(cp); d.appendChild(mailBox); box.appendChild(d); }
+    return { mailNow, ml:()=>ml };
+  }
   function openRequestDetail(reqId){
     const req=opportunities.find(x=>x.id===reqId); if(!req) return;
     viewingOppId=reqId;
@@ -5433,29 +5461,7 @@
       box.appendChild(buildStageTrack(liveReq, key=>{ liveReq.forEach(o=>{ if(o.stage!==key) setOppStage(o, key); }); openRequestDetail(reqId); }));
     }
     if(list.length) box.appendChild(buildRequestCompare(list, null));
-    const mailBox=document.createElement('div'); mailBox.className='opp-mail';
-    let ml=pricingMail(req, list);
-    mailBox.innerHTML='<div class="opp-phase-h">Mail de demande de pricing</div>';
-    const subj=document.createElement('input'); subj.readOnly=true; subj.value=ml.subject; subj.id='opp-mail-subject';
-    const body=document.createElement('textarea'); body.readOnly=true; body.value=ml.body; body.rows=12; body.id='opp-mail-body';
-    // all the plants together, or one only (a click on its name)
-    if(list.length>1){
-      const chips=document.createElement('div'); chips.className='mail-scope'; chips.setAttribute('role','group'); chips.setAttribute('aria-label','Mail pour');
-      const pick=(sub, b)=>{ ml=pricingMail(req, sub); subj.value=ml.subject; body.value=ml.body; chips.querySelectorAll('button').forEach(x=>x.classList.toggle('on', x===b)); };
-      const mk=(label, sub)=>{ const b=document.createElement('button'); b.type='button'; b.textContent=label; b.onclick=()=>pick(sub, b); chips.appendChild(b); return b; };
-      mk('Toutes ('+list.length+')', list).classList.add('on'); list.forEach(o=>mk(oppName(o), [o]));
-      mailBox.appendChild(chips);
-    }
-    const hint=document.createElement('p'); hint.className='modal-hint'; hint.textContent='Joins le fichier « Caractéristiques Centrales » créé par le bouton ci-dessous : toutes les lignes du modèle, remplies avec ce que l\u2019appli connaît (et tout ce que contenait l\u2019Excel du producteur).';
-    mailBox.appendChild(subj); mailBox.appendChild(body); mailBox.appendChild(hint);
-    // the pricing mail only matters from the Go to the indicative pricing: later, it folds away (still there, one click)
-    const loM=Math.min(...(liveReq.length?liveReq:list).map(x=>stageIndex(x.stage)).filter(i=>i>=0)), mailNow=loM>=stageIndex('qualif_en_cours') && loM<=stageIndex('pricing_indicatif');
-    if(mailNow) box.appendChild(mailBox);
-    else { const d=document.createElement('details'); d.className='opp-mail-fold'; const sm=document.createElement('summary'); sm.textContent='Mail de demande de pricing'; d.appendChild(sm);
-      mailBox.querySelector('.opp-phase-h').remove();
-      const cp=document.createElement('div'); cp.className='opp-mail-copy';
-      [['Copier l\u2019objet',()=>ml.subject],['Copier le mail',()=>ml.body]].forEach(([t,f])=>{ const b=document.createElement('button'); b.type='button'; b.className='ghost-btn'; b.textContent=t; b.onclick=e=>copyToClipboard(f(), e.target); cp.appendChild(b); });
-      mailBox.appendChild(cp); d.appendChild(mailBox); box.appendChild(d); }
+    const pm=appendPricingMail(box, req, list), mailNow=pm.mailNow;
     const actions=$('opp-detail-actions'); actions.innerHTML='';
     const live=list.filter(o=>!isExited(o));
     if(live.length){
@@ -5468,8 +5474,8 @@
       if(!same || !waiting.length) actions.appendChild(oppActionBtn(same?'Tout passer à l\u2019étape suivante':'Avancer chaque installation', ()=>{ closeOppDetail(); offerStageAdvance(live, live.every(o=>o.stage==='qualif_en_cours')?'demande_prix':null); }));
     }
     if(!window.TODO_LITE && list.length>1) actions.appendChild(oppActionBtn('Dégrouper', async()=>{ if(await ungroupRequest(reqId)) closeOppDetail(); }, 'ghost-btn'));
-    if(mailNow){ actions.appendChild(oppActionBtn('Copier l\u2019objet', e=>copyToClipboard(ml.subject, e.target), 'ghost-btn'));
-    actions.appendChild(oppActionBtn('Copier le mail', e=>copyToClipboard(ml.body, e.target), 'ghost-btn')); }
+    if(mailNow){ actions.appendChild(oppActionBtn('Copier l\u2019objet', e=>copyToClipboard(pm.ml().subject, e.target), 'ghost-btn'));
+    actions.appendChild(oppActionBtn('Copier le mail', e=>copyToClipboard(pm.ml().body, e.target), 'ghost-btn')); }
     actions.appendChild(oppActionBtn('Fichier caractéristiques (.xlsx)', e=>downloadCaract(list.filter(o=>!isExited(o)), e.target), 'ghost-btn'));
     excelButtons(actions, list);
     actions.appendChild(oppActionBtn('Copier lignes Pipe', e=>copyPipeLines(list.filter(o=>!isExited(o)), e.target), 'ghost-btn'));
