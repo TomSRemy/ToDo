@@ -1802,6 +1802,36 @@ with sync_playwright() as p:
     check(not errors, f"no page errors ({errors})")
     ctx.close()
 
+    # --- Notes express and mode appel: the figures typed in bulk are spotted, one click fills the sheet; a call is kept in the history
+    qn = [{"id": "q1", "kind": "installation", "company": "QN", "centrale": "Hangar", "title": "Hangar", "stage": "collecte", "kwc": "900", "mwh": "1080",
+           "prenom": "Jeanne", "nom": "TEST", "tel": "06 00 00 00 00", "createdAt": 1, "updatedAt": 1, "deleted": False}]
+    page, errors = new_page(browser, {"todo_todo-widget-opportunities": json.dumps(qn)}, viewport={"width": 1400, "height": 900})
+    page.goto(URL); page.click('[data-tab="pipeline"]'); page.locator(".pipe-card", has_text="Hangar").first.click()
+    page.click("#opp-detail-body .sheet-sec:has-text('Notes express') > summary")
+    page.fill("#qn-text", "P50 1200, P90 950 MWh, MES juin 2027, 49300 Cholet, RDV 2 le 12/11, offre engageante. SPV : SOLAR TEST SAS")
+    rows = page.eval_on_selector_all(".qn-row", "els=>els.map(e=>e.innerText.replace(/\\s+/g,' '))")
+    check(any(r.startswith("P50 : 1 200 MWh/an") for r in rows) and any(r.startswith("P90 : 950") for r in rows) and any("Juin 2027" in r for r in rows)
+          and any(r.startswith("Commune : Cholet") for r in rows) and any(r.startswith("Offre demandée : Engageante") for r in rows) and any(r.startswith("SPV : SOLAR TEST SAS (") for r in rows),
+          f"notes express: the figures of the notes are spotted ({rows})")
+    page.click(".qn-row:has-text('P90') input"); page.click(".qn-fill"); page.wait_for_timeout(200)
+    q1 = next(o for o in stored(page, "todo-widget-opportunities") if o["id"] == "q1")
+    check(q1.get("mwh") == "1200" and q1.get("commune") == "Cholet" and q1.get("nature") == "Engageante" and not q1.get("p90") and q1.get("rdv2", "").endswith("-11-12"),
+          f"notes express: one click fills the ticked lines only ({ {k: q1.get(k) for k in ('mwh', 'p90', 'commune', 'nature', 'rdv2')} })")
+    if not page.is_visible("#opp-detail-body .sp-call"): page.locator(".pipe-card", has_text="Hangar").first.click()
+    page.click("#opp-detail-body .sp-call")
+    check(page.is_visible("#call-overlay") and "06 00 00 00 00" in page.inner_text(".call-head") and "fichier Caractéristiques" in page.inner_text(".call-talk"), "mode appel: the number, what to talk about at this step")
+    page.fill("#call-notes", "Il confirme : P50 1250. Rappeler pour le fichier.")
+    check("remplir 1 case" in page.inner_text(".call-end").lower(), "mode appel: the end button says what it will fill")
+    page.click(".call-end"); page.wait_for_timeout(200)
+    q1 = next(o for o in stored(page, "todo-widget-opportunities") if o["id"] == "q1")
+    log = q1.get("notesLog") or []
+    check(q1.get("mwh") == "1250" and len(log) == 1 and log[0]["kind"] == "appel" and "Rappeler" in log[0]["text"] and page.is_visible("#opp-detail-overlay"),
+          f"mode appel: ending the call fills the sheet, keeps the call in the history, back to the sheet ({log})")
+    page.click("#opp-detail-body .opp-history > summary")
+    check("Appel (1 min) : Il confirme" in page.inner_text("#opp-detail-body .opp-history"), "history: the call is listed")
+    check(not errors, f"no page errors ({errors})")
+    page.close()
+
     # --- Meeting view: a lot keeps its installations together under one title line (who, since when); a click opens the lot
     ml = [{"id": "mr", "kind": "request", "company": "LOTS", "createdAt": 1, "updatedAt": 1, "deleted": False}] + [
           {"id": "ml%d" % i, "kind": "installation", "company": "LOTS", "centrale": "Toit %d" % i, "title": "Toit %d" % i, "kwc": "1000", "requestId": "mr", "lot": "Lot Nord" if i < 3 else "",
