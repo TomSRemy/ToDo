@@ -24,7 +24,6 @@
     {key:'prise_contact',label:'Prise de contact',phase:'qualif',who:'Com',task:'Prendre le RDV 1',pipe:'Prise en contact'},
     {key:'collecte',label:'Collecte d\u2019infos',phase:'qualif',who:'Com',task:'Collecter les infos centrale',pipe:"Collecte d'informations"},
     {key:'qualif_en_cours',label:'Qualification',phase:'qualif',who:'Com',task:'RDV 2 et décision Go / No Go',pipe:'Qualification en cours'},
-    {key:'demande_prix',label:'Demande de prix',phase:'offre',who:'Com',task:'Envoyer la demande de pricing',bdd:'En préparation'},
     {key:'pricing_indicatif',label:'Pricing indicatif',phase:'offre',who:'Ops',task:'Pricing indicatif',bdd:'En préparation'},
     {key:'offre_remise',label:'Offre à remettre',phase:'offre',who:'Com',task:'Remettre l\u2019offre au producteur',bdd:'En préparation'},
     {key:'offre_attente',label:'Retour sur l\u2019offre',phase:'offre',who:'Client',task:'Relancer le producteur sur l\u2019offre',bdd:'En attente'},
@@ -2786,7 +2785,7 @@
     {key:'contrat',label:'Contrat'},{key:'onboarding',label:'Onboarding'},{key:'actif',label:'En service'}
   ];
   const OPP_EXITS={ no_go:'No Go', perdu:'Perdu', abandonne:'Abandonné' };
-  const LEGACY_STAGE={ demarchage:'a_qualifier', prospect:'a_qualifier', pricing:'demande_prix', signature:'mise_signature', encodage:'onboarding', bascule:'actif' };
+  const LEGACY_STAGE={ demarchage:'a_qualifier', prospect:'a_qualifier', pricing:'pricing_indicatif', demande_prix:'pricing_indicatif', signature:'mise_signature', encodage:'onboarding', bascule:'actif' };
   const ONBOARDING_STEPS=[
     {k:'clauses',label:'Clauses communiquées pour paramétrage (prix, PN, dispo, pénalités)',who:'Com'},
     {k:'wattee_contrat',label:'Contrat créé dans WATTEE',who:'Com'},
@@ -3670,14 +3669,14 @@
   const isEngageant=o=>!!o && o.nature==='Engageante';
   function stageLabel(key, o){ if(key==='prequal') return 'Pré-qualif'; if(OPP_EXITS[key]) return OPP_EXITS[key];
     if(key==='pricing_indicatif' && isEngageant(o)) return 'Pricing engageant';
-    const s=oppStage(key); return s?s.label:key; }
+    const s=oppStage(LEGACY_STAGE[key]||key); return s?s.label:key; }
   const stageTaskOf=(st, o)=>st.key==='pricing_indicatif' && isEngageant(o)?'Pricing engageant':st.task;
   function oppPhase(o){ if(o.kind==='prequal') return 'prequal'; const s=oppStage(o.stage); return s?s.phase:null; }
   function oppName(o){ return o.centrale||o.title||'(sans nom)'; }
   function isExited(o){ return !!OPP_EXITS[o.stage]; }
   function pipeStade(o){
     if(o.stage==='no_go') return 'No Go';
-    const i=stageIndex(o.stage), go=stageIndex('demande_prix');
+    const i=stageIndex(o.stage), go=stageIndex('pricing_indicatif');
     if(i>=go || ((o.stage==='perdu'||o.stage==='abandonne') && o.goDate)) return 'Transféré BDD';
     const s=oppStage(o.stage); return s&&s.pipe?s.pipe:'A qualifier';
   }
@@ -4190,7 +4189,7 @@
     return cands.find(p=>parcNorm(p.inst)===n && coHit(p)) || cands.find(coHit) || (cands.length===1?cands[0]:null);
   }
   function suiviState(o){
-    if(o.kind!=='installation' || isExited(o) || stageIndex(o.stage)<stageIndex('demande_prix')) return null;
+    if(o.kind!=='installation' || isExited(o) || stageIndex(o.stage)<stageIndex('pricing_indicatif')) return null;
     if(parcData===null) loadParc();
     if(!parcData) return null;
     const want=(oppStage(o.stage)||{}).bdd, p=parcMatchOpp(o);
@@ -4963,7 +4962,7 @@
       const o={ id:newOppId('opp'), kind:'installation', company, title:inst.centrale, stage:startStage, requestId:reqId, taskId:null, createdAt:Date.now(), updatedAt:Date.now(), deleted:false, lostAt:null };
       PQ_SHARED_KEYS.forEach(k=>{ if(v[k]!==undefined) o[k]=v[k]; });
       PQ_CENTRALE_KEYS.forEach(k=>{ if(inst[k]!==undefined) o[k]=inst[k]; }); if(inst.caract) o.caract=inst.caract;
-      if(stageIndex(startStage)>=stageIndex('demande_prix')) o.goDate=toISO(new Date());
+      if(stageIndex(startStage)>=stageIndex('pricing_indicatif')) o.goDate=toISO(new Date());
       if(otherIds.length) o.otherContactIds=[...new Set(otherIds)];
       opportunities.push(o);
       return o;
@@ -5084,7 +5083,7 @@
         actions.appendChild(oppActionBtn('Réactiver', ()=>{ o.stage=o.stageBeforeExit||'a_qualifier'; o.lostAt=null; touchCrm(o); saveCrm(); renderPipeline(); openOppDetail(o.id); }));
       } else {
         if(o.stage==='qualif_en_cours'){
-          actions.appendChild(oppActionBtn('Go', ()=>{ closeOppDetail(); offerStageAdvance([o], 'demande_prix'); }));
+          actions.appendChild(oppActionBtn('Go', ()=>{ closeOppDetail(); offerStageAdvance([o], 'pricing_indicatif'); }));
           actions.appendChild(oppActionBtn('No Go', ()=>exitOpp(o,'no_go'), 'ghost-btn'));
         } else if(o.stage==='offre_attente'){
           actions.appendChild(oppActionBtn('Offre acceptée', ()=>{ closeOppDetail(); offerStageAdvance([o], 'kyc'); }));
@@ -5096,14 +5095,14 @@
       excelButtons(actions, [o]);
       actions.appendChild(oppActionBtn('Fichier caractéristiques (.xlsx)', e=>downloadCaract(o.requestId?requestInstalls(o.requestId).filter(x=>!isExited(x)):[o], e.target), 'ghost-btn'));
       actions.appendChild(oppActionBtn('Copier ligne Pipe', e=>copyPipeLines(o.requestId?requestInstalls(o.requestId).filter(x=>!isExited(x)):[o], e.target), 'ghost-btn'));
-      if(o.goDate || stageIndex(o.stage)>=stageIndex('demande_prix')) actions.appendChild(oppActionBtn('Copier ligne BDD', e=>copyToClipboard(bddRow(o), e.target), 'ghost-btn'));
+      if(o.goDate || stageIndex(o.stage)>=stageIndex('pricing_indicatif')) actions.appendChild(oppActionBtn('Copier ligne BDD', e=>copyToClipboard(bddRow(o), e.target), 'ghost-btn'));
       if(!o.requestId && !isExited(o)) actions.appendChild(oppActionBtn('Demande de pricing', ()=>{
         const reqId=newOppId('req');
         opportunities.push({ id:reqId, kind:'request', company:o.company, title:'Demande de pricing', createdAt:Date.now(), updatedAt:Date.now(), deleted:false });
         o.requestId=reqId; touchCrm(o); saveCrm(); renderPipeline(); openRequestDetail(reqId);
       }, 'ghost-btn'));
       if(!isExited(o)){
-        if(stageIndex(o.stage)>=stageIndex('demande_prix') && o.stage!=='offre_attente'){ actions.appendChild(oppActionBtn('Perdu', ()=>loseOpps([o]), 'ghost-btn danger-btn')); }
+        if(stageIndex(o.stage)>=stageIndex('pricing_indicatif') && o.stage!=='offre_attente'){ actions.appendChild(oppActionBtn('Perdu', ()=>loseOpps([o]), 'ghost-btn danger-btn')); }
         actions.appendChild(oppActionBtn('Abandonner', ()=>exitOpp(o,'abandonne'), 'ghost-btn danger-btn'));
       }
     }
@@ -5386,7 +5385,7 @@
   let stageScopeAll=true;   // a stage chosen in an installation's sheet applies to all the installations of its request
   function setOppStage(o, key){
     const prev=stageIndex(o.stage), next=stageIndex(key), today=toISO(new Date());
-    if(next>=stageIndex('demande_prix') && !o.goDate){ o.goDate=today; o.qualification=true; }
+    if(next>=stageIndex('pricing_indicatif') && !o.goDate){ o.goDate=today; o.qualification=true; }
     if(prev<=stageIndex('offre_remise') && next>stageIndex('offre_remise') && !o.dateOffre) o.dateOffre=today;
     if(prev<=stageIndex('signature') && next>stageIndex('signature') && !o.signDate) o.signDate=today;
     // the offer accepted (into the contract phase), then the contract signed: a little celebration
@@ -5453,7 +5452,7 @@
       });
     }
     saveCrm(); closeStageAdvance(); render(); renderPipeline();
-    if(moves.some(m=>m.key==='demande_prix')){ const reqId=list[0].requestId; if(reqId) openRequestDetail(reqId); else openOppDetail(list[0].id); }
+    if(moves.some(m=>m.key==='pricing_indicatif')){ const reqId=list[0].requestId; if(reqId) openRequestDetail(reqId); else openOppDetail(list[0].id); }
   }
   function noGoFromAdvance(){
     if(!pendingAdvance) return;
@@ -5489,7 +5488,7 @@
     const first=live.find(x=>x.stage===st.key)||live[0], ago=d=>{ const t=pqDateOf(d); if(!t) return ''; const n=Math.floor((Date.now()-t)/864e5); return n<=0?'aujourd\u2019hui':n===1?'hier':'il y a '+n+' jours'; };
     const facts=[];
     if(lo<=stageIndex('qualif_en_cours')){ const miss=live.reduce((s,x)=>s+CARACT_ROWS.filter(l=>REQ_NEEDED.has(caractKey(l)) && caractValue(x,l)==='').length,0); if(miss) facts.push(miss+' case'+(miss>1?'s':'')+' à compléter avant la demande de prix'); }
-    if(first.goDate && lo>=stageIndex('demande_prix') && lo<=stageIndex('offre_remise')) facts.push('Go le '+pqIsoToFr(first.goDate)+' ('+ago(first.goDate)+')');
+    if(first.goDate && lo>=stageIndex('pricing_indicatif') && lo<=stageIndex('offre_remise')) facts.push('Go le '+pqIsoToFr(first.goDate)+' ('+ago(first.goDate)+')');
     if(first.dateOffre && lo>=stageIndex('offre_attente') && lo<stageIndex('kyc')) facts.push('Offre remise le '+pqIsoToFr(first.dateOffre)+' ('+ago(first.dateOffre)+')');
     if(lo>=stageIndex('kyc') && lo<=stageIndex('signature') && first.dateOffre) facts.push('Offre acceptée après une remise le '+pqIsoToFr(first.dateOffre));
     if(first.signDate && lo>=stageIndex('onboarding')) facts.push('Signé le '+pqIsoToFr(first.signDate));
@@ -5599,7 +5598,7 @@
         actions.appendChild(oppActionBtn('Offre acceptée'+(waiting.length>1?' ('+waiting.length+')':''), ()=>{ closeOppDetail(); offerStageAdvance(waiting, 'kyc'); }));
         actions.appendChild(oppActionBtn('Offre refusée'+(waiting.length>1?' ('+waiting.length+')':''), ()=>loseOpps(waiting), 'ghost-btn'));
       }
-      if(!same || !waiting.length) actions.appendChild(oppActionBtn(same?'Tout passer à l\u2019étape suivante':'Avancer chaque installation', ()=>{ closeOppDetail(); offerStageAdvance(live, live.every(o=>o.stage==='qualif_en_cours')?'demande_prix':null); }));
+      if(!same || !waiting.length) actions.appendChild(oppActionBtn(same?'Tout passer à l\u2019étape suivante':'Avancer chaque installation', ()=>{ closeOppDetail(); offerStageAdvance(live, live.every(o=>o.stage==='qualif_en_cours')?'pricing_indicatif':null); }));
     }
     if(!window.TODO_LITE && list.length>1) actions.appendChild(oppActionBtn('Dégrouper', async()=>{ if(await ungroupRequest(reqId)) closeOppDetail(); }, 'ghost-btn'));
     if(mailNow){ actions.appendChild(oppActionBtn('Copier l\u2019objet', e=>copyToClipboard(pm.ml().subject, e.target), 'ghost-btn'));
@@ -6026,7 +6025,7 @@
   function excelButtons(actions, list){
     if(!bridgeConfigured()) return;
     if(!ON_PHONE) actions.appendChild(oppActionBtn(list.length>1?'Envoyer au Pipe Excel ('+list.length+')':'Envoyer au Pipe Excel', e=>sendToExcel('pipe', list, e.target)));
-    if(!ON_PHONE && list.some(o=>o.goDate || stageIndex(o.stage)>=stageIndex('demande_prix'))) actions.appendChild(oppActionBtn(list.length>1?'Envoyer à la BDD Excel ('+list.length+')':'Envoyer à la BDD Excel', e=>sendToExcel('bdd', list.filter(o=>o.goDate || stageIndex(o.stage)>=stageIndex('demande_prix')), e.target)));
+    if(!ON_PHONE && list.some(o=>o.goDate || stageIndex(o.stage)>=stageIndex('pricing_indicatif'))) actions.appendChild(oppActionBtn(list.length>1?'Envoyer à la BDD Excel ('+list.length+')':'Envoyer à la BDD Excel', e=>sendToExcel('bdd', list.filter(o=>o.goDate || stageIndex(o.stage)>=stageIndex('pricing_indicatif')), e.target)));
   }
 
   function renderLists(){
@@ -7059,7 +7058,7 @@
   // Puts a contract back into the pipeline (stage: pricing request), prefilled from the Parc
   function renewalToPipeline(p){
     const company=ensureCompany(p.dev||p.prod);
-    const o={ id:newOppId('opp'), kind:'installation', company, title:p.inst||p.prod, centrale:p.inst||p.prod, producteur:p.prod, stage:'demande_prix', requestId:null, taskId:null,
+    const o={ id:newOppId('opp'), kind:'installation', company, title:p.inst||p.prod, centrale:p.inst||p.prod, producteur:p.prod, stage:'pricing_indicatif', requestId:null, taskId:null,
       kwc:p.kwc?String(p.kwc):'', mwh:p.p50?String(Math.round(p.p50)):'', dept:p.dept, region:p.region, install:p.enr==='PV'||p.enr==='Eolien'||p.enr==='Hydro'?p.enr:'',
       contrat:p.cadre==='CR'?(p.ao==='AOS CRE'?'AOS CRE':'AO CRE CR'):p.cadre==='OA'?"Sortie d'OA / CR":p.cadre==='ACC'?'Surplus ACC':'',
       charge:p.charge, origine:'Contact direct', ca:p.ca||'N/A', dateEntree:toISO(new Date()), annee:String(new Date().getFullYear()), goDate:toISO(new Date()),

@@ -408,7 +408,10 @@
             <li><b>Glisser-déposer</b> : attrape une carte ou le bloc d'une demande, il suit la souris ; lâché sur une colonne, l'appli demande l'étape exacte (Échap pour annuler).</li>
             <li><b>Grouper</b> : coche la petite case en haut à droite des cartes ou blocs à réunir (ou Ctrl+clic), autant que tu veux, puis « Grouper » dans la barre en bas ; le plus gros bloc accueille les autres. « Dégrouper » (au survol du bloc, ou dans sa fiche) les sépare.</li>
             <li><b>Blocs</b> : le crayon (au survol) donne un nom au bloc, affiché après le producteur ; les totaux (installations · MWc) sont à droite ; au-delà de 6 installations, le bloc se replie (« + N autres »).</li>
-            <li><b>Fiche adaptée à l'étape</b> : en haut, « Maintenant » rappelle l'étape, ce qu'elle demande et les dates utiles. Le mail de demande de prix est déplié du Go au pricing indicatif, replié ensuite (un clic le rouvre) ; le tableau côte à côte est replié une fois l'offre partie.</li>
+            <li><b>Pricing indicatif ou engageant</b> : une seule étape « Pricing », nommée d'après l'offre demandée (« Offre demandée : Indicative / Engageante » dans « Maintenant ») ; pour une offre engageante, le « Pricing ferme » du contrat est inclus et sauté. Le Go passe directement au pricing et ouvre la fiche sur le mail de demande.</li>
+            <li><b>Étape suivante</b> : la fenêtre propose aussi de clore la tâche de l'étape quittée ; glisser une carte vers une étape plus avancée ouvre la même fenêtre.</li>
+            <li><b>Fiche</b> : « Historique » (en bas) retrace les dates et tâches faites ; téléphones et mails cliquables ; actions occasionnelles dans « Plus ▾ ».</li>
+            <li><b>Fiche adaptée à l'étape</b> : en haut, « Maintenant » rappelle l'étape, ce qu'elle demande et les dates utiles. Le mail de demande de prix est déplié (et placé en premier) de la qualification au pricing, replié ensuite (un clic le rouvre) ; le tableau côte à côte est replié une fois l'offre partie.</li>
             <li><b>Copier-coller</b> (partout) : « Copier ligne Pipe » (37 colonnes) ou « Copier ligne BDD » (91 colonnes), puis clic en colonne A d'une ligne vide et <kbd>Ctrl</kbd>+<kbd>V</kbd>.</li>
             <li><b>Pont Excel</b> (sur l'ordinateur) : « Envoyer au Pipe / à la BDD Excel » écrit directement dans les fichiers synchronisés avec SharePoint. Une ligne existante (même producteur + centrale) est mise à jour, sinon elle est ajoutée ; les formules ne sont jamais écrasées.</li>
             <li>Installation du pont : <b>Réf. &amp; data → Pont Excel</b>. Télécharge les deux fichiers dans un même dossier, double-clique sur le .bat, choisis les deux Excel, recopie la clé. Laisse la fenêtre ouverte (réduite).</li>
@@ -420,7 +423,7 @@
           <ul>
             <li>Charge le fichier « Suivi Agrégation » (ou « Lire depuis l'Excel » avec le pont). Il reste sur l'appareil, il n'est pas envoyé sur GitHub.</li>
             <li>Volumes par année et par cadre face à l'objectif, développeurs, régions, échéances, table filtrable.</li>
-            <li><b>Renouvellements</b> : une tâche par développeur et date de fin pour les contrats qui se terminent dans les 6 mois (réglable). « Remettre dans le pipeline » recrée l'installation à l'étape Demande de prix.</li>
+            <li><b>Renouvellements</b> : une tâche par développeur et date de fin pour les contrats qui se terminent dans les 6 mois (réglable). « Remettre dans le pipeline » recrée l'installation à l'étape Pricing ; « Non renouvelé » l'enregistre comme perdue (dans les Sorties du pipeline) et clôt sa tâche de renouvellement.</li>
             <li>Les contrats d'un producteur apparaissent aussi sur sa fiche dans Contacts (bouton ⓘ).</li>
           </ul>
         </section>

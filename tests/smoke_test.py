@@ -377,8 +377,8 @@ with sync_playwright() as p:
 
     # --- « Ma semaine »: what moved this week, ready to paste in a mail
     nowms = int(time.time() * 1000); old = nowms - 30 * 86400000; recent = nowms - 60000
-    wk_opps = [{"id": "w1", "kind": "installation", "company": "Solaris", "centrale": "Toit Nord", "title": "Toit Nord", "kwc": "1500", "stage": "demande_prix",
-                "stageLog": [{"stage": "collecte", "at": old}, {"stage": "demande_prix", "at": recent}], "createdAt": old, "updatedAt": recent, "deleted": False},
+    wk_opps = [{"id": "w1", "kind": "installation", "company": "Solaris", "centrale": "Toit Nord", "title": "Toit Nord", "kwc": "1500", "stage": "pricing_indicatif",
+                "stageLog": [{"stage": "collecte", "at": old}, {"stage": "pricing_indicatif", "at": recent}], "createdAt": old, "updatedAt": recent, "deleted": False},
                {"id": "w2", "kind": "installation", "company": "Ventus", "centrale": "Parc Est", "title": "Parc Est", "kwc": "4200", "stage": "onboarding", "signDate": TODAY.isoformat(),
                 "stageLog": [{"stage": "signature", "at": old}, {"stage": "onboarding", "at": recent}], "createdAt": old, "updatedAt": recent, "deleted": False},
                {"id": "w3", "kind": "prequal", "company": "Hélios", "stage": "prequal", "createdAt": recent, "updatedAt": recent, "deleted": False},
@@ -390,7 +390,7 @@ with sync_playwright() as p:
     check(page.is_visible("#week-overlay"), "my week: the Today page opens the weekly summary")
     body = page.inner_text("#week-overlay")
     check("Parc Est" in body and "4,2 MWc" in body, f"my week: signed this week, with the MWc ({body[:200]!r})")
-    check("Toit Nord" in body and "Collecte d’infos → Demande de prix" in body, "my week: the deals that moved, from → to")
+    check("Toit Nord" in body and "Collecte d’infos → Pricing indicatif" in body, "my week: the deals that moved, from → to")
     check("Hélios (pré-qualif)" in body and "Envoyer le KYC à Ventus" in body and "Préparer RDV" in body, "my week: new deals, tasks done (no [[ ]]), next week")
     check("Ancien" not in body, "my week: older moves are left out")
     page.click("#week-overlay .wk-switch [data-w=last]")
@@ -691,6 +691,8 @@ with sync_playwright() as p:
     page.click("#stage-advance-confirm"); page.wait_for_timeout(200)
     st = {o["id"]: o.get("stage") for o in stored(page, "todo-widget-opportunities")}
     check(st["d1"] == "pricing_indicatif" and st["d2"] == "pricing_indicatif" and page.locator('.pipe-col[data-phase="offre"] .pipe-req-card').count() == 1, f"pipeline: both installations move together ({st})")
+    check(page.is_visible("#opp-detail-overlay") and page.is_visible("#opp-mail-body"), "pipeline: moved to the pricing (the Go), the sheet opens on the pricing mail")
+    page.click("#opp-detail-actions >> text=Fermer")
     page.drag_and_drop(".pipe-card[data-id=solo]", '.pipe-col[data-phase="actif"]'); page.wait_for_timeout(100)
     if page.is_visible("#stage-advance-overlay"): page.click("#stage-advance-confirm"); page.wait_for_timeout(200)
     check(next(o for o in stored(page, "todo-widget-opportunities") if o["id"] == "solo")["stage"] == "actif" and not page.is_visible(".drop-menu"), "pipeline: a phase with one step takes the card at once (no step to choose)")
@@ -721,10 +723,10 @@ with sync_playwright() as p:
     page.close()
 
     # --- a plant on its own (no request) has its pricing mail too, open at the pricing steps
-    page, errors = new_page(browser, {"todo_todo-widget-opportunities": json.dumps([{"id": "one", "kind": "installation", "company": "SEULE SAS", "producteur": "SEULE SAS", "centrale": "Hangar", "title": "Hangar", "kwc": "300", "install": "PV", "stage": "demande_prix", "createdAt": 1, "updatedAt": 1, "deleted": False}])}, viewport={"width": 1300, "height": 900})
+    page, errors = new_page(browser, {"todo_todo-widget-opportunities": json.dumps([{"id": "one", "kind": "installation", "company": "SEULE SAS", "producteur": "SEULE SAS", "centrale": "Hangar", "title": "Hangar", "kwc": "300", "install": "PV", "stage": "pricing_indicatif", "createdAt": 1, "updatedAt": 1, "deleted": False}])}, viewport={"width": 1300, "height": 900})
     page.goto(URL); page.click('[data-tab="pipeline"]'); page.click(".pipe-card[data-id=one]")
     check(page.is_visible("#opp-detail-body #opp-mail-body") and "SEULE SAS_Hangar" in page.input_value("#opp-mail-body") and "SEULE SAS" in page.input_value("#opp-mail-subject"),
-          "single plant: its sheet has the pricing mail (open at « Demande de prix »)")
+          "single plant: its sheet has the pricing mail (open at the pricing step)")
     check(not errors, f"no page errors ({errors})")
     page.close()
 
@@ -1250,17 +1252,17 @@ with sync_playwright() as p:
     page.goto(URL); page.click('[data-tab="pipeline"]'); page.locator(".pipe-req-name", has_text="Centrale 1").click()
     check(page.locator("#opp-detail-body .stage-scope button.on").inner_text() == "Toutes les installations (3)", "batch: by default a stage applies to all the installations")
     check(page.inner_text("#opp-detail-sum") == "3 installations", "sheet: the header sums up the opportunity (installations · power · technology · volume)")
-    page.click("#opp-detail-body .opp-stage-step:has-text('Demande de prix')"); page.wait_for_timeout(100)
+    page.click("#opp-detail-body .opp-stage-step:has-text('Pricing indicatif')"); page.wait_for_timeout(100)
     check(page.is_visible("#choice-overlay") and "2 étapes" in page.inner_text("#choice-text"), "step track: jumping over a step is asked first")
     page.click("#choice-btns >> text=Avancer"); page.wait_for_timeout(200)
     st_ = {o["id"]: o.get("stage") for o in stored(page, "todo-widget-opportunities")}
-    check(st_["b1"] == st_["b2"] == st_["b3"] == "demande_prix", f"batch: the three installations moved together ({st_})")
+    check(st_["b1"] == st_["b2"] == st_["b3"] == "pricing_indicatif", f"batch: the three installations moved together ({st_})")
     page.click("#opp-detail-body .stage-scope button:has-text('Seulement celle-ci')")
-    page.click("#opp-detail-body .opp-stage-step:has-text('Pricing indicatif')"); page.wait_for_timeout(200)
+    page.click("#opp-detail-body .opp-stage-step:has-text('Offre à remettre')"); page.wait_for_timeout(200)
     st_ = {o["id"]: o.get("stage") for o in stored(page, "todo-widget-opportunities")}
-    check(st_["b1"] == "pricing_indicatif" and st_["b2"] == st_["b3"] == "demande_prix", "batch: one by one is still possible")
+    check(st_["b1"] == "offre_remise" and st_["b2"] == st_["b3"] == "pricing_indicatif", "batch: one by one is still possible")
     page.click(".opp-back")
-    check("1" in page.inner_text("#opp-detail-body .opp-stage-step.current:has-text('Pricing indicatif') .ost-n") and page.locator("#opp-detail-body .req-inst").count() == 3,
+    check("1" in page.inner_text("#opp-detail-body .opp-stage-step.current:has-text('Offre à remettre') .ost-n") and page.locator("#opp-detail-body .req-inst").count() == 3,
           "request sheet: the same step track, with the number of installations at each step")
     page.click("#opp-detail-body .opp-stage-step:has-text('Négociation')"); page.click("#choice-btns >> text=Avancer"); page.wait_for_timeout(200)
     check(page.inner_text("#opp-detail-edit") == "Modifier les fiches" and page.locator("#opp-detail-body .req-inst-ed").count() == 3, "request sheet: edit buttons in the global view")
@@ -1439,7 +1441,7 @@ with sync_playwright() as p:
     page.context.grant_permissions(["clipboard-read", "clipboard-write"])
     opps = lambda: stored(page, "todo-widget-opportunities")
     page.goto(URL); page.click('[data-tab="pipeline"]')
-    check("Demande de prix" in page.inner_text('[data-phase="offre"]'), "old opportunities move to the new stages")
+    check("Pricing indicatif" in page.inner_text('[data-phase="offre"]'), "old opportunities move to the new stages")
     page.click("#opp-add-btn"); page.fill("#pq1-company", "solaris")
     check("Client existant" in page.inner_text("#pq1-company-hint"), "step 1 recognises a known client")
     page.click("#pq-next-btn")
@@ -1492,7 +1494,7 @@ with sync_playwright() as p:
     if page.is_visible("#choice-overlay"): page.click("#choice-btns >> text=Avancer")
     page.click("#opp-detail-actions >> text=Go"); page.click("#stage-advance-confirm")
     moulin = next(o for o in opps() if o.get("centrale") == "Le Moulin")
-    check(moulin["stage"] == "demande_prix" and moulin.get("goDate"), "Go moves to the pricing request and records the date")
+    check(moulin["stage"] == "pricing_indicatif" and moulin.get("goDate"), "Go moves to the pricing and records the date")
     check(page.is_visible("#opp-mail-body"), "after Go, the pricing request opens")
     page.click("#opp-detail-actions >> text=Fermer")
     page.locator('[data-phase="offre"] .pipe-card', has_text="Le Moulin").first.click()
@@ -1708,7 +1710,7 @@ with sync_playwright() as p:
     def mi(i, co, n, st, kwc, mwh, mes, tech="PV"):
         return {"id": "mt%d" % i, "kind": "installation", "company": co, "producteur": co, "centrale": n, "title": n, "stage": st, "kwc": kwc, "mwh": mwh, "mesPrev": mes,
                 "install": tech, "contrat": "AO CRE CR", "fin": "31/12/2030", "dept": "49 - Maine-et-Loire", "createdAt": 1, "updatedAt": 1, "deleted": False}
-    meet = [mi(1, "SOLARIS", "Toit Durand", "collecte", "300", "360", "01/06/2027"), mi(2, "SOLARIS", "CS du Moulin", "demande_prix", "4500", "5200", "01/03/2027"),
+    meet = [mi(1, "SOLARIS", "Toit Durand", "collecte", "300", "360", "01/06/2027"), mi(2, "SOLARIS", "CS du Moulin", "pricing_indicatif", "4500", "5200", "01/03/2027"),
             mi(3, "VENTUS", "Parc des Crêtes", "offre_attente", "12000", "28000", "01/12/2027", "Eolien"), mi(4, "ZEN", "Hangar 2", "negociation", "250", "290", "15/09/2026"),
             dict(mi(5, "ZEN", "Perdu", "perdu", "100", "", "2027"))]
     ctx = browser.new_context(viewport={"width": 1400, "height": 900}, permissions=["clipboard-read", "clipboard-write"], accept_downloads=True)
@@ -2032,7 +2034,7 @@ Responsable technique
             return route.fulfill(status=200, headers=h, body=json.dumps({"ok": True, "version": "1.2", "authorized": ok, "pipe": {"name": "Pipe.xlsx", "found": True}, "bdd": {"name": "Suivi.xlsx", "found": True}}))
         sent.append((request.url.rsplit("/", 2)[-2], json.loads(request.post_data)))
         return route.fulfill(status=200, headers=h, body=json.dumps({"ok": True, "results": [{"ok": True, "action": "ajoutée", "row": 12}]}))
-    inst = [{"id": "i1", "kind": "installation", "company": "SCEA", "producteur": "SCEA", "centrale": "Les Vignes", "title": "Les Vignes", "stage": "demande_prix",
+    inst = [{"id": "i1", "kind": "installation", "company": "SCEA", "producteur": "SCEA", "centrale": "Les Vignes", "title": "Les Vignes", "stage": "pricing_indicatif",
              "goDate": "2026-10-19", "dateEntree": "2026-10-12", "kwc": "2400", "new": True, "createdAt": 1, "updatedAt": 1, "deleted": False}]
     page, errors = new_page(browser, {"todo_todo-widget-opportunities": json.dumps(inst)})
     page.route("http://127.0.0.1:8765/**", bridge)
