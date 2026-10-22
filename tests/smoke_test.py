@@ -1861,6 +1861,22 @@ with sync_playwright() as p:
     check(not errors, f"no page errors ({errors})")
     page.close()
 
+    # --- Keyboard in a sheet: 1 ticks the first box, Entrée moves on and confirms, n opens the notes
+    kb = [{"id": "k1", "kind": "installation", "company": "KB", "centrale": "Toit", "title": "Toit", "stage": "kyc", "createdAt": 1, "updatedAt": 1, "deleted": False}]
+    page, errors = new_page(browser, {"todo_todo-widget-opportunities": json.dumps(kb)}, viewport={"width": 1400, "height": 900})
+    page.goto(URL); page.click('[data-tab="pipeline"]'); page.locator(".pipe-card", has_text="Toit").first.click(); page.wait_for_timeout(150)
+    page.keyboard.press("1"); page.wait_for_timeout(150)
+    check(page.is_checked("#opp-detail-body .sp-check:has-text('Documents KYC') input"), "keyboard: 1 ticks the first box of the list")
+    page.keyboard.press("n"); page.wait_for_timeout(150)
+    check(page.evaluate("document.activeElement.id") == "qn-text", "keyboard: n opens the notes")
+    page.click("#opp-detail-title"); page.keyboard.press("Enter"); page.wait_for_timeout(150)
+    check(page.is_visible("#stage-advance-overlay"), "keyboard: Entrée asks for the next step")
+    page.keyboard.press("Enter"); page.wait_for_timeout(200)
+    k1 = next(o for o in stored(page, "todo-widget-opportunities") if o["id"] == "k1")
+    check(k1["stage"] == "negociation", f"keyboard: Entrée again confirms ({k1['stage']})")
+    check(not errors, f"no page errors ({errors})")
+    page.close()
+
     # --- Meeting view: a lot keeps its installations together under one title line (who, since when); a click opens the lot
     ml = [{"id": "mr", "kind": "request", "company": "LOTS", "createdAt": 1, "updatedAt": 1, "deleted": False}] + [
           {"id": "ml%d" % i, "kind": "installation", "company": "LOTS", "centrale": "Toit %d" % i, "title": "Toit %d" % i, "kwc": "1000", "requestId": "mr", "lot": "Lot Nord" if i < 3 else "",

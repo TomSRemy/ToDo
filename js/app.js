@@ -5615,6 +5615,7 @@
       else { if(next) btn('→ Passer à « '+stageLabel(next.key, first)+' »', 'sp-next', ()=>{ closeOppDetail(); offerStageAdvance(live, null, reopen); });
         if(lo>=stageIndex('pricing_indicatif')) btn('Perdu', 'sp-alt', ()=>loseOpps(live)); else btn('Abandonner', 'sp-alt', ()=>exitList(live,'abandonne')); }
       main.appendChild(row);
+      if(!ON_PHONE){ const kh=document.createElement('div'); kh.className='sp-keys'; const nk=Math.min(9, main.querySelectorAll('.sp-checks input[type=checkbox]').length); kh.innerHTML='<kbd>Entrée</kbd> passer à la suite'+(nk?' · <kbd>1</kbd>'+(nk>1?'…<kbd>'+nk+'</kbd>':'')+' cocher':'')+' · <kbd>n</kbd> noter · <kbd>a</kbd> appel'; main.appendChild(kh); }
       if(opts.scope){ main.appendChild(opts.scope); }
     }
     // the side: next task, contact, key figures
@@ -7417,6 +7418,22 @@
     else if(e.key==='Enter'){ if(selectedTaskId)validateTask(selectedTaskId); }
     else if(e.key==='e'){ if(selectedTaskId){ e.preventDefault(); openEdit(selectedTaskId); } }
   });
+
+  // a sheet open: the keyboard drives the step — Entrée moves on, 1…9 tick the list, n notes, a calls; Entrée confirms the move
+  document.addEventListener('keydown', e=>{
+    if(e.ctrlKey || e.metaKey || e.altKey || window.TODO_LITE) return;
+    const ae=document.activeElement, tag=ae?ae.tagName:'', typing=(tag==='INPUT' && !/^(checkbox|radio|button)$/.test(ae.type)) || tag==='TEXTAREA' || tag==='SELECT' || (ae && ae.isContentEditable);
+    if(typing) return;
+    const adv=$('stage-advance-overlay');
+    if(adv && !adv.classList.contains('hidden')){ if(e.key==='Enter' && tag!=='BUTTON'){ e.preventDefault(); e.stopPropagation(); $('stage-advance-confirm').click(); } return; }
+    const ov=$('opp-detail-overlay'); if(!ov || ov.classList.contains('hidden')) return;
+    if(document.querySelector('#call-overlay, #dup-overlay, #choice-overlay:not(.hidden), #gs-overlay:not([hidden])')) return;
+    const body=$('opp-detail-body');
+    if(e.key==='Enter' && tag!=='BUTTON' && tag!=='A'){ const b=body.querySelector('.sp-next'); if(b){ e.preventDefault(); e.stopPropagation(); b.click(); } return; }
+    if(/^[1-9]$/.test(e.key)){ const boxes=[...body.querySelectorAll('.sp-checks input[type=checkbox]')], cb=boxes[+e.key-1]; if(cb){ e.preventDefault(); e.stopPropagation(); if(!cb.disabled){ cb.checked=!cb.checked; cb.dispatchEvent(new Event('change')); } } return; }
+    if(e.key==='n'){ const sec=[...body.querySelectorAll('.sheet-sec')].find(d=>d.querySelector('.qn')); if(sec){ e.preventDefault(); e.stopPropagation(); sec.open=true; const ta=sec.querySelector('textarea'); ta.scrollIntoView({ block:'center' }); ta.focus(); } return; }
+    if(e.key==='a'){ const b=body.querySelector('.sp-call'); if(b){ e.preventDefault(); e.stopPropagation(); b.click(); } return; }
+  }, true);
 
   // PWA: install prompt (hidden on iOS Safari and once already installed — no beforeinstallprompt there)
   let deferredInstallPrompt = null;
