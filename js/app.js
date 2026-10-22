@@ -4551,6 +4551,7 @@
     st.installs.forEach((inst,i)=>{ if(!(inst.centrale||'').trim()) inst.centrale=st.installs.length>1?producteur+' '+(i+1):producteur; });
     if(st.editId){
       const o=opportunities.find(x=>x.id===st.editId); if(!o){ closeOppForm(); return; }
+      const namesBefore=new Map(opportunities.filter(x=>!x.deleted && (x.id===o.id || (o.requestId && x.requestId===o.requestId))).map(x=>[x.id, oppName(x)]));   // renamed installations: their [[links]] follow
       const company=ensureCompany(producteur);
       PQ_SHARED_KEYS.forEach(k=>{ o[k]=v[k]; }); PQ_CENTRALE_KEYS.forEach(k=>{ o[k]=st.installs[0][k]; }); if(st.installs[0].caract) o.caract=st.installs[0].caract;
       o.company=company; o.title=o.centrale; touchCrm(o);
@@ -4576,6 +4577,7 @@
         x.title=x.centrale; touchCrm(x);
       });
       if(st.editOtherIds){ o.otherContactIds=[...new Set(st.editOtherIds.filter(id=>!mc || id!==mc.id))]; if(!o.otherContactIds.length) delete o.otherContactIds; touchCrm(o); }
+      namesBefore.forEach((nm,id)=>{ const x=opportunities.find(y=>y.id===id); if(x && oppName(x)!==nm) rewriteLinks(nm, oppName(x)); });
       saveCrm(); closeOppForm(); renderPipeline(); render();
       openOppDetail(o.id);
       return;
