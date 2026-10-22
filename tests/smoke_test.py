@@ -384,6 +384,22 @@ with sync_playwright() as p:
     check(not errors, f"no page errors ({errors})")
     page.close()
 
+    # --- « Widget »: the tasks in a detached window (always on top when the browser allows it, else a small window)
+    page, errors = new_page(browser, viewport={"width": 1300, "height": 850})
+    page.add_init_script("window.__pip=[]; Object.defineProperty(window, 'documentPictureInPicture', { configurable:true, value:{ requestWindow: async o=>{ window.__pip.push(o); return window.open('about:blank','_blank'); } } });")
+    page.goto(URL)
+    with page.context.expect_page() as pop: page.click(".app-sidebar-widget")
+    page.wait_for_timeout(300)
+    check(page.evaluate("window.__pip.length") == 1 and "widget" not in page.url, "widget: opens a window kept above the others, the app stays as it is")
+    pop.value.close(); page.close()
+    page, errors = new_page(browser, viewport={"width": 1300, "height": 850})
+    page.add_init_script("try{ delete window.documentPictureInPicture; delete Window.prototype.documentPictureInPicture; }catch(e){}")
+    page.goto(URL)
+    with page.context.expect_page() as pop: page.click(".app-sidebar-widget")
+    pop.value.wait_for_load_state()
+    check("widget" in pop.value.url and "pip" in pop.value.url and "widget" not in page.url, f"widget: without that, a small separate window ({pop.value.url})")
+    pop.value.close(); check(not errors, f"no page errors ({errors})"); page.close()
+
     # --- backup reminder: no sync and no export for a month
     page, errors = new_page(browser, {"todo_todo-widget-tasks": json.dumps([task("bk", "Une tâche")])}, viewport={"width": 1300, "height": 850})
     page.add_init_script("if(!sessionStorage.getItem('bk')){ localStorage.setItem('first-seen-at', String(Date.now()-40*864e5)); sessionStorage.setItem('bk','1'); }")

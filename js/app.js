@@ -7644,6 +7644,20 @@
   $('gs-open-btn').onclick=()=>gsOpen(); $('gs-open-lite').onclick=()=>gsOpen();
 
   // ---------- widget mode: the tasks tab in a floating panel opened from a draggable bubble ----------
+  // from the app: « Widget » opens the tasks in a small window of their own, kept above the other windows (Chrome / Edge),
+  // or else in a small separate window — no longer a bubble inside this same page
+  async function openMiniWindow(){
+    const url=new URL('index.html?widget&pip', location.href).href;
+    if('documentPictureInPicture' in window){
+      try{ const w=await documentPictureInPicture.requestWindow({ width:400, height:600 });
+        w.document.title='Tâches'; w.document.body.style.cssText='margin:0;background:#0A0D12;';
+        const f=w.document.createElement('iframe'); f.src=url; f.title='Tâches'; f.style.cssText='border:0;width:100vw;height:100vh;display:block;';
+        w.document.body.appendChild(f); return true; }catch(e){}
+    }
+    const w=window.open(url, 'todo-mini', 'popup,width=400,height=620'); return !!w;
+  }
+  window.todoOpenMini=openMiniWindow;
+  { const wl=document.querySelector('.app-sidebar-widget'); if(wl && !window.TODO_WIDGET) wl.addEventListener('click', e=>{ e.preventDefault(); openMiniWindow(); }); }
   function widgetOpenFull(url){
     url=url||'index.html';
     if(window.TODO_PIP || window.top!==window){ try{ window.open(url, '_blank'); }catch(e){} return; }   // mini window or embedded page: new tab
