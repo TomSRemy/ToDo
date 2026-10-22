@@ -1048,9 +1048,9 @@ with sync_playwright() as p:
     check(page.locator("#postit-list .pi-row.done").count() == 1, "post-it: a ticked line is struck through and saved")
     page.locator("#postit-list .pi-text", has_text="Envoyer offre").click()
     check(page.is_visible("#postit-text") and page.evaluate("document.activeElement.id") == "postit-text", "post-it: clicking a line edits the text")
-    page.keyboard.type(" PPA"); page.locator("#postit-bar").click(); page.wait_for_timeout(200)
-    check([t.strip() for t in page.eval_on_selector_all("#postit-list .pi-text", "els=>els.map(e=>e.textContent)")] == ["Appeler Paul", "Envoyer offre PPA"],
-          "post-it: back to the checklist after editing")
+    page.keyboard.type(" PPA"); page.locator("#postit-bar").click(position={"x": 4, "y": 4}); page.wait_for_timeout(200)
+    pi = [t.strip() for t in page.eval_on_selector_all("#postit-list .pi-text", "els=>els.map(e=>e.textContent)")]
+    check(pi == ["Appeler Paul", "Envoyer offre PPA"], f"post-it: back to the checklist after editing ({pi})")
     check(not errors, f"no page errors ({errors})")
     page.close()
 
