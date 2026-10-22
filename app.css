@@ -1702,3 +1702,9 @@ html.lite .wk-card{ display:none; }
 .nw-actor{ background:var(--panel-2); border:1px solid var(--bd); border-radius:var(--radius); color:var(--tx1); font:500 12px var(--font-ui); padding:5px 8px; }
 .nw-actor[hidden]{ display:none; }
 .nw-local input:disabled + *, .nw-local:has(input:disabled){ opacity:.5; cursor:default; }
+
+/* pricing mail: all plants or one */
+.mail-scope{ display:flex; flex-wrap:wrap; gap:6px; margin:4px 0 8px; }
+.mail-scope button{ background:var(--panel-2); border:1px solid var(--bd); border-radius:999px; color:var(--tx2); font:500 12px var(--font-ui); padding:3px 11px; cursor:pointer; }
+.mail-scope button:hover{ color:var(--tx1); border-color:var(--tx3); }
+.mail-scope button.on{ color:var(--accent); border-color:var(--accent); background:var(--accent-dim); }

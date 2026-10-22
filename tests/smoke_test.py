@@ -465,6 +465,9 @@ with sync_playwright() as p:
     # drag a point like in Obsidian: it follows the mouse and pulls its neighbours; let go, it stays where it was put (until « Libérer les points »)
     page.press(".nw-search input", "Enter"); page.wait_for_timeout(250)   # the point is brought to the middle of the free space, away from the panel
     box = page.locator(".nw-stage canvas").bounding_box()
+    pz = page.evaluate("window.todoNetworkPos('op:no1')"); page.mouse.move(box["x"] + pz[0], box["y"] + pz[1])
+    for _ in range(5): page.mouse.wheel(0, 120); page.wait_for_timeout(30)   # zoomed out a little: a drag on screen is a real move in the graph
+    page.press(".nw-search input", "Enter"); page.wait_for_timeout(250)
     p0, c0 = page.evaluate("window.todoNetworkPos('op:no1')"), page.evaluate("window.todoNetworkPos('co:solaris')")
     page.mouse.move(box["x"] + p0[0], box["y"] + p0[1]); page.mouse.down()
     for i in range(1, 11): page.mouse.move(box["x"] + p0[0] - 18 * i, box["y"] + p0[1] + 14 * i); page.wait_for_timeout(30)
@@ -998,6 +1001,14 @@ with sync_playwright() as p:
     check("- Durée : 2 pricing demandés, jusqu’au 31/12/2030 et jusqu’au 31/12/2031." in b and "- Contexte du marché : AO CRE (CR)" in b
           and "   - Prix phase de Test : SPOT" in b and "   - Période de test : frais en €/MWh" in b and "- GO : sans objet" in b and "- GAPD : coût et montant à indiquer." in b
           and "- Éolien : bridages" in b and "Date de remise de l’offre : [À CONFIRMER" in b and b.endswith("Merci d’avance !"), "pricing mail: options, test phase and conditions like the model")
+    grouped = page.evaluate("""(()=>{ const base={ kind:'installation', company:'EX', producteur:'EX', contrat:'AO CRE CR', fin:'31/12/2030', install:'PV' };
+      const same=n=>Object.assign({}, base, { centrale:'Toit '+n, debut:'01/03/2027', mesPrev:'01/04/2027' });
+      const a=window.__todo.pricingMail({ company:'EX' }, [same(1), same(2), same(3), Object.assign({}, base, { centrale:'Sol', debut:'01/07/2027', mesPrev:'01/08/2027' })]).body;
+      const many=[1,2,3,4,5,6].map(i=>Object.assign({}, base, { centrale:'C'+i, debut:'01/0'+i+'/2027', mesPrev:'01/0'+(i+1)+'/2027' }));
+      return [a, window.__todo.pricingMail({ company:'EX' }, many).body]; })()""")
+    tl = [l.strip() for l in grouped[0].split("\n") if "(test " in l]
+    check(tl == ["- Toit 1, Toit 2, Toit 3 : mars 2027 → avril 2027 (test 1 mois)", "- Sol : juillet 2027 → août 2027 (test 1 mois)"], f"pricing mail: plants with the same dates on one line ({tl})")
+    check("(test " not in grouped[1] and "MSI de février 2027 à juillet 2027" in grouped[1] and "fichier joint" in grouped[1], "pricing mail: too many different dates → the period and the attached file")
     page.close()
 
     # --- Contract dates: start + duration → end, start + end → duration, one-click choices
@@ -1281,6 +1292,14 @@ with sync_playwright() as p:
     check(len(t) == 1 and t[0]["title"].startswith("Appeler Pierre"), "one call task for the whole request")
     page.click(".pipe-req-card .pipe-card-title")
     check("Codes affaire" in page.input_value("#opp-mail-body") and "27(06)" in page.input_value("#opp-mail-body"), "pricing mail with business codes")
+    chips = page.locator(".mail-scope button")
+    if chips.count() >= 3:
+        both = page.input_value("#opp-mail-body").count(" – A"); name = chips.nth(1).inner_text(); chips.nth(1).click()
+        one = page.input_value("#opp-mail-body")
+        check(both >= 2 and one.count(" – A") == 1 and name in one, f"pricing mail: a click on a plant writes the mail for it alone ({name})")
+        chips.nth(0).click()
+    else:
+        check(False, f"pricing mail: one chip per plant ({chips.count()})")
     page.click("#opp-detail-actions >> text=Copier lignes Pipe")
     page.click("#choice-btns >> text=Une ligne par installation")
     rows = page.evaluate("navigator.clipboard.readText()").split("\n")

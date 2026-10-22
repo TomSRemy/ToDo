@@ -5228,10 +5228,18 @@
     }
     if(list.length>1) box.appendChild(buildRequestCompare(list, null));
     const mailBox=document.createElement('div'); mailBox.className='opp-mail';
-    const ml=pricingMail(req, list);
+    let ml=pricingMail(req, list);
     mailBox.innerHTML='<div class="opp-phase-h">Mail de demande de pricing</div>';
     const subj=document.createElement('input'); subj.readOnly=true; subj.value=ml.subject; subj.id='opp-mail-subject';
     const body=document.createElement('textarea'); body.readOnly=true; body.value=ml.body; body.rows=12; body.id='opp-mail-body';
+    // all the plants together, or one only (a click on its name)
+    if(list.length>1){
+      const chips=document.createElement('div'); chips.className='mail-scope'; chips.setAttribute('role','group'); chips.setAttribute('aria-label','Mail pour');
+      const pick=(sub, b)=>{ ml=pricingMail(req, sub); subj.value=ml.subject; body.value=ml.body; chips.querySelectorAll('button').forEach(x=>x.classList.toggle('on', x===b)); };
+      const mk=(label, sub)=>{ const b=document.createElement('button'); b.type='button'; b.textContent=label; b.onclick=()=>pick(sub, b); chips.appendChild(b); return b; };
+      mk('Toutes ('+list.length+')', list).classList.add('on'); list.forEach(o=>mk(oppName(o), [o]));
+      mailBox.appendChild(chips);
+    }
     const hint=document.createElement('p'); hint.className='modal-hint'; hint.textContent='Joins le fichier « Caractéristiques Centrales » créé par le bouton ci-dessous : toutes les lignes du modèle, remplies avec ce que l\u2019appli connaît (et tout ce que contenait l\u2019Excel du producteur).';
     mailBox.appendChild(subj); mailBox.appendChild(body); mailBox.appendChild(hint);
     box.appendChild(mailBox);
@@ -5350,11 +5358,14 @@
       const m=days/30.44; return Math.abs(m-Math.round(m))<0.2 && Math.round(m)>=1?Math.round(m)+' mois':Math.max(1,Math.round(days/7))+' semaine'+(Math.round(days/7)>1?'s':''); };
     const byStart=list.slice().sort((x,y)=>{ const a=injOf(x)||msiOf(x), b=injOf(y)||msiOf(y); return (a?a.y*12+(a.m||0):1e9)-(b?b.y*12+(b.m||0):1e9); });
     const anyTest=list.some(o=>{ const a=injOf(o), b=msiOf(o); return a && b && testLen(a,b); });
-    const dateLine=o=>{ const a=injOf(o), b=msiOf(o), t=testLen(a,b);
-      if(a && b && t) return oppName(o)+' : '+month(a)+' → '+month(b)+' (test '+t+')';
-      if(b) return oppName(o)+' : MSI '+month(b)+(a?'':' (première injection [À CONFIRMER])');
-      if(a) return oppName(o)+' : '+month(a)+' → MSI [À CONFIRMER]';
-      return oppName(o)+' : [À CONFIRMER]'; };
+    const dateText=o=>{ const a=injOf(o), b=msiOf(o), t=testLen(a,b);
+      if(a && b && t) return month(a)+' → '+month(b)+' (test '+t+')';
+      if(b) return 'MSI '+month(b)+(a?'':' (première injection [À CONFIRMER])');
+      if(a) return month(a)+' → MSI [À CONFIRMER]';
+      return '[À CONFIRMER]'; };
+    // the same dates for several plants: one line; too many different lines: the period, and the attached file for the detail
+    const dateGroups=[]; byStart.forEach(o=>{ const t=dateText(o), g=dateGroups.find(x=>x.t===t); if(g) g.names.push(oppName(o)); else dateGroups.push({ t, names:[oppName(o)] }); });
+    const namesOf=g=>g.names.length>4?g.names.length+' centrales ('+g.names.slice(0,3).join(', ')+'…)':g.names.join(', ');
     const ends=[...new Set(list.map(o=>{ const e=pqMonthYear(o.fin); return e&&e.m?pqPad(e.d||new Date(e.y,e.m,0).getDate())+'/'+pqPad(e.m)+'/'+e.y:(o.fin||''); }).filter(Boolean))];
     const duree=ends.length>1?ends.length+' pricing demandés, '+ends.map(e=>'jusqu’au '+e).join(' et ')+'.':ends.length?'jusqu’au '+ends[0]+'.':'[À CONFIRMER]';
     const ctx=[...new Set(list.map(o=>(o.contrat||'').replace(/\s+CR$/,' (CR)')).filter(Boolean))].join(' / ')||'[À CONFIRMER]';
@@ -5369,7 +5380,10 @@
       '- Production : voir fichier joint.',
       '- Latitude/longitude : voir fichier joint.',
       '- Dates de démarrage du contrat (première injection → MSI, phase de test entre les deux) :');
-    byStart.forEach(o=>L.push('   - '+dateLine(o)));
+    if(dateGroups.length>4){
+      const msis=list.map(msiOf).filter(Boolean).sort((x,y)=>(x.y*12+(x.m||0))-(y.y*12+(y.m||0)));
+      L.push('   - '+(msis.length?'MSI de '+month(msis[0])+' à '+month(msis[msis.length-1])+' ; ':'')+'le détail par centrale est dans le fichier joint (lignes « Première injection » et « Date de mise en service »).');
+    } else dateGroups.forEach(g=>L.push('   - '+(list.length>1?namesOf(g)+' : ':'')+g.t));
     L.push('- Durée : '+duree, '- Contexte du marché : '+ctx);
     if(anyTest && anyCr){
       L.push('- Prix d’achat par Selfee : Le producteur demande un prix pour la phase de test et un prix pour la période CR à partir de la MSI.',
