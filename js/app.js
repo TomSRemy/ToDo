@@ -4099,7 +4099,7 @@
     opts=opts||{};
     const editing=opts.editId?opportunities.find(o=>o.id===opts.editId):null;
     pqState={ editId:editing?editing.id:null, prequalId:opts.prequalId||null, shared:pqDefaults(), installs:[{}], auto:new Set(), touched:new Set(), contactChoice:null, contactPicked:false, extras:[], extraExisting:new Set(), principal:'main', step:1 };
-    pqLastFiles=null;
+    pqLastFiles=null; setTimeout(pqRestartVisible, 0);
     if(editing){
       PQ_SHARED_KEYS.forEach(k=>{ if(editing[k]!==undefined) pqState.shared[k]=editing[k]; });
       pqState.editOtherIds=(editing.otherContactIds||[]).slice();
@@ -4373,6 +4373,7 @@
       const tag=!st.editId||st.installs.length<2?'':i===0?'<span class="pq-inst-tag">celle que tu modifies</span>':inst._oppId?'<span class="pq-inst-tag">déjà dans la demande</span>':'<span class="pq-inst-tag new">nouvelle : sera créée</span>';
       const many=st.installs.length>1, sub=[inst.centrale, fmtKwc(inst.kwc)].filter(Boolean).join(' · ');
       h+='<div class="pq-sec pq-inst'+(many?' many':'')+'" style="--inst-c:'+PROJECT_PALETTE[i%PROJECT_PALETTE.length]+'"><div class="pq-sec-h">'+(many?'<span class="pq-inst-n">'+(i+1)+'</span><span class="pq-inst-name">'+escapeHtml(sub||'Installation '+(i+1))+'</span>':'Installation')+tag
+        +'<button type="button" class="pq-link pq-clear-inst" data-clear="'+i+'" title="Effacer toutes les infos de cette installation (si ce n\u2019est pas la bonne centrale)">Vider</button>'
         +(st.installs.length>1 && !(st.editId && i===0)?'<button type="button" class="pq-link" data-remove="'+i+'">'+(st.editId && inst._oppId?'Ne pas modifier ici':'Retirer')+'</button>':'')+'</div>'
         +groups.map(([label,gf])=>(label?'<div class="pq-grp">'+label+'</div>':'')+'<div class="pq-grid pq-grid5">'+gf.map(f=>pqFieldHtml(f,String(i),inst[f.k],st.auto.has(i+'.'+f.k))).join('')+'</div>').join('')+'</div>';
     });
@@ -4610,6 +4611,7 @@
     pqState.detected=pqDetectPeople(text).map(p=>({ v:p, on:p.sender }));
     pqApply(parsed, installs);
     pqDetectBox(parsed, installs);
+    pqRestartVisible();
   }
   // « Ce que j'ai trouvé » : producer, plants and people of the documents; each person can be linked or not, and made
   // the main contact. Known contacts are recognised (same mail, or same name in the same company).
@@ -4659,6 +4661,18 @@
   function pqDetectedIds(company){
     return (pqState.detected||[]).filter(d=>d.on && !pqIsMain(d.v)).map(d=>{ const v=Object.assign({}, d.v, { tel:[d.v.tel,d.v.tel2].filter(Boolean).join(' / ') }); const c=ensureContact(v, company); return c&&c.id; }).filter(Boolean);
   }
+  // « Repartir de zéro » : the pasted mail, the files and everything read from them go; what was typed by hand stays
+  function pqRestart(){
+    const st=pqState; if(!st) return;
+    $('pq-mail').value=''; pqLastFiles=null; $('pq-files-info').textContent=''; st.detected=[]; st.hints=null;
+    [...st.auto].forEach(key=>{ if(st.touched.has(key)) return; const [sc,k]=key.split('.'); if(sc==='s') st.shared[k]=pqDefaults()[k]; else if(st.installs[+sc]) delete st.installs[+sc][k]; });
+    st.auto=new Set();
+    if(st.editId){ st.installs=st.installs.filter((x,i)=>i===0 || !x._fromFile); }
+    else { const typed=st.installs.filter((x,i)=>[...st.touched].some(k=>k.startsWith(i+'.'))); st.installs=typed.length?typed:[{}];
+      st.touched=new Set([...st.touched].filter(k=>k.startsWith('s.'))); }
+    $('pq-detect').hidden=true; $('pq-detect').innerHTML=''; $('pq-mail-warning').hidden=true; pqRender(); pqRestartVisible();
+  }
+  function pqRestartVisible(){ const b=$('pq-restart'); if(b) b.hidden=!($('pq-mail').value.trim() || pqLastFiles || (pqState && pqState.auto.size)); }
   async function pqHandleFiles(fileList){
     const files=[...fileList]; if(!files.length) return;
     $('pq-files-info').textContent='Lecture…';
@@ -6446,6 +6460,7 @@
   $('pq-form').addEventListener('input', pqOnInput);
   $('pq-form').addEventListener('change', pqOnChange);
   $('pq-form').addEventListener('change', e=>{ if(e.target.id==='pq-contact-switch' && pqState && e.target.value){ pqSwitchContact(e.target.value); return; } });
+  $('pq-restart').onclick=()=>askChoice('Repartir de zéro ?', 'Le mail collé, les fichiers et tout ce qui en a été lu (installations, contacts, dates…) seront effacés du formulaire. Ce que tu as tapé toi-même reste.', [{ label:'Repartir de zéro', value:'y' }]).then(v=>{ if(v==='y') pqRestart(); });
   $('pq-form').addEventListener('change', e=>{ if(e.target.id==='pq-count-ok' && pqState){ pqState.countConfirmed=e.target.checked?pqState.installs.length:null; } });
   $('pq-form').addEventListener('click', e=>{
     if(!pqState) return;
@@ -6496,7 +6511,12 @@
     const dc=e.target.closest('[data-dset]'); if(dc){ const i=+dc.dataset.s, k=dc.dataset.dset; pqState.installs[i][k]=dc.dataset.v; pqState.touched.add(i+'.'+k); pqState.auto.delete(i+'.'+k); pqLinkDates(i, k); pqRerenderKeepFocus(); return; }
     const p9=e.target.closest('[data-p90]'); if(p9){ const i=+p9.dataset.s; pqState.installs[i].p90=p9.dataset.p90; pqState.touched.add(i+'.p90'); pqRerenderKeepFocus(); return; }
     const est=e.target.closest('[data-est]'); if(est){ const i=+est.dataset.s; pqState.installs[i].mwh=est.dataset.est; pqState.touched.add(i+'.mwh'); pqRerenderKeepFocus(); return; }
-    const rm=e.target.closest('[data-remove]'); if(rm){ pqState.installs.splice(+rm.dataset.remove,1); pqState.auto=new Set([...pqState.auto].filter(k=>k.startsWith('s.'))); pqRerenderKeepFocus(); return; }
+    const clr=e.target.closest('[data-clear]'); if(clr){ const i=+clr.dataset.clear, inst=pqState.installs[i]||{};
+      askChoice('Vider cette installation ?', 'Toutes les infos de « '+(inst.centrale||'Installation '+(i+1))+' » seront effacées dans le formulaire (rien n\u2019est enregistré tant que tu ne valides pas).', [{ label:'Vider', value:'y' }]).then(v=>{ if(v!=='y' || !pqState) return;
+        pqState.installs[i]=inst._oppId?{ _oppId:inst._oppId }:{}; const pre=i+'.';
+        pqState.touched=new Set([...pqState.touched].filter(k=>!k.startsWith(pre))); pqState.auto=new Set([...pqState.auto].filter(k=>!k.startsWith(pre))); pqRender(); });
+      return; }
+        const rm=e.target.closest('[data-remove]'); if(rm){ pqState.installs.splice(+rm.dataset.remove,1); pqState.auto=new Set([...pqState.auto].filter(k=>k.startsWith('s.'))); pqRerenderKeepFocus(); return; }
     if(e.target.id==='pq-add-inst'){ const last=pqState.installs[pqState.installs.length-1]||{}; pqState.installs.push({ install:last.install, contrat:last.contrat }); pqRender(); const f=$('pq-'+(pqState.installs.length-1)+'-centrale'); if(f) f.focus(); }
   });
   $('pq-mail').addEventListener('input', ()=>{ clearTimeout(pqParseTimer); pqParseTimer=setTimeout(pqReparse, 250); });

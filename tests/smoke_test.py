@@ -1436,6 +1436,22 @@ with sync_playwright() as p:
     check(not errors, f"no page errors ({errors})")
     page.close()
 
+    # --- the form: « Vider » one installation, « Repartir de zéro » from the pasted mail
+    page, errors = new_page(browser)
+    page.goto(URL); page.click('[data-tab="pipeline"]'); page.click("#opp-add-btn"); page.fill("#pq1-company", "SEM RESET"); page.click("#pq-next-btn")
+    check(not page.is_visible("#pq-restart"), "form: nothing to start over before a mail is pasted")
+    page.fill("#pq-mail", "De : H R <h@sem.fr>\nObjet : Nos centrales\n\nNous avons deux projets :\n- Gymnase : 250 kWc\n- École : 100 kWc\nH R"); page.wait_for_timeout(500)
+    check(page.input_value("#pq-0-centrale") == "Gymnase" and page.input_value("#pq-1-centrale") == "École" and page.is_visible("#pq-restart"), "form: the mail fills two installations")
+    page.click("[data-clear='1']"); page.click("#choice-btns >> text=Vider"); page.wait_for_timeout(100)
+    check(page.input_value("#pq-1-centrale") == "" and page.input_value("#pq-1-kwc") == "" and page.input_value("#pq-0-centrale") == "Gymnase", "form: « Vider » clears one installation only")
+    page.fill("#pq-0-particularites", "Tapé à la main") if page.locator("#pq-0-particularites").count() else None
+    page.click("#pq-restart"); page.click("#choice-btns >> text=Repartir de zéro"); page.wait_for_timeout(200)
+    left = page.locator("[id^=pq-][id$=-centrale]").count()
+    check(page.input_value("#pq-mail") == "" and page.input_value("#pq-0-centrale") == "" and left == 1 and not page.is_visible("#pq-restart"),
+          f"form: « Repartir de zéro » clears the mail and what was read from it ({left} installation left)")
+    check(not errors, f"no page errors ({errors})")
+    page.close()
+
     # --- Qualification: the number of plants announced by the mail is checked against the installations found
     page, errors = new_page(browser)
     page.goto(URL); page.click('[data-tab="pipeline"]'); page.click("#opp-add-btn"); page.fill("#pq1-company", "SEM"); page.click("#pq-next-btn")

@@ -1708,3 +1708,10 @@ html.lite .wk-card{ display:none; }
 .mail-scope button{ background:var(--panel-2); border:1px solid var(--bd); border-radius:999px; color:var(--tx2); font:500 12px var(--font-ui); padding:3px 11px; cursor:pointer; }
 .mail-scope button:hover{ color:var(--tx1); border-color:var(--tx3); }
 .mail-scope button.on{ color:var(--accent); border-color:var(--accent); background:var(--accent-dim); }
+
+/* the form: clear one installation, or start over from the pasted mail / files */
+.pq-sec-h .pq-clear-inst{ margin-left:auto; }
+.pq-sec-h .pq-clear-inst + .pq-link{ margin-left:0; }
+.pq-restart{ align-self:flex-start; color:var(--tx3); text-decoration:underline; margin:2px 0 6px; }
+.pq-restart:hover{ color:var(--crit, #ED6965); }
+.pq-restart[hidden]{ display:none; }
