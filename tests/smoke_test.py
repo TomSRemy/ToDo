@@ -783,6 +783,17 @@ with sync_playwright() as p:
     page.click("#opp-detail-body tbody[data-sec='Localisation'] .req-sec-h")
     check("caractéristiques centrales" in table.lower() and page.locator("#opp-detail-body .req-table td.none").count() > 10,
           "request: the table also lists every line of the plant characteristics file")
+    # Excel-like fill: the small square of the active cell dragged onto the other plant copies the value
+    spv = "#opp-detail-body .req-in[data-id='%s'][data-l='Nom SPV']"
+    page.fill(spv % "t1", "SPV COMMUNE"); page.press(spv % "t1", "Tab"); page.focus(spv % "t1"); page.wait_for_timeout(100)
+    hb, tb = page.locator("#opp-detail-body .req-fill").bounding_box(), page.locator(spv % "t2").bounding_box()
+    page.mouse.move(hb["x"] + 4, hb["y"] + 4); page.mouse.down(); page.mouse.move(tb["x"] + 20, tb["y"] + 10, steps=6); page.mouse.up(); page.wait_for_timeout(300)
+    t2 = next(o for o in stored(page, "todo-widget-opportunities") if o["id"] == "t2")
+    check(page.input_value(spv % "t2") == "SPV COMMUNE" and "SPV COMMUNE" in json.dumps(t2, ensure_ascii=False), "request: the fill handle copies a value to the other plant, saved")
+    page.click("#opp-detail-body .req-tools [data-rows=needed]")
+    check(not page.is_visible(spv % "t1") and page.is_visible("#opp-detail-body .req-in[data-id='t1'][data-l='Commune']"), "request: « Obligatoires » shows only the lines the pricing needs")
+    page.click("#opp-detail-body .req-tools [data-rows=all]")
+    check(page.is_visible(spv % "t1"), "request: « Tout le fichier » shows them all again")
     page.click("#opp-detail-body .req-compare-h")
     check(not page.is_visible("#opp-detail-body .req-table"), "request: the side-by-side table folds with a click on its title")
     page.locator("#opp-detail-body .req-tab", has_text="BETA PV1").click()

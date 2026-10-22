@@ -4874,7 +4874,7 @@
       box.appendChild(head);
       { const f=stageFocus([o]); if(f) box.appendChild(f); }
       box.appendChild(buildInstallSheet(o));
-      if(siblings.length>1) box.appendChild(buildRequestCompare(siblings, o.id));
+      box.appendChild(buildRequestCompare(siblings.length>1?siblings:[o], o.id));   // every line of the « Caractéristiques Centrales » file, to fill in place
       // installations of one request usually move together: the stage applies to all of them, or to this one only
       const batch=o.requestId?requestInstalls(o.requestId).filter(x=>!isExited(x)):[];
       const many=batch.length>1 && !isExited(o);
@@ -4975,6 +4975,28 @@
     }
   }
   function reqSecOpen(name, def){ try{ const v=localStorage.getItem('req-sec-'+name); return v===null?def:v==='1'; }catch(e){ return def; } }
+  // Excel-like fill: the small square at the corner of the active cell, dragged along its line (the other plants) or down
+  // its column, copies its value into every cell it covers
+  function reqFillHandle(sc){
+    const handle=document.createElement('span'); handle.className='req-fill'; handle.title='Tirer pour recopier dans les cases voisines';
+    sc.addEventListener('focusin', e=>{ const inp=e.target.closest && e.target.closest('.req-in'); if(!inp || inp.readOnly || inp.disabled) return; inp.closest('td').appendChild(handle); });
+    handle.addEventListener('pointerdown', e=>{
+      e.preventDefault(); e.stopPropagation();
+      const td=handle.parentElement, src=td && td.querySelector('.req-in'); if(!src) return;
+      const tbl=td.closest('table'), r0=td.parentElement.rowIndex, c0=td.cellIndex; let picked=[];
+      const paint=()=>{ tbl.querySelectorAll('.fill-sel').forEach(x=>x.classList.remove('fill-sel')); picked.forEach(c=>c.classList.add('fill-sel')); };
+      const move=ev=>{ const el=document.elementFromPoint(ev.clientX, ev.clientY), over=el && el.closest && el.closest('td'); if(!over || over.closest('table')!==tbl) return;
+        const r=over.parentElement.rowIndex, c=over.cellIndex; picked=[];
+        if(r===r0){ for(let k=Math.min(c,c0);k<=Math.max(c,c0);k++){ const x=tbl.rows[r0].cells[k]; if(x && k!==c0 && x.querySelector('.req-in')) picked.push(x); } }
+        else if(c===c0){ for(let k=Math.min(r,r0);k<=Math.max(r,r0);k++){ const row=tbl.rows[k], x=row && row.cells[c0]; if(x && k!==r0 && x.offsetParent && x.querySelector('.req-in')) picked.push(x); } }
+        paint(); };
+      const up=()=>{ document.removeEventListener('pointermove', move); document.removeEventListener('pointerup', up);
+        const v=src.value; picked.forEach(x=>{ const inp=x.querySelector('.req-in'); if(!inp || inp.readOnly || inp.disabled) return;
+          if(inp.tagName==='SELECT'){ if(![...inp.options].some(o=>o.value===v || o.text===v)) return; } inp.value=v; inp.dispatchEvent(new Event('change', { bubbles:true })); });
+        setTimeout(()=>{ picked.forEach(c=>c.classList.remove('fill-sel')); }, 600); };
+      document.addEventListener('pointermove', move); document.addEventListener('pointerup', up);
+    });
+  }
   function buildRequestCompare(list, currentId){
     // folds away with a click on its title; open or closed is remembered on this device
     const wrap=document.createElement('details'); wrap.className='req-compare';
@@ -4984,7 +5006,7 @@
     wrap.open=open;
     wrap.addEventListener('toggle', ()=>{ try{ localStorage.setItem(key, wrap.open?'1':'0'); }catch(e){} });
     const missing=list.reduce((s,x)=>s+CARACT_ROWS.filter(l=>REQ_NEEDED.has(caractKey(l)) && caractValue(x,l)==='').length,0);
-    wrap.innerHTML='<summary class="opp-phase-h req-compare-h">Les '+list.length+' installations côte à côte'+(missing?' <span class="req-miss">'+missing+' case'+(missing>1?'s':'')+' à compléter</span>':'')+'<span class="req-hint">cliquer dans une case pour la modifier</span></summary>';
+    wrap.innerHTML='<summary class="opp-phase-h req-compare-h">'+(list.length>1?'Les '+list.length+' installations côte à côte':'Caractéristiques centrales')+(missing?' <span class="req-miss">'+missing+' case'+(missing>1?'s':'')+' à compléter</span>':'')+'<span class="req-hint">cliquer dans une case pour la modifier · tirer le petit carré pour recopier</span></summary>';
     const sc=document.createElement('div'); sc.className='req-compare-scroll';
     const cell=(x,v,attrs,need)=>'<td class="'+(x.id===currentId?'cur ':'')+(v===''?(need?'empty':'none'):'')+'"><input class="req-in" '+attrs+' value="'+escapeHtml(String(v))+'" placeholder="'+(need?'à compléter':'—')+'" aria-label="'+escapeHtml(oppName(x))+'"></td>';
     let t='<table class="req-table"><thead><tr><th class="req-lab">Caractéristiques centrales</th>'+list.map((x,i)=>'<th class="'+(x.id===currentId?'cur':'')+'"><button type="button" class="req-col" data-id="'+escapeHtml(x.id)+'" title="Ouvrir la fiche">'+(i+1)+' · '+escapeHtml(oppName(x))+'</button></th>').join('')+'</tr></thead>';
@@ -4995,8 +5017,9 @@
     caractSections().forEach(([name, labels])=>{
       const vals=labels.map(l=>list.map(x=>caractValue(x,l)));
       section(name, vals.map(r=>r.map(v=>v!=='')), name.startsWith('Champ')?undefined:true);
+      if(!labels.some(l=>REQ_NEEDED.has(caractKey(l)))) t=t.replace(/<tbody class="req-sec([^"]*)" data-sec="([^"]*)">(?![\s\S]*<tbody)/, '<tbody class="req-sec$1 opt-sec" data-sec="$2">');
       labels.forEach((l,li)=>{ const need=REQ_NEEDED.has(caractKey(l));
-        t+='<tr><th scope="row" class="req-lab">'+escapeHtml(l)+'</th>'+list.map((x,xi)=>cell(x, vals[li][xi], 'data-id="'+escapeHtml(x.id)+'" data-l="'+escapeHtml(l)+'"', need)).join('')+'</tr>'; });
+        t+='<tr'+(need?'':' class="opt"')+'><th scope="row" class="req-lab">'+escapeHtml(l)+'</th>'+list.map((x,xi)=>cell(x, vals[li][xi], 'data-id="'+escapeHtml(x.id)+'" data-l="'+escapeHtml(l)+'"', need)).join('')+'</tr>'; });
       t+='</tbody>';
     });
     // what the app adds for the contract (not in the producer's file)
@@ -5009,7 +5032,15 @@
         return cell(x, v, 'data-id="'+escapeHtml(x.id)+'" data-k="'+k+'"', false); }).join('')+'</tr>';
     });
     t+='</tbody></table>';
-    sc.innerHTML=t; wrap.appendChild(sc);
+    sc.innerHTML=t;
+    // all the lines of the file, or only the ones the pricing needs (choice remembered on this device)
+    const tools=document.createElement('div'); tools.className='req-tools';
+    let only=false; try{ only=localStorage.getItem('req-rows')==='needed'; }catch(e){}
+    tools.innerHTML='<span>Lignes :</span><button type="button" data-rows="needed">Obligatoires</button><button type="button" data-rows="all">Tout le fichier</button>';
+    const paintRows=()=>{ sc.querySelector('.req-table').classList.toggle('only-needed', only); tools.querySelectorAll('button').forEach(b=>b.classList.toggle('on', (b.dataset.rows==='needed')===only)); };
+    tools.querySelectorAll('button').forEach(b=>b.onclick=()=>{ only=b.dataset.rows==='needed'; try{ localStorage.setItem('req-rows', only?'needed':'all'); }catch(e){} paintRows(); });
+    wrap.appendChild(tools); wrap.appendChild(sc); paintRows();
+    if(!window.TODO_LITE) reqFillHandle(sc);
     if(window.TODO_LITE) sc.querySelectorAll('.req-in').forEach(i=>{ if(i.tagName==='SELECT') i.disabled=true; else i.readOnly=true; });   // phone: read only, like the sheets
     sc.querySelectorAll('.req-col').forEach(b=>{ b.onclick=()=>openOppDetail(b.dataset.id); });
     sc.querySelectorAll('.req-sec-h').forEach(b=>{ b.onclick=()=>{ const tb=b.closest('tbody'), f=!tb.classList.contains('folded'); tb.classList.toggle('folded', f); b.setAttribute('aria-expanded', String(!f)); try{ localStorage.setItem('req-sec-'+tb.dataset.sec, f?'0':'1'); }catch(e){} }; });
@@ -5293,7 +5324,7 @@
       box.appendChild(sh);
       box.appendChild(buildStageTrack(liveReq, key=>{ liveReq.forEach(o=>{ if(o.stage!==key) setOppStage(o, key); }); openRequestDetail(reqId); }));
     }
-    if(list.length>1) box.appendChild(buildRequestCompare(list, null));
+    if(list.length) box.appendChild(buildRequestCompare(list, null));
     const mailBox=document.createElement('div'); mailBox.className='opp-mail';
     let ml=pricingMail(req, list);
     mailBox.innerHTML='<div class="opp-phase-h">Mail de demande de pricing</div>';
