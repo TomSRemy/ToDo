@@ -17,7 +17,7 @@
     let hidden=new Set(); try{ hidden=new Set(JSON.parse(localStorage.getItem('network-hidden')||'["meeting"]')); }catch(e){}
     root.innerHTML='<div class="nw-bar"><div class="nw-search"><input type="text" placeholder="Trouver dans le réseau…" aria-label="Trouver dans le réseau"></div><div class="nw-types"></div>'
       +'<label class="nw-local"><input type="checkbox"> Voisinage seulement</label><button type="button" class="nw-fit">Recentrer</button></div>'
-      +'<div class="nw-stage"><canvas></canvas><div class="nw-tip" hidden></div><div class="nw-side" hidden></div><div class="nw-hint">Molette : zoom · glisser : déplacer · clic : détails · double-clic : ouvrir la fiche</div></div>';
+      +'<div class="nw-stage"><canvas role="img" aria-label="Graphe des connexions. Utilise la recherche pour trouver un élément : ses liens s’affichent dans le panneau."></canvas><div class="nw-tip" hidden></div><div class="nw-side" hidden></div><div class="nw-hint">Molette : zoom · glisser : déplacer · clic : détails · double-clic : ouvrir la fiche</div></div>';
     const canvas=root.querySelector('canvas'), ctx=canvas.getContext('2d'), stage=root.querySelector('.nw-stage'), tip=root.querySelector('.nw-tip'), side=root.querySelector('.nw-side');
     const search=root.querySelector('.nw-search input'), typesBox=root.querySelector('.nw-types'), localBox=root.querySelector('.nw-local input');
     let nodes=[], edges=[], byId=new Map(), adj=new Map(), pos=new Map();   // positions kept between refreshes

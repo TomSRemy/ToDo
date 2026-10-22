@@ -7124,8 +7124,10 @@
   function networkData(){
     const nodes=[], edges=[], seen=new Set();
     const node=(id, type, label, sub, open)=>{ if(seen.has(id)) return id; seen.add(id); nodes.push({ id, type, label:String(label||'(sans nom)'), sub:sub||'', open }); return id; };
+    const perCo=new Map(); activeContacts().forEach(c=>{ const k=pqFold(c.company); if(k) perCo.set(k,(perCo.get(k)||0)+1); });   // counted once
     const coId=name=>{ name=String(name||'').trim(); if(!name) return null; const id='co:'+pqFold(name).replace(/[^a-z0-9]/g,''); if(id==='co:') return null;
-      const nC=activeContacts().filter(c=>pqFold(c.company)===pqFold(name)).length;
+      if(seen.has(id)) return id;
+      const nC=perCo.get(pqFold(name))||0;
       return node(id, 'company', name, nC?nC+' contact'+(nC>1?'s':''):'Société', ()=>openCompany(name)); };
     const link=(a,b)=>{ if(a && b) edges.push([a,b]); };
     allCompanyNames().forEach(coId);
