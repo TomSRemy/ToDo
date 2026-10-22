@@ -384,6 +384,26 @@ with sync_playwright() as p:
     check(not errors, f"no page errors ({errors})")
     page.close()
 
+    # --- hover preview: a mini sheet on a company, a contact ([[link]]) or in the pipeline
+    page, errors = new_page(browser, {
+        "todo_todo-widget-tasks": json.dumps([task("pk1", "Rappeler [[Paul Durand]] pour l'offre", client="Solaris", due=(TODAY + datetime.timedelta(days=3)).isoformat())]),
+        "todo_todo-widget-contacts": json.dumps([{"id": "pc1", "firstName": "Paul", "lastName": "Durand", "role": "Gérant", "company": "Solaris", "phone1": "06 11 22 33 44", "email": "paul@exemple.fr", "createdAt": 1, "updatedAt": 1, "deleted": False}]),
+        "todo_todo-widget-opportunities": json.dumps([{"id": "po1", "kind": "installation", "company": "Solaris", "centrale": "Toit Sud", "title": "Toit Sud", "kwc": "2500", "stage": "kyc", "createdAt": 1, "updatedAt": 1, "deleted": False}])},
+        viewport={"width": 1300, "height": 850})
+    page.goto(URL); page.click('[data-tab="tasks"]'); page.wait_for_timeout(200)
+    page.locator('.task-row-grid [data-peek="co:Solaris"]').first.hover(); page.wait_for_timeout(700)
+    pk = page.inner_text(".peek") if page.is_visible(".peek") else ""
+    check("Solaris" in pk and "1 installation" in pk and "2,5 MWc" in pk and "Paul Durand" in pk and "1 ouverte" in pk, f"hover preview: a company's mini sheet ({pk!r})")
+    page.mouse.move(5, 845); page.wait_for_timeout(200)
+    check(not page.is_visible(".peek"), "hover preview: gone when the mouse leaves")
+    page.locator('.wl[data-peek="ct:pc1"]').first.hover(); page.wait_for_timeout(700)
+    pk = page.inner_text(".peek") if page.is_visible(".peek") else ""
+    check("contact" in pk.lower() and "06 11 22 33 44" in pk and "1 le cite" in pk and "Gérant · Solaris" in pk, f"hover preview: a [[link]] to a contact ({pk!r})")
+    page.click('[data-tab="pipeline"]'); page.locator('.pipe-card-company[data-peek="co:Solaris"]').first.hover(); page.wait_for_timeout(700)
+    check(page.is_visible(".peek") and "KYC" in page.inner_text(".peek"), "hover preview: also on the pipeline cards")
+    check(not errors, f"no page errors ({errors})")
+    page.close()
+
     # --- small screen: the note steps aside while the full task form would be hidden behind it
     page, errors = new_page(browser, viewport={"width": 1100, "height": 720})
     page.goto(URL); page.click('[data-tab="tasks"]')

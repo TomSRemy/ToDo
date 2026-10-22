@@ -1099,8 +1099,8 @@
     grid.appendChild(titleWrap);
 
     const clientTag=t.client ? makeTag(t.client, clientColor(t.client), 'dot') : makeTag('+ Client', '#6B7480');
-    if(t.client) clientTag.title=t.client;   // the full name when the chip is cut
-    clientTag.style.cursor='pointer'; clientTag.title='Cliquer pour changer le client';
+    clientTag.style.cursor='pointer'; clientTag.title=t.client?t.client+' — cliquer pour changer le client':'Cliquer pour choisir le client';   // the full name when the chip is cut
+    if(t.client) clientTag.dataset.peek='co:'+t.client;
     clientTag.onclick=e=>openInlineFieldPopover(e, t, 'client', clientsList, clientColor);
     grid.appendChild(clientTag);
 
@@ -2478,7 +2478,7 @@
 
     const companyCell=document.createElement('div'); companyCell.className='contact-company-cell';
     if(c.company){
-      const pill=document.createElement('span'); pill.className='contact-company-pill'; pill.textContent=c.company;
+      const pill=document.createElement('span'); pill.className='contact-company-pill'; pill.textContent=c.company; pill.dataset.peek='co:'+c.company;
       const chex=clientColor(c.company);
       pill.style.color=chex; pill.style.background=chex+'16';
       companyCell.appendChild(pill);
@@ -3983,7 +3983,7 @@
   function buildPipeCard(o){
     const card=document.createElement('div'); card.className='pipe-card'; card.dataset.id=o.id;
     card.style.borderLeft='3px solid '+clientColor(o.company);
-    const c=document.createElement('div'); c.className='pipe-card-company'; c.style.color=clientColor(o.company); c.textContent=o.company;
+    const c=document.createElement('div'); c.className='pipe-card-company'; c.style.color=clientColor(o.company); c.textContent=o.company; if(o.company) c.dataset.peek='co:'+o.company;
     const cs=companyStars(o.company); if(cs) c.appendChild(starsWidget(cs));
     card.appendChild(c);
     if(o.kind==='prequal'){
@@ -4005,7 +4005,7 @@
     const company=group[0].company;
     const card=document.createElement('div'); card.className='pipe-card pipe-req-card'; card.dataset.id=reqId;
     card.style.borderLeft='3px solid '+clientColor(company);
-    const c=document.createElement('div'); c.className='pipe-card-company'; c.style.color=clientColor(company); c.textContent=company;
+    const c=document.createElement('div'); c.className='pipe-card-company'; c.style.color=clientColor(company); c.textContent=company; if(company) c.dataset.peek='co:'+company;
     const t=document.createElement('div'); t.className='pipe-card-title pipe-req-title'; t.title=(req.title||'Demande de pricing')+' · '+group.length+' installations';
     { const a=document.createElement('span'); a.textContent=req.title||'Demande de pricing'; const b=document.createElement('span'); b.className='pipe-req-n'; b.textContent=group.length+' install.'; t.append(a,b); }   // the count never cut off
     card.appendChild(c); card.appendChild(t);
@@ -7203,7 +7203,7 @@
   function renderLinked(el, text){
     el.textContent=''; const str=String(text||''); let last=0, T=null;
     str.replace(LINK_RE,(m,n,at)=>{ if(at>last) el.appendChild(document.createTextNode(str.slice(last,at)));
-      T=T||linkTargets(); const r=resolveLink(n,T), a=document.createElement('span'); a.className='wl'+(r?'':' none'); a.textContent=n; a.title=r?r.type+' : ouvrir la fiche':'Rien trouvé à ce nom';
+      T=T||linkTargets(); const r=resolveLink(n,T), a=document.createElement('span'); a.className='wl'+(r?'':' none'); a.textContent=n; a.title=r?r.type+' : ouvrir la fiche':'Rien trouvé à ce nom'; if(r) a.dataset.peek=r.type==='Société'?'co:'+r.name:r.id;
       if(r) a.onclick=e=>{ e.stopPropagation(); r.open(); }; el.appendChild(a); last=at+m.length; return m; });
     if(last<str.length) el.appendChild(document.createTextNode(str.slice(last)));
   }
@@ -7384,6 +7384,63 @@
   $('co-sheet-edit').onclick=()=>{ const n=coSheetName; closeCompanySheet(); if(n) openCompanyEditForm(n); };
   $('co-sheet-net').onclick=()=>{ const n=coSheetName; closeCompanySheet(); if(n) openInNetwork('co:'+pqFold(n).replace(/[^a-z0-9]/g,'')); };
   document.addEventListener('keydown', e=>{ if(e.key==='Escape' && coSheetName){ e.stopPropagation(); closeCompanySheet(); } }, true);
+  // ----- Hover preview: a mini sheet when the mouse rests on a company, a contact or an installation (data-peek="co:Name" | "ct:id" | "op:id") -----
+  let peekEl=null, peekTimer=0, peekFor=null;
+  function peekLines(key){
+    const kind=key.slice(0,3), v=key.slice(3), L=[]; let title='', eyebrow='';
+    const mw=list=>{ const k=list.reduce((s,o)=>s+kwcNum(o),0); return k?(k>=1000?(Math.round(k/100)/10).toLocaleString('fr-FR')+' MWc':Math.round(k).toLocaleString('fr-FR')+' kWc'):''; };
+    const lastMeet=ids=>meetings.filter(m=>!m.deleted && ids.includes(m.contactId) && m.date).sort((a,b)=>b.date.localeCompare(a.date))[0];
+    const nextTask=list=>list.filter(t=>t.due).sort((a,b)=>a.due.localeCompare(b.due))[0];
+    if(kind==='co:'){
+      const name=v; eyebrow='Société'; title=name;
+      const cts=activeContacts().filter(c=>sameCo(c.company,name));
+      const ins=opportunities.filter(o=>!o.deleted && o.kind==='installation' && !isExited(o) && sameCo(o.company,name));
+      const tk=activeTasks().filter(t=>sameCo(t.client,name));
+      const co=companies.find(c=>!c.deleted && sameCo(c.name,name)); if(co && co.type) eyebrow='Société · '+co.type;
+      if(ins.length){ const top=ins.reduce((a,b)=>stageIndex(b.stage)>stageIndex(a.stage)?b:a); L.push(['Pipeline', ins.length+' installation'+(ins.length>1?'s':'')+(mw(ins)?' · '+mw(ins):'')+' · '+stageLabel(top.stage)]); }
+      cts.slice(0,3).forEach((c,i)=>L.push([i?'':'Contacts', [[c.firstName,c.lastName].filter(Boolean).join(' '), c.role, c.phone1].filter(Boolean).join(' · ')]));
+      if(cts.length>3) L.push(['', '+ '+(cts.length-3)+' autre'+(cts.length>4?'s':'')]);
+      const nt=nextTask(tk); if(tk.length) L.push(['Tâches', tk.length+' ouverte'+(tk.length>1?'s':'')+(nt?(nt.due<toISO(new Date())?' · en retard depuis le ':' · prochaine le ')+pqIsoToFr(nt.due).slice(0,5)+' : '+plainLinks(nt.title):'')]);
+      const lm=lastMeet(cts.map(c=>c.id)); if(lm) L.push(['Dernier RDV', pqIsoToFr(lm.date)+(lm.label?' · '+lm.label:'')]);
+      if(!L.length) L.push(['', 'Rien d’autre pour l’instant.']);
+    } else if(kind==='ct:'){
+      const c=contacts.find(x=>x.id===v && !x.deleted); if(!c) return null;
+      eyebrow='Contact'; title=[c.firstName,c.lastName].filter(Boolean).join(' ')||c.email||'';
+      if(c.role||c.company) L.push(['', [c.role, c.company].filter(Boolean).join(' · ')]);
+      if(c.phone1||c.phone2) L.push(['Tél.', [c.phone1,c.phone2].filter(Boolean).join(' · ')]);
+      if(c.email) L.push(['Mail', c.email]);
+      const lm=lastMeet([c.id]); if(lm) L.push(['Dernier RDV', pqIsoToFr(lm.date)+(lm.label?' · '+lm.label:'')]);
+      const T=linkTargets(), tk=activeTasks().filter(t=>linksIn(t.title+' '+(t.description||''),T).includes('ct:'+c.id));
+      if(tk.length){ const nt=nextTask(tk)||tk[0]; L.push(['Tâches', tk.length+(tk.length>1?' le citent':' le cite')+' · '+plainLinks(nt.title)]); }
+      if(c.comment) L.push(['Note', plainLinks(c.comment).slice(0,120)]);
+    } else if(kind==='op:'){
+      const o=opportunities.find(x=>x.id===v && !x.deleted); if(!o) return null;
+      eyebrow='Installation'; title=oppName(o);
+      L.push(['', [o.company, stageLabel(o.stage)].filter(Boolean).join(' · ')]);
+      const f=[mw([o]), o.install, o.contrat].filter(Boolean).join(' · '); if(f) L.push(['', f]);
+      if(o.mesPrev||o.mesEff) L.push(['MES', o.mesEff||o.mesPrev]);
+    } else return null;
+    return { eyebrow, title, L };
+  }
+  function hidePeek(){ clearTimeout(peekTimer); peekFor=null; if(peekEl) peekEl.hidden=true; }
+  function showPeek(el){
+    const d=peekLines(el.dataset.peek); if(!d || !el.isConnected) return;
+    if(!peekEl){ peekEl=document.createElement('div'); peekEl.className='peek'; peekEl.setAttribute('role','tooltip'); document.body.appendChild(peekEl); }
+    peekEl.innerHTML=''; const e=document.createElement('div'); e.className='peek-k'; e.textContent=d.eyebrow; const h=document.createElement('b'); h.className='peek-t'; h.textContent=d.title; peekEl.append(e,h);
+    d.L.forEach(([k,v])=>{ const r=document.createElement('div'); r.className='peek-r'; const a=document.createElement('span'); a.textContent=k; const b=document.createElement('span'); b.textContent=v; r.append(a,b); peekEl.appendChild(r); });
+    peekEl.hidden=false;
+    const r=el.getBoundingClientRect(), w=peekEl.offsetWidth, hh=peekEl.offsetHeight;
+    let x=Math.min(innerWidth-w-10, Math.max(10, r.left)), y=r.bottom+6; if(y+hh>innerHeight-10) y=Math.max(10, r.top-hh-6);
+    peekEl.style.left=x+'px'; peekEl.style.top=y+'px';
+  }
+  if(!window.TODO_LITE && !window.TODO_WIDGET && window.matchMedia && matchMedia('(hover:hover)').matches){
+    document.addEventListener('mouseover', e=>{ const el=e.target.closest && e.target.closest('[data-peek]'); if(el===peekFor) return; hidePeek(); if(!el) return;
+      peekFor=el; peekTimer=setTimeout(()=>{ if(peekFor===el) showPeek(el); }, 450); });
+    ['scroll','mousedown','keydown'].forEach(t=>document.addEventListener(t, hidePeek, true));
+    window.addEventListener('blur', hidePeek);
+  }
+  window.todoPeek=key=>{ const d=peekLines(key); return d?[d.eyebrow, d.title].concat(d.L.map(x=>x.filter(Boolean).join(' : '))).join('\n'):null; };
+
   function allCompanyNames(){
     const m=new Map(); const add=n=>{ n=String(n||'').trim(); if(n && !m.has(pqFold(n))) m.set(pqFold(n), n); };
     companies.filter(c=>!c.deleted).forEach(c=>add(c.name)); contacts.filter(c=>!c.deleted).forEach(c=>add(c.company));
