@@ -1062,7 +1062,7 @@ with sync_playwright() as p:
     st_ = {o["id"]: o.get("stage") for o in stored(page, "todo-widget-opportunities")}
     check(st_["b1"] == "pricing_indicatif" and st_["b2"] == st_["b3"] == "demande_prix", "batch: one by one is still possible")
     page.click(".opp-back")
-    check("1" in page.inner_text("#opp-detail-body .opp-stage-step.current:has-text('Pricing indicatif') .stage-n") and page.locator("#opp-detail-body .req-inst").count() == 3,
+    check("1" in page.inner_text("#opp-detail-body .opp-stage-step.current:has-text('Pricing indicatif') .ost-n") and page.locator("#opp-detail-body .req-inst").count() == 3,
           "request sheet: the same step track, with the number of installations at each step")
     page.click("#opp-detail-body .opp-stage-step:has-text('Négociation')"); page.wait_for_timeout(200)
     check(page.inner_text("#opp-detail-edit") == "Modifier les fiches" and page.locator("#opp-detail-body .req-inst-ed").count() == 3, "request sheet: edit buttons in the global view")

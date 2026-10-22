@@ -5093,7 +5093,8 @@
         const i=stageIndex(st.key), n=list.filter(x=>x.stage===st.key).length;
         const row=document.createElement('button'); row.type='button';
         row.className='opp-stage-step '+(allOut?'upcoming':(n?'current':(i<lo?'done':'upcoming')));
-        row.innerHTML=escapeHtml(st.label)+(st.who!=='Com'?' <span class="pipe-who">'+st.who+'</span>':'')+(list.length>1&&n?' <span class="stage-n">'+n+'</span>':'');
+        const cls=row.className.split(' ')[1];
+        row.innerHTML='<span class="ost-mark">'+(cls==='done'?'✓':cls==='current'?'●':'')+'</span><span class="ost-l">'+escapeHtml(st.label)+'</span><span class="ost-m">'+(st.who!=='Com'?'<span class="ost-who">'+st.who+'</span>':'')+(list.length>1&&n?'<b class="ost-n">'+n+'</b>':'')+'</span>';
         row.title=list.length>1?'Placer les '+list.length+' installations à cette étape':'Placer l\u2019installation à cette étape';
         row.onclick=()=>{ if(list.every(x=>x.stage===st.key)) return; onPick(st.key); };
         g.appendChild(row);
