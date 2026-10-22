@@ -3766,6 +3766,8 @@
     });
     return per;
   }
+  // how likely a deal reaches commissioning, by step (an estimate, for the forecast)
+  const MES_WEIGHTS={ a_qualifier:.05, prise_contact:.05, collecte:.1, qualif_en_cours:.15, pricing_indicatif:.25, offre_remise:.3, offre_attente:.4, kyc:.6, negociation:.7, pricing_ferme:.75, mise_signature:.85, signature:.9, onboarding:1, actif:1 };
   function renderPipeDash(board){
     board.classList.add('pipe-dash');
     const all=opportunities.filter(o=>!o.deleted && o.kind!=='request' && o.stage!=='converti');
@@ -3824,6 +3826,23 @@
         r.querySelector('.pd-bar span').style.width=Math.max(4,l.length/maxN*100)+'%';
         r.querySelector('.pd-v').textContent=l.length+' · '+fmtMwc(l.reduce((x,o)=>x+kwcNum(o),0))+(avg!=null?' · '+avg+' j en moy.':'')+(late?' · '+late+' > 15 j':'');
         if(late) r.classList.add('late'); c4.appendChild(r); }); }
+    // commissioning to come, by quarter: what is in play and what is likely (weighted by how far the deal is)
+    { const W=MES_WEIGHTS, today=new Date(), q0=today.getFullYear()*4+Math.floor(today.getMonth()/3), Q=8, rows=Array.from({ length:Q }, (_,i)=>({ q:q0+i, all:0, likely:0, sure:0, n:0 }));
+      let vague=0;   // a year alone (« 2027 ») can't be put in a quarter
+      live.filter(o=>o.kind==='installation').forEach(o=>{ const v=String(o.mesEff||o.mesPrev||'').trim(), tq=/^T([1-4])\s+(\d{4})$/i.exec(v), p2=tq?null:pqMonthYear(v);
+        if(!tq && (!p2 || p2.m==null)){ if(p2) vague+=kwcNum(o)*(W[o.stage]||0); return; }
+        const d=tq?new Date(+tq[2], (+tq[1]-1)*3, 1):new Date(p2.y, p2.m-1, p2.d||1); const qi=d.getFullYear()*4+Math.floor(d.getMonth()/3)-q0; if(qi<0 || qi>=Q) return;
+        const k=kwcNum(o), w=W[o.stage]!=null?W[o.stage]:0; const r=rows[qi]; r.all+=k; r.likely+=k*w; if(w>=1) r.sure+=k; r.n++; });
+      const tot=rows.reduce((x,r)=>x+r.likely,0), maxA=Math.max(1,...rows.map(r=>r.all));
+      const c5=card('Mises en service à venir', tot?'MWc par trimestre selon la date de mise en service de la fiche. Barre claire : en jeu ; foncée : probable (pondéré par l’étape : '+Object.entries({ 'qualification':W.qualif_en_cours, 'pricing':W.pricing_indicatif, 'offre en attente':W.offre_attente, 'KYC':W.kyc, 'signature':W.signature }).map(([l,v])=>l+' '+Math.round(v*100)+' %').join(', ')+', signé 100 %).':'Aucune date de mise en service dans les deux ans sur les dossiers en cours.');
+      if(tot){ const ch=document.createElement('div'); ch.className='pd-mes';
+        rows.forEach(r=>{ const col=document.createElement('div'); col.className='pd-mes-col'; col.title=r.n?r.n+' installation'+(r.n>1?'s':'')+' · en jeu '+fmtMwc(r.all)+' · probable '+fmtMwc(r.likely)+(r.sure?' · signé '+fmtMwc(r.sure):''):'Rien de prévu';
+          col.innerHTML='<span class="v"></span><span class="bars"><span class="a"></span><span class="l"></span></span><span class="q"></span>';
+          col.querySelector('.v').textContent=r.likely?(Math.round(r.likely/100)/10).toLocaleString('fr-FR'):'';
+          col.querySelector('.a').style.height=(r.all/maxA*100)+'%'; col.querySelector('.l').style.height=(r.likely/maxA*100)+'%';
+          col.querySelector('.q').textContent='T'+(r.q%4+1)+' '+String(Math.floor(r.q/4)).slice(2); ch.appendChild(col); });
+        c5.appendChild(ch);
+        const t2=document.createElement('p'); t2.className='pd-hint'; t2.textContent='Sur deux ans : '+fmtMwc(tot)+' probables, sur '+fmtMwc(rows.reduce((x,r)=>x+r.all,0))+' en jeu (MWc, chiffre au-dessus de chaque barre).'+(vague?' Et '+fmtMwc(vague)+' probables avec une année seule, sans trimestre.':''); c5.appendChild(t2); } }
     // deals that drag
     const now=Date.now(), stalled=live.filter(o=>o.stage!=='actif' && lastMove(o)>1e12 && now-lastMove(o)>=STALL_DAYS*864e5).sort((a,b)=>lastMove(a)-lastMove(b));
     const c3=card('Dossiers qui traînent', stalled.length?'Sans étape ni modification depuis '+STALL_DAYS+' jours ou plus.':'Aucun dossier sans mouvement depuis '+STALL_DAYS+' jours.');

@@ -2045,3 +2045,11 @@ details.req-compare:not([open]) > .req-compare-h::before{ transform:none; }
 .dup-acts{ display:flex; gap:8px; flex-wrap:wrap; margin-top:4px; }
 .dup-merge{ background:var(--accent); border:none; border-radius:var(--radius); color:#04070C; font:600 12.5px var(--font-ui); padding:6px 12px; cursor:pointer; }
 .sp-keys{ font-size:11px; color:var(--tx3); } .sp-keys kbd{ font:10.5px var(--font-mono); border:1px solid var(--bd); border-bottom-width:2px; border-radius:4px; padding:0 4px; color:var(--tx2); background:var(--panel-2); }
+/* commissioning forecast: one column per quarter, in play (light) and likely (dark) to one scale */
+.pd-mes{ display:grid; grid-template-columns:repeat(8,minmax(0,1fr)); gap:6px; height:150px; align-items:end; }
+.pd-mes-col{ display:flex; flex-direction:column; align-items:center; gap:3px; height:100%; min-width:0; }
+.pd-mes-col .v{ font:600 10.5px var(--font-mono); color:var(--tx2); min-height:13px; font-variant-numeric:tabular-nums; }
+.pd-mes-col .bars{ position:relative; flex:1; width:70%; max-width:34px; }
+.pd-mes-col .bars span{ position:absolute; left:0; right:0; bottom:0; border-radius:3px 3px 0 0; }
+.pd-mes-col .a{ background:color-mix(in srgb, var(--accent) 22%, transparent); } .pd-mes-col .l{ background:var(--accent); }
+.pd-mes-col .q{ font:500 10px var(--font-mono); color:var(--tx3); white-space:nowrap; }

@@ -893,6 +893,7 @@ with sync_playwright() as p:
     rows = page.eval_on_selector_all(".pd-trow", "els=>els.map(e=>e.innerText.replace(/\\s+/g,' '))")
     check(any(r.startswith("Pricing indicatif 11 j") for r in rows) and any(r.startswith("Négociation 20 j") for r in rows), f"pipeline dashboard: average days per step from the history ({rows})")
     check("Alpha" in page.inner_text(".pd-card:has-text('Dossiers qui traînent')"), "pipeline dashboard: the deal stuck for 20 days is listed")
+    check(page.locator(".pd-card:has-text('Mises en service à venir')").count() == 1, "pipeline dashboard: the commissioning forecast card")
     who = page.eval_on_selector_all(".pd-who-row", "els=>els.map(e=>e.innerText.replace(/\\s+/g,' '))")
     check(len(who) == 2 and any(r.startswith("À moi 1 · 2 MWc · 20 j") and "1 > 15 j" in r for r in who) and any(r.startswith("Ops 1 · 0,5 MWc · 2 j") for r in who), f"pipeline dashboard: who holds the deals, for how long ({who})")
     check("Fixe un objectif" in page.inner_text(".pd-goal"), "pipeline goal: invites to set the year's goal")
@@ -1858,6 +1859,19 @@ with sync_playwright() as p:
     check("Aucune installation ni société en double" in page.inner_text("#dup-overlay"), "doublons: nothing left")
     page.click("#dup-overlay .dup-close"); page.wait_for_timeout(150)
     check(not page.is_visible("#pipe-dup-btn"), "doublons: the button goes away")
+    check(not errors, f"no page errors ({errors})")
+    page.close()
+
+    # --- Commissioning forecast: by quarter, weighted by the step (a signed deal counts fully)
+    y = datetime.date.today().year + 1
+    fc = [{"id": "f1", "kind": "installation", "company": "F", "centrale": "A", "title": "A", "stage": "onboarding", "kwc": "2000", "mesPrev": f"01/02/{y}", "createdAt": 1, "updatedAt": 1, "deleted": False},
+          {"id": "f2", "kind": "installation", "company": "F", "centrale": "B", "title": "B", "stage": "offre_attente", "kwc": "1000", "mesPrev": f"T1 {y}", "createdAt": 1, "updatedAt": 1, "deleted": False},
+          {"id": "f3", "kind": "installation", "company": "F", "centrale": "C", "title": "C", "stage": "kyc", "kwc": "1000", "mesPrev": str(y), "createdAt": 1, "updatedAt": 1, "deleted": False}]
+    page, errors = new_page(browser, {"todo_todo-widget-opportunities": json.dumps(fc)}, viewport={"width": 1400, "height": 900})
+    page.goto(URL); page.click('[data-tab="pipeline"]'); page.click("#pipe-dash-toggle")
+    col = page.locator(".pd-mes-col", has_text=f"T1 {str(y)[2:]}")
+    txt = page.inner_text(".pd-card:has-text('Mises en service à venir')")
+    check(col.locator(".v").inner_text() == "2,4" and "2,4 MWc probables, sur 3 MWc en jeu" in txt and "0,6 MWc probables avec une année seule" in txt, f"forecast: T1 counts the signed plant fully and 40 % of the offer; a year alone apart ({txt[-160:]!r})")
     check(not errors, f"no page errors ({errors})")
     page.close()
 
