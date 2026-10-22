@@ -1790,6 +1790,9 @@ with sync_playwright() as p:
     names = page.eval_on_selector_all(".meet-table td.meet-name", "els=>els.map(e=>e.textContent)")
     check(len(secs) == 3 and names == ["Toit Durand", "Parc des Crêtes", "CS du Moulin", "Hangar 2"] and "4,5 MWc" in page.inner_text(".meet-table") and "jusqu’au 31/12/2030" in page.inner_text(".meet-table"),
           f"meeting view: one line per installation, by phase, the most advanced first, lost ones left out ({secs}, {names})")
+    viz = page.inner_text(".meet-viz")
+    check(page.locator(".meet-kpi").count() == 5 and page.locator(".meet-step").count() == 4 and "Qui a la main".lower() in viz.lower() and page.locator(".meet-who-bar span").count() >= 2,
+          f"meeting view: key figures, MWc by step, who holds the deals ({viz[:160]!r})")
     page.click(".meet-chip[data-phase='qualif']")
     check(page.locator(".meet-table td.meet-name").count() == 3 and page.get_attribute(".meet-chip[data-phase='qualif']", "aria-pressed") == "false", "meeting view: a phase can be left out")
     page.click(".meet-actions >> text=Copier pour mail / Teams"); page.wait_for_timeout(200)

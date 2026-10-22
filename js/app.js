@@ -3768,6 +3768,24 @@
   }
   // how likely a deal reaches commissioning, by step (an estimate, for the forecast)
   const MES_WEIGHTS={ a_qualifier:.05, prise_contact:.05, collecte:.1, qualif_en_cours:.15, pricing_indicatif:.25, offre_remise:.3, offre_attente:.4, kyc:.6, negociation:.7, pricing_ferme:.75, mise_signature:.85, signature:.9, onboarding:1, actif:1 };
+  // MWc expected to start, by quarter over two years: in play, and likely (weighted by the step)
+  function mesForecast(list){
+    const W=MES_WEIGHTS, today=new Date(), q0=today.getFullYear()*4+Math.floor(today.getMonth()/3), Q=8, rows=Array.from({ length:Q }, (_,i)=>({ q:q0+i, all:0, likely:0, sure:0, n:0 }));
+    let vague=0;   // a year alone (« 2027 ») can't be put in a quarter
+    list.filter(o=>o.kind==='installation' && !isExited(o)).forEach(o=>{ const v=String(o.mesEff||o.mesPrev||'').trim(), tq=/^T([1-4])\s+(\d{4})$/i.exec(v), p2=tq?null:pqMonthYear(v);
+      if(!tq && (!p2 || p2.m==null)){ if(p2) vague+=kwcNum(o)*(W[o.stage]||0); return; }
+      const d=tq?new Date(+tq[2], (+tq[1]-1)*3, 1):new Date(p2.y, p2.m-1, p2.d||1); const qi=d.getFullYear()*4+Math.floor(d.getMonth()/3)-q0; if(qi<0 || qi>=Q) return;
+      const k=kwcNum(o), w=W[o.stage]!=null?W[o.stage]:0; const r=rows[qi]; r.all+=k; r.likely+=k*w; if(w>=1) r.sure+=k; r.n++; });
+    const tot=rows.reduce((x,r)=>x+r.likely,0), all=rows.reduce((x,r)=>x+r.all,0), maxA=Math.max(1,...rows.map(r=>r.all));
+    const ch=document.createElement('div'); ch.className='pd-mes';
+    rows.forEach(r=>{ const col=document.createElement('div'); col.className='pd-mes-col'; col.title=r.n?r.n+' installation'+(r.n>1?'s':'')+' · en jeu '+fmtMwc(r.all)+' · probable '+fmtMwc(r.likely)+(r.sure?' · signé '+fmtMwc(r.sure):''):'Rien de prévu';
+      col.innerHTML='<span class="v"></span><span class="bars"><span class="a"></span><span class="l"></span></span><span class="q"></span>';
+      col.querySelector('.v').textContent=r.likely?(Math.round(r.likely/100)/10).toLocaleString('fr-FR'):'';
+      col.querySelector('.a').style.height=(r.all/maxA*100)+'%'; col.querySelector('.l').style.height=(r.likely/maxA*100)+'%';
+      col.querySelector('.q').textContent='T'+(r.q%4+1)+' '+String(Math.floor(r.q/4)).slice(2); ch.appendChild(col); });
+    const text='Sur deux ans : '+fmtMwc(tot)+' probables, sur '+fmtMwc(all)+' en jeu (MWc, chiffre au-dessus de chaque barre).'+(vague?' Et '+fmtMwc(vague)+' probables avec une année seule, sans trimestre.':'');
+    return { tot, all, chart:ch, text };
+  }
   function renderPipeDash(board){
     board.classList.add('pipe-dash');
     const all=opportunities.filter(o=>!o.deleted && o.kind!=='request' && o.stage!=='converti');
@@ -3827,22 +3845,9 @@
         r.querySelector('.pd-v').textContent=l.length+' · '+fmtMwc(l.reduce((x,o)=>x+kwcNum(o),0))+(avg!=null?' · '+avg+' j en moy.':'')+(late?' · '+late+' > 15 j':'');
         if(late) r.classList.add('late'); c4.appendChild(r); }); }
     // commissioning to come, by quarter: what is in play and what is likely (weighted by how far the deal is)
-    { const W=MES_WEIGHTS, today=new Date(), q0=today.getFullYear()*4+Math.floor(today.getMonth()/3), Q=8, rows=Array.from({ length:Q }, (_,i)=>({ q:q0+i, all:0, likely:0, sure:0, n:0 }));
-      let vague=0;   // a year alone (« 2027 ») can't be put in a quarter
-      live.filter(o=>o.kind==='installation').forEach(o=>{ const v=String(o.mesEff||o.mesPrev||'').trim(), tq=/^T([1-4])\s+(\d{4})$/i.exec(v), p2=tq?null:pqMonthYear(v);
-        if(!tq && (!p2 || p2.m==null)){ if(p2) vague+=kwcNum(o)*(W[o.stage]||0); return; }
-        const d=tq?new Date(+tq[2], (+tq[1]-1)*3, 1):new Date(p2.y, p2.m-1, p2.d||1); const qi=d.getFullYear()*4+Math.floor(d.getMonth()/3)-q0; if(qi<0 || qi>=Q) return;
-        const k=kwcNum(o), w=W[o.stage]!=null?W[o.stage]:0; const r=rows[qi]; r.all+=k; r.likely+=k*w; if(w>=1) r.sure+=k; r.n++; });
-      const tot=rows.reduce((x,r)=>x+r.likely,0), maxA=Math.max(1,...rows.map(r=>r.all));
-      const c5=card('Mises en service à venir', tot?'MWc par trimestre selon la date de mise en service de la fiche. Barre claire : en jeu ; foncée : probable (pondéré par l’étape : '+Object.entries({ 'qualification':W.qualif_en_cours, 'pricing':W.pricing_indicatif, 'offre en attente':W.offre_attente, 'KYC':W.kyc, 'signature':W.signature }).map(([l,v])=>l+' '+Math.round(v*100)+' %').join(', ')+', signé 100 %).':'Aucune date de mise en service dans les deux ans sur les dossiers en cours.');
-      if(tot){ const ch=document.createElement('div'); ch.className='pd-mes';
-        rows.forEach(r=>{ const col=document.createElement('div'); col.className='pd-mes-col'; col.title=r.n?r.n+' installation'+(r.n>1?'s':'')+' · en jeu '+fmtMwc(r.all)+' · probable '+fmtMwc(r.likely)+(r.sure?' · signé '+fmtMwc(r.sure):''):'Rien de prévu';
-          col.innerHTML='<span class="v"></span><span class="bars"><span class="a"></span><span class="l"></span></span><span class="q"></span>';
-          col.querySelector('.v').textContent=r.likely?(Math.round(r.likely/100)/10).toLocaleString('fr-FR'):'';
-          col.querySelector('.a').style.height=(r.all/maxA*100)+'%'; col.querySelector('.l').style.height=(r.likely/maxA*100)+'%';
-          col.querySelector('.q').textContent='T'+(r.q%4+1)+' '+String(Math.floor(r.q/4)).slice(2); ch.appendChild(col); });
-        c5.appendChild(ch);
-        const t2=document.createElement('p'); t2.className='pd-hint'; t2.textContent='Sur deux ans : '+fmtMwc(tot)+' probables, sur '+fmtMwc(rows.reduce((x,r)=>x+r.all,0))+' en jeu (MWc, chiffre au-dessus de chaque barre).'+(vague?' Et '+fmtMwc(vague)+' probables avec une année seule, sans trimestre.':''); c5.appendChild(t2); } }
+    { const f=mesForecast(live), W=MES_WEIGHTS;
+      const c5=card('Mises en service à venir', f.tot?'MWc par trimestre selon la date de mise en service de la fiche. Barre claire : en jeu ; foncée : probable (pondéré par l\u2019étape : '+Object.entries({ 'qualification':W.qualif_en_cours, 'pricing':W.pricing_indicatif, 'offre en attente':W.offre_attente, 'KYC':W.kyc, 'signature':W.signature }).map(([l,v])=>l+' '+Math.round(v*100)+' %').join(', ')+', signé 100 %).':'Aucune date de mise en service dans les deux ans sur les dossiers en cours.');
+      if(f.tot){ c5.appendChild(f.chart); const t2=document.createElement('p'); t2.className='pd-hint'; t2.textContent=f.text; c5.appendChild(t2); } }
     // deals that drag
     const now=Date.now(), stalled=live.filter(o=>o.stage!=='actif' && lastMove(o)>1e12 && now-lastMove(o)>=STALL_DAYS*864e5).sort((a,b)=>lastMove(a)-lastMove(b));
     const c3=card('Dossiers qui traînent', stalled.length?'Sans étape ni modification depuis '+STALL_DAYS+' jours ou plus.':'Aucun dossier sans mouvement depuis '+STALL_DAYS+' jours.');
@@ -3948,6 +3953,43 @@
     w.document.write('<!doctype html><html lang="fr"><head><meta charset="utf-8"><title>'+escapeHtml(meetTitle())+'</title><style>@page{ size:A4 landscape; margin:12mm } body{ margin:0 } tr{ page-break-inside:avoid }</style></head><body>'+meetHtml(groups)+'</body></html>');
     w.document.close(); w.focus(); setTimeout(()=>w.print(), 200);
   }
+  // the meeting view's pictures: key figures, MWc by step, commissioning by quarter, who holds the deals
+  const WHO_COLORS={ Com:'var(--accent)', Ops:'#B49CFF', Jur:'#E5B54F', Client:'#7DD3FC', Dir:'#F2A541' };
+  function meetVisuals(groups){
+    const list=groups.flatMap(g=>g.list), kw=list.reduce((x,o)=>x+kwcNum(o),0), mwh=list.reduce((x,o)=>x+(pqNum(String(o.mwh||''))||0),0);
+    const likely=list.reduce((x,o)=>x+kwcNum(o)*(MES_WEIGHTS[o.stage]||0),0), stuck=list.filter(o=>{ const d=daysInStage(o); return d!=null && d>15; }).length;
+    const box=document.createElement('div'); box.className='meet-viz';
+    const kp=document.createElement('div'); kp.className='meet-kpis';
+    [[fmtMwc(kw),'en jeu'],[fmtMwc(likely),'probables (pondéré par l’étape)'],[list.length,'installation'+(list.length>1?'s':'')],[mwh?(mwh>=1000?(Math.round(mwh/100)/10).toLocaleString('fr-FR')+' GWh':Math.round(mwh).toLocaleString('fr-FR')+' MWh'):'—','par an (P50)'],[stuck,'bloquée'+(stuck>1?'s':'')+' > 15 j']]
+      .forEach(([v,l],i)=>{ const d=document.createElement('div'); d.className='meet-kpi'+(i===4 && stuck?' warn':''); d.innerHTML='<b></b><span></span>'; d.firstChild.textContent=v; d.lastChild.textContent=l; kp.appendChild(d); });
+    box.appendChild(kp);
+    const cards=document.createElement('div'); cards.className='meet-cards'; box.appendChild(cards);
+    const card=t=>{ const c=document.createElement('section'); c.className='meet-card'; const h=document.createElement('h4'); h.textContent=t; c.appendChild(h); cards.appendChild(c); return c; };
+    // MWc by step, coloured by phase; a click goes to that part of the table
+    { const c=card('MWc par étape'); const steps=OPP_STAGES.map(st=>{ const l=list.filter(o=>o.stage===st.key); return { st, n:l.length, kw:l.reduce((x,o)=>x+kwcNum(o),0) }; }).filter(x=>x.n);
+      const mx=Math.max(1,...steps.map(x=>x.kw));
+      steps.forEach(x=>{ const r=document.createElement('button'); r.type='button'; r.className='meet-step'; r.innerHTML='<span class="l"></span><span class="b"><span></span></span><span class="v"></span>';
+        r.querySelector('.l').textContent=x.st.label; const bar=r.querySelector('.b span'); bar.style.width=Math.max(3,x.kw/mx*100)+'%'; bar.style.background=(MAP_PHASES.find(p=>p[0]===x.st.phase)||[0,0,'#888'])[2];
+        r.querySelector('.v').textContent=(x.kw?fmtMwc(x.kw):'—')+' · '+x.n; r.title=x.n+' installation'+(x.n>1?'s':'')+' à « '+x.st.label+' »';
+        r.onclick=()=>{ const tr=document.querySelector('#pipeline-board tr.meet-sec[data-phase="'+x.st.phase+'"]'); if(tr) tr.scrollIntoView({ block:'start', behavior:'smooth' }); };
+        c.appendChild(r); }); }
+    // commissioning by quarter (the same picture as the dashboard)
+    { const c=card('Mises en service à venir'); const f=mesForecast(list);
+      if(f.tot){ c.appendChild(f.chart); const p=document.createElement('p'); p.className='meet-hint'; p.textContent='Clair : en jeu · foncé : probable. '+f.text.replace(/ \(MWc, chiffre au-dessus de chaque barre\)/,''); c.appendChild(p); }
+      else { const p=document.createElement('p'); p.className='meet-hint'; p.textContent='Pas de date de mise en service dans les deux ans sur ces dossiers.'; c.appendChild(p); } }
+    // who holds the deals: one bar split by MWc, then one line each
+    { const c=card('Qui a la main'); const by={}; list.forEach(o=>{ const st=oppStage(o.stage); if(!st) return; const w=st.who==='SC'?'Ops':st.who; (by[w]=by[w]||[]).push(o); });
+      const order=['Com','Ops','Jur','Client','Dir'].filter(w=>by[w]), tot=Math.max(1, list.reduce((x,o)=>x+Math.max(kwcNum(o),1),0));
+      const bar=document.createElement('div'); bar.className='meet-who-bar';
+      order.forEach(w=>{ const sg=document.createElement('span'); sg.style.width=(by[w].reduce((x,o)=>x+Math.max(kwcNum(o),1),0)/tot*100)+'%'; sg.style.background=WHO_COLORS[w]; sg.title=WHO[w]; bar.appendChild(sg); });
+      c.appendChild(bar);
+      order.forEach(w=>{ const l=by[w], ds=l.map(daysInStage).filter(d=>d!=null), avg=ds.length?Math.round(ds.reduce((x,y)=>x+y,0)/ds.length):null, late=ds.filter(d=>d>15).length;
+        const r=document.createElement('div'); r.className='meet-who'; r.innerHTML='<span class="who-chip"></span><span class="n"></span><span class="m"></span>';
+        const ch=r.querySelector('.who-chip'); ch.classList.add('who-'+w.toLowerCase()); ch.textContent=WHO[w];
+        r.querySelector('.n').textContent=l.length+' · '+fmtMwc(l.reduce((x,o)=>x+kwcNum(o),0));
+        r.querySelector('.m').textContent=(avg!=null?avg+' j en moyenne':'')+(late?' · '+late+' > 15 j':''); if(late) r.classList.add('late'); c.appendChild(r); }); }
+    return box;
+  }
   function renderPipeMeet(board, q){
     board.classList.add('pipe-meet');
     const groups=meetData(q), n=groups.reduce((t,g)=>t+g.rows.length,0);
@@ -3967,10 +4009,11 @@
       chips.appendChild(c); });
     board.appendChild(chips);
     if(!n){ const e=document.createElement('div'); e.className='today-empty'; e.textContent='Aucune installation dans ces phases.'; board.appendChild(e); return; }
+    board.appendChild(meetVisuals(groups));
     const wrap=document.createElement('div'); wrap.className='meet-scroll';
     let t='<table class="meet-table"><thead><tr>'+MEET_COLS.map(c=>'<th>'+escapeHtml(c)+'</th>').join('')+'</tr></thead><tbody>';
     groups.forEach(g=>{ if(!g.rows.length) return;
-      t+='<tr class="meet-sec"><th colspan="'+MEET_COLS.length+'">'+escapeHtml(g.phase.label)+'<span>'+escapeHtml(meetTotal(g.kwc,g.mwh,g.rows.length))+'</span></th></tr>';
+      t+='<tr class="meet-sec" data-phase="'+g.phase.key+'"><th colspan="'+MEET_COLS.length+'"><i style="background:'+(MAP_PHASES.find(x=>x[0]===g.phase.key)||[0,0,'#888'])[2]+'"></i>'+escapeHtml(g.phase.label)+'<span>'+escapeHtml(meetTotal(g.kwc,g.mwh,g.rows.length))+'</span></th></tr>';
       let lastKey=null;
       g.rows.forEach((r,i)=>{ const o=g.list[i], k=meetBlockKey(o), mates=g.list.filter(x=>meetBlockKey(x)===k);
         if(mates.length>1 && k!==lastKey){   // a lot, or a request at one step: one title line, the installations under it
