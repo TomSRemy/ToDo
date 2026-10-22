@@ -676,7 +676,52 @@ with sync_playwright() as p:
     page.drag_and_drop(".pipe-card[data-id=solo]", '.pipe-col[data-phase="actif"]'); page.wait_for_timeout(200)
     check(next(o for o in stored(page, "todo-widget-opportunities") if o["id"] == "solo")["stage"] == "actif" and not page.is_visible(".drop-menu"), "pipeline: a phase with one step takes the card at once")
     page.drag_and_drop(".pipe-card[data-id=solo]", '.pipe-col[data-phase="contrat"]'); page.keyboard.press("Escape"); page.wait_for_timeout(100)
-    check(next(o for o in stored(page, "todo-widget-opportunities") if o["id"] == "solo")["stage"] == "actif" and not page.is_visible(".drop-menu"), "pipeline: Escape leaves the card where it was")
+    check(next(o for o in stored(page, "todo-widget-opportunities") if o["id"] == "solo")["stage"] == "actif" and not page.is_visible(".drop-menu"), f"pipeline: Escape leaves the card where it was ({next(o for o in stored(page, 'todo-widget-opportunities') if o['id'] == 'solo')['stage']}, {page.is_visible('.drop-menu')})")
+    check(not errors, f"no page errors ({errors})")
+    page.close()
+
+    # --- Pipeline: a card dropped on another groups them in one request; « Dégrouper » separates them again
+    gg = [{"id": f"g{i}", "kind": "installation", "company": "GROUPE", "centrale": f"Parc {i}", "title": f"Parc {i}", "stage": "collecte", "createdAt": 1, "updatedAt": 1, "deleted": False} for i in (1, 2)]
+    page, errors = new_page(browser, {"todo_todo-widget-opportunities": json.dumps(gg), "todo_todo-widget-tasks": json.dumps([task("gt", "Appeler", opportunityId="g1")])}, viewport={"width": 1400, "height": 900})
+    page.goto(URL); page.click('[data-tab="pipeline"]')
+    page.drag_and_drop(".pipe-card[data-id=g2]", ".pipe-card[data-id=g1]")
+    check(page.is_visible("#choice-overlay") and "nouvelle demande" in page.inner_text("#choice-text"), "pipeline: a card dropped on another offers to group them")
+    page.click("#choice-btns >> text=Grouper"); page.wait_for_timeout(200)
+    ops = stored(page, "todo-widget-opportunities"); req = [o for o in ops if o.get("kind") == "request" and not o.get("deleted")]
+    g = {o["id"]: o.get("requestId") for o in ops if o.get("kind") == "installation"}
+    check(len(req) == 1 and g["g1"] == g["g2"] == req[0]["id"] and page.locator(".pipe-req-card").count() == 1, f"pipeline: grouped in one new request, one block ({g})")
+    page.hover(".pipe-req-card"); page.click(".pipe-req-card .pipe-ungroup"); page.click("#choice-btns >> text=Dégrouper"); page.wait_for_timeout(200)
+    ops = stored(page, "todo-widget-opportunities")
+    check(all(not o.get("requestId") for o in ops if o.get("kind") == "installation") and all(o.get("deleted") for o in ops if o.get("kind") == "request")
+          and page.locator(".pipe-req-card").count() == 0 and page.locator(".pipe-card[data-id=g1], .pipe-card[data-id=g2]").count() == 2, "pipeline: « Dégrouper » gives back separate cards")
+    check(not errors, f"no page errors ({errors})")
+    page.close()
+
+    # --- Pipeline blocks: a name of one's own, totals on the right, long blocks folded; drop below an empty column; « Grouper avec… »
+    big = [{"id": "rqb", "kind": "request", "company": "BIG", "title": "Demande de pricing", "createdAt": 1, "updatedAt": 1, "deleted": False}] + \
+          [{"id": f"b{i}", "kind": "installation", "company": "BIG", "centrale": f"Toit {i}", "title": f"Toit {i}", "kwc": "500", "requestId": "rqb", "stage": "offre_attente", "createdAt": 1, "updatedAt": 1, "deleted": False} for i in range(1, 9)] + \
+          [{"id": "lone", "kind": "installation", "company": "LONE", "centrale": "Seule", "title": "Seule", "stage": "collecte", "createdAt": 1, "updatedAt": 1, "deleted": False}]
+    page, errors = new_page(browser, {"todo_todo-widget-opportunities": json.dumps(big)}, viewport={"width": 1400, "height": 900})
+    page.goto(URL); page.click('[data-tab="pipeline"]')
+    blk = page.locator(".pipe-req-card[data-id=rqb]")
+    check("8 · 4 MWc" in blk.locator(".pipe-req-tot").inner_text() and blk.locator(".pipe-req-line:visible").count() == 4 and "+ 4 autres" in blk.inner_text(),
+          "pipeline: a long block shows its totals and folds to its first lines")
+    blk.locator(".pipe-req-more").click()
+    check(page.locator(".pipe-req-card[data-id=rqb] .pipe-req-line:visible").count() == 8, "pipeline: one click unfolds it")
+    page.hover(".pipe-req-card[data-id=rqb]"); page.click(".pipe-req-card[data-id=rqb] .pipe-req-rename"); page.keyboard.type("Lot toitures"); page.keyboard.press("Enter"); page.wait_for_timeout(150)
+    check("Lot toitures" in page.inner_text(".pipe-req-card[data-id=rqb] .pipe-req-head") and next(o for o in stored(page, "todo-widget-opportunities") if o["id"] == "rqb").get("label") == "Lot toitures",
+          "pipeline: a block can be named after its producer")
+    col = page.locator('.pipe-col[data-phase="contrat"]').bounding_box(); src = page.locator(".pipe-card[data-id=lone]").bounding_box()
+    page.mouse.move(src["x"] + 30, src["y"] + 12); page.mouse.down(); page.mouse.move(src["x"] + 60, src["y"] + 40, steps=3)
+    page.mouse.move(col["x"] + col["width"] / 2, col["y"] + col["height"] + 250, steps=6)
+    check(page.locator(".pipe-ghost").count() == 1, "pipeline: the dragged card follows the mouse")
+    page.mouse.up(); page.wait_for_timeout(100)
+    check(page.is_visible(".drop-menu") and "kyc" in page.inner_html(".drop-menu").lower(), "pipeline: dropped below an empty column, it still asks the step")
+    page.keyboard.press("Escape")
+    page.drag_and_drop(".pipe-card[data-id=lone]", ".pipe-req-card[data-id=rqb] .pipe-req-head")
+    check(page.is_visible(".drop-menu .drop-menu-group"), "pipeline: dropped on a card of another column, « Grouper avec… » is offered too")
+    page.click(".drop-menu .drop-menu-group"); page.click("#choice-btns >> text=Grouper"); page.wait_for_timeout(200)
+    check(next(o for o in stored(page, "todo-widget-opportunities") if o["id"] == "lone").get("requestId") == "rqb", "pipeline: and it joins that block")
     check(not errors, f"no page errors ({errors})")
     page.close()
 
@@ -1393,7 +1438,7 @@ with sync_playwright() as p:
     page.click(".pipe-card:has-text('Moulin Neuf')")
     visible = page.eval_on_selector_all("#opp-detail-actions button", "els=>els.filter(e=>e.offsetParent).map(e=>e.textContent)")
     check(visible == ["Voir dans le réseau", "Fermer"], f"phone version: installation sheet is read-only, the network one tap away ({visible})")
-    page.click("#opp-detail-actions >> text=Fermer"); page.locator(".pipe-req-card .pipe-card-title", has_text="Demande").click()
+    page.click("#opp-detail-actions >> text=Fermer"); page.locator(".pipe-req-card .pipe-card-title", has_text="Ventus").click()
     ro = page.evaluate("""[[...document.querySelectorAll('#opp-detail-body .req-inst-ed, #opp-detail-body .req-inst-rm, #opp-detail-body .stage-scope')].filter(e=>e.offsetParent).length,
       [...document.querySelectorAll('#opp-detail-body .req-in')].every(i=>i.readOnly||i.disabled), document.querySelectorAll('#opp-detail-body .req-in').length]""")
     check(ro[0] == 0 and ro[1] and ro[2] > 0, f"phone version: the request sheet is read-only too ({ro})")

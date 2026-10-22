@@ -4008,32 +4008,85 @@
     }
   }
   // Drag a card (or a request's block) onto another phase: its steps are offered, the chosen one applies to every installation dragged
-  { const board=$('pipeline-board'); let dragIds=null;
-    board.addEventListener('dragstart', e=>{ const c=e.target.closest && e.target.closest('[data-drag]'); if(!c) return; dragIds=c.dataset.drag.split(',');
-      try{ e.dataTransfer.setData('text/plain', c.dataset.drag); e.dataTransfer.effectAllowed='move'; }catch(err){} c.classList.add('dragging'); board.classList.add('drag-on'); });
-    board.addEventListener('dragend', e=>{ dragIds=null; board.classList.remove('drag-on'); board.querySelectorAll('.dragging,.drop-over').forEach(x=>x.classList.remove('dragging','drop-over')); });
-    const colOf=e=>{ const c=e.target.closest && e.target.closest('.pipe-col[data-phase]'); return c && c.dataset.phase!=='prequal'?c:null; };
-    board.addEventListener('dragover', e=>{ if(!dragIds) return; const c=colOf(e); board.querySelectorAll('.drop-over').forEach(x=>{ if(x!==c) x.classList.remove('drop-over'); }); if(!c) return; e.preventDefault(); c.classList.add('drop-over'); });
-    board.addEventListener('drop', e=>{ const c=colOf(e); if(!c || !dragIds) return; e.preventDefault(); const ids=dragIds; dragIds=null;
-      board.querySelectorAll('.drop-over').forEach(x=>x.classList.remove('drop-over'));
-      const list=ids.map(id=>opportunities.find(o=>o.id===id)).filter(Boolean); if(!list.length) return;
-      pipeDropMenu(list, c.dataset.phase, e.clientX, e.clientY); });
+  // Drag a card or a request's block with the mouse: it follows the pointer; dropped on another column, its steps are
+  // offered (and « Grouper avec… » when dropped on a card); dropped on a card of its own column, they are grouped
+  { const board=$('pipeline-board'); let drag=null, eatClick=false;
+    const colAt=(x,y)=>{ const el=document.elementFromPoint(x,y); let c=el && el.closest && el.closest('#pipeline-board .pipe-col[data-phase]');
+      if(!c) c=[...board.querySelectorAll('.pipe-col[data-phase]')].find(k=>{ const r=k.getBoundingClientRect(); return x>=r.left && x<=r.right && y>=r.top-40; })||null;   // also below its last card
+      return c && c.dataset.phase!=='prequal'?c:null; };
+    const cardAt=(x,y)=>{ const el=document.elementFromPoint(x,y), k=el && el.closest && el.closest('#pipeline-board .pipe-card[data-drag]'); return k && k!==drag.card?k:null; };
+    const clear=()=>board.querySelectorAll('.drop-over,.drop-card').forEach(x=>x.classList.remove('drop-over','drop-card'));
+    const end=()=>{ if(!drag) return; if(drag.ghost) drag.ghost.remove(); drag.card.classList.remove('dragging'); document.body.classList.remove('pipe-dragging'); clear(); drag=null; };
+    board.addEventListener('pointerdown', e=>{
+      if(e.button!==0 || e.pointerType==='touch') return;
+      const card=e.target.closest && e.target.closest('.pipe-card[data-drag]'); if(!card || card.dataset.renaming || e.target.closest('button,input,select,a')) return;
+      drag={ card, ids:card.dataset.drag.split(','), x:e.clientX, y:e.clientY, on:false };
+    });
+    document.addEventListener('pointermove', e=>{
+      if(!drag) return;
+      if(!drag.on){ if(Math.abs(e.clientX-drag.x)+Math.abs(e.clientY-drag.y)<6) return;
+        const r=drag.card.getBoundingClientRect(); drag.on=true; drag.dx=drag.x-r.left; drag.dy=drag.y-r.top;
+        const g=drag.card.cloneNode(true); g.className+=' pipe-ghost'; g.style.width=r.width+'px'; g.removeAttribute('data-drag'); document.body.appendChild(g); drag.ghost=g;
+        drag.card.classList.add('dragging'); document.body.classList.add('pipe-dragging'); window.getSelection && window.getSelection().removeAllRanges(); }
+      e.preventDefault();
+      drag.ghost.style.left=(e.clientX-drag.dx)+'px'; drag.ghost.style.top=(e.clientY-drag.dy)+'px';
+      clear(); const c=colAt(e.clientX,e.clientY), k=cardAt(e.clientX,e.clientY); if(c) c.classList.add('drop-over'); if(k) k.classList.add('drop-card');
+    });
+    document.addEventListener('pointerup', e=>{
+      if(!drag) return; const d=drag;
+      if(!d.on){ drag=null; return; }
+      const c=colAt(e.clientX,e.clientY), k=cardAt(e.clientX,e.clientY); end(); eatClick=true; setTimeout(()=>{ eatClick=false; }, 0);
+      if(!c) return;
+      const list=d.ids.map(id=>opportunities.find(o=>o.id===id)).filter(Boolean); if(!list.length) return;
+      const target=k?k.dataset.drag.split(',').map(id=>opportunities.find(o=>o.id===id)).filter(Boolean):null;
+      if(target && target.length && c.dataset.phase===oppPhase(list[0])){ groupInto(list, target); return; }
+      pipeDropMenu(list, c.dataset.phase, e.clientX, e.clientY, target && target.length?target:null);
+    });
+    document.addEventListener('keydown', e=>{ if(e.key==='Escape' && drag){ end(); } }, true);
+    board.addEventListener('click', e=>{ if(eatClick){ e.stopPropagation(); e.preventDefault(); eatClick=false; } }, true);   // the drop is not a click on the card
   }
-  function pipeDropMenu(list, phase, x, y){
+  // Group: the installations dragged join the request of the card they are dropped on (a new request when it has none)
+  async function groupInto(moving, target){
+    if(!target.length) return;
+    const t0=target[0], all=[...new Set(target.concat(moving))], cos=[...new Set(all.map(o=>o.company).filter(Boolean))];
+    const v=await askChoice('Grouper dans une même demande ?', (moving.length>1?moving.length+' installations':'« '+oppName(moving[0])+' »')+' rejoin'+(moving.length>1?'nent':'t')+' '+(t0.requestId?'la demande de pricing de « '+oppName(t0)+' »':'« '+oppName(t0)+' » dans une nouvelle demande de pricing')+' ('+all.length+' installations en tout).'
+      +(cos.length>1?' Attention : producteurs différents ('+cos.join(', ')+') ; la demande garde « '+(t0.company||'')+' ».':''), [{ label:'Grouper', value:'y' }]);
+    if(v!=='y') return;
+    let reqId=t0.requestId;
+    if(!reqId){ reqId=newOppId('req'); opportunities.push({ id:reqId, kind:'request', company:t0.company||'', title:'Demande de pricing', createdAt:Date.now(), updatedAt:Date.now(), deleted:false }); }
+    const left=new Set(moving.map(o=>o.requestId).filter(r=>r && r!==reqId));
+    all.forEach(o=>{ if(o.requestId!==reqId){ o.requestId=reqId; touchCrm(o); } });
+    left.forEach(r=>{ if(!requestInstalls(r).length) dropRequest(r, all[0].id); });   // a request left empty goes, its tasks follow
+    saveCrm(); renderPipeline();
+  }
+  // Ungroup: each installation of the request on its own card; the request's tasks go to the first one
+  function dropRequest(reqId, heirId){
+    const req=opportunities.find(o=>o.id===reqId); if(!req) return;
+    tasks.filter(t=>t.opportunityId===reqId).forEach(t=>{ t.opportunityId=heirId; touch(t); }); saveTasks();
+    req.deleted=true; touchCrm(req);
+  }
+  async function ungroupRequest(reqId){
+    const list=requestInstalls(reqId); if(!list.length) return false;
+    const v=await askChoice('Dégrouper cette demande ?', 'Les '+list.length+' installations redeviennent des cartes séparées (rien n\u2019est effacé ; les tâches de la demande passent à « '+oppName(list[0])+' »).', [{ label:'Dégrouper', value:'y' }]);
+    if(v!=='y') return false;
+    list.forEach(o=>{ o.requestId=null; touchCrm(o); }); dropRequest(reqId, list[0].id); saveCrm(); renderPipeline(); return true;
+  }
+  function pipeDropMenu(list, phase, x, y, target){
     const steps=OPP_STAGES.filter(st=>st.phase===phase); if(!steps.length) return;
     const apply=key=>{ list.forEach(o=>{ if(o.stage!==key) setOppStage(o, key); }); renderPipeline(); };
-    if(steps.length===1){ apply(steps[0].key); return; }
+    if(steps.length===1 && !target){ apply(steps[0].key); return; }
     document.querySelectorAll('.drop-menu').forEach(m=>m.remove());
     const m=document.createElement('div'); m.className='drop-menu'; m.setAttribute('role','menu');
     const h=document.createElement('div'); h.className='drop-menu-h'; h.textContent=(list.length>1?list.length+' installations':oppName(list[0]))+' → quelle étape ?'; m.appendChild(h);
     steps.forEach(st=>{ const b=document.createElement('button'); b.type='button'; b.setAttribute('role','menuitem'); b.dataset.stage=st.key;
       b.innerHTML='<span></span>'+(st.who!=='Com'?'<em>'+st.who+'</em>':''); b.firstChild.textContent=st.label; if(list.every(o=>o.stage===st.key)) b.classList.add('on');
       b.onclick=()=>{ m.remove(); apply(st.key); }; m.appendChild(b); });
+    if(target){ const g=document.createElement('button'); g.type='button'; g.className='drop-menu-group'; g.setAttribute('role','menuitem'); g.textContent='Grouper avec « '+oppName(target[0])+(target.length>1?' » (+'+(target.length-1)+')':' »'); g.onclick=()=>{ m.remove(); groupInto(list, target); }; m.appendChild(g); }
     document.body.appendChild(m);
     const r=m.getBoundingClientRect(); m.style.left=Math.min(innerWidth-r.width-8, x)+'px'; m.style.top=Math.min(innerHeight-r.height-8, y)+'px';
     m.querySelector('button').focus();
     const close=ev=>{ if(ev.type==='keydown' && ev.key!=='Escape') return; if(ev.type==='mousedown' && m.contains(ev.target)) return; m.remove(); document.removeEventListener('mousedown', close, true); document.removeEventListener('keydown', close, true); };
-    setTimeout(()=>{ document.addEventListener('mousedown', close, true); document.addEventListener('keydown', close, true); }, 0);
+    document.addEventListener('keydown', close, true); setTimeout(()=>document.addEventListener('mousedown', close, true), 0);   // Escape at once; a click only after the drop itself
   }
   function stageChip(o){
     const s=oppStage(o.stage);
@@ -4074,7 +4127,7 @@
   }
   function buildPipeCard(o){
     const card=document.createElement('div'); card.className='pipe-card'; card.dataset.id=o.id;
-    if(o.kind==='installation' && !isExited(o) && !window.TODO_LITE){ card.draggable=true; card.dataset.drag=o.id; }
+    if(o.kind==='installation' && !isExited(o) && !window.TODO_LITE) card.dataset.drag=o.id;
     card.style.borderLeft='3px solid '+clientColor(o.company);
     const c=document.createElement('div'); c.className='pipe-card-company'; c.style.color=clientColor(o.company); c.textContent=o.company; if(o.company) c.dataset.peek='co:'+o.company;
     const cs=companyStars(o.company); if(cs) c.appendChild(starsWidget(cs));
@@ -4093,26 +4146,50 @@
     card.onclick=()=>openOppDetail(o.id);
     return card;
   }
+  // A request's block: the producer, a name of one's own, the totals on the right; long blocks fold to their first lines
+  const REQ_FOLD_AT=6;
+  function reqTotals(group){ const kw=group.reduce((t,o)=>t+kwcNum(o),0); return group.length+(kw?' · '+fmtKwc(kw):' inst.'); }
+  function reqDisplayName(req, list){ return (req.label?req.label:(list.length+' installation'+(list.length>1?'s':''))); }
   function buildRequestCard(reqId, group){
     const req=opportunities.find(x=>x.id===reqId)||{};
     const company=group[0].company;
     const card=document.createElement('div'); card.className='pipe-card pipe-req-card'; card.dataset.id=reqId;
-    if(!window.TODO_LITE){ card.draggable=true; card.dataset.drag=group.map(x=>x.id).join(','); }
+    if(!window.TODO_LITE) card.dataset.drag=group.map(x=>x.id).join(',');
     card.style.borderLeft='3px solid '+clientColor(company);
-    const c=document.createElement('div'); c.className='pipe-card-company'; c.style.color=clientColor(company); c.textContent=company; if(company) c.dataset.peek='co:'+company;
-    const t=document.createElement('div'); t.className='pipe-card-title pipe-req-title'; t.title=(req.title||'Demande de pricing')+' · '+group.length+' installations';
-    { const a=document.createElement('span'); a.textContent=req.title||'Demande de pricing'; const b=document.createElement('span'); b.className='pipe-req-n'; b.textContent=group.length+' install.'; t.append(a,b); }   // the count never cut off
-    card.appendChild(c); card.appendChild(t);
+    const head=document.createElement('div'); head.className='pipe-card-title pipe-req-head';
+    const c=document.createElement('span'); c.className='pipe-card-company'; c.style.color=clientColor(company); c.textContent=company; if(company) c.dataset.peek='co:'+company;
+    const lab=document.createElement('span'); lab.className='pipe-req-label'; lab.textContent=req.label||'';
+    const tot=document.createElement('span'); tot.className='pipe-req-tot'; tot.textContent=reqTotals(group); tot.title=group.length+' installations au total';
+    head.append(c, lab);
+    if(!window.TODO_LITE){
+      const ren=document.createElement('button'); ren.type='button'; ren.className='pipe-req-rename'; ren.title='Nommer ce bloc (texte après le producteur)'; ren.setAttribute('aria-label','Renommer');
+      ren.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>';
+      ren.onclick=ev=>{ ev.stopPropagation(); card.dataset.renaming='1';
+        const inp=document.createElement('input'); inp.className='pipe-req-label-in'; inp.value=req.label||''; inp.placeholder='ex. Lot toitures 2027'; lab.replaceWith(inp); ren.hidden=true; inp.focus(); inp.select();
+        const done=save=>{ if(save){ const v=inp.value.trim(); if((req.label||'')!==v){ req.label=v; touchCrm(req); saveCrm(); } } renderPipeline(); };
+        inp.onclick=x=>x.stopPropagation(); inp.onkeydown=x=>{ if(x.key==='Enter'){ x.preventDefault(); done(true); } if(x.key==='Escape'){ x.stopPropagation(); done(false); } }; inp.onblur=()=>done(true); };
+      head.appendChild(tot); head.appendChild(ren);
+    } else head.appendChild(tot);
+    card.appendChild(head);
     const same=group.every(o=>o.stage===group[0].stage);
-    if(same){ const m=document.createElement('div'); m.className='pipe-card-meta'; m.appendChild(stageChip(group[0])); card.appendChild(m); }
-    group.forEach(o=>{
-      const r=document.createElement('div'); r.className='pipe-req-line';
+    const meta=document.createElement('div'); meta.className='pipe-card-meta'; if(same) meta.appendChild(stageChip(group[0]));
+    if(!window.TODO_LITE){ const ug=document.createElement('button'); ug.type='button'; ug.className='pipe-ungroup'; ug.textContent='Dégrouper'; ug.title='Séparer les installations de ce bloc';
+      ug.onclick=ev=>{ ev.stopPropagation(); ungroupRequest(reqId); }; meta.appendChild(ug); }
+    card.appendChild(meta);
+    let open=group.length<=REQ_FOLD_AT; try{ const v=JSON.parse(localStorage.getItem('pipe-req-open')||'{}')[reqId]; if(v!=null) open=v; }catch(err){}
+    group.forEach((o,i)=>{
+      const r=document.createElement('div'); r.className='pipe-req-line'; if(!open && i>=4) r.hidden=true;
       const n=document.createElement('span'); n.className='pipe-req-name'; n.textContent=oppName(o); n.title=[oppName(o), fmtKwc(o.kwc), stageLabel(o.stage)].filter(Boolean).join(' · ');
       r.appendChild(n);
       if(same){ const k=document.createElement('span'); k.className='pipe-req-kwc'; k.textContent=fmtKwc(o.kwc); r.appendChild(k); } else r.appendChild(stageChip(o));
-      r.onclick=e=>{ e.stopPropagation(); openOppDetail(o.id); };
+      r.onclick=ev=>{ ev.stopPropagation(); openOppDetail(o.id); };
       card.appendChild(r);
     });
+    if(group.length>REQ_FOLD_AT){
+      const t=document.createElement('button'); t.type='button'; t.className='pipe-req-more'; t.textContent=open?'Replier ▴':'+ '+(group.length-4)+' autres ▾';
+      t.onclick=ev=>{ ev.stopPropagation(); let m={}; try{ m=JSON.parse(localStorage.getItem('pipe-req-open')||'{}'); }catch(err){} m[reqId]=!open; try{ localStorage.setItem('pipe-req-open', JSON.stringify(m)); }catch(err){} renderPipeline(); };
+      card.appendChild(t);
+    }
     card.onclick=()=>openRequestDetail(reqId);
     return card;
   }
@@ -4850,7 +4927,7 @@
     if(o.company || o.requestId){
       const nav=document.createElement('div'); nav.className='opp-nav';
       if(o.requestId && o.kind==='installation'){ const req=opportunities.find(x=>x.id===o.requestId), n=requestInstalls(o.requestId).length;
-        const r=document.createElement('button'); r.type='button'; r.className='opp-co-link opp-back'; r.textContent='← '+((req&&req.title)||'Demande de pricing')+' ('+n+' installation'+(n>1?'s':'')+')'; r.onclick=()=>openRequestDetail(o.requestId); nav.appendChild(r); }
+        const r=document.createElement('button'); r.type='button'; r.className='opp-co-link opp-back'; r.textContent='← '+(req&&req.label?req.label+' ('+n+' installation'+(n>1?'s':'')+')':'Les '+n+' installations'); r.onclick=()=>openRequestDetail(o.requestId); nav.appendChild(r); }
       if(o.company){ const l=document.createElement('button'); l.type='button'; l.className='opp-co-link'; l.textContent='Fiche '+o.company+' →'; l.onclick=()=>{ closeOppDetail(); openCompanySheet(o.company); }; nav.appendChild(l); }
       box.appendChild(nav);
     }
@@ -5275,7 +5352,7 @@
     const req=opportunities.find(x=>x.id===reqId); if(!req) return;
     viewingOppId=reqId;
     const list=requestInstalls(reqId);
-    $('opp-detail-title').textContent=req.company+' — '+(req.title||'Demande de pricing');
+    $('opp-detail-title').textContent=req.company+' — '+reqDisplayName(req, list);
     $('opp-detail-sum').textContent=oppSummary(requestInstalls(reqId).filter(x=>!isExited(x)));
     // edit from the global view: the form shows all the installations of the request (this one first)
     { const first=requestInstalls(reqId).filter(x=>!isExited(x))[0]||requestInstalls(reqId)[0]; const ed=$('opp-detail-edit');
@@ -5359,6 +5436,7 @@
       }
       if(!same || !waiting.length) actions.appendChild(oppActionBtn(same?'Tout passer à l\u2019étape suivante':'Avancer chaque installation', ()=>{ closeOppDetail(); offerStageAdvance(live, live.every(o=>o.stage==='qualif_en_cours')?'demande_prix':null); }));
     }
+    if(!window.TODO_LITE && list.length>1) actions.appendChild(oppActionBtn('Dégrouper', async()=>{ if(await ungroupRequest(reqId)) closeOppDetail(); }, 'ghost-btn'));
     if(mailNow){ actions.appendChild(oppActionBtn('Copier l\u2019objet', e=>copyToClipboard(ml.subject, e.target), 'ghost-btn'));
     actions.appendChild(oppActionBtn('Copier le mail', e=>copyToClipboard(ml.body, e.target), 'ghost-btn')); }
     actions.appendChild(oppActionBtn('Fichier caractéristiques (.xlsx)', e=>downloadCaract(list.filter(o=>!isExited(o)), e.target), 'ghost-btn'));

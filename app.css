@@ -1730,10 +1730,12 @@ html.lite .wk-card{ display:none; }
 .opp-mail-copy button{ font:600 12px var(--font-ui); padding:6px 12px; border-radius:var(--radius); border:1px solid var(--bd); background:var(--panel-2); color:var(--tx1); cursor:pointer; }
 
 /* pipeline: drag a card or a request's block to another phase */
-.pipe-card[draggable=true]{ cursor:grab; }
+.pipe-card[data-drag]{ cursor:grab; }
 .pipe-card.dragging{ opacity:.45; }
-#pipeline-board.drag-on .pipe-col[data-phase]:not([data-phase=prequal]){ outline:1px dashed var(--bd); outline-offset:-2px; }
-#pipeline-board.drag-on .pipe-col.drop-over{ outline:2px solid var(--accent); background:var(--accent-dim); }
+body.pipe-dragging #pipeline-board .pipe-col[data-phase]:not([data-phase=prequal]){ outline:1px dashed var(--bd); outline-offset:-2px; }
+body.pipe-dragging, body.pipe-dragging *{ cursor:grabbing !important; user-select:none; }
+.pipe-ghost{ position:fixed; z-index:22000; pointer-events:none; margin:0; opacity:.92; transform:rotate(1.5deg); box-shadow:0 18px 40px rgba(0,0,0,.55); max-height:70vh; overflow:hidden; }
+#pipeline-board .pipe-col.drop-over{ outline:2px solid var(--accent); background:var(--accent-dim); }
 .drop-menu{ position:fixed; z-index:21000; min-width:220px; background:var(--panel); border:1px solid var(--bd); border-radius:10px; padding:6px; box-shadow:0 14px 38px rgba(0,0,0,.5); display:flex; flex-direction:column; gap:2px; }
 .drop-menu-h{ font:600 10.5px var(--font-mono); text-transform:uppercase; letter-spacing:.05em; color:var(--tx3); padding:4px 8px 6px; }
 .drop-menu button{ display:flex; align-items:center; gap:8px; background:none; border:none; border-radius:6px; padding:7px 9px; font:500 13px var(--font-ui); color:var(--tx1); text-align:left; cursor:pointer; }
@@ -1749,3 +1751,28 @@ html.lite .wk-card{ display:none; }
 .req-table td{ position:relative; }
 .req-fill{ position:absolute; right:-3px; bottom:-3px; width:10px; height:10px; background:var(--accent); border:1px solid var(--panel); border-radius:2px; cursor:crosshair; z-index:2; touch-action:none; }
 .req-table td.fill-sel{ background:var(--accent-dim) !important; box-shadow:inset 0 0 0 1px var(--accent); }
+
+/* pipeline: group (drop a card on another) and ungroup */
+.pipe-card.drop-card{ outline:2px solid var(--accent); outline-offset:2px; }
+.pipe-ungroup{ margin-left:auto; visibility:hidden; background:none; border:1px solid var(--bd); border-radius:6px; color:var(--tx3); font:500 10.5px var(--font-ui); padding:1px 7px; cursor:pointer; }
+.pipe-req-card:hover .pipe-ungroup{ visibility:visible; }
+.pipe-ungroup:hover{ color:var(--tx1); border-color:var(--accent); }
+
+/* request block: producer, own name, totals on the right; long blocks folded */
+.pipe-req-head{ display:flex; align-items:baseline; gap:6px; min-width:0; white-space:nowrap; }
+.pipe-req-head .pipe-card-company{ flex-shrink:0; max-width:62%; min-width:0; overflow:hidden; text-overflow:ellipsis; }
+.pipe-req-label{ color:var(--tx1); font-weight:600; min-width:0; overflow:hidden; text-overflow:ellipsis; }
+.pipe-req-label:empty{ display:none; }
+.pipe-req-label::before{ content:'· '; color:var(--tx3); font-weight:400; }
+.pipe-req-rename{ visibility:hidden; background:none; border:none; padding:0 2px; color:var(--tx3); cursor:pointer; line-height:0; }
+.pipe-req-rename svg{ width:11px; height:11px; }
+.pipe-req-card:hover .pipe-req-rename{ visibility:visible; }
+.pipe-req-rename:hover{ color:var(--accent); }
+.pipe-req-tot{ margin-left:auto; flex-shrink:0; font:600 10.5px var(--font-mono); color:var(--tx2); }
+.pipe-req-label-in{ flex:1; min-width:60px; background:var(--panel-2); border:1px solid var(--accent); border-radius:4px; color:var(--tx1); font:600 12px var(--font-ui); padding:1px 5px; }
+.pipe-card-meta{ display:flex; align-items:center; gap:6px; }
+.pipe-req-more{ display:block; width:100%; margin-top:4px; background:none; border:none; border-top:1px solid var(--bd-soft); padding:5px 0 1px; color:var(--tx3); font:500 11.5px var(--font-ui); text-align:left; cursor:pointer; }
+.pipe-req-more:hover{ color:var(--accent); }
+.drop-menu-group{ border-top:1px solid var(--bd) !important; border-radius:0 0 6px 6px !important; margin-top:4px; color:var(--accent) !important; }
+.pipe-req-line[hidden]{ display:none; }
+.pipe-req-card .pipe-card-meta{ flex-wrap:nowrap; min-height:20px; } .pipe-req-card .pipe-card-meta .pipe-ungroup{ flex-shrink:0; }
