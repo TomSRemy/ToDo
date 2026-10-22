@@ -21,7 +21,7 @@
     const canvas=root.querySelector('canvas'), ctx=canvas.getContext('2d'), stage=root.querySelector('.nw-stage'), tip=root.querySelector('.nw-tip'), side=root.querySelector('.nw-side');
     const search=root.querySelector('.nw-search input'), typesBox=root.querySelector('.nw-types'), localBox=root.querySelector('.nw-local input');
     let nodes=[], edges=[], byId=new Map(), adj=new Map(), pos=new Map();   // positions kept between refreshes
-    let view={ x:0, y:0, k:1 }, hover=null, selected=null, alpha=1, raf=0, dpr=1, W=0, H=0, dragging=null, panning=null, moved=false, matches=null;
+    let view={ x:0, y:0, k:1 }, hover=null, selected=null, alpha=1, raf=0, dpr=1, W=0, H=0, dragging=null, panning=null, moved=false, matches=null, follow=0;
 
     function visibleSet(){
       let ok=n=>!hidden.has(n.type);
@@ -91,11 +91,13 @@
       ctx.fillStyle='rgba(232,238,245,.92)';
       labels.forEach(([n,x,y,r])=>{ ctx.font=(n.type==='company'||n.type==='project'?'600 ':'')+'11px system-ui, sans-serif'; ctx.fillText(n.label.length>34?n.label.slice(0,33)+'…':n.label, x+r+3, y+4); });
     }
-    function loop(){ raf=0; if(alpha>.02 || dragging) tick(); draw(); if(alpha>.02 || dragging) raf=requestAnimationFrame(loop); }
+    // the selected point in the middle of the free space (left of the side panel); followed while the layout settles
+    function centerOn(n){ const off=side.hidden?0:-(side.offsetWidth+12)/2; view.x=-n.p.x*view.k+off; view.y=-n.p.y*view.k; }
+    function loop(){ raf=0; if(alpha>.02 || dragging) tick(); if(follow && selected && !panning && !dragging && performance.now()<follow) centerOn(selected); draw(); if(alpha>.02 || dragging) raf=requestAnimationFrame(loop); }
     function kick(){ if(!raf) raf=requestAnimationFrame(loop); }
     function resize(){ const r=stage.getBoundingClientRect(); dpr=window.devicePixelRatio||1; W=r.width; H=r.height; canvas.width=W*dpr; canvas.height=H*dpr; canvas.style.width=W+'px'; canvas.style.height=H+'px'; kick(); }
     function nodeAt(sx,sy){ const ok=visibleSet(); let best=null, bd=1e9; nodes.forEach(n=>{ if(!ok(n)) return; const [x,y]=toScreen(n.p.x,n.p.y), d=(x-sx)**2+(y-sy)**2, r=Math.max(8,n.r*view.k+4); if(d<r*r && d<bd){ bd=d; best=n; } }); return best; }
-    function fit(){
+    function fit(){ follow=0;
       const ok=visibleSet(), vis=nodes.filter(ok); if(!vis.length) return;
       let x0=1e9,y0=1e9,x1=-1e9,y1=-1e9; vis.forEach(n=>{ x0=Math.min(x0,n.p.x); y0=Math.min(y0,n.p.y); x1=Math.max(x1,n.p.x); y1=Math.max(y1,n.p.y); });
       view.k=Math.max(.25, Math.min(2.2, Math.min(W/((x1-x0)||1), H/((y1-y0)||1))*.85)); view.x=-(x0+x1)/2*view.k; view.y=-(y0+y1)/2*view.k; kick();
@@ -118,12 +120,13 @@
       if(hidden.has(n.type)){ hidden.delete(n.type); paintTypes(); }
       selected=n; showSide(n);
       if(o && o.local){ localBox.checked=true; alpha=Math.max(alpha,.5); setTimeout(fit, 500); }   // from a sheet: its neighbourhood first
-      view.x=-n.p.x*view.k; view.y=-n.p.y*view.k; if(view.k<1) view.k=1.1; kick();
+      if(view.k<1) view.k=1.1;   // zoom first, then centre (the other way round put the point off-centre)
+      centerOn(n); follow=o && o.local?0:performance.now()+2000; kick();
     }
     // ---- interactions
-    canvas.addEventListener('wheel', e=>{ e.preventDefault(); const r=canvas.getBoundingClientRect(), sx=e.clientX-r.left, sy=e.clientY-r.top, [wx,wy]=toWorld(sx,sy);
+    canvas.addEventListener('wheel', e=>{ e.preventDefault(); follow=0; const r=canvas.getBoundingClientRect(), sx=e.clientX-r.left, sy=e.clientY-r.top, [wx,wy]=toWorld(sx,sy);
       view.k=Math.max(.15, Math.min(4, view.k*(e.deltaY<0?1.12:1/1.12))); view.x=(sx-W/2)-wx*view.k; view.y=(sy-H/2)-wy*view.k; kick(); }, { passive:false });
-    canvas.addEventListener('pointerdown', e=>{ const r=canvas.getBoundingClientRect(), sx=e.clientX-r.left, sy=e.clientY-r.top, n=nodeAt(sx,sy); moved=false; canvas.setPointerCapture(e.pointerId);
+    canvas.addEventListener('pointerdown', e=>{ follow=0; const r=canvas.getBoundingClientRect(), sx=e.clientX-r.left, sy=e.clientY-r.top, n=nodeAt(sx,sy); moved=false; canvas.setPointerCapture(e.pointerId);
       if(n){ dragging=n; alpha=Math.max(alpha,.3); } else panning={ sx, sy, x:view.x, y:view.y }; kick(); });
     canvas.addEventListener('pointermove', e=>{ const r=canvas.getBoundingClientRect(), sx=e.clientX-r.left, sy=e.clientY-r.top;
       if(dragging){ const [wx,wy]=toWorld(sx,sy); dragging.p.x=wx; dragging.p.y=wy; dragging.p.vx=dragging.p.vy=0; moved=true; kick(); return; }
