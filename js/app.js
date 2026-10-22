@@ -5867,12 +5867,16 @@
     createTask({ title, description:$('f-description').value.trim(), client:clientInput.value.trim(), project:projectInput.value.trim(), urgency:$('f-urgency').value, status:$('f-status').value, reminder:$('f-reminder').value, link:$('f-link').value.trim(), due, recur });
     render(); renderLists(); closeAddForm();
   }
-  // the note steps aside while the full form is open if it would hide the form's buttons (small screens), and comes back after
-  let postitAsideForForm=false;
-  function openAddForm(){ addSection.classList.add('open'); $('f-title').focus();
-    if(postitEl && !postitEl.classList.contains('hidden')){ const a=cancelTaskBtn.parentElement.getBoundingClientRect(), b=postitEl.getBoundingClientRect();
-      if(a.bottom>b.top && a.top<b.bottom && a.right>b.left && a.left<b.right){ setPostitOpen(false); postitAsideForForm=true; } } }
-  function closeAddForm(){ addSection.classList.remove('open'); resetAddForm(); if(postitAsideForForm){ postitAsideForForm=false; setPostitOpen(true); } }
+  // the note stays in view (that is its point): if it would cover the form's buttons, the buttons make room beside it
+  function fitFormButtons(){
+    const row=cancelTaskBtn.parentElement; row.style.marginRight='';
+    if(!addSection.classList.contains('open') || !postitEl || postitEl.classList.contains('hidden')) return;
+    const a=row.getBoundingClientRect(), b=postitEl.getBoundingClientRect();
+    if(a.bottom>b.top && a.top<b.bottom && a.right>b.left && a.left<b.right) row.style.marginRight=Math.min(a.width-160, a.right-b.left+12)+'px';
+  }
+  function openAddForm(){ addSection.classList.add('open'); $('f-title').focus(); fitFormButtons(); }
+  function closeAddForm(){ addSection.classList.remove('open'); resetAddForm(); cancelTaskBtn.parentElement.style.marginRight=''; }
+  window.addEventListener('resize', fitFormButtons);
   function quickAdd(){
     const title=quickAddInput.value.trim(); if(!title) return;
     createTask({ title, urgency:'moyenne', status:'a_faire' });

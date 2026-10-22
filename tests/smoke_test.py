@@ -417,14 +417,15 @@ with sync_playwright() as p:
     check(not errors, f"no page errors ({errors})")
     page.close()
 
-    # --- small screen: the note steps aside while the full task form would be hidden behind it
+    # --- small screen: the note stays in view; the full task form's buttons make room beside it
     page, errors = new_page(browser, viewport={"width": 1100, "height": 720})
     page.goto(URL); page.click('[data-tab="tasks"]')
     check(page.is_visible("#postit"), "small screen: the note is open")
     page.click("text=Tâche complète")
-    check(not page.is_visible("#postit") and page.is_visible("#submit-task"), "small screen: the note steps aside so « Ajouter » shows")
-    page.click("#cancel-task")
-    check(page.is_visible("#postit"), "small screen: the note comes back when the form closes")
+    sb, nb = page.locator("#submit-task").bounding_box(), page.locator("#postit").bounding_box()
+    check(page.is_visible("#postit") and sb["x"] + sb["width"] <= nb["x"], f"small screen: the note stays in view, « Ajouter » makes room beside it ({sb}, {nb})")
+    page.fill("#f-title", "Depuis le formulaire"); page.click("#submit-task")
+    check(page.is_visible("#postit") and any(t["title"] == "Depuis le formulaire" for t in stored(page, "todo-widget-tasks")), "small screen: « Ajouter » can be clicked")
     check(not errors, f"no page errors ({errors})")
     page.close()
 
