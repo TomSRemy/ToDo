@@ -4005,7 +4005,11 @@
   window.todoExtraCommands=(window.todoExtraCommands||[]).concat(
     PRESET_VIEWS.tasks.map(p=>({ t:'Vue tâches : '+p.name, k:'vue filtre taches', go:()=>applySavedView('tasks',{ id:p.id, name:p.name, preset:p.id }) })),
     PRESET_VIEWS.pipeline.map(p=>({ t:'Vue pipeline : '+p.name, k:'vue filtre pipeline', go:()=>applySavedView('pipeline',{ id:p.id, name:p.name, preset:p.id }) })));
-  function renderPipeline(){ renderPipelineInner(); if(typeof paintPicks==='function') paintPicks(); }
+  function renderPipeline(){ renderPipelineInner(); if(typeof paintPicks==='function') paintPicks(); paintXsCount(); }
+  // how many lines wait for the Excel files (or changed there), on the « Excel ⇄ » button
+  function paintXsCount(){ const b=$('pipe-xs-btn'); if(!b || ON_PHONE) return; let n=0;
+    try{ xsList().forEach(o=>{ if(xsTodo(xsState('pipe',o)) || (xsBddApplies(o) && xsTodo(xsState('bdd',o)))) n++; }); }catch(e){}
+    b.textContent='Excel ⇄'+(n?' · '+n:''); b.classList.toggle('xs-pending', n>0); }
   function renderPipelineInner(){
     if(normalizeOpps()) saveCrmLocalOnly();
     const board=$('pipeline-board');
@@ -5931,10 +5935,126 @@
     if(bridgeState.ok && !bridgeUpToDate(bridgeState.info)) throw new Error('Ton pont Excel est une ancienne version, moins protégée que la nouvelle : rien n\u2019a été envoyé. Dans Réf. & data → Pont Excel, télécharge pont-excel.ps1, remplace l\u2019ancien fichier et relance le pont.');
     const res=await bridgeCall('POST','/'+kind+'/upsert',{ rows }, 30000);
     const results=res.results||[], pending=[];
-    results.forEach((r,i)=>{ const o=list[i]; xlRemember(kind, o, rows[i].values, r); if(r.ok && ((r.conflicts&&r.conflicts.length) || r.question)) pending.push({ o, r }); });
+    results.forEach((r,i)=>{ const o=list[i]; xlRemember(kind, o, rows[i].values, r); if(r.ok && ((r.conflicts&&r.conflicts.length) || r.question)) pending.push({ o, r });
+      if(r.ok && r.action!=='en attente'){ o.excelSent=Object.assign({}, o.excelSent||{}, { [kind]:{ at:Date.now(), h:xsHash(rows[i].values) } }); } });
     list.forEach(o=>{ o[kind==='pipe'?'pipeSentAt':'bddSentAt']=Date.now(); touchCrm(o); }); saveCrm();
     return { res, results, pending };
   }
+  // ---------- Excel ⇄ appli : what was sent to the Pipe and to the Suivi (BDD), what changed since on either side ----------
+  const xsHash=vals=>{ const t=(vals||[]).map(v=>cellToText(v)).join('␟'); let h=5381; for(let i=0;i<t.length;i++) h=((h*33)^t.charCodeAt(i))>>>0; return h.toString(36); };
+  const xsNorm=v=>pqFold(String(v==null?'':v)).replace(/[^a-z0-9]/g,'');
+  const xsColIdx=letters=>String(letters||'').toUpperCase().split('').reduce((n,ch)=>n*26+(ch.charCodeAt(0)-64),0)-1;
+  // one Excel cell as text, the way the app writes it (dates from Excel serials, numbers with a comma)
+  const xsCellText=(v, dateish)=>{ if(v==null) return ''; if(typeof v==='number' && dateish && v>20000 && v<80000){ const d=new Date(Math.round((v-25569)*86400000)); return pqPad(d.getUTCDate())+'/'+pqPad(d.getUTCMonth()+1)+'/'+d.getUTCFullYear(); }
+    if(typeof v==='number') return String(Math.round(v*1000)/1000).replace('.',','); if(typeof v==='boolean') return v?'VRAI':'FAUX'; return String(v).trim(); };
+  let xsRead={ pipe:null, bdd:null };   // last reading of each file through the bridge: { at, rows: Map(key → row), off }
+  const XS_KEYS={ pipe:{ header:'Nom Producteur', a:6, b:19, sheet:/pipe/i }, bdd:{ header:'Nom_prod', a:6, b:33, sheet:/bdd/i } };
+  const xsAppValues=(kind,o)=>kind==='pipe'?PQ_FIELDS.reduce((row,f,i)=>{ row[xsColIdx(f.col)]=pipeCells(o)[i]; return row; }, []):bddCells(o);
+  const xsKey=(kind, vals)=>xsNorm(vals[XS_KEYS[kind].a])+'|'+xsNorm(vals[XS_KEYS[kind].b]);
+  async function xsReadFile(kind){
+    const res=await bridgeCall('GET','/'+kind+'/read',null,60000), sheets=res.sheets||{};
+    const name=Object.keys(sheets).find(n=>XS_KEYS[kind].sheet.test(n)); if(!name) throw new Error('Onglet introuvable dans le fichier '+(kind==='pipe'?'Pipe':'BDD'));
+    const rows=sheets[name]||[], K=XS_KEYS[kind];
+    const hi=rows.findIndex((r,i)=>i<20 && (r||[]).some(c=>xsNorm(c)===xsNorm(K.header))); if(hi<0) throw new Error('En-tête « '+K.header+' » introuvable');
+    const off=rows[hi].findIndex(c=>xsNorm(c)===xsNorm(K.header))-K.a, map=new Map();
+    rows.slice(hi+1).forEach((r,i)=>{ if(!r) return; const vals=[]; r.forEach((c,j)=>{ vals[j-off]=c; }); const k=xsKey(kind, vals); if(k!=='|') map.set(k, { vals, line:hi+2+i }); });
+    xsRead[kind]={ at:Date.now(), rows:map, name };
+  }
+  // where an installation stands for one file
+  function xsState(kind, o){
+    const vals=xsAppValues(kind, o), h=xsHash(kind==='pipe'?pipeCells(o):vals), sent=o.excelSent&&o.excelSent[kind], legacy=!sent && o.excelPrev && o.excelPrev[kind];
+    const sentAt=sent?sent.at:(kind==='pipe'?o.pipeSentAt:o.bddSentAt);
+    const app=sent?(sent.h===h?'ok':'modif'):legacy||sentAt?'envoye':'jamais';
+    const st={ app, sentAt, excel:null, diffs:[], statut:null };
+    const rd=xsRead[kind];
+    if(rd){ const hit=rd.rows.get(xsKey(kind, vals));
+      if(!hit) st.excel='absent';
+      else { st.line=hit.line; const prev=(o.excelPrev&&o.excelPrev[kind])||[];
+        const cols=kind==='pipe'?PQ_FIELDS.map(f=>({ i:xsColIdx(f.col), f, label:f.label, dateish:f.type==='date'||['mesPrev','mesEff','debut','fin'].includes(f.k) })):[{ i:24, label:'Statut' }];
+        cols.forEach(c=>{ const ex=xsCellText(hit.vals[c.i], c.dateish), ap=cellToText(vals[c.i]), pv=cellToText(prev[c.i]);
+          if(xsNorm(ex)===xsNorm(ap)) return;
+          // changed in the Excel by someone (not what the app wrote last), or still to send from the app
+          st.diffs.push({ col:c, excel:ex, app:ap, byExcel:!!ex && xsNorm(ex)!==xsNorm(pv) }); });
+        if(kind==='bdd') st.statut=xsCellText(hit.vals[24]);
+        st.excel=st.diffs.some(d=>d.byExcel)?'modifie':'present'; } }
+    else if(kind==='bdd'){ const s2=suiviState(o); if(s2) st.excel=s2.k==='missing'?'absent':s2.k==='diff'?'statut':'present', st.statut=s2.p&&s2.p.statut; }
+    return st;
+  }
+  const xsTodo=st=>st.app==='jamais'||st.app==='modif'||st.excel==='absent'||st.excel==='modifie'||st.excel==='statut'||(st.diffs||[]).length>0;
+  function xsList(){ return opportunities.filter(o=>!o.deleted && o.kind==='installation' && (!isExited(o) || (o.excelSent||o.pipeSentAt||o.bddSentAt))); }
+  const xsBddApplies=o=>isExited(o) || stageIndex(o.stage)>=stageIndex('pricing_indicatif');
+  // a value changed in the Pipe by a colleague, taken into the app
+  function xsTake(o, d){
+    const f=d.col.f; if(!f) return;
+    let v=d.excel;
+    if(f.type==='check') v=/^(vrai|true|oui|1|x)$/i.test(v);
+    else if(f.type==='date'){ const m=/^(\d{2})\/(\d{2})\/(\d{4})$/.exec(v); v=m?m[3]+'-'+m[2]+'-'+m[1]:v; }
+    o[f.k]=v; touchCrm(o); saveCrm();
+  }
+  // a status typed in the Suivi by someone: Gagné / Perdu / Abandon brought into the pipeline
+  function xsStatutAction(o, statut){
+    const s=pqFold(statut||'');
+    if(/gagne/.test(s) && stageIndex(o.stage)<stageIndex('onboarding')) return { label:'Passer à Onboarding', run:()=>{ setOppStage(o,'onboarding'); } };
+    if(/perdu/.test(s) && !isExited(o)) return { label:'Marquer perdu', run:()=>{ o.stageBeforeExit=o.stage; o.stage='perdu'; o.lostAt=Date.now(); touchCrm(o); saveCrm(); } };
+    if(/abandon|sans suite|no ?go/.test(s) && !isExited(o)) return { label:'Marquer abandonné', run:()=>{ o.stageBeforeExit=o.stage; o.stage='abandonne'; o.lostAt=Date.now(); touchCrm(o); saveCrm(); } };
+    return null;
+  }
+  async function openExcelSync(opts){
+    let ov=$('xs-overlay');
+    if(!ov){ ov=document.createElement('div'); ov.id='xs-overlay'; ov.className='modal-overlay';
+      ov.innerHTML='<div class="modal-box wide xs-box" role="dialog" aria-labelledby="xs-title"><div class="xs-head"><h3 id="xs-title">Excel ⇄ appli</h3><div class="xs-filter"><button type="button" data-f="todo" class="on">À traiter</button><button type="button" data-f="all">Tout</button></div><button type="button" class="modal-x xs-x" aria-label="Fermer">×</button></div>'
+        +'<p class="modal-hint xs-info"></p><div class="xs-tools"><button type="button" class="xs-read">Relire les Excel</button><button type="button" class="xs-send" data-k="pipe"></button><button type="button" class="xs-send" data-k="bdd"></button></div><div class="xs-body"></div></div>';
+      document.body.appendChild(ov); const close=()=>ov.classList.add('hidden');
+      ov.addEventListener('click', e=>{ if(e.target===ov) close(); }); ov.querySelector('.xs-x').onclick=close;
+      ov.querySelectorAll('.xs-filter button').forEach(b=>b.onclick=()=>{ ov.querySelectorAll('.xs-filter button').forEach(x=>x.classList.toggle('on', x===b)); paintExcelSync(); });
+      ov.querySelector('.xs-read').onclick=async e=>{ const b=e.currentTarget, t=b.textContent; b.disabled=true; b.textContent='Lecture…';
+        try{ await xsReadFile('pipe'); await xsReadFile('bdd'); importParcFromBridge(true); }catch(err){ showBridgeMsg(err.message, false); } b.disabled=false; b.textContent=t; paintExcelSync(); };
+      ov.querySelectorAll('.xs-send').forEach(b=>b.onclick=async()=>{ const kind=b.dataset.k, list=xsList().filter(o=>(kind==='pipe'||xsBddApplies(o)) && xsTodo(xsState(kind,o)) && !((xsState(kind,o).diffs||[]).some(d=>d.byExcel))); if(!list.length) return;
+        await sendToExcel(kind, list, b); if(bridgeConfigured()){ try{ await xsReadFile(kind); }catch(e){} } paintExcelSync(); });
+    }
+    ov.classList.remove('hidden'); paintExcelSync();
+    if(bridgeConfigured() && !(opts&&opts.noRead) && (!xsRead.pipe || Date.now()-xsRead.pipe.at>120000)){ try{ await xsReadFile('pipe'); await xsReadFile('bdd'); }catch(e){} paintExcelSync(); }
+  }
+  function paintExcelSync(){
+    const ov=$('xs-overlay'); if(!ov || ov.classList.contains('hidden')) return;
+    const all=ov.querySelector('.xs-filter .on').dataset.f==='all', body=ov.querySelector('.xs-body'); body.innerHTML='';
+    const fmtD=t=>t>1e12?new Date(t).toLocaleDateString('fr-FR'):'';
+    ov.querySelector('.xs-info').textContent=bridgeConfigured()
+      ? 'Pipe '+(xsRead.pipe?'relu le '+fmtD(xsRead.pipe.at)+' à '+new Date(xsRead.pipe.at).toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'}):'pas encore relu')+' · Suivi '+(xsRead.bdd?'relu':'pas encore relu')+'. Envoyer ne remplace jamais une case modifiée par un collègue : elle te sera demandée.'
+      : 'Pont Excel non connecté sur cet ordinateur : la colonne « appli » dit ce qui a été envoyé ; le Suivi est relu depuis le Portefeuille (fichier chargé). Le pont se règle dans Réf. & data.';
+    const rows=xsList().map(o=>({ o, p:xsState('pipe',o), b:xsBddApplies(o)?xsState('bdd',o):null }));
+    const todo=rows.filter(r=>xsTodo(r.p) || (r.b && xsTodo(r.b)));
+    const cntP=rows.filter(r=>xsTodo(r.p) && !r.p.diffs.some(d=>d.byExcel)).length, cntB=rows.filter(r=>r.b && xsTodo(r.b) && !r.b.diffs.some(d=>d.byExcel)).length;
+    ov.querySelectorAll('.xs-send').forEach(b=>{ const n=b.dataset.k==='pipe'?cntP:cntB; b.textContent='Envoyer au '+(b.dataset.k==='pipe'?'Pipe':'Suivi')+' ('+n+')'; b.disabled=!n || !bridgeConfigured(); b.title=bridgeConfigured()?'':'Pont Excel non connecté'; });
+    const shown=all?rows:todo;
+    if(!shown.length){ body.innerHTML='<p class="xs-empty">✓ Tout est à jour'+(xsRead.pipe?'':' côté appli (relis les Excel pour vérifier le contenu des fichiers)')+'.</p>'; return; }
+    const t=document.createElement('table'); t.className='xs-table';
+    t.innerHTML='<thead><tr><th>Installation</th><th>Pipe Excel</th><th>Suivi (BDD)</th></tr></thead>';
+    const tb=document.createElement('tbody');
+    const cell=(kind, o, st)=>{
+      const td=document.createElement('td'); if(!st){ td.innerHTML='<span class="xs-na">pas encore (avant le pricing)</span>'; return td; }
+      const tag=(cls,txt)=>{ const s=document.createElement('span'); s.className='xs-tag '+cls; s.textContent=txt; td.appendChild(s); };
+      if(st.app==='jamais') tag('warn','Pas envoyé');
+      else if(st.app==='modif') tag('warn','Modifié dans l’appli depuis l’envoi'+(fmtD(st.sentAt)?' du '+fmtD(st.sentAt):''));
+      else tag('ok','Envoyé'+(fmtD(st.sentAt)?' le '+fmtD(st.sentAt):''));
+      if(st.excel==='absent' && st.app!=='jamais') tag('bad','Absent du fichier');
+      if(st.excel==='statut') tag('info','Statut Suivi : '+(st.statut||'?'));
+      if(st.line) { const l=document.createElement('span'); l.className='xs-line'; l.textContent='ligne '+st.line; td.appendChild(l); }
+      st.diffs.filter(d=>d.byExcel).slice(0,6).forEach(d=>{ const r=document.createElement('div'); r.className='xs-diff';
+        r.innerHTML='<span></span><b></b>'; r.firstChild.textContent=d.col.label+' : Excel « '+(d.excel||'vide')+' »'; r.lastChild.textContent=' · appli « '+(d.app||'vide')+' »';
+        if(kind==='pipe' && d.col.f){ const b=document.createElement('button'); b.type='button'; b.className='pq-link'; b.textContent='Reprendre dans l’appli'; b.onclick=()=>{ xsTake(o,d); renderPipeline(); paintExcelSync(); }; r.appendChild(b); }
+        if(kind==='bdd'){ const a=xsStatutAction(o, d.excel); if(a){ const b=document.createElement('button'); b.type='button'; b.className='pq-link'; b.textContent=a.label; b.onclick=()=>{ a.run(); renderPipeline(); paintExcelSync(); }; r.appendChild(b); } }
+        td.appendChild(r); });
+      if(st.excel==='statut'){ const a=xsStatutAction(o, st.statut); if(a){ const b=document.createElement('button'); b.type='button'; b.className='pq-link'; b.textContent=a.label; b.onclick=()=>{ a.run(); renderPipeline(); paintExcelSync(); }; td.appendChild(b); } }
+      if(xsTodo(st) && !st.diffs.some(d=>d.byExcel) && bridgeConfigured()){ const b=document.createElement('button'); b.type='button'; b.className='pq-link xs-one'; b.textContent='Envoyer'; b.onclick=async()=>{ await sendToExcel(kind,[o],b); try{ await xsReadFile(kind); }catch(e){} paintExcelSync(); }; td.appendChild(b); }
+      return td; };
+    shown.forEach(({o,p,b})=>{ const tr=document.createElement('tr');
+      const n=document.createElement('td'); n.className='xs-name'; n.innerHTML='<b></b><span></span>'; n.firstChild.textContent=oppName(o); n.lastChild.textContent=[o.company, stageLabel(o.stage, o)].filter(Boolean).join(' · ');
+      n.onclick=()=>{ $('xs-overlay').classList.add('hidden'); openOppDetail(o.id); };
+      tr.append(n, cell('pipe', o, p), cell('bdd', o, b)); tb.appendChild(tr); });
+    t.appendChild(tb); body.appendChild(t);
+  }
+  window.todoExcelSync=openExcelSync;
   async function sendToExcel(kind, list, btn){
     if(ON_PHONE) return;
     const label=btn?btn.textContent:'';
@@ -6763,6 +6883,7 @@
   $('tasks-views-btn').onclick=e=>{ e.stopPropagation(); openViewsMenu('tasks', e.currentTarget); };
   $('pipe-views-btn').onclick=e=>{ e.stopPropagation(); openViewsMenu('pipeline', e.currentTarget); };
   $('pipe-meet-toggle').onclick=()=>{ pipeMeet=!pipeMeet; if(pipeMeet) pipeDash=false; renderPipeline(); };
+  $('pipe-xs-btn').onclick=()=>openExcelSync();
   $('pipe-list-toggle').onclick=()=>{ pipeList=!(pipeList && !pipeDash && !pipeMeet); pipeDash=false; pipeMeet=false; try{ localStorage.setItem('pipe-list', pipeList?'1':'0'); }catch(e){} renderPipeline(); };
   $('pq-save-btn').onclick=saveOpp;
   $('pq-next-btn').onclick=pqNext;
@@ -8000,6 +8121,7 @@
       { t:'Nouvelle pré-qualif', k:'prequalif prospect', go:clickEl('prequal-add-btn','pipeline') },
       { t:'Nouveau contact', k:'ajouter contact personne', go:clickEl('contact-add-btn','contacts') },
       { t:'Coller une signature de mail', k:'contact signature', go:clickEl('sig-paste-btn','contacts') },
+      { t:'Excel ⇄ appli : ce qui est envoyé ou pas', k:'excel pipe bdd suivi envoye pousse synchro', go:()=>openExcelSync() },
       { t:'Pipeline en liste', k:'liste tableau installations toutes', go:()=>{ gsTab('pipeline'); setTimeout(()=>{ pipeList=true; pipeDash=false; pipeMeet=false; try{ localStorage.setItem('pipe-list','1'); }catch(e){} renderPipeline(); },40); } },
       { t:'Vue réunion du pipeline', k:'reunion pricing partager', go:()=>{ gsTab('pipeline'); setTimeout(()=>{ if(!pipeMeet){ pipeMeet=true; pipeDash=false; renderPipeline(); } },40); } },
       { t:'Tableau de bord du pipeline', k:'dashboard stats', go:()=>{ gsTab('pipeline'); setTimeout(()=>{ if(!pipeDash){ pipeDash=true; pipeMeet=false; renderPipeline(); } },40); } },

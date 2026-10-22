@@ -576,7 +576,7 @@ with sync_playwright() as p:
     check("Envoyé l'offre SOLARIS" in hist and "Mail CR" in hist and page.locator("#daynotes-overlay .dn-line.done").count() == 2, "note of the day: the history shows yesterday, ticked lines struck")
     page.fill("#daynotes-overlay .dn-search", "mail"); page.wait_for_timeout(100)
     check(page.locator("#daynotes-overlay .dn-line").count() == 1, "note of the day: the history can be searched")
-    page.keyboard.press("Escape"); page.reload(); page.wait_for_timeout(400)
+    page.keyboard.press("Escape"); page.wait_for_timeout(150); page.reload(); page.wait_for_timeout(400)
     note2 = next(n for n in stored(page, "todo-widget-notes") if n["id"] == "scratchpad")
     check(note2["text"] == "Rappeler [[Paul Durand]]" and note2.get(yk) == note.get(yk), "note of the day: opening again the same day changes nothing")
     page.keyboard.press("Control+k"); page.keyboard.type("mail cr")
@@ -2049,6 +2049,46 @@ Responsable technique
           "bridge: Pipe row sent with real dates, numbers and booleans")
     check(len(bdd_row) == 91 and bdd_row[3] == {"d": "2026-10-19"} and bdd_row[33] == "Les Vignes" and bdd_row[24] == "En préparation", "bridge: BDD row sent")
     check("ajoutée" in page.inner_text("#bridge-msg"), "bridge: result shown")
+    check(not errors, f"no page errors ({errors})")
+    page.close()
+
+    # --- Excel ⇄ appli: what was sent or not, what a colleague changed in the Pipe, a status typed in the Suivi
+    xs_sent = []
+    pipe_head = [""] * 37; pipe_head[6] = "Nom Producteur"; pipe_head[19] = "Nom Centrale"; pipe_head[35] = "Commentaires"
+    pipe_a = [None] * 37; pipe_a[6] = "SCEA"; pipe_a[19] = "Les Vignes"; pipe_a[35] = "Vu au salon (Marie)"
+    bdd_head = [""] * 91; bdd_head[6] = "Nom_prod"; bdd_head[33] = "Nom_Installation_prod"; bdd_head[24] = "Statut"
+    bdd_a = [None] * 91; bdd_a[6] = "SCEA"; bdd_a[33] = "Les Vignes"; bdd_a[24] = "Gagné"
+    def xs_bridge(route, request):
+        if request.method == "OPTIONS":
+            return route.fulfill(status=204, headers={"Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "*", "Access-Control-Allow-Methods": "*"})
+        h = {"Access-Control-Allow-Origin": "*", "Content-Type": "application/json"}
+        u = request.url
+        if u.endswith("/status"):
+            return route.fulfill(status=200, headers=h, body=json.dumps({"ok": True, "version": "1.2", "authorized": True, "pipe": {"name": "Pipe.xlsx", "found": True}, "bdd": {"name": "Suivi.xlsx", "found": True}}))
+        if u.endswith("/pipe/read"): return route.fulfill(status=200, headers=h, body=json.dumps({"ok": True, "sheets": {"Pipe agrégation": [["Pipe"], pipe_head, pipe_a]}}))
+        if u.endswith("/bdd/read"): return route.fulfill(status=200, headers=h, body=json.dumps({"ok": True, "sheets": {"BDD Agrégation": [bdd_head, bdd_a]}}))
+        body = json.loads(request.post_data); xs_sent.append((u.rsplit("/", 2)[-2], body))
+        return route.fulfill(status=200, headers=h, body=json.dumps({"ok": True, "results": [{"ok": True, "action": "ajoutée", "row": 30 + i} for i in range(len(body["rows"]))]}))
+    xs_inst = [{"id": "xa", "kind": "installation", "company": "SCEA", "producteur": "SCEA", "centrale": "Les Vignes", "title": "Les Vignes", "stage": "kyc", "pipeSentAt": 1, "bddSentAt": 1,
+                "createdAt": 1, "updatedAt": 1, "deleted": False},
+               {"id": "xb", "kind": "installation", "company": "SCEA", "producteur": "SCEA", "centrale": "Le Pré", "title": "Le Pré", "stage": "collecte", "createdAt": 1, "updatedAt": 1, "deleted": False}]
+    page, errors = new_page(browser, {"todo_todo-widget-opportunities": json.dumps(xs_inst), "todo_bridge-config": json.dumps({"port": 8765, "token": "k1"})}, viewport={"width": 1400, "height": 900})
+    page.route("http://127.0.0.1:8765/**", xs_bridge)
+    page.goto(URL); page.click('[data-tab="pipeline"]'); page.click("#pipe-xs-btn")
+    page.wait_for_function("document.querySelector('#xs-overlay .xs-info').textContent.includes('relu le')", timeout=8000)
+    xs = page.inner_text("#xs-overlay .xs-body")
+    check("Le Pré" in xs and "Pas envoyé" in xs, "excel ⇄ app: an installation never sent is listed")
+    check("Commentaires : Excel « Vu au salon (Marie) »" in xs and "ligne 3" in xs, f"excel ⇄ app: a cell changed in the Pipe by a colleague is shown, with its line ({xs[:300]!r})")
+    check("avant le pricing" in xs, "excel ⇄ app: the Suivi only from the pricing on")
+    page.click("#xs-overlay .xs-diff:has-text('Commentaires') .pq-link:has-text('Reprendre')"); page.wait_for_timeout(150)
+    check(next(o for o in stored(page, "todo-widget-opportunities") if o["id"] == "xa").get("commentaires") == "Vu au salon (Marie)", "excel ⇄ app: « Reprendre dans l’appli » takes the colleague's value")
+    page.click("#xs-overlay .pq-link:has-text('Passer à Onboarding')"); page.wait_for_timeout(150)
+    check(next(o for o in stored(page, "todo-widget-opportunities") if o["id"] == "xa").get("stage") == "onboarding", "excel ⇄ app: « Gagné » in the Suivi moves the deal to Onboarding")
+    page.click("#xs-overlay .xs-send[data-k=pipe]"); page.wait_for_timeout(400)
+    sent_ids = [r["values"][19] for k, b in xs_sent if k == "pipe" for r in b["rows"]]
+    check("Le Pré" in sent_ids, f"excel ⇄ app: « Envoyer au Pipe » sends what is pending ({sent_ids})")
+    xb = next(o for o in stored(page, "todo-widget-opportunities") if o["id"] == "xb")
+    check((xb.get("excelSent") or {}).get("pipe", {}).get("h"), "excel ⇄ app: what was sent is remembered (to spot later changes)")
     check(not errors, f"no page errors ({errors})")
     page.close()
 
