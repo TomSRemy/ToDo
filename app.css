@@ -2004,3 +2004,8 @@ details.req-compare:not([open]) > .req-compare-h::before{ transform:none; }
 .sp-act:hover{ background:color-mix(in srgb, var(--accent) 14%, transparent); }
 .pd-who-row{ grid-template-columns:100px minmax(0,1fr) minmax(150px,auto); }
 .pd-who-row .pd-v{ white-space:nowrap; } .pd-who-row.late .pd-v{ color:var(--warn, #E5B54F); }
+/* meeting view: a lot (or a request at one step) gets a title line, its installations under it */
+.meet-table tr.meet-blk td{ padding:9px 10px 5px; color:var(--tx1); background:color-mix(in srgb, var(--accent) 5%, transparent); border-bottom:1px solid var(--bd-soft); cursor:pointer; }
+.meet-table tr.meet-blk:hover td{ background:color-mix(in srgb, var(--accent) 10%, transparent); }
+.meet-blk-name{ margin-left:6px; color:#B49CFF; font-weight:600; } .meet-blk-sum{ margin-left:10px; color:var(--tx2); font-size:12px; }
+.meet-table tr.meet-inblk td:first-child{ padding-left:24px; color:var(--tx3); }

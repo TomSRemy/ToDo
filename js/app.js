@@ -3855,7 +3855,10 @@
   // ----- Meeting view: what is coming, one line per installation, to share with the pricing team -----
   const MEET_PHASES=[{ key:'qualif', label:'Qualification · à venir' }, { key:'offre', label:'Offre · pricing en cours' }, { key:'contrat', label:'Contrat · pricing ferme' }];
   function meetPhasesOn(){ try{ const v=JSON.parse(localStorage.getItem('pipe-meet-phases')||'null'); if(Array.isArray(v) && v.length) return v; }catch(e){} return MEET_PHASES.map(p=>p.key); }
-  const MEET_COLS=['Producteur','Centrale','Techno','Puissance','P50 (MWh/an)','Dépt','MES','Contrat','Mécanisme','Étape','Prochaine échéance','Chargé'];
+  const MEET_COLS=['Producteur','Centrale','Techno','Puissance','P50 (MWh/an)','Dépt','MES','Contrat','Mécanisme','Étape','Prochaine échéance','Chargé','Lot / demande','Depuis'];
+  // the block an installation belongs to in the meeting view: same request, same lot, same step
+  const meetBlockKey=o=>o.requestId?o.requestId+'|'+(o.lot||'')+'|'+o.stage:'o'+o.id;
+  const meetBlockName=o=>{ if(o.lot) return o.lot; const r=o.requestId && opportunities.find(x=>x.id===o.requestId); return r && !r.deleted?(r.label||'Demande de '+requestInstalls(r.id).length+' installations'):''; };
   function meetRow(o){
     const fr=v=>/^\d{4}-\d{2}-\d{2}$/.test(v||'')?pqIsoToFr(v):(v||'');
     const s=oppStage(o.stage), task=o.taskId?tasks.find(t=>t.id===o.taskId && !t.done && t.status!=='termine'):null;
@@ -3863,7 +3866,7 @@
     const mwh=pqNum(String(o.mwh||''));
     return [o.producteur||o.company||'', oppName(o), o.install==='Eolien'?'Éolien':(o.install||''), fmtKwc(o.kwc), mwh?Math.round(mwh).toLocaleString('fr-FR'):'',
       (o.dept||'').replace(/^(\S+)\s+-\s+.*$/,'$1'), o.mesEff?fr(o.mesEff)+' (effective)':fr(o.mesPrev), o.debut&&o.fin?fr(o.debut)+' → '+fr(o.fin):o.fin?'jusqu\u2019au '+fr(o.fin):o.debut?'dès '+fr(o.debut)+(o.duree?', '+o.duree+' ans':''):(o.duree?o.duree+' ans':''),
-      o.contrat||'', s?s.label+(s.who!=='Com'?' ('+s.who+')':''):'', next, o.charge||''];
+      o.contrat||'', s?stageLabel(o.stage, o)+(s.who!=='Com'?' ('+(WHO[s.who]||s.who)+')':''):'', next, o.charge||'', meetBlockName(o), (()=>{ const d=daysInStage(o); return d==null?'':d+' j'; })()];
   }
   function meetData(q){
     const on=meetPhasesOn();
@@ -3872,7 +3875,10 @@
       .filter(o=>!q || pqFold([o.company,o.producteur,o.centrale,o.title,o.dept].join(' ')).includes(q))
       .filter(o=>!vp || vp(o));
     return MEET_PHASES.filter(p=>on.includes(p.key)).map(p=>{
-      const list=live.filter(o=>oppPhase(o)===p.key).sort((a,b)=>stageIndex(b.stage)-stageIndex(a.stage) || (pqToDate(a.mesEff||a.mesPrev)||9e15)-(pqToDate(b.mesEff||b.mesPrev)||9e15) || (a.company||'').localeCompare(b.company||'','fr'));
+      const sorted=live.filter(o=>oppPhase(o)===p.key).sort((a,b)=>stageIndex(b.stage)-stageIndex(a.stage) || (pqToDate(a.mesEff||a.mesPrev)||9e15)-(pqToDate(b.mesEff||b.mesPrev)||9e15) || (a.company||'').localeCompare(b.company||'','fr'));
+      // the installations of one block (a lot, or a request at one step) stay together, where the first of them stands
+      const blocks=new Map(); sorted.forEach(o=>{ const k=meetBlockKey(o); if(!blocks.has(k)) blocks.set(k,[]); blocks.get(k).push(o); });
+      const list=[...blocks.values()].flat();
       const kwc=list.reduce((t,o)=>t+(pqNum(String(o.kwc||''))||0),0), mwh=list.reduce((t,o)=>t+(pqNum(String(o.mwh||''))||0),0);
       return { phase:p, list, rows:list.map(meetRow), kwc, mwh };
     });
@@ -3900,7 +3906,7 @@
       const aoa=[[meetTitle()],[],MEET_COLS];
       groups.forEach(g=>{ if(!g.rows.length) return; aoa.push([g.phase.label+' — '+meetTotal(g.kwc,g.mwh,g.rows.length)]); g.list.forEach((o,i)=>{ const r=g.rows[i].slice(); r[3]=pqNum(String(o.kwc||''))||''; r[4]=Math.round(pqNum(String(o.mwh||'')))||''; aoa.push(r); }); aoa.push([]); });
       aoa[2][3]='Puissance (kWc)';
-      const ws=XLSX.utils.aoa_to_sheet(aoa); ws['!cols']=[22,24,9,14,12,6,14,24,14,22,26,10].map(w=>({ wch:w }));
+      const ws=XLSX.utils.aoa_to_sheet(aoa); ws['!cols']=[22,24,9,14,12,6,14,24,14,22,26,10,22,8].map(w=>({ wch:w }));
       const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'Ce qui arrive');
       const d=new Date(); XLSX.writeFile(wb, String(d.getFullYear()).slice(2)+pqPad(d.getMonth()+1)+pqPad(d.getDate())+'_Pipe agrégation - réunion pricing.xlsx');
       flashBtn(btn,'✓ Fichier créé');
@@ -3934,9 +3940,18 @@
     let t='<table class="meet-table"><thead><tr>'+MEET_COLS.map(c=>'<th>'+escapeHtml(c)+'</th>').join('')+'</tr></thead><tbody>';
     groups.forEach(g=>{ if(!g.rows.length) return;
       t+='<tr class="meet-sec"><th colspan="'+MEET_COLS.length+'">'+escapeHtml(g.phase.label)+'<span>'+escapeHtml(meetTotal(g.kwc,g.mwh,g.rows.length))+'</span></th></tr>';
-      g.rows.forEach((r,i)=>{ t+='<tr data-id="'+escapeHtml(g.list[i].id)+'">'+r.map((v,j)=>'<td'+(j===1?' class="meet-name"':'')+'>'+escapeHtml(v)+'</td>').join('')+'</tr>'; }); });
+      let lastKey=null;
+      g.rows.forEach((r,i)=>{ const o=g.list[i], k=meetBlockKey(o), mates=g.list.filter(x=>meetBlockKey(x)===k);
+        if(mates.length>1 && k!==lastKey){   // a lot, or a request at one step: one title line, the installations under it
+          const st=oppStage(o.stage), d=daysInStage(o), kw=mates.reduce((x,y)=>x+kwcNum(y),0);
+          t+='<tr class="meet-blk" data-blk="'+escapeHtml(k)+'" data-req="'+escapeHtml(o.requestId)+'" data-ids="'+escapeHtml(mates.map(x=>x.id).join(','))+'"><td colspan="'+MEET_COLS.length+'"><b>'+escapeHtml(o.company||'')+'</b>'
+            +(meetBlockName(o)?' <span class="meet-blk-name">'+escapeHtml(meetBlockName(o))+'</span>':'')
+            +' <span class="meet-blk-sum">'+escapeHtml([mates.length+' installations', kw?fmtKwc(kw):'', stageLabel(o.stage, o), st?WHO[st.who]||st.who:'', d!=null?'depuis '+d+' j':''].filter(Boolean).join(' · '))+'</span></td></tr>'; }
+        lastKey=k;
+        t+='<tr data-id="'+escapeHtml(o.id)+'"'+(mates.length>1?' class="meet-inblk"':'')+'>'+r.map((v,j)=>'<td'+(j===1?' class="meet-name"':'')+'>'+escapeHtml(v)+'</td>').join('')+'</tr>'; }); });
     wrap.innerHTML=t+'</tbody></table>';
     wrap.querySelectorAll('tr[data-id]').forEach(tr=>{ tr.onclick=()=>openOppDetail(tr.dataset.id); });
+    wrap.querySelectorAll('tr.meet-blk').forEach(tr=>{ tr.onclick=()=>openRequestDetail(tr.dataset.req, tr.dataset.ids.split(',')); });
     board.appendChild(wrap);
   }
   // ---------- saved views (tasks and pipeline): ready-made ones, and the user's own (filters + view + search) ----------

@@ -1802,6 +1802,21 @@ with sync_playwright() as p:
     check(not errors, f"no page errors ({errors})")
     ctx.close()
 
+    # --- Meeting view: a lot keeps its installations together under one title line (who, since when); a click opens the lot
+    ml = [{"id": "mr", "kind": "request", "company": "LOTS", "createdAt": 1, "updatedAt": 1, "deleted": False}] + [
+          {"id": "ml%d" % i, "kind": "installation", "company": "LOTS", "centrale": "Toit %d" % i, "title": "Toit %d" % i, "kwc": "1000", "requestId": "mr", "lot": "Lot Nord" if i < 3 else "",
+           "stage": "pricing_indicatif" if i < 3 else "collecte", "createdAt": 1, "updatedAt": 1, "deleted": False} for i in (1, 2, 3)] + [
+          {"id": "mo", "kind": "installation", "company": "AUTRE", "centrale": "Seule", "title": "Seule", "kwc": "500", "stage": "pricing_indicatif", "createdAt": 1, "updatedAt": 1, "deleted": False}]
+    page, errors = new_page(browser, {"todo_todo-widget-opportunities": json.dumps(ml)}, viewport={"width": 1400, "height": 900})
+    page.goto(URL); page.click('[data-tab="pipeline"]'); page.click("#pipe-meet-toggle")
+    blk = page.locator(".meet-table tr.meet-blk")
+    check(blk.count() == 1 and "Lot Nord" in blk.inner_text() and "2 installations" in blk.inner_text() and "Ops" in blk.inner_text() and page.locator(".meet-table tr.meet-inblk").count() == 2,
+          f"meeting view: the lot has one title line, its installations under it ({blk.all_inner_texts()})")
+    blk.click(); page.wait_for_timeout(200)
+    check("Lot Nord" in page.inner_text("#opp-detail-title"), "meeting view: a click on the lot opens its sheet")
+    check(not errors, f"no page errors ({errors})")
+    page.close()
+
     # --- Pipeline: a mail listing several plants gives one installation each; quotes in a mail never reach the HTML
     page, errors = new_page(browser)
     page.goto(URL); page.click('[data-tab="pipeline"]'); page.click("#opp-add-btn"); page.fill("#pq1-company", "HELIO OUEST SAS"); page.click("#pq-next-btn")
