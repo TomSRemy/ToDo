@@ -1511,7 +1511,7 @@
     const stalled=opportunities.filter(o=>!o.deleted && (o.kind==='installation'||o.kind==='prequal') && !isExited(o) && o.stage!=='converti' && o.stage!=='actif' && lastMove(o)>1e12 && now-lastMove(o)>=STALL_DAYS*864e5)
       .sort((a,b)=>lastMove(a)-lastMove(b));
     block('Pipeline : sans mouvement depuis '+STALL_DAYS+' jours', stalled.length, stalled.slice(0,8).map(o=>{ const d=Math.floor((now-lastMove(o))/864e5);
-      return row(o.kind==='prequal'?o.company+' (pré-qualif)':oppName(o), [o.kind==='prequal'?'':o.company, stageLabel(o.stage)].filter(Boolean).join(' · '), d+' j', ()=>{ gsTab('pipeline'); setTimeout(()=>openOppDetail(o.id),30); }, d>=30?'late':''); }),
+      return row(o.kind==='prequal'?o.company+' (pré-qualif)':oppName(o), [o.kind==='prequal'?'':o.company, stageLabel(o.stage, o)].filter(Boolean).join(' · '), d+' j', ()=>{ gsTab('pipeline'); setTimeout(()=>openOppDetail(o.id),30); }, d>=30?'late':''); }),
       'Aucune étape ni modification depuis. Relance, avance ou classe-les.');
     if(parcData===null) loadParc();
     if(parcData){
@@ -2663,7 +2663,7 @@
       row.appendChild(icon);
       const text=document.createElement('div'); text.className='contact-activity-row-text'; text.textContent=o.title||o.company;
       row.appendChild(text);
-      const tag=document.createElement('span'); tag.className='contact-activity-row-tag'; tag.style.cssText='color:var(--accent);background:var(--accent-dim);'; tag.textContent=o.stage==='perdu'?'Perdu':stageLabel(o.stage);
+      const tag=document.createElement('span'); tag.className='contact-activity-row-tag'; tag.style.cssText='color:var(--accent);background:var(--accent-dim);'; tag.textContent=o.stage==='perdu'?'Perdu':stageLabel(o.stage, o);
       row.appendChild(tag);
       return row;
     });
@@ -3665,7 +3665,13 @@
   // ----- Stages -----
   function oppStage(key){ return OPP_STAGES.find(s=>s.key===key)||null; }
   function stageIndex(key){ return OPP_STAGES.findIndex(s=>s.key===key); }
-  function stageLabel(key){ if(key==='prequal') return 'Pré-qualif'; if(OPP_EXITS[key]) return OPP_EXITS[key]; const s=oppStage(key); return s?s.label:key; }
+  // The offer's pricing step is « indicatif » or « engageant » after the kind of offer asked (Nature offre); an offer
+  // engageante from the start already carries the firm price: the contract's « Pricing ferme » is then included (skipped).
+  const isEngageant=o=>!!o && o.nature==='Engageante';
+  function stageLabel(key, o){ if(key==='prequal') return 'Pré-qualif'; if(OPP_EXITS[key]) return OPP_EXITS[key];
+    if(key==='pricing_indicatif' && isEngageant(o)) return 'Pricing engageant';
+    const s=oppStage(key); return s?s.label:key; }
+  const stageTaskOf=(st, o)=>st.key==='pricing_indicatif' && isEngageant(o)?'Pricing engageant':st.task;
   function oppPhase(o){ if(o.kind==='prequal') return 'prequal'; const s=oppStage(o.stage); return s?s.phase:null; }
   function oppName(o){ return o.centrale||o.title||'(sans nom)'; }
   function isExited(o){ return !!OPP_EXITS[o.stage]; }
@@ -3801,7 +3807,7 @@
     const c3=card('Dossiers qui traînent', stalled.length?'Sans étape ni modification depuis '+STALL_DAYS+' jours ou plus.':'Aucun dossier sans mouvement depuis '+STALL_DAYS+' jours.');
     stalled.slice(0,10).forEach(o=>{ const d=Math.floor((now-lastMove(o))/864e5); const r=document.createElement('button'); r.type='button'; r.className='tw-row'+(d>=30?' late':'');
       r.innerHTML='<span class="k"><b></b><span></span></span><span class="v"></span>'; r.querySelector('b').textContent=o.kind==='prequal'?o.company+' (pré-qualif)':oppName(o);
-      r.querySelector('.k span').textContent=[o.kind==='prequal'?'':o.company, stageLabel(o.stage)].filter(Boolean).join(' · '); r.querySelector('.v').textContent=d+' j'; r.onclick=()=>openOppDetail(o.id); c3.appendChild(r); });
+      r.querySelector('.k span').textContent=[o.kind==='prequal'?'':o.company, stageLabel(o.stage, o)].filter(Boolean).join(' · '); r.querySelector('.v').textContent=d+' j'; r.onclick=()=>openOppDetail(o.id); c3.appendChild(r); });
   }
   // ----- List view: every installation in one sortable table (search, saved view and « Sorties » apply) -----
   const PL_COLS=[
@@ -4144,7 +4150,9 @@
   }
   function pipeDropMenu(list, phase, x, y, target){
     const steps=OPP_STAGES.filter(st=>st.phase===phase); if(!steps.length) return;
-    const apply=key=>{ list.forEach(o=>{ if(o.stage!==key) setOppStage(o, key); }); renderPipeline(); };
+    // forward: the same window as « Étape suivante » (task to create, task to close); back: at once
+    const apply=key=>{ const k=stageIndex(key), fwd=list.filter(o=>stageIndex(o.stage)<k), back=list.filter(o=>stageIndex(o.stage)>k);
+      back.forEach(o=>setOppStage(o, key)); renderPipeline(); if(fwd.length) offerStageAdvance(fwd, key); };
     if(steps.length===1 && !target){ apply(steps[0].key); return; }
     document.querySelectorAll('.drop-menu').forEach(m=>m.remove());
     const m=document.createElement('div'); m.className='drop-menu'; m.setAttribute('role','menu');
@@ -4162,7 +4170,7 @@
   function stageChip(o){
     const s=oppStage(o.stage);
     const chip=document.createElement('span'); chip.className='pipe-chip'+(isExited(o)?' out':'');
-    chip.textContent=stageLabel(o.stage);
+    chip.textContent=stageLabel(o.stage, o);
     if(s && s.who && s.who!=='Com'){ const w=document.createElement('span'); w.className='pipe-who'; w.textContent=s.who; chip.appendChild(w); }
     return chip;
   }
@@ -4251,7 +4259,7 @@
     let open=group.length<=REQ_FOLD_AT; try{ const v=JSON.parse(localStorage.getItem('pipe-req-open')||'{}')[reqId]; if(v!=null) open=v; }catch(err){}
     group.forEach((o,i)=>{
       const r=document.createElement('div'); r.className='pipe-req-line'; if(!open && i>=4) r.hidden=true;
-      const n=document.createElement('span'); n.className='pipe-req-name'; n.textContent=oppName(o); n.title=[oppName(o), fmtKwc(o.kwc), stageLabel(o.stage)].filter(Boolean).join(' · ');
+      const n=document.createElement('span'); n.className='pipe-req-name'; n.textContent=oppName(o); n.title=[oppName(o), fmtKwc(o.kwc), stageLabel(o.stage, o)].filter(Boolean).join(' · ');
       r.appendChild(n);
       if(same){ const k=document.createElement('span'); k.className='pipe-req-kwc'; k.textContent=fmtKwc(o.kwc); r.appendChild(k); } else r.appendChild(stageChip(o));
       r.onclick=ev=>{ ev.stopPropagation(); openOppDetail(o.id); };
@@ -5334,7 +5342,10 @@
         const row=document.createElement('button'); row.type='button';
         row.className='opp-stage-step '+(allOut?'upcoming':(n?'current':(i<lo?'done':'upcoming')));
         const cls=row.className.split(' ')[1];
-        row.innerHTML='<span class="ost-mark">'+(cls==='done'?'✓':cls==='current'?'●':'')+'</span><span class="ost-l">'+escapeHtml(st.label)+'</span><span class="ost-m">'+(st.who!=='Com'?'<span class="ost-who">'+st.who+'</span>':'')+(list.length>1&&n?'<b class="ost-n">'+n+'</b>':'')+'</span>';
+        const eng=list.length && list.every(isEngageant), mixed=!eng && list.some(isEngageant);
+        const lbl=st.key==='pricing_indicatif'?(eng?'Pricing engageant':mixed?'Pricing indicatif / engageant':st.label):st.key==='pricing_ferme' && eng?'Pricing ferme · inclus':st.label;
+        if(st.key==='pricing_ferme' && eng && !n) row.classList.add('skipped');
+        row.innerHTML='<span class="ost-mark">'+(cls==='done'?'✓':cls==='current'?'●':'')+'</span><span class="ost-l">'+escapeHtml(lbl)+'</span><span class="ost-m">'+(st.who!=='Com'?'<span class="ost-who">'+st.who+'</span>':'')+(list.length>1&&n?'<b class="ost-n">'+n+'</b>':'')+'</span>';
         row.title=list.length>1?'Placer les '+list.length+' installations à cette étape':'Placer l\u2019installation à cette étape';
         row.onclick=async()=>{ if(list.every(x=>x.stage===st.key)) return;
           // one step forward: at once; several steps at a time, or back: asked first (a click on the wrong line is easy)
@@ -5376,17 +5387,23 @@
   // forcedKey (Go → pricing request) applies to every installation that is still before it.
   const nextStageKey=(o, forcedKey)=>{
     if(forcedKey) return stageIndex(o.stage)<stageIndex(forcedKey)?forcedKey:null;
-    const n=OPP_STAGES[stageIndex(o.stage)+1]; return n?n.key:null;
+    let n=OPP_STAGES[stageIndex(o.stage)+1]; if(n && n.key==='pricing_ferme' && isEngageant(o)) n=OPP_STAGES[stageIndex('pricing_ferme')+1];
+    return n?n.key:null;
   };
   function offerStageAdvance(list, forcedKey){
     const moves=list.map(o=>({ o, key:nextStageKey(o, forcedKey) })).filter(m=>m.key);
     if(!moves.length) return;
-    pendingAdvance={ moves:moves.map(m=>({ id:m.o.id, key:m.key })) };
+    // the open tasks of the step being left (linked to these installations or their request): closed with the move, if ticked
+    const linkIds=new Set(moves.flatMap(m=>[m.o.id, m.o.requestId].filter(Boolean)));
+    const oldTasks=tasks.filter(t=>!t.deleted && !t.archived && t.opportunityId && linkIds.has(t.opportunityId));
+    pendingAdvance={ moves:moves.map(m=>({ id:m.o.id, key:m.key })), closeIds:oldTasks.map(t=>t.id) };
+    $('stage-close-row').hidden=!oldTasks.length; $('stage-close-tasks').checked=true;
+    $('stage-close-text').textContent=oldTasks.length===1?'Clore « '+plainLinks(oldTasks[0].title)+' »':'Clore les '+oldTasks.length+' tâches en cours de ce dossier';
     const o=moves[0].o, next=oppStage(moves[0].key);
     const same=moves.every(m=>m.key===moves[0].key && m.o.stage===o.stage);
     const label=moves.length>1?moves.length+' installations ('+o.company+')':'« '+o.company+' — '+oppName(o)+' »';
     $('stage-advance-text').textContent=same
-      ? label+' : passer de « '+stageLabel(o.stage)+' » à « '+next.label+' »'+(next.who!=='Com'?' (porté par '+next.who+', la tâche sera « en attente »)':'')+' ?'
+      ? label+' : passer de « '+stageLabel(o.stage, o)+' » à « '+next.label+' »'+(next.who!=='Com'?' (porté par '+next.who+', la tâche sera « en attente »)':'')+' ?'
       : label+' : chaque installation passe à son étape suivante ('+moves.map(m=>oppName(m.o)+' → '+oppStage(m.key).label).join(', ')+') ?';
     $('stage-advance-nogo').classList.toggle('hidden', !moves.every(m=>m.o.stage==='qualif_en_cours'));
     $('stage-create-task').checked=true; $('stage-due').value=next.who!=='Com'?pqAddDays(7):''; $('stage-urgency').value='moyenne'; $('stage-due-row').style.display='flex';
@@ -5397,6 +5414,9 @@
     const moves=pendingAdvance.moves.map(m=>({ o:opportunities.find(x=>x.id===m.id), key:m.key })).filter(m=>m.o);
     moves.forEach(m=>setOppStage(m.o, m.key));
     const list=moves.map(m=>m.o);
+    if($('stage-close-tasks').checked && pendingAdvance.closeIds && pendingAdvance.closeIds.length){
+      pendingAdvance.closeIds.forEach(id=>{ const t=tasks.find(x=>x.id===id); if(t && !t.archived){ t.archived=true; t.archivedAt=Date.now(); touch(t); } });
+      saveTasks(); renderArchive(); }
     if($('stage-create-task').checked && moves.length){
       // one task per target stage; grouped installations of a request share it
       const byKey=new Map(); moves.forEach(m=>{ if(!byKey.has(m.key)) byKey.set(m.key,[]); byKey.get(m.key).push(m.o); });
@@ -5404,7 +5424,7 @@
         const req=group.length>1 && group[0].requestId ? opportunities.find(x=>x.id===group[0].requestId) : null;
         const target=req||group[0];
         const s=oppStage(key), other=s.who!=='Com';
-        const task=createTask({ title:s.task+' — '+(req?group.length+' installations':oppName(group[0])), client:group[0].company, due:$('stage-due').value, urgency:$('stage-urgency').value, status:other?'en_attente':'a_faire', description:other?'À suivre : étape portée par '+s.who+'.':'' });
+        const task=createTask({ title:stageTaskOf(s, group[0])+' — '+(req?group.length+' installations':oppName(group[0])), client:group[0].company, due:$('stage-due').value, urgency:$('stage-urgency').value, status:other?'en_attente':'a_faire', description:other?'À suivre : étape portée par '+s.who+'.':'' });
         task.opportunityId=target.id; task.stageLabel=s.label; touch(task); saveTasks();
         target.taskId=task.id; touchCrm(target);
       });
@@ -5435,8 +5455,13 @@
     const box=document.createElement('div'); box.className='stage-focus';
     box.innerHTML='<div class="sf-k">Maintenant</div><div class="sf-main"><b></b><span class="sf-who"></span></div><div class="sf-todo"></div><ul class="sf-facts"></ul>';
     box.querySelector('b').textContent=st.label; box.querySelector('.sf-who').textContent=st.who==='Com'?'':'porté par '+st.who;
-    box.querySelector('.sf-todo').textContent=tk?'Tâche : '+plainLinks(tk.title)+(tk.due?' · '+pqIsoToFr(tk.due):''):'À faire : '+st.task;
+    box.querySelector('.sf-todo').textContent=tk?'Tâche : '+plainLinks(tk.title)+(tk.due?' · '+pqIsoToFr(tk.due):''):'À faire : '+stageTaskOf(st, first);
     facts.forEach(f=>{ const li=document.createElement('li'); li.textContent=f; box.querySelector('.sf-facts').appendChild(li); });
+    if(!window.TODO_LITE && lo>=stageIndex('qualif_en_cours') && lo<=stageIndex('offre_attente')){
+      const eng=live.every(isEngageant), sw=document.createElement('div'); sw.className='sf-nature'; sw.innerHTML='<span>Offre demandée :</span>';
+      [['Non engageante','Indicative'],['Engageante','Engageante']].forEach(([v,l])=>{ const b=document.createElement('button'); b.type='button'; b.textContent=l; b.classList.toggle('on', (v==='Engageante')===eng);
+        b.onclick=()=>{ live.forEach(x=>{ if(x.nature!==v){ x.nature=v; touchCrm(x); } }); saveCrm(); renderPipeline(); if(viewingOppId) openOppDetail(viewingOppId); }; sw.appendChild(b); });
+      box.appendChild(sw); }
     return box;
   }
   // The pricing request mail (subject + body, one plant or all), open from the Go to the indicative pricing, folded otherwise
@@ -7173,7 +7198,7 @@
   function parcMapPoints(layer){
     const today=toISO(new Date());
     if(parcKpiSet) return parcKpiSet.map(p=>({ code:deptCodeOf(p.siteDept||p.dept), kwc:p.kwc||0, tech:mapTech(p.enr), name:p.inst||p.prod, prod:p.prod||p.dev, who:p.dev, ref:{ parc:p }, extra:p.fin?'fin '+pqIsoToFr(p.fin):p.statut }));
-    if(layer==='pipe') return opportunities.filter(o=>!o.deleted && o.kind==='installation' && !isExited(o)).map(o=>({ code:deptCodeOf(o.dept), kwc:pqNum(o.kwc||'')||0, tech:mapTech(o.install), name:oppName(o), prod:o.producteur||o.company, who:o.company, ref:{ opp:o.id }, extra:stageLabel(o.stage) }));
+    if(layer==='pipe') return opportunities.filter(o=>!o.deleted && o.kind==='installation' && !isExited(o)).map(o=>({ code:deptCodeOf(o.dept), kwc:pqNum(o.kwc||'')||0, tech:mapTech(o.install), name:oppName(o), prod:o.producteur||o.company, who:o.company, ref:{ opp:o.id }, extra:stageLabel(o.stage, o) }));
     if(!parcData) return [];
     const list=layer==='pending'?parcData.items.filter(p=>p.statut==='En attente'||p.statut==='En préparation'):parcData.items.filter(p=>p.statut==='Gagné' && (!p.fin || p.fin>=today));
     return list.map(p=>({ code:deptCodeOf(p.siteDept||p.dept), kwc:p.kwc||0, tech:mapTech(p.enr), name:p.inst||p.prod, prod:p.prod||p.dev, who:p.dev, ref:{ parc:p }, extra:p.fin?'fin '+pqIsoToFr(p.fin):p.statut }));
@@ -7697,7 +7722,7 @@
     live.filter(o=>o.kind==='request').forEach(r=>{ const n=live.filter(o=>o.requestId===r.id).length; if(!n) return;
       link(node('rq:'+r.id, 'request', 'Demande · '+(r.company||''), n+' installation'+(n>1?'s':''), ()=>{ gsTab('pipeline'); setTimeout(()=>openRequestDetail(r.id),30); }), coId(r.company)); });
     live.filter(o=>o.kind!=='request' && o.stage!=='converti').forEach(o=>{
-      const pre=o.kind==='prequal', id=node('op:'+o.id, pre?'prequal':'installation', pre?o.company+' (pré-qualif)':oppName(o), [o.company, stageLabel(o.stage), fmtKwc(o.kwc)].filter(Boolean).join(' · '), ()=>{ gsTab('pipeline'); setTimeout(()=>openOppDetail(o.id),30); });
+      const pre=o.kind==='prequal', id=node('op:'+o.id, pre?'prequal':'installation', pre?o.company+' (pré-qualif)':oppName(o), [o.company, stageLabel(o.stage, o), fmtKwc(o.kwc)].filter(Boolean).join(' · '), ()=>{ gsTab('pipeline'); setTimeout(()=>openOppDetail(o.id),30); });
       link(id, coId(o.company)); if(o.producteur && pqFold(o.producteur)!==pqFold(o.company)) link(id, coId(o.producteur));
       if(o.requestId && seen.has('rq:'+o.requestId)) link(id, 'rq:'+o.requestId);
       if(o.mail && byMail.has(String(o.mail).toLowerCase())) link(id, byMail.get(String(o.mail).toLowerCase()));
@@ -7738,7 +7763,7 @@
     tasks.filter(t=>!t.deleted && t.archived && sameCo(t.client,name)).forEach(t=>ev.push({ at:t.archivedAt||t.updatedAt, kind:'done', html:'Fait : '+escapeHtml(plainLinks(t.title)) }));
     opportunities.filter(o=>!o.deleted && (sameCo(o.company,name)||sameCo(o.producteur,name))).forEach(o=>{
       if(o.createdAt>1e12) ev.push({ at:o.createdAt, kind:'new', html:(o.kind==='request'?'Demande reçue : ':o.kind==='prequal'?'Pré-qualification : ':'Nouvelle opportunité : ')+'<b>'+escapeHtml(o.kind==='prequal'?'rencontre':oppName(o))+'</b>' });
-      (o.stageLog||[]).forEach((s,i)=>{ if(i===0 && Math.abs(s.at-(o.createdAt||0))<60000) return; ev.push({ at:s.at, kind:'stage', html:escapeHtml(o.kind==='prequal'?'Pré-qualif':oppName(o))+' → <b>'+escapeHtml(stageLabel(s.stage))+'</b>' }); });
+      (o.stageLog||[]).forEach((s,i)=>{ if(i===0 && Math.abs(s.at-(o.createdAt||0))<60000) return; ev.push({ at:s.at, kind:'stage', html:escapeHtml(o.kind==='prequal'?'Pré-qualif':oppName(o))+' → <b>'+escapeHtml(stageLabel(s.stage, s))+'</b>' }); });
     });
     cts.forEach(c=>{ if(c.createdAt>1e12) ev.push({ at:c.createdAt, kind:'new', html:'Nouveau contact : <b>'+escapeHtml([c.firstName,c.lastName].filter(Boolean).join(' '))+'</b>' }); });
     return ev.filter(e=>e.at).sort((a,b)=>b.at-a.at);
@@ -7780,7 +7805,7 @@
     const inNext=new Set(next.map(x=>x.id).filter(Boolean));
     section(colL,'À venir',next.map(x=>x.r),'Rien de daté pour ce client.');
     section(colL,'Contacts',cts.map(c=>row([c.firstName,c.lastName].filter(Boolean).join(' ')||'(sans nom)',[c.role,c.email].filter(Boolean).join(' · '),c.phone1||c.phone2||'',()=>openContactEverywhere(c.id))),'Aucun contact.');
-    section(colL,'Pipeline',live.map(o=>row(oppName(o),stageLabel(o.stage)+(o.dept?' · '+o.dept:''),fmtKwc(o.kwc),()=>{ gsTab('pipeline'); setTimeout(()=>openOppDetail(o.id),30); })),'Aucune opportunité en cours.'+(gone?' ('+gone+' terminée'+(gone>1?'s':'')+')':''));
+    section(colL,'Pipeline',live.map(o=>row(oppName(o),stageLabel(o.stage, o)+(o.dept?' · '+o.dept:''),fmtKwc(o.kwc),()=>{ gsTab('pipeline'); setTimeout(()=>openOppDetail(o.id),30); })),'Aucune opportunité en cours.'+(gone?' ('+gone+' terminée'+(gone>1?'s':'')+')':''));
     section(colR,'Portefeuille',parc.slice().sort((a,b)=>(a.statut==='Gagné'?0:1)-(b.statut==='Gagné'?0:1)||(a.fin||'9').localeCompare(b.fin||'9')).slice(0,8)
       .map(p=>row(p.inst||p.prod||'(sans nom)',[p.statut,p.fin?'fin '+pqIsoToFr(p.fin):''].filter(Boolean).join(' · '),p.kwc?fmtKwc(p.kwc):'',()=>openParcItem(p))),
       parcData?'Aucun contrat dans le Suivi Agrégation.':'Charge le Suivi Agrégation dans Portefeuille pour voir les contrats.');
@@ -7816,7 +7841,7 @@
       const ins=opportunities.filter(o=>!o.deleted && o.kind==='installation' && !isExited(o) && sameCo(o.company,name));
       const tk=activeTasks().filter(t=>sameCo(t.client,name));
       const co=companies.find(c=>!c.deleted && sameCo(c.name,name)); if(co && co.type) eyebrow='Société · '+co.type;
-      if(ins.length){ const top=ins.reduce((a,b)=>stageIndex(b.stage)>stageIndex(a.stage)?b:a); L.push(['Pipeline', ins.length+' installation'+(ins.length>1?'s':'')+(mw(ins)?' · '+mw(ins):'')+' · '+stageLabel(top.stage)]); }
+      if(ins.length){ const top=ins.reduce((a,b)=>stageIndex(b.stage)>stageIndex(a.stage)?b:a); L.push(['Pipeline', ins.length+' installation'+(ins.length>1?'s':'')+(mw(ins)?' · '+mw(ins):'')+' · '+stageLabel(top.stage, top)]); }
       cts.slice(0,3).forEach((c,i)=>L.push([i?'':'Contacts', [[c.firstName,c.lastName].filter(Boolean).join(' '), c.role, c.phone1].filter(Boolean).join(' · ')]));
       if(cts.length>3) L.push(['', '+ '+(cts.length-3)+' autre'+(cts.length>4?'s':'')]);
       const nt=nextTask(tk); if(tk.length) L.push(['Tâches', tk.length+' ouverte'+(tk.length>1?'s':'')+(nt?(nt.due<toISO(new Date())?' · en retard depuis le ':' · prochaine le ')+pqIsoToFr(nt.due).slice(0,5)+' : '+plainLinks(nt.title):'')]);
@@ -7835,7 +7860,7 @@
     } else if(kind==='op:'){
       const o=opportunities.find(x=>x.id===v && !x.deleted); if(!o) return null;
       eyebrow='Installation'; title=oppName(o);
-      L.push(['', [o.company, stageLabel(o.stage)].filter(Boolean).join(' · ')]);
+      L.push(['', [o.company, stageLabel(o.stage, o)].filter(Boolean).join(' · ')]);
       const f=[mw([o]), o.install, o.contrat].filter(Boolean).join(' · '); if(f) L.push(['', f]);
       if(o.mwh) L.push(['P50', Math.round(pqNum(String(o.mwh))||0).toLocaleString('fr-FR')+' MWh/an']);
       if(o.dept) L.push(['Lieu', o.dept]);
@@ -7869,7 +7894,7 @@
     const k=id.slice(0,3), v=id.slice(3);
     if(k==='co:'){ const d=peekLines('co:'+label); return d?d.L:[]; }
     if(k==='ct:'||k==='op:'){ const d=peekLines(id); return d?d.L.filter(x=>!(k==='op:' && !x[0] && x===d.L[0])):[]; }
-    if(k==='rq:'){ const l=opportunities.filter(o=>!o.deleted && o.requestId===v && o.kind==='installation'), kw=l.reduce((s,o)=>s+kwcNum(o),0), st=[...new Set(l.map(o=>stageLabel(o.stage)))];
+    if(k==='rq:'){ const l=opportunities.filter(o=>!o.deleted && o.requestId===v && o.kind==='installation'), kw=l.reduce((s,o)=>s+kwcNum(o),0), st=[...new Set(l.map(o=>stageLabel(o.stage, o)))];
       return [['Installations', l.length+(kw?' · '+(Math.round(kw/100)/10).toLocaleString('fr-FR')+' MWc':'')], ['Étape', st.join(', ')]].concat(l.slice(0,5).map((o,i)=>[i?'':'Centrales', oppName(o)+(o.kwc?' · '+fmtKwc(o.kwc):'')])); }
     if(k==='tk:'){ const t=tasks.find(x=>x.id===v); if(!t) return []; const L=[];
       if(t.client) L.push(['Client', t.client]); L.push(['Statut', (STATUS_META[t.status]||{}).label||t.status||'']); if(t.urgency) L.push(['Urgence', t.urgency]);
@@ -7901,7 +7926,7 @@
     const co=top(allCompanyNames().filter(n=>hit(n)).map(n=>{ const nC=activeContacts().filter(c=>c.company===n).length, nO=activeOpportunities().filter(o=>o.company===n).length;
       return { ic:'S', title:n, sub:[nC?nC+' contact'+(nC>1?'s':''):'', nO?nO+' opportunité'+(nO>1?'s':''):''].filter(Boolean).join(' · ')||'Société', go:()=>openCompany(n) }; }),5);
     if(co.length) groups.push(['Sociétés',co]);
-    const op=top(opportunities.filter(o=>!o.deleted && o.kind!=='request' && hit(oppName(o),o.company,o.producteur,o.dept,o.commune,o.cp,o.spv,o.siret,o.charge,reqLabelOf(o),codeAffaire(o))).map(o=>({ ic:'P', title:oppName(o), sub:[o.company, stageLabel(o.stage)].filter(Boolean).join(' · '), right:fmtKwc(o.kwc), go:()=>{ gsTab('pipeline'); setTimeout(()=>openOppDetail(o.id),30); } })),6);
+    const op=top(opportunities.filter(o=>!o.deleted && o.kind!=='request' && hit(oppName(o),o.company,o.producteur,o.dept,o.commune,o.cp,o.spv,o.siret,o.charge,reqLabelOf(o),codeAffaire(o))).map(o=>({ ic:'P', title:oppName(o), sub:[o.company, stageLabel(o.stage, o)].filter(Boolean).join(' · '), right:fmtKwc(o.kwc), go:()=>{ gsTab('pipeline'); setTimeout(()=>openOppDetail(o.id),30); } })),6);
     if(op.length) groups.push(['Pipeline',op]);
     // a block named by hand (« Lot toitures »): the request itself
     const rq=opportunities.filter(r=>!r.deleted && r.kind==='request' && r.label && hit(r.label, r.company)).slice(0,3).map(r=>({ ic:'▦', title:r.company+' · '+r.label, sub:requestInstalls(r.id).length+' installations', go:()=>{ gsTab('pipeline'); setTimeout(()=>openRequestDetail(r.id),30); } }));

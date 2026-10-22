@@ -1812,3 +1812,8 @@ body.postit-open #pipeline-board.pipe-list{ padding-bottom:300px; }
 #stage-due-row select{ flex:0 0 140px; }
 #stage-advance-overlay .crm-form-actions{ flex-wrap:wrap; }
 #stage-advance-overlay .crm-form-actions button{ white-space:nowrap; }
+
+.stage-focus .sf-nature{ grid-column:2; display:flex; align-items:center; gap:6px; margin-top:6px; font-size:12px; color:var(--tx3); }
+.stage-focus .sf-nature button{ background:var(--panel); border:1px solid var(--bd); border-radius:999px; color:var(--tx2); font:500 12px var(--font-ui); padding:2px 10px; cursor:pointer; }
+.stage-focus .sf-nature button.on{ color:var(--accent); border-color:var(--accent); background:var(--accent-dim); }
+.opp-stage-step.skipped{ opacity:.45; text-decoration:line-through; text-decoration-color:var(--tx3); }
