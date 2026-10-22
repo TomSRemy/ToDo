@@ -4224,6 +4224,7 @@
     const openDetails=[...$('pq-form').querySelectorAll('details[open] > summary')].map(s=>s.textContent);
     $('pq-form').innerHTML=h+PQ_FIELDS.filter(f=>f.type==='list').map(f=>'<datalist id="pq-dl-'+f.k+'">'+f.opts.map(o=>'<option value="'+escapeHtml(o)+'">').join('')+'</datalist>').join('');
     $('pq-form').querySelectorAll('details').forEach(d=>{ if(openDetails.includes(d.querySelector('summary').textContent)) d.open=true; });
+    attachLinkAutocomplete($('pq-s-commentaires'));   // « [[ » in the pipeline comments too
     pqSummary();
   }
   // Number of plants: checked against what the mail announces; to be confirmed when there are several or a gap
