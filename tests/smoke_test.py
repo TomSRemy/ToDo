@@ -657,10 +657,14 @@ with sync_playwright() as p:
     # --- Contacts page: list view by default, pencil to edit, top bars always in view
     many = [{"id": f"k{i}", "firstName": f"P{i}", "lastName": f"Nom{i:02d}", "role": "", "company": "Gamma", "email": "", "phone1": "", "phone2": "",
              "relevance": 0, "comment": "", "createdAt": 1, "updatedAt": 1, "deleted": False} for i in range(40)]
-    page, errors = new_page(browser, {"todo_todo-widget-contacts": json.dumps(many)}, viewport={"width": 1300, "height": 700})
-    page.goto(URL); page.evaluate("sessionStorage.setItem('cvs','1'); localStorage.removeItem('contacts-view')"); page.reload(); page.wait_for_function("document.querySelector('#contacts-view-switch .view-icon-btn.active')"); page.click('[data-tab="contacts"]')
+    # its own page, without new_page's « grouped view » setting, and checked once the app has run (the HTML already marks « liste » active)
+    page = browser.new_page(viewport={"width": 1300, "height": 700}); errors = []; page.on("pageerror", lambda e: errors.append(str(e)))
+    page.route("**/fonts.g*/**", lambda r: r.abort())
+    page.add_init_script("if(!sessionStorage.getItem('seeded')){ localStorage.setItem('todo_todo-widget-contacts', " + json.dumps(json.dumps(many)) + "); sessionStorage.setItem('seeded','1'); }")
+    page.goto(URL); page.click('[data-tab="contacts"]'); page.wait_for_selector("#contacts-list .contact-row")
+    cv = page.evaluate("[localStorage.getItem('contacts-view'), [...document.querySelectorAll('#contacts-view-switch .view-icon-btn.active')].map(b=>b.dataset.view)]")
     check(page.locator('#contacts-view-switch [data-view="liste"].active').count() == 1 and page.locator("#contacts-list .company-group-header").count() == 0,
-          "contacts: list view by default")
+          f"contacts: list view by default ({cv})")
     page.locator("#contacts-list .contact-row", has_text="Nom05").locator(".edit-btn").click()
     check(page.is_visible("#contact-form") and page.input_value("#ct-last") == "Nom05", "contacts: the pencil opens the contact to edit")
     page.click("#contact-form >> text=Annuler") if page.locator("#contact-form >> text=Annuler").count() else None
