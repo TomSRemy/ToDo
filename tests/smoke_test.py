@@ -826,6 +826,28 @@ with sync_playwright() as p:
     check(not errors, f"no page errors ({errors})")
     page.close()
 
+    # --- Settings shared between devices (saved views, network layout, goals) through the note
+    tel_views = json.dumps([{"name": "Vue téléphone", "filter": "all"}])
+    n_at = int(time.time() * 1000) - 60000   # written today: no morning roll in the way
+    files = {"notes.json": [{"id": "scratchpad", "text": "Appeler Paul", "createdAt": 1, "updatedAt": n_at, "deleted": False, "pref_saved-views-tasks": tel_views,
+                             "pref_network-pins": json.dumps({"co:solaris": [10, 20]})}],
+             "tasks.json": [], "crm.json": {"companies": [], "contacts": [], "meetings": [], "opportunities": []}}
+    base_n = [{"id": "scratchpad", "text": "Appeler Paul", "createdAt": 1, "updatedAt": n_at, "deleted": False}]
+    page, errors = new_page(browser, dict(SYNC_ON, **{"todo_todo-widget-notes": json.dumps(base_n), "todo_sync-notes-base": json.dumps(base_n)}), viewport={"width": 1300, "height": 850})
+    page.add_init_script("if(!sessionStorage.getItem('pv')){ localStorage.setItem('saved-views-tasks', JSON.stringify([{name:'Vue PC', filter:'critique'}])); sessionStorage.setItem('pv','1'); }")
+    mock_github(page, files); page.goto(URL)
+    page.wait_for_function("(localStorage.getItem('saved-views-tasks')||'').includes('Vue téléphone')", timeout=10000)
+    names = [v["name"] for v in page.evaluate("JSON.parse(localStorage.getItem('saved-views-tasks'))")]
+    check("Vue PC" in names and "Vue téléphone" in names, f"shared settings: the other device's saved views arrive, this one's are kept ({names})")
+    check("co:solaris" in page.evaluate("localStorage.getItem('network-pins')||''"), "shared settings: points put down in the network arrive too")
+    page.click('[data-tab="pipeline"]'); page.click("#pipe-dash-toggle"); page.fill(".pd-goal-in", "42"); page.press(".pd-goal-in", "Enter")
+    page.wait_for_function("1", timeout=1000); page.wait_for_timeout(4000)
+    srv = files["notes.json"][0]
+    check("42" in (srv.get("pref_pipe-goals") or "") and "Vue PC" in (srv.get("pref_saved-views-tasks") or ""), f"shared settings: this device's settings go to the other one ({ {k: v for k, v in srv.items() if k.startswith('pref_')} })")
+    check(srv.get("text") == "Appeler Paul" and srv.get("updatedAt") == n_at, f"shared settings: the note itself is left untouched (its date too) ({srv.get('text')!r}, {srv.get('updatedAt')})")
+    check(not errors, f"no page errors ({errors})")
+    page.close()
+
     # --- Note of the day + sync: this device puts yesterday away while the other one added a line: both kept
     yms = int((datetime.datetime.combine(TODAY - datetime.timedelta(days=1), datetime.time(17, 0))).timestamp() * 1000)
     base_n = [{"id": "scratchpad", "text": "✓ Fait hier\nAppeler Paul", "createdAt": 1, "updatedAt": yms, "deleted": False}]

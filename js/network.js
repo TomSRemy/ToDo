@@ -15,9 +15,9 @@
   function mount(root, getData, opts){
     opts=opts||{};
     let hidden=new Set(); try{ hidden=new Set(JSON.parse(localStorage.getItem('network-hidden')||'["meeting"]')); }catch(e){}
-    // points put down by hand stay where they were left (kept on this device) until « Libérer les points »
+    // points put down by hand stay where they were left (shared with the other devices by the sync) until « Libérer les points »
     let pins=new Map(); try{ pins=new Map(Object.entries(JSON.parse(localStorage.getItem('network-pins')||'{}'))); }catch(e){}
-    const savePins=()=>{ try{ localStorage.setItem('network-pins', JSON.stringify(Object.fromEntries(pins))); }catch(e){} paintPins(); };
+    const savePins=()=>{ try{ localStorage.setItem('network-pins', JSON.stringify(Object.fromEntries(pins))); }catch(e){} if(window.todoSettingsChanged) window.todoSettingsChanged(); paintPins(); };
     root.innerHTML='<div class="nw-bar"><div class="nw-search"><input type="text" placeholder="Trouver dans le réseau…" aria-label="Trouver dans le réseau"></div><div class="nw-types"></div>'
       +'<label class="nw-local"><input type="checkbox"> Voisinage seulement</label><button type="button" class="nw-fit">Recentrer</button></div>'
       +'<div class="nw-stage"><canvas role="img" aria-label="Graphe des connexions. Utilise la recherche pour trouver un élément : ses liens s’affichent dans le panneau."></canvas><div class="nw-tip" hidden></div><div class="nw-side" hidden></div><button type="button" class="nw-unpin" hidden>Libérer les points</button><div class="nw-hint">Molette : zoom · glisser : déplacer · clic : détails · double-clic : ouvrir la fiche · glisser un point : il reste où tu le poses</div></div>';
@@ -32,6 +32,8 @@
       return ok;
     }
     function build(){
+      // settings may have come from the other device: read again
+      try{ hidden=new Set(JSON.parse(localStorage.getItem('network-hidden')||'["meeting"]')); }catch(e){} try{ pins=new Map(Object.entries(JSON.parse(localStorage.getItem('network-pins')||'{}'))); }catch(e){}
       const d=getData(); byId=new Map(); adj=new Map();
       nodes=d.nodes.map(n=>{ const p=pos.get(n.id)||{ x:(Math.random()-.5)*600, y:(Math.random()-.5)*600, vx:0, vy:0 }; pos.set(n.id,p); const pin=pins.get(n.id); if(pin){ p.x=pin[0]; p.y=pin[1]; } const o=Object.assign({}, n, { p }); byId.set(n.id,o); adj.set(n.id,[]); return o; });
       edges=d.edges.filter(([a,b])=>byId.has(a) && byId.has(b) && a!==b);
@@ -52,7 +54,7 @@
       typesBox.innerHTML='';
       Object.keys(TYPES).filter(t=>count[t]).forEach(t=>{ const b=document.createElement('button'); b.type='button'; b.className='nw-type'+(hidden.has(t)?' off':''); b.setAttribute('aria-pressed', String(!hidden.has(t)));
         b.innerHTML='<i style="background:'+TYPES[t].color+'"></i>'+esc(TYPES[t].label)+' <span>'+count[t]+'</span>';
-        b.onclick=()=>{ hidden.has(t)?hidden.delete(t):hidden.add(t); try{ localStorage.setItem('network-hidden', JSON.stringify([...hidden])); }catch(e){} paintTypes(); alpha=Math.max(alpha,.5); kick(); };
+        b.onclick=()=>{ hidden.has(t)?hidden.delete(t):hidden.add(t); try{ localStorage.setItem('network-hidden', JSON.stringify([...hidden])); }catch(e){} if(window.todoSettingsChanged) window.todoSettingsChanged(); paintTypes(); alpha=Math.max(alpha,.5); kick(); };
         typesBox.appendChild(b); });
     }
     // ---- physics: springs on the links, repulsion between all visible nodes (grid-bucketed), a gentle pull to the centre

@@ -100,7 +100,7 @@
     if(seeded){ saveTasks(); saveClients(); saveProjects(); }
     if(crmSeeded){ saveCrm(); }
     await loadSyncConfig();
-    consolidateNotes(); rollDailyNote();
+    consolidateNotes(); rollDailyNote(); prefsInit();
     loadParc(); ensureRenewalTasks();
     if(migrateCompanyStars() | migrateContactCivility()) saveCrm();
     checkReminders();
@@ -339,6 +339,13 @@
 
   // Post-it text edited on two devices: this device's lines, minus those the other device deleted (and this one did not touch),
   // plus those the other device added, placed after the line that precedes them there.
+  // a setting changed on both devices (saved views, network layout, goals): both kept — views by name, the rest key by key
+  function mergePrefValue(local, remote){
+    let l, r; try{ l=JSON.parse(local); r=JSON.parse(remote); }catch(e){ return local; }
+    if(Array.isArray(l) && Array.isArray(r)) return JSON.stringify(l.every(x=>x && typeof x==='object')?l.concat(r.filter(x=>x && !l.some(y=>y.name===x.name))):[...new Set(l.concat(r))]);
+    if(l && r && typeof l==='object' && typeof r==='object') return JSON.stringify(Object.assign({}, r, l));
+    return local;
+  }
   function mergeNoteLines(base, local, remote){
     const B=String(base||'').split('\n'), L=String(local||'').split('\n'), R=String(remote||'').split('\n');
     const inB=new Set(B), inR=new Set(R), inL=new Set(L);
@@ -398,7 +405,7 @@
         if(localChanged && !remoteChanged) return;
         if(localChanged && remoteChanged && entityType==='note'){
           // the post-it changes all the time on both devices: its lines are merged, never reported as a conflict
-          result[field]=field==='text'?mergeNoteLines(base[field], local[field], remote[field]):((remote.updatedAt||0)>(local.updatedAt||0)?remote[field]:local[field]);
+          result[field]=field==='text'?mergeNoteLines(base[field], local[field], remote[field]):field.startsWith('pref_')?mergePrefValue(local[field], remote[field]):((remote.updatedAt||0)>(local.updatedAt||0)?remote[field]:local[field]);
           return;
         }
         if(localChanged && remoteChanged){
@@ -1544,6 +1551,42 @@
     n.text=lines.filter(l=>!PI_DONE.test(l)).join('\n').replace(/\n{3,}/g,'\n\n').replace(/^\n+/,'');
     n.rolledFor=today; touch(n); saveNotes(); if(undoBase) undoRebase(); return true;
   }
+  // ---------- settings shared between devices: saved views, network layout, goals… ride along in the note as « pref_<key> » fields ----------
+  // (merged field by field by the sync; the note's date is left alone so the morning roll is not disturbed)
+  const PREF_PREFIX='pref_', SYNCED_PREFS=['saved-views-tasks','saved-views-pipeline','network-pins','network-hidden','pipe-goals','pipe-meet-phases'];
+  const lsGet=k=>{ try{ return localStorage.getItem(k); }catch(e){ return null; } }, lsSet=(k,v)=>{ try{ localStorage.setItem(k,v); }catch(e){} };
+  function prefsToNote(){
+    if(window.TODO_WIDGET) return;
+    const n=scratchNote(); let ch=false;
+    SYNCED_PREFS.forEach(k=>{ const v=lsGet(k); if(v!=null && n[PREF_PREFIX+k]!==v){ n[PREF_PREFIX+k]=v; ch=true; } });
+    if(!ch) return;
+    if(undoBase) undoCommit(); n.prefsAt=Date.now(); saveNotesLocalOnly(); scheduleNotesSyncPush(); if(undoBase) undoRebase();   // not a Ctrl+Z step
+  }
+  function prefsFromNote(){
+    const n=notes.find(x=>x.id===POSTIT_ID && !x.deleted); if(!n) return false; let ch=false;
+    SYNCED_PREFS.forEach(k=>{ const v=n[PREF_PREFIX+k]; if(typeof v==='string' && lsGet(k)!==v){ lsSet(k,v); ch=true; } });
+    return ch;
+  }
+  // first time on a device: what it already had and what the other device shared are put together
+  function prefsInit(){
+    if(window.TODO_WIDGET) return;
+    const n=notes.find(x=>x.id===POSTIT_ID && !x.deleted);
+    if(n && !lsGet('prefs-merged')){
+      const parse=v=>{ try{ return JSON.parse(v); }catch(e){ return null; } };
+      SYNCED_PREFS.forEach(k=>{ const a=parse(lsGet(k)), b=parse(n[PREF_PREFIX+k]); if(a==null || b==null) return;
+        let m=null;
+        if(Array.isArray(a) && Array.isArray(b)) m=k.startsWith('saved-views')?b.concat(a.filter(x=>!b.some(y=>y && x && y.name===x.name))):[...new Set(b.concat(a))];
+        else if(typeof a==='object' && typeof b==='object') m=Object.assign({}, a, b);
+        if(m){ const v=JSON.stringify(m); lsSet(k, v); n[PREF_PREFIX+k]=v; } });
+      lsSet('prefs-merged','1'); saveNotesLocalOnly(); scheduleNotesSyncPush();
+    }
+    prefsFromNote(); prefsToNote();   // what the note holds wins (latest from either device); what only this device has is shared
+  }
+  function prefsApplied(){
+    if(networkView && $('tab-network') && !$('tab-network').classList.contains('hidden')) networkView.refresh();
+    if($('tab-pipeline') && !$('tab-pipeline').classList.contains('hidden')) renderPipeline();
+  }
+  window.todoSettingsChanged=prefsToNote;
   document.addEventListener('visibilitychange', ()=>{ if(!document.hidden && rollDailyNote()) renderNotes(); });
   setInterval(()=>{ if(!document.hidden && document.activeElement!==postitTextEl && rollDailyNote()) renderNotes(); }, 5*60*1000);   // the app left open over midnight
   function openDayNotes(focusDay){
@@ -1643,6 +1686,7 @@
     $('postit-tab-preview').textContent=first||'Note';
   }
   function renderNotes(){
+    if(prefsFromNote()) setTimeout(prefsApplied, 0);   // settings changed on the other device
     if(!postitTextEl) return;
     const n=notes.find(x=>x.id===POSTIT_ID && !x.deleted);
     const txt=n ? (n.text||'') : '';
@@ -3808,7 +3852,7 @@
     // which phases to show (remembered on this device)
     const chips=document.createElement('div'); chips.className='meet-chips'; const on=meetPhasesOn();
     MEET_PHASES.forEach(p=>{ const c=document.createElement('button'); c.type='button'; c.className='meet-chip'+(on.includes(p.key)?' on':''); c.textContent=p.label; c.dataset.phase=p.key; c.setAttribute('aria-pressed', String(on.includes(p.key)));
-      c.onclick=()=>{ let v=meetPhasesOn(); v=v.includes(p.key)?v.filter(k=>k!==p.key):v.concat(p.key); if(!v.length) return; try{ localStorage.setItem('pipe-meet-phases', JSON.stringify(MEET_PHASES.map(x=>x.key).filter(k=>v.includes(k)))); }catch(e){} renderPipeline(); };
+      c.onclick=()=>{ let v=meetPhasesOn(); v=v.includes(p.key)?v.filter(k=>k!==p.key):v.concat(p.key); if(!v.length) return; try{ localStorage.setItem('pipe-meet-phases', JSON.stringify(MEET_PHASES.map(x=>x.key).filter(k=>v.includes(k)))); }catch(e){} prefsToNote(); renderPipeline(); };
       chips.appendChild(c); });
     board.appendChild(chips);
     if(!n){ const e=document.createElement('div'); e.className='today-empty'; e.textContent='Aucune installation dans ces phases.'; board.appendChild(e); return; }
@@ -3843,7 +3887,7 @@
     ]
   };
   function userViews(scope){ try{ return JSON.parse(localStorage.getItem('saved-views-'+scope)||'[]'); }catch(e){ return []; } }
-  function storeUserViews(scope, list){ try{ localStorage.setItem('saved-views-'+scope, JSON.stringify(list)); }catch(e){} }
+  function storeUserViews(scope, list){ try{ localStorage.setItem('saved-views-'+scope, JSON.stringify(list)); }catch(e){} prefsToNote(); }
   function currentViewSnapshot(scope){
     const st=savedViewState[scope];
     if(scope==='tasks') return { filter:currentFilter, view:currentView, q:searchQuery||'', preset:st&&st.preset||null };
