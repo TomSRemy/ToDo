@@ -859,6 +859,13 @@ with sync_playwright() as p:
           and rows["Première injection"] == ["Mars 2027", "Avril 2027"] and rows["Puissance installée (kWc)"] == [4986.93, 4790.89] and rows["Département"] == ["Aude (11)", "Lot-et-Garonne (47)"]
           and rows["Champ 1 : Inclinaison (°)"] == [20, 20] and rows["Stockage"] == [None, None],
           f"caract file: the app's values and every line of the producer's file ({rows.get('Latitude')}, {rows.get('Première injection')})")
+    rgb = lambda c: (c.fill.fgColor.rgb if c.fill and c.fill.fill_type else None)
+    lab = {r[0].value: r[0].row for r in out.iter_rows(min_row=2)}
+    prod_row = lab["Productible (P50) (kWh/kWc/an)"]
+    check(out.sheet_view.showGridLines is False and out["A2"].font.name == "Arial" and rgb(out["A2"]) == "FF85C2F6" and rgb(out["B2"]) == "FF85C2F6"
+          and out["B2"].font.color.rgb == "FFFFFFFF" and out["A3"].font.b and out["A3"].font.color.rgb == "FF002060" and rgb(out["A3"]) == "FFF2F2F2"
+          and out.cell(prod_row, 1).border.bottom.style == "thick" and out["B3"].border.left.style == "thin" and round(out.column_dimensions["A"].width) == 49,
+          "caract file: the template's design (Arial, blue « Nom Installation » line, grey labels in navy, borders, no gridlines)")
     check(not errors, f"no page errors ({errors})")
     page.close()
 

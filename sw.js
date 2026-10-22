@@ -1,6 +1,8 @@
-const CACHE = 'todo-pwa-v16';
+const CACHE = 'todo-pwa-v17';
 // Excel / Outlook reader, loaded on demand by the app: kept for offline use
 const XLSX_URL = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
+const EXCELJS_URL = 'https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js';   // the « Caractéristiques Centrales » file in its design
+const LIBS = [XLSX_URL, EXCELJS_URL];
 const ASSETS = [
   './',
   './index.html',
@@ -46,7 +48,7 @@ self.addEventListener('fetch', e => {
   // the local Excel bridge, fonts — goes straight to the network: serving a cached copy of data/tasks.json
   // made a sync merge against an old server state and undo recent changes.
   const sameOrigin = new URL(e.request.url).origin === self.location.origin;
-  if (!sameOrigin && e.request.url !== XLSX_URL) return;
+  if (!sameOrigin && !LIBS.includes(e.request.url)) return;
 
   // Pages and the app's own code (index.html, app.css, js/*.js): network first, so a new version shows at the
   // first reload and the page never runs with an older copy of its code; the cached copy only serves when offline.
@@ -67,7 +69,7 @@ self.addEventListener('fetch', e => {
     caches.match(e.request).then(cached => {
       const fetchPromise = fetch(e.request).then(res => {
         // cross-origin scripts (the CDN library) come back "opaque": cache them too
-        if (res && (res.ok || (res.type === 'opaque' && e.request.url === XLSX_URL))) {
+        if (res && (res.ok || (res.type === 'opaque' && LIBS.includes(e.request.url)))) {
           const clone = res.clone();
           caches.open(CACHE).then(c => c.put(e.request, clone));
         }

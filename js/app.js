@@ -5321,14 +5321,53 @@
     const who=(list[0]&&(list[0].producteur||list[0].company)||'Producteur').replace(/[\\/:*?"<>|]/g,'').trim();
     return yymmdd+'_Caractéristiques_Centrales_'+who+'.xlsx';
   }
+  // The « Caractéristiques Centrales » file in the template's own design: Arial 11, no gridlines, the « Nom Installation » line
+  // on light blue, the labels on light grey in bold navy, thin grey borders, a thick blue line after « Productible » and a
+  // medium one after each « Champ », values worked out by the app on yellow (« infos en jaune extrapolées »).
+  let exceljsLoading=null;
+  function loadExcelJs(){
+    if(window.ExcelJS) return Promise.resolve();
+    if(!exceljsLoading) exceljsLoading=new Promise((res,rej)=>{ const s=document.createElement('script'); s.src='https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js'; s.onload=()=>res(); s.onerror=()=>{ exceljsLoading=null; rej(new Error('Bibliothèque Excel indisponible (hors ligne ?)')); }; document.head.appendChild(s); });
+    return exceljsLoading;
+  }
+  const CARACT_PLAIN=new Set(['Commune','P50 annuel (indicatif) (MWh/an)','P90 annuel (indicatif) (MWh/an)'].map(caractKey));
+  function caractGuessed(o, label){   // worked out by the app rather than given by the producer
+    const k=caractKey(label), num=v=>!isNaN(pqNum(String(v==null?'':v))) && String(v).trim()!=='';
+    const inFile=Object.keys(o.caract||{}).some(l=>caractKey(l)===k && String(o.caract[l]).trim()!=='');
+    if(k===caractKey('Productible (P50) (kWh/kWc/an)')) return !num(o.productible) && !inFile && num(o.mwh) && num(o.kwc);
+    if(k===caractKey('Nature Projet')) return !inFile && !!caractValue(o,label);
+    return false;
+  }
+  async function caractWorkbookBlob(list){
+    await loadExcelJs();
+    const wb=new ExcelJS.Workbook(), ws=wb.addWorksheet('Données', { views:[{ showGridLines:false }] });
+    const font={ name:'Arial', size:11 }, navy='FF002060', grey='FFF2F2F2', blue='FF85C2F6', line={ style:'thin', color:{ argb:'FFBFBFBF' } };
+    ws.columns=[{ width:48.8 }].concat(list.map(()=>({ width:34 })));
+    const head=ws.getRow(1); head.height=16.9;
+    list.forEach((_,i)=>{ const c=head.getCell(i+2); c.value='Centrale '+(i+1); c.font=Object.assign({}, font, { bold:true }); c.alignment={ horizontal:'center', vertical:'middle' }; });
+    CARACT_ROWS.forEach((label, r)=>{
+      const row=ws.getRow(r+2), k=caractKey(label), first=r===0;
+      row.height=k===caractKey('Adresse Installation')?24:16.9;
+      const bottom=k===caractKey('Productible (P50) (kWh/kWc/an)')?{ style:'thick', color:{ argb:blue } }:/^champ[123]fixeoutracker$/.test(k)?{ style:'medium', color:{ argb:blue } }:line;
+      const a=row.getCell(1); a.value=label;
+      a.font=Object.assign({}, font, first?{ bold:true }:CARACT_PLAIN.has(k)?{}:{ bold:true, color:{ argb:navy } });
+      a.fill={ type:'pattern', pattern:'solid', fgColor:{ argb:first?blue:grey } };
+      a.alignment={ vertical:'middle' }; a.border={ top:line, left:line, right:line, bottom };
+      list.forEach((o,i)=>{ const c=row.getCell(i+2), v=caractValue(o,label);
+        c.value=v===''||v==null?null:v;
+        c.font=Object.assign({}, font, first?{ bold:true, color:{ argb:'FFFFFFFF' } }:{});
+        c.alignment={ horizontal:'left', vertical:'middle', wrapText:k===caractKey('Adresse Installation')||k===caractKey('Système de gestion des heures négatives') };
+        if(first) c.fill={ type:'pattern', pattern:'solid', fgColor:{ argb:blue } };
+        else if(caractGuessed(o,label)) c.fill={ type:'pattern', pattern:'solid', fgColor:{ argb:'FFFFFF00' } };
+        c.border={ top:line, left:line, right:line, bottom }; });
+    });
+    return new Blob([await wb.xlsx.writeBuffer()], { type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+  }
+  window.todoCaractBlob=list=>caractWorkbookBlob(list);
   async function downloadCaract(list, btn){
     try{
-      await loadXlsxLib();
-      const rows=[[''].concat(list.map((_,i)=>'Centrale '+(i+1)))].concat(CARACT_ROWS.map(l=>[l].concat(list.map(o=>caractValue(o,l)))));
-      const ws=XLSX.utils.aoa_to_sheet(rows);
-      ws['!cols']=[{ wch:52 }].concat(list.map(()=>({ wch:34 })));
-      const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'Données');
-      XLSX.writeFile(wb, caractFileName(list));
+      const blob=await caractWorkbookBlob(list), url=URL.createObjectURL(blob);
+      const a=document.createElement('a'); a.href=url; a.download=caractFileName(list); document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(url), 2000);
       if(btn){ const t=btn.textContent; btn.textContent='✓ Fichier créé'; setTimeout(()=>{ btn.textContent=t; },2000); }
     }catch(e){ console.error(e); showBridgeMsg('Fichier non créé : '+(e.message||e), false); }
   }
