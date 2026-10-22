@@ -1817,3 +1817,16 @@ body.postit-open #pipeline-board.pipe-list{ padding-bottom:300px; }
 .stage-focus .sf-nature button{ background:var(--panel); border:1px solid var(--bd); border-radius:999px; color:var(--tx2); font:500 12px var(--font-ui); padding:2px 10px; cursor:pointer; }
 .stage-focus .sf-nature button.on{ color:var(--accent); border-color:var(--accent); background:var(--accent-dim); }
 .opp-stage-step.skipped{ opacity:.45; text-decoration:line-through; text-decoration-color:var(--tx3); }
+
+/* sheet: secondary actions in « Plus ▾ » */
+.act-more{ position:relative; }
+.act-more > summary{ list-style:none; cursor:pointer; font:600 12.5px var(--font-ui); padding:7px 14px; border-radius:var(--radius); border:1px solid var(--bd); background:var(--panel-2); color:var(--tx1); user-select:none; }
+.act-more > summary::-webkit-details-marker{ display:none; }
+.act-more[open] > summary{ border-color:var(--accent); }
+.act-more-list{ position:absolute; bottom:calc(100% + 6px); left:0; z-index:30; min-width:220px; display:flex; flex-direction:column; gap:2px; padding:6px; background:var(--panel); border:1px solid var(--bd); border-radius:10px; box-shadow:0 14px 38px rgba(0,0,0,.5); }
+.act-more-list button{ text-align:left; width:100%; }
+
+.parc-due.lost{ opacity:.55; }
+.parc-due-lost{ font-size:11.5px; color:var(--tx3); }
+.parc-due-nogo{ color:var(--tx3) !important; margin-left:8px; }
+.parc-due-nogo:hover{ color:var(--crit, #ED6965) !important; }

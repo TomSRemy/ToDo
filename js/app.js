@@ -5003,6 +5003,17 @@
 
   // ----- Detail (installation, pre-qualif) -----
   let viewingOppId=null;
+  // the sheet's buttons used now and then go in a « Plus ▾ » menu: the bar keeps the everyday ones
+  const ACT_MORE=/^(Copier lignes? Pipe|Copier lignes? BDD|Voir dans le réseau|Dégrouper|Supprimer|Demande de pricing)$/;
+  function foldActions(bar){
+    if(!bar || window.TODO_LITE) return;
+    const more=[...bar.children].filter(b=>b.tagName==='BUTTON' && ACT_MORE.test(b.textContent.trim()));
+    if(more.length<2) return;
+    const d=document.createElement('details'); d.className='act-more'; const sm=document.createElement('summary'); sm.textContent='Plus ▾'; d.appendChild(sm);
+    const box=document.createElement('div'); box.className='act-more-list'; more.forEach(b=>{ b.addEventListener('click', ()=>{ d.open=false; }); box.appendChild(b); }); d.appendChild(box);
+    const close=bar.querySelector('button:last-child'); if(close && /^Fermer$/.test(close.textContent.trim())) bar.insertBefore(d, close); else bar.appendChild(d);
+    document.addEventListener('mousedown', e=>{ if(d.open && !d.contains(e.target)) d.open=false; }, true);
+  }
   function oppActionBtn(label, fn, cls){ const b=document.createElement('button'); b.type='button'; b.textContent=label; if(cls) b.className=cls; b.onclick=fn; return b; }
   function openOppDetail(id){
     const o=opportunities.find(x=>x.id===id); if(!o) return;
@@ -5099,7 +5110,7 @@
     { const mb=mentionsBlock('op:'+o.id); if(mb) $('opp-detail-body').appendChild(mb); }
     actions.appendChild(oppActionBtn('Supprimer', ()=>{ if(!confirm('Supprimer cette fiche du pipeline ?')) return; o.deleted=true; touchCrm(o); saveCrm(); closeOppDetail(); renderPipeline(); }, 'ghost-btn danger-btn'));
     actions.appendChild(oppActionBtn('Fermer', closeOppDetail, 'ghost-btn lite-keep'));
-    $('opp-detail-overlay').classList.remove('hidden');
+    foldActions($('opp-detail-actions')); $('opp-detail-overlay').classList.remove('hidden');
   }
   function closeOppDetail(){ $('opp-detail-overlay').classList.add('hidden'); viewingOppId=null; }
   // Installation sheet: every column of the Pipe / BDD, grouped; empty values shown as "—" so gaps are visible.
@@ -5300,11 +5311,17 @@
     closeOppDetail(); renderPipeline();
   }
   // a lost deal (one installation or a whole request at once), with its little animation
+  // a lost renewal: its « Renouvellement … » task (made from the Portefeuille) is closed with it
+  function closeRenewalTask(o){
+    if(!o || !o.renewalOf || !parcData || !parcData.items) return;
+    const p=parcData.items.find(x=>parcKey(x)===o.renewalOf); if(!p) return;
+    const t=tasks.find(x=>x.id===renewGroupId(p) && !x.archived && !x.deleted); if(t){ t.archived=true; t.archivedAt=Date.now(); touch(t); saveTasks(); render(); }
+  }
   function loseOpps(list){
     if(!list.length) return;
     const what=list.length>1?list.length+' installations ('+list[0].company+')':'« '+oppName(list[0])+' »';
     if(!confirm(what+' : offre perdue ?')) return;
-    list.forEach(o=>{ o.stageBeforeExit=o.stage; o.stage='perdu'; o.lostAt=Date.now(); touchCrm(o); });
+    list.forEach(o=>{ o.stageBeforeExit=o.stage; o.stage='perdu'; o.lostAt=Date.now(); touchCrm(o); closeRenewalTask(o); });
     saveCrm(); closeOppDetail(); renderPipeline();
     celebrate('lost', list);
   }
@@ -5567,7 +5584,7 @@
     actions.appendChild(oppActionBtn('Copier lignes BDD', e=>copyToClipboard(list.map(bddRow).join('\n'), e.target), 'ghost-btn'));
     actions.appendChild(oppActionBtn('Voir dans le réseau', ()=>{ closeOppDetail(); openInNetwork('rq:'+reqId); }, 'ghost-btn opp-net-btn lite-keep'));
     actions.appendChild(oppActionBtn('Fermer', closeOppDetail, 'ghost-btn lite-keep'));
-    $('opp-detail-overlay').classList.remove('hidden');
+    foldActions($('opp-detail-actions')); $('opp-detail-overlay').classList.remove('hidden');
   }
   function pqMonthYear(s){
     const t=String(s||'').trim(); let m;
@@ -7117,6 +7134,13 @@
         const act=document.createElement('span'); act.className='parc-due-act';
         if(opp){ const b=document.createElement('button'); b.type='button'; b.className='pq-link'; b.textContent='Voir dans le pipeline'; b.onclick=()=>{ document.querySelector('.tab[data-tab="pipeline"]').click(); setTimeout(()=>openOppDetail(opp.id),50); }; act.appendChild(b); }
         else { const b=document.createElement('button'); b.type='button'; b.className='pq-link'; b.textContent='Remettre dans le pipeline'; b.onclick=()=>{ const o=renewalToPipeline(p); document.querySelector('.tab[data-tab="pipeline"]').click(); setTimeout(()=>openOppDetail(o.id),50); }; act.appendChild(b); }
+        // a renewal that will not happen: recorded as lost (pipeline « Sorties », stats), its renewal task closed
+        if(opp && isExited(opp)){ act.innerHTML=''; const t=document.createElement('span'); t.className='parc-due-lost'; t.textContent='Non renouvelé'+(opp.lostAt?' le '+new Date(opp.lostAt).toLocaleDateString('fr-FR'):''); act.appendChild(t); r.classList.add('lost'); }
+        else if(!window.TODO_LITE){ const nb=document.createElement('button'); nb.type='button'; nb.className='pq-link parc-due-nogo'; nb.textContent='Non renouvelé';
+          nb.onclick=()=>{ if(opp){ loseOpps([opp]); renderParc(); return; }
+            if(!confirm('« '+(p.inst||p.prod)+' » (fin le '+pqIsoToFr(p.fin)+') : non renouvelé ?')) return;
+            const o=renewalToPipeline(p); o.stageBeforeExit=o.stage; o.stage='perdu'; o.lostAt=Date.now(); touchCrm(o); closeRenewalTask(o); saveCrm(); renderPipeline(); renderParc(); celebrate('lost', [o]); };
+          act.appendChild(nb); }
         r.appendChild(act);
         s.appendChild(r);
       });

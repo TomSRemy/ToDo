@@ -66,6 +66,14 @@ def new_page(browser, seed=None, **ctx):
 PEEK = "(k=>(window.storage&&window.storage.peek)?window.storage.peek(k):localStorage.getItem('todo_'+k))"
 
 
+def act(page, label):
+    """Click a sheet's action, opening « Plus ▾ » first when it is folded there."""
+    loc = page.locator("#opp-detail-actions button", has_text=label).first
+    if not loc.is_visible() and page.locator("#opp-detail-actions .act-more > summary").count():
+        page.click("#opp-detail-actions .act-more > summary")
+    loc.click()
+
+
 def postit_edit(page):
     """The post-it shows its lines as a checklist; a click on a line's text edits it (cursor at the end of that line)."""
     if page.is_visible("#postit-list"): page.locator("#postit-list .pi-text").last.click()
@@ -514,7 +522,7 @@ with sync_playwright() as p:
     page.fill(".nw-search input", "toit"); page.press(".nw-search input", "Enter"); page.wait_for_timeout(200)
     page.click(".nw-side .nw-open"); page.wait_for_timeout(300)
     check(page.is_visible("#opp-detail-overlay") and "Toit Durand" in page.inner_text("#opp-detail-title"), "network: « Ouvrir la fiche » opens the installation")
-    page.click("#opp-detail-actions >> text=Voir dans le réseau"); page.wait_for_timeout(500)
+    act(page, "Voir dans le réseau"); page.wait_for_timeout(500)
     page.wait_for_timeout(300)
     check(page.is_visible("#tab-network") and page.evaluate("window.todoNetworkState().selected") == "op:no1" and page.is_checked(".nw-local input")
           and page.evaluate("window.todoNetworkState().visible") < page.evaluate("window.todoNetworkState().nodes"), "network: « Voir dans le réseau » from a sheet shows its neighbourhood")
@@ -1249,12 +1257,12 @@ with sync_playwright() as p:
     page.route("**/fonts.g*/**", lambda r: r.abort())
     page.add_init_script("if(!sessionStorage.getItem('seeded')){ localStorage.setItem('todo_todo-widget-opportunities', " + json.dumps(json.dumps(cp_opps)) + "); sessionStorage.setItem('seeded','1'); }")
     page.goto(URL); page.click('[data-tab="pipeline"]'); page.locator(".pipe-req-card .pipe-card-title").first.click()
-    page.click("#opp-detail-actions >> text=Copier lignes Pipe")
+    act(page, "Copier lignes Pipe")
     check(page.is_visible("#choice-overlay") and "2 installations" in page.inner_text("#choice-text"), "pipe copy: asks one line per installation or one for all")
     page.click("#choice-btns >> text=Une seule ligne pour toutes"); page.wait_for_timeout(200)
     clip = page.evaluate("navigator.clipboard.readText()")
     check(clip.count("\n") == 0 and "Toit 1 + Toit 2" in clip and "\t300\t" in clip.replace(",", "."), f"pipe copy: one line, names joined, powers added ({clip[:80]!r})")
-    page.click("#opp-detail-actions >> text=Copier lignes Pipe"); page.click("#choice-btns >> text=Une ligne par installation"); page.wait_for_timeout(200)
+    act(page, "Copier lignes Pipe"); page.click("#choice-btns >> text=Une ligne par installation"); page.wait_for_timeout(200)
     check(page.evaluate("navigator.clipboard.readText()").count("\n") == 1, "pipe copy: or one line each")
     clip = page.evaluate("navigator.clipboard.readText()")
     check("[[" not in clip and "Voir Paul Durand" in clip, "pipe copy: [[links]] go to the Excel as plain names")
@@ -1442,7 +1450,7 @@ with sync_playwright() as p:
         chips.nth(0).click()
     else:
         check(False, f"pricing mail: one chip per plant ({chips.count()})")
-    page.click("#opp-detail-actions >> text=Copier lignes Pipe")
+    act(page, "Copier lignes Pipe")
     page.click("#choice-btns >> text=Une ligne par installation")
     rows = page.evaluate("navigator.clipboard.readText()").split("\n")
     check(len(rows) == 2 and all(len(r.split("\t")) == 37 for r in rows), "Pipe rows: one per installation, 37 columns")
@@ -1465,7 +1473,7 @@ with sync_playwright() as p:
     page.click("#opp-detail-actions >> text=Fermer")
     page.locator('[data-phase="offre"] .pipe-card', has_text="Le Moulin").first.click()
     check("statut bdd" in page.inner_text("#opp-detail-body").lower() and "En préparation" in page.inner_text("#opp-detail-body"), "installation sheet shows the BDD status")
-    page.click("#opp-detail-actions >> text=Copier ligne BDD")
+    act(page, "Copier ligne BDD")
     row = page.evaluate("navigator.clipboard.readText()").split("\t")
     check(len(row) == 91 and row[24] == "En préparation" and row[33] == "Le Moulin", "BDD row: 91 columns, status and plant")
     check(re.match(r"^\[?\w*\]?[\w()\[\]]* – .+_Le Moulin – A$", row[7]) is not None, f"BDD row: business code in column H « Ref_Watt.ee » ({row[7]})")
@@ -1924,6 +1932,11 @@ Responsable technique
     page.click(".parc-due .pq-link:has-text('Remettre dans le pipeline')"); page.wait_for_timeout(300)
     check(page.is_visible("#opp-detail-overlay") and "CS DU MOULIN" in page.inner_text("#opp-detail-title"), "parc: contract put back into the pipeline")
     page.click("#opp-detail-actions >> text=Fermer")
+    page.click('[data-tab="parc"]'); page.once("dialog", lambda d: d.accept()); page.click(".parc-due .parc-due-nogo"); page.wait_for_timeout(400)
+    lost = [o for o in stored(page, "todo-widget-opportunities") if o.get("renewalOf")]
+    renew = [t for t in stored(page, "todo-widget-tasks") if t["id"].startswith("renew_")]
+    check(lost and lost[0]["stage"] == "perdu" and renew[0].get("archived") and "Non renouvelé" in page.inner_text(".parc-due"),
+          "parc: « Non renouvelé » records the renewal as lost and closes its renewal task")
     page.click('[data-tab="contacts"]'); page.click("#vcf-btn")
     check(page.inner_text("#vcf-new") == "1", "vcf: duplicates inside the app count once")
     with page.expect_download() as dl:
