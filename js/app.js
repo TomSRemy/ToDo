@@ -3962,7 +3962,8 @@
   window.todoExtraCommands=(window.todoExtraCommands||[]).concat(
     PRESET_VIEWS.tasks.map(p=>({ t:'Vue tâches : '+p.name, k:'vue filtre taches', go:()=>applySavedView('tasks',{ id:p.id, name:p.name, preset:p.id }) })),
     PRESET_VIEWS.pipeline.map(p=>({ t:'Vue pipeline : '+p.name, k:'vue filtre pipeline', go:()=>applySavedView('pipeline',{ id:p.id, name:p.name, preset:p.id }) })));
-  function renderPipeline(){
+  function renderPipeline(){ renderPipelineInner(); if(typeof paintPicks==='function') paintPicks(); }
+  function renderPipelineInner(){
     if(normalizeOpps()) saveCrmLocalOnly();
     const board=$('pipeline-board');
     board.innerHTML=''; board.classList.remove('pipe-dash','pipe-meet');
@@ -4008,13 +4009,11 @@
     }
   }
   // Drag a card (or a request's block) onto another phase: its steps are offered, the chosen one applies to every installation dragged
-  // Drag a card or a request's block with the mouse: it follows the pointer; dropped on another column, its steps are
-  // offered (and « Grouper avec… » when dropped on a card); dropped on a card of its own column, they are grouped
+  // Drag a card or a request's block with the mouse: it follows the pointer; dropped on a column, that column's steps are offered
   { const board=$('pipeline-board'); let drag=null, eatClick=false;
     const colAt=(x,y)=>{ const el=document.elementFromPoint(x,y); let c=el && el.closest && el.closest('#pipeline-board .pipe-col[data-phase]');
       if(!c) c=[...board.querySelectorAll('.pipe-col[data-phase]')].find(k=>{ const r=k.getBoundingClientRect(); return x>=r.left && x<=r.right && y>=r.top-40; })||null;   // also below its last card
       return c && c.dataset.phase!=='prequal'?c:null; };
-    const cardAt=(x,y)=>{ const el=document.elementFromPoint(x,y), k=el && el.closest && el.closest('#pipeline-board .pipe-card[data-drag]'); return k && k!==drag.card?k:null; };
     const clear=()=>board.querySelectorAll('.drop-over,.drop-card').forEach(x=>x.classList.remove('drop-over','drop-card'));
     const end=()=>{ if(!drag) return; if(drag.ghost) drag.ghost.remove(); drag.card.classList.remove('dragging'); document.body.classList.remove('pipe-dragging'); clear(); drag=null; };
     board.addEventListener('pointerdown', e=>{
@@ -4030,20 +4029,51 @@
         drag.card.classList.add('dragging'); document.body.classList.add('pipe-dragging'); window.getSelection && window.getSelection().removeAllRanges(); }
       e.preventDefault();
       drag.ghost.style.left=(e.clientX-drag.dx)+'px'; drag.ghost.style.top=(e.clientY-drag.dy)+'px';
-      clear(); const c=colAt(e.clientX,e.clientY), k=cardAt(e.clientX,e.clientY); if(c) c.classList.add('drop-over'); if(k) k.classList.add('drop-card');
+      clear(); const c=colAt(e.clientX,e.clientY); if(c) c.classList.add('drop-over');
     });
     document.addEventListener('pointerup', e=>{
       if(!drag) return; const d=drag;
       if(!d.on){ drag=null; return; }
-      const c=colAt(e.clientX,e.clientY), k=cardAt(e.clientX,e.clientY); end(); eatClick=true; setTimeout(()=>{ eatClick=false; }, 0);
+      const c=colAt(e.clientX,e.clientY); end(); eatClick=true; setTimeout(()=>{ eatClick=false; }, 0);
       if(!c) return;
       const list=d.ids.map(id=>opportunities.find(o=>o.id===id)).filter(Boolean); if(!list.length) return;
-      const target=k?k.dataset.drag.split(',').map(id=>opportunities.find(o=>o.id===id)).filter(Boolean):null;
-      if(target && target.length && c.dataset.phase===oppPhase(list[0])){ groupInto(list, target); return; }
-      pipeDropMenu(list, c.dataset.phase, e.clientX, e.clientY, target && target.length?target:null);
+      pipeDropMenu(list, c.dataset.phase, e.clientX, e.clientY);
     });
     document.addEventListener('keydown', e=>{ if(e.key==='Escape' && drag){ end(); } }, true);
     board.addEventListener('click', e=>{ if(eatClick){ e.stopPropagation(); e.preventDefault(); eatClick=false; } }, true);   // the drop is not a click on the card
+  }
+  // Several cards or blocks picked (the box at their corner, or Ctrl+click), then « Grouper » puts them in one request
+  const pipePicked=new Set();
+  function paintPicks(){
+    const board=$('pipeline-board'), shown=new Set([...board.querySelectorAll('.pipe-card[data-drag]')].map(c=>c.dataset.drag));
+    [...pipePicked].forEach(k=>{ if(!shown.has(k)) pipePicked.delete(k); });   // cards no longer on screen (moved, filtered, regrouped)
+    board.querySelectorAll('.pipe-card[data-drag]').forEach(c=>{ const on=pipePicked.has(c.dataset.drag); c.classList.toggle('picked', on); const b=c.querySelector('.pipe-pick'); if(b) b.setAttribute('aria-checked', String(on)); });
+    document.body.classList.toggle('pipe-picking', pipePicked.size>0);
+    let bar=$('pipe-pickbar');
+    if(!pipePicked.size){ if(bar) bar.hidden=true; return; }
+    if(!bar){ bar=document.createElement('div'); bar.id='pipe-pickbar'; bar.className='pipe-pickbar'; bar.innerHTML='<span></span><button type="button" class="pk-group">Grouper</button><button type="button" class="ghost-btn pk-cancel">Annuler</button>'; document.body.appendChild(bar);
+      bar.querySelector('.pk-cancel').onclick=()=>{ pipePicked.clear(); paintPicks(); };
+      bar.querySelector('.pk-group').onclick=()=>groupPicked(); }
+    const ids=[...pipePicked].flatMap(k=>k.split(',')), n=pipePicked.size;
+    bar.hidden=false; bar.querySelector('span').textContent=n+' sélectionné'+(n>1?'s':'')+' · '+ids.length+' installation'+(ids.length>1?'s':'');
+    bar.querySelector('.pk-group').disabled=n<2;
+    bar.querySelector('.pk-group').title=n<2?'Sélectionne au moins deux cartes ou blocs':'Les réunir dans une même demande';
+  }
+  async function groupPicked(){
+    const groups=[...pipePicked].map(k=>k.split(',').map(id=>opportunities.find(o=>o.id===id)).filter(Boolean)).filter(g=>g.length);
+    if(groups.length<2) return;
+    const base=groups.slice().sort((a,b)=>(b[0].requestId?1:0)-(a[0].requestId?1:0) || b.length-a.length)[0];   // the biggest existing request takes the others
+    const moving=groups.filter(g=>g!==base).flat();
+    if(await groupInto(moving, base)){ pipePicked.clear(); paintPicks(); }
+  }
+  { const board=$('pipeline-board');
+    board.addEventListener('click', e=>{
+      const pick=e.target.closest && e.target.closest('.pipe-pick'), card=e.target.closest && e.target.closest('.pipe-card[data-drag]');
+      if(!card || !(pick || e.ctrlKey || e.metaKey)) return;
+      e.stopPropagation(); e.preventDefault();
+      const k=card.dataset.drag; pipePicked.has(k)?pipePicked.delete(k):pipePicked.add(k); paintPicks();
+    }, true);
+    document.addEventListener('keydown', e=>{ if(e.key==='Escape' && pipePicked.size && !document.querySelector('.modal-overlay:not(.hidden), .drop-menu')){ pipePicked.clear(); paintPicks(); } });
   }
   // Group: the installations dragged join the request of the card they are dropped on (a new request when it has none)
   async function groupInto(moving, target){
@@ -4051,13 +4081,13 @@
     const t0=target[0], all=[...new Set(target.concat(moving))], cos=[...new Set(all.map(o=>o.company).filter(Boolean))];
     const v=await askChoice('Grouper dans une même demande ?', (moving.length>1?moving.length+' installations':'« '+oppName(moving[0])+' »')+' rejoin'+(moving.length>1?'nent':'t')+' '+(t0.requestId?'la demande de pricing de « '+oppName(t0)+' »':'« '+oppName(t0)+' » dans une nouvelle demande de pricing')+' ('+all.length+' installations en tout).'
       +(cos.length>1?' Attention : producteurs différents ('+cos.join(', ')+') ; la demande garde « '+(t0.company||'')+' ».':''), [{ label:'Grouper', value:'y' }]);
-    if(v!=='y') return;
+    if(v!=='y') return false;
     let reqId=t0.requestId;
     if(!reqId){ reqId=newOppId('req'); opportunities.push({ id:reqId, kind:'request', company:t0.company||'', title:'Demande de pricing', createdAt:Date.now(), updatedAt:Date.now(), deleted:false }); }
     const left=new Set(moving.map(o=>o.requestId).filter(r=>r && r!==reqId));
     all.forEach(o=>{ if(o.requestId!==reqId){ o.requestId=reqId; touchCrm(o); } });
     left.forEach(r=>{ if(!requestInstalls(r).length) dropRequest(r, all[0].id); });   // a request left empty goes, its tasks follow
-    saveCrm(); renderPipeline();
+    saveCrm(); renderPipeline(); return true;
   }
   // Ungroup: each installation of the request on its own card; the request's tasks go to the first one
   function dropRequest(reqId, heirId){
@@ -4127,7 +4157,7 @@
   }
   function buildPipeCard(o){
     const card=document.createElement('div'); card.className='pipe-card'; card.dataset.id=o.id;
-    if(o.kind==='installation' && !isExited(o) && !window.TODO_LITE) card.dataset.drag=o.id;
+    if(o.kind==='installation' && !isExited(o) && !window.TODO_LITE){ card.dataset.drag=o.id; card.appendChild(pickBox()); }
     card.style.borderLeft='3px solid '+clientColor(o.company);
     const c=document.createElement('div'); c.className='pipe-card-company'; c.style.color=clientColor(o.company); c.textContent=o.company; if(o.company) c.dataset.peek='co:'+o.company;
     const cs=companyStars(o.company); if(cs) c.appendChild(starsWidget(cs));
@@ -4147,6 +4177,7 @@
     return card;
   }
   // A request's block: the producer, a name of one's own, the totals on the right; long blocks fold to their first lines
+  function pickBox(){ const b=document.createElement('span'); b.className='pipe-pick'; b.setAttribute('role','checkbox'); b.setAttribute('aria-checked','false'); b.title='Sélectionner (pour grouper) — ou Ctrl+clic'; return b; }
   const REQ_FOLD_AT=6;
   function reqTotals(group){ const kw=group.reduce((t,o)=>t+kwcNum(o),0); return group.length+(kw?' · '+fmtKwc(kw):' inst.'); }
   function reqDisplayName(req, list){ return (req.label?req.label:(list.length+' installation'+(list.length>1?'s':''))); }
@@ -4154,7 +4185,7 @@
     const req=opportunities.find(x=>x.id===reqId)||{};
     const company=group[0].company;
     const card=document.createElement('div'); card.className='pipe-card pipe-req-card'; card.dataset.id=reqId;
-    if(!window.TODO_LITE) card.dataset.drag=group.map(x=>x.id).join(',');
+    if(!window.TODO_LITE){ card.dataset.drag=group.map(x=>x.id).join(','); card.appendChild(pickBox()); }
     card.style.borderLeft='3px solid '+clientColor(company);
     const head=document.createElement('div'); head.className='pipe-card-title pipe-req-head';
     const c=document.createElement('span'); c.className='pipe-card-company'; c.style.color=clientColor(company); c.textContent=company; if(company) c.dataset.peek='co:'+company;

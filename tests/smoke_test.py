@@ -684,8 +684,12 @@ with sync_playwright() as p:
     gg = [{"id": f"g{i}", "kind": "installation", "company": "GROUPE", "centrale": f"Parc {i}", "title": f"Parc {i}", "stage": "collecte", "createdAt": 1, "updatedAt": 1, "deleted": False} for i in (1, 2)]
     page, errors = new_page(browser, {"todo_todo-widget-opportunities": json.dumps(gg), "todo_todo-widget-tasks": json.dumps([task("gt", "Appeler", opportunityId="g1")])}, viewport={"width": 1400, "height": 900})
     page.goto(URL); page.click('[data-tab="pipeline"]')
-    page.drag_and_drop(".pipe-card[data-id=g2]", ".pipe-card[data-id=g1]")
-    check(page.is_visible("#choice-overlay") and "nouvelle demande" in page.inner_text("#choice-text"), "pipeline: a card dropped on another offers to group them")
+    page.hover(".pipe-card[data-id=g1]"); page.click(".pipe-card[data-id=g1] .pipe-pick")
+    check(page.is_visible("#pipe-pickbar") and page.is_disabled("#pipe-pickbar .pk-group"), "pipeline: a card picked, « Grouper » waits for a second one")
+    page.click(".pipe-card[data-id=g2]", modifiers=["Control"])
+    check("2 sélectionnés" in page.inner_text("#pipe-pickbar") and not page.is_visible("#opp-detail-overlay"), "pipeline: Ctrl+click picks another (without opening it)")
+    page.click("#pipe-pickbar .pk-group")
+    check(page.is_visible("#choice-overlay") and "nouvelle demande" in page.inner_text("#choice-text"), "pipeline: « Grouper » asks before grouping")
     page.click("#choice-btns >> text=Grouper"); page.wait_for_timeout(200)
     ops = stored(page, "todo-widget-opportunities"); req = [o for o in ops if o.get("kind") == "request" and not o.get("deleted")]
     g = {o["id"]: o.get("requestId") for o in ops if o.get("kind") == "installation"}
@@ -719,9 +723,11 @@ with sync_playwright() as p:
     check(page.is_visible(".drop-menu") and "kyc" in page.inner_html(".drop-menu").lower(), "pipeline: dropped below an empty column, it still asks the step")
     page.keyboard.press("Escape")
     page.drag_and_drop(".pipe-card[data-id=lone]", ".pipe-req-card[data-id=rqb] .pipe-req-head")
-    check(page.is_visible(".drop-menu .drop-menu-group"), "pipeline: dropped on a card of another column, « Grouper avec… » is offered too")
-    page.click(".drop-menu .drop-menu-group"); page.click("#choice-btns >> text=Grouper"); page.wait_for_timeout(200)
-    check(next(o for o in stored(page, "todo-widget-opportunities") if o["id"] == "lone").get("requestId") == "rqb", "pipeline: and it joins that block")
+    check(page.is_visible(".drop-menu") and not page.is_visible(".drop-menu .drop-menu-group"), "pipeline: dropped on a block, a card only changes step (grouping is done by picking)")
+    page.keyboard.press("Escape")
+    page.hover(".pipe-card[data-id=lone]"); page.click(".pipe-card[data-id=lone] .pipe-pick"); page.click(".pipe-req-card[data-id=rqb] .pipe-pick")
+    page.click("#pipe-pickbar .pk-group"); page.click("#choice-btns >> text=Grouper"); page.wait_for_timeout(200)
+    check(next(o for o in stored(page, "todo-widget-opportunities") if o["id"] == "lone").get("requestId") == "rqb" and not page.is_visible("#pipe-pickbar"), "pipeline: picked and grouped, it joins the biggest block")
     check(not errors, f"no page errors ({errors})")
     page.close()
 
