@@ -5079,6 +5079,7 @@
       if(!o.requestId){ const fr=document.createElement('div'), pm=appendPricingMail(fr, { company:o.company }, [o]);   // a plant on its own has its pricing mail too, first at the pricing steps
         if(pm.mailNow){ box.append(...fr.childNodes); box.appendChild(cmp); } else { box.appendChild(cmp); box.append(...fr.childNodes); } }
       else box.appendChild(cmp);
+      { const h=buildHistory(o.requestId?requestInstalls(o.requestId):[o]); if(h) box.appendChild(h); }
       if(isExited(o)){
         actions.appendChild(oppActionBtn('Réactiver', ()=>{ o.stage=o.stageBeforeExit||'a_qualifier'; o.lostAt=null; touchCrm(o); saveCrm(); renderPipeline(); openOppDetail(o.id); }));
       } else {
@@ -5276,7 +5277,12 @@
       const p=document.createElement('div'); p.className='os-person'+(main?' main':'');
       const h=document.createElement('div'); h.className='os-person-h'; h.innerHTML='<b></b><span></span>'; h.firstChild.textContent=name||'(sans nom)'; h.lastChild.textContent=[main?'contact principal':'',role].filter(Boolean).join(' · '); p.appendChild(h);
       const lines=[['Tél. 1',tels[0]],['Tél. 2',tels[1]],['Mail',mail]];
-      lines.forEach(([l,v])=>{ const r=document.createElement('div'); r.className='os-row'; const a=document.createElement('span'); a.textContent=l; const b=document.createElement('b'); b.textContent=v||'—'; if(v) copyVal(b,v); else b.classList.add('none'); r.append(a,b); p.appendChild(r); });
+      // a phone calls, a mail opens a new message; the small button next to it copies
+      lines.forEach(([l,v])=>{ const r=document.createElement('div'); r.className='os-row'; const a=document.createElement('span'); a.textContent=l; const b=document.createElement('b');
+        if(!v){ b.textContent='—'; b.classList.add('none'); r.append(a,b); p.appendChild(r); return; }
+        const isMail=/@/.test(v), link=document.createElement('a'); link.className='os-link'; link.textContent=v; link.href=isMail?'mailto:'+v.trim():'tel:'+v.replace(/[^\d+]/g,''); link.onclick=e=>e.stopPropagation();
+        const cp=document.createElement('button'); cp.type='button'; cp.className='os-copy'; cp.title='Copier'; cp.setAttribute('aria-label','Copier '+v); cp.textContent='⧉'; cp.onclick=e=>{ e.stopPropagation(); copyToClipboard(v, cp); };
+        b.append(link, cp); r.append(a,b); p.appendChild(r); });
       return p;
     };
     const mainName=[o.prenom,(o.nom||'').replace(/^(M\.|Mme)\s+/i,'')].filter(Boolean).join(' ');
@@ -5458,6 +5464,25 @@
 
   // ----- Pricing requests (several installations, one mail) -----
   // « Maintenant » : what the current step asks for, with the dates that matter at that step
+  // « Historique » : when what happened (created, Go, offer, steps, signature, tasks done), newest first
+  function buildHistory(list){
+    const ids=new Set(list.flatMap(o=>[o.id, o.requestId].filter(Boolean))), ev=[], seen=new Set();
+    const add=(at, text)=>{ if(!at) return; const t=typeof at==='number'?at:(pqDateOf(at)||new Date(at+'T12:00:00')).getTime(); if(!t || isNaN(t)) return; const k=text+'|'+toISO(new Date(t)); if(seen.has(k)) return; seen.add(k); ev.push({ t, text }); };
+    const first=list.reduce((m,o)=>Math.min(m, o.createdAt>1e12?o.createdAt:Infinity), Infinity); if(isFinite(first)) add(first, 'Opportunité créée');
+    list.forEach(o=>{
+      (o.stageLog||[]).forEach((e,i)=>{ if(i===0 || !e || !(e.at>1e12)) return; add(e.at, 'Étape : '+stageLabel(e.stage, o)); });
+      if(o.goDate) add(o.goDate, 'Go'); if(o.dateOffre) add(o.dateOffre, 'Offre remise'); if(o.signDate) add(o.signDate, 'Signé');
+      if(o.lostAt) add(o.lostAt, (OPP_EXITS[o.stage]||'Sortie'));
+    });
+    tasks.filter(t=>!t.deleted && t.archived && t.opportunityId && ids.has(t.opportunityId)).forEach(t=>add(t.archivedAt||t.updatedAt, 'Fait : '+plainLinks(t.title)));
+    if(!ev.length) return null;
+    ev.sort((a,b)=>b.t-a.t);
+    const d=document.createElement('details'); d.className='opp-history';
+    const sm=document.createElement('summary'); sm.textContent='Historique · '+ev.length; d.appendChild(sm);
+    const ul=document.createElement('ul');
+    ev.forEach(e=>{ const li=document.createElement('li'); li.innerHTML='<span></span><b></b>'; li.firstChild.textContent=new Date(e.t).toLocaleDateString('fr-FR'); li.lastChild.textContent=e.text; ul.appendChild(li); });
+    d.appendChild(ul); return d;
+  }
   function stageFocus(list){
     const live=list.filter(x=>!isExited(x)); if(!live.length) return null;
     const lo=Math.min(...live.map(x=>stageIndex(x.stage)).filter(i=>i>=0)); const st=OPP_STAGES[lo]; if(!st) return null;
@@ -5564,6 +5589,7 @@
     // at the pricing steps the mail is the thing to do: it comes before the long characteristics table
     const mailFrag=document.createElement('div'), pm=appendPricingMail(mailFrag, req, list), mailNow=pm.mailNow, cmp=list.length?buildRequestCompare(list, null):null;
     if(mailNow){ box.append(...mailFrag.childNodes); if(cmp) box.appendChild(cmp); } else { if(cmp) box.appendChild(cmp); box.append(...mailFrag.childNodes); }
+    { const h=buildHistory(list); if(h) box.appendChild(h); }
     const actions=$('opp-detail-actions'); actions.innerHTML='';
     const live=list.filter(o=>!isExited(o));
     if(live.length){

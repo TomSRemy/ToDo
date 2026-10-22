@@ -758,6 +758,30 @@ with sync_playwright() as p:
     check(not errors, f"no page errors ({errors})")
     page.close()
 
+    # --- sheet: « Pricing engageant », the contact's phone as a link, « Historique », « Plus ▾ », the firm pricing included
+    nowms = int(time.time() * 1000)
+    hs = [{"id": "h1", "kind": "installation", "company": "HISTO", "centrale": "Toit H", "title": "Toit H", "stage": "pricing_indicatif", "nature": "Engageante", "mail": "luc@histo.fr",
+           "goDate": "2026-09-01", "createdAt": nowms - 60 * 86400000, "updatedAt": nowms, "deleted": False,
+           "stageLog": [{"stage": "collecte", "at": nowms - 60 * 86400000}, {"stage": "pricing_indicatif", "at": nowms - 50 * 86400000}]}]
+    page, errors = new_page(browser, {"todo_todo-widget-opportunities": json.dumps(hs),
+        "todo_todo-widget-contacts": json.dumps([{"id": "hc", "firstName": "Luc", "lastName": "Histo", "company": "HISTO", "email": "luc@histo.fr", "phone1": "06 98 76 54 32", "createdAt": 1, "updatedAt": 1, "deleted": False}]),
+        "todo_todo-widget-tasks": json.dumps([task("ht", "Appeler Luc", archived=True, archivedAt=nowms - 55 * 86400000, opportunityId="h1")])}, viewport={"width": 1300, "height": 900})
+    page.goto(URL); page.click('[data-tab="pipeline"]')
+    check("Pricing engageant" in page.inner_text(".pipe-card[data-id=h1]"), "pricing: an offer engageante shows « Pricing engageant »")
+    page.click(".pipe-card[data-id=h1]")
+    check(page.get_attribute("#opp-detail-body a.os-link[href^='tel:']", "href") == "tel:0698765432" and page.locator("#opp-detail-body a.os-link[href='mailto:luc@histo.fr']").count() == 1,
+          "sheet: the contact's phone and mail are links (found by the mail)")
+    page.click("#opp-detail-body .opp-history > summary"); hist = page.inner_text("#opp-detail-body .opp-history")
+    check("Opportunité créée" in hist and "Go" in hist and "Fait : Appeler Luc" in hist and "Pricing engageant" in hist, f"sheet: the history lists what happened ({hist[:160]!r})")
+    check(page.locator("#opp-detail-actions .act-more").count() == 1 and not page.is_visible("#opp-detail-actions button:has-text('Supprimer')"), "sheet: occasional actions folded in « Plus ▾ »")
+    page.click("#opp-detail-body .sf-nature button:has-text('Indicative')"); page.wait_for_timeout(200)
+    check(next(o for o in stored(page, "todo-widget-opportunities") if o["id"] == "h1").get("nature") == "Non engageante" and "Pricing indicatif" in page.inner_text(".pipe-card[data-id=h1]"),
+          "pricing: one click switches to an indicative offer")
+    page.click("#opp-detail-body .sf-nature button:has-text('Engageante')"); page.wait_for_timeout(200)
+    check(page.locator("#opp-detail-body .opp-stage-step.skipped:has-text('inclus')").count() == 1, "pricing: an offer engageante shows the firm pricing as included")
+    check(not errors, f"no page errors ({errors})")
+    page.close()
+
     # --- Pipeline blocks: a name of one's own, totals on the right, long blocks folded; drop below an empty column; « Grouper avec… »
     big = [{"id": "rqb", "kind": "request", "company": "BIG", "title": "Demande de pricing", "createdAt": 1, "updatedAt": 1, "deleted": False}] + \
           [{"id": f"b{i}", "kind": "installation", "company": "BIG", "centrale": f"Toit {i}", "title": f"Toit {i}", "kwc": "500", "requestId": "rqb", "stage": "offre_attente", "createdAt": 1, "updatedAt": 1, "deleted": False} for i in range(1, 9)] + \

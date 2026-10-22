@@ -1830,3 +1830,15 @@ body.postit-open #pipeline-board.pipe-list{ padding-bottom:300px; }
 .parc-due-lost{ font-size:11.5px; color:var(--tx3); }
 .parc-due-nogo{ color:var(--tx3) !important; margin-left:8px; }
 .parc-due-nogo:hover{ color:var(--crit, #ED6965) !important; }
+
+.os-link{ color:var(--tx1); text-decoration:none; border-bottom:1px dotted var(--tx3); }
+.os-link:hover{ color:var(--accent); border-bottom-color:var(--accent); }
+.os-copy{ margin-left:6px; background:none; border:none; color:var(--tx3); cursor:pointer; font-size:12px; padding:0 2px; }
+.os-copy:hover{ color:var(--accent); }
+
+.opp-history{ margin:14px 0 4px; border:1px solid var(--bd); border-radius:8px; padding:8px 12px; }
+.opp-history > summary{ cursor:pointer; font:600 11px var(--font-mono); text-transform:uppercase; letter-spacing:.05em; color:var(--tx3); }
+.opp-history ul{ list-style:none; margin:8px 0 0; padding:0; display:flex; flex-direction:column; gap:3px; }
+.opp-history li{ display:grid; grid-template-columns:92px minmax(0,1fr); gap:10px; font-size:12.5px; color:var(--tx2); }
+.opp-history li span{ font-family:var(--font-mono); font-size:11.5px; color:var(--tx3); }
+.opp-history li b{ font-weight:500; color:var(--tx1); }
