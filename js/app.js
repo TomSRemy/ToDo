@@ -1664,7 +1664,17 @@
       ['Tâches faites', done.map(t=>plainLinks(t.title)+(t.client?' ('+t.client+')':''))],
       ['La semaine prochaine', next.map(t=>pqIsoToFr(t.due).slice(0,5)+' · '+plainLinks(t.title)+(t.client?' ('+t.client+')':''))],
     ];
-    const kpis=[[signed.length,'signé'+(signed.length>1?'s':'')+(signed.length?' · '+mw(mwOf(signed)):'')],[offers.length,'offre'+(offers.length>1?'s':'')+' remise'+(offers.length>1?'s':'')],[moves.size,'avancée'+(moves.size>1?'s':'')+' de dossier'],[done.length,'tâche'+(done.length>1?'s':'')+' faite'+(done.length>1?'s':'')]];
+    // the calls of the week (mode appel), and what is stuck now (more than 15 days at the same step), with who has it
+    const calls=[]; { const seen=new Set(); insts.forEach(o=>(o.notesLog||[]).forEach(n=>{ if(n.kind!=='appel' || !inR(n.at)) return; const k=n.at+'|'+(o.requestId||o.id); if(seen.has(k)) return; seen.add(k);
+      calls.push({ at:n.at, line:new Date(n.at).toLocaleDateString('fr-FR',{ day:'2-digit', month:'2-digit' })+' · '+(o.company||'')+(n.text?' — '+(n.text.length>90?n.text.slice(0,90)+'…':n.text):'') }); })); }
+    calls.sort((x,y)=>x.at-y.at);
+    sections.splice(5, 0, ['Appels', calls.map(c=>c.line)]);
+    if(which!=='last'){ const stuck=new Map(); insts.filter(o=>o.kind==='installation' && !isExited(o) && o.stage!=='actif').forEach(o=>{ const d=daysInStage(o); if(d==null || d<=15) return;
+        const k=meetBlockKey(o); const x=stuck.get(k)||{ o, d, list:[] }; x.list.push(o); stuck.set(k,x); });
+      sections.splice(6, 0, ['Bloqués (plus de 15 jours à la même étape)', [...stuck.values()].sort((x,y)=>y.d-x.d).map(x=>{ const st=oppStage(x.o.stage);
+        return x.o.company+' — '+(meetBlockName(x.o) && x.list.length>1?meetBlockName(x.o):x.list.length>3?x.list.length+' installations':x.list.map(oppName).join(', '))+' : '+stageLabel(x.o.stage, x.o)+(st && st.who!=='Com'?', chez '+(WHO[st.who]||st.who):'')+', depuis '+x.d+' j'; })]); }
+    const freshMw=mwOf(fresh.filter(o=>o.kind==='installation'));
+    const kpis=[[signed.length,'signé'+(signed.length>1?'s':'')+(signed.length?' · '+mw(mwOf(signed)):'')],[offers.length,'offre'+(offers.length>1?'s':'')+' remise'+(offers.length>1?'s':'')],[moves.size,'avancée'+(moves.size>1?'s':'')+' de dossier'],[done.length,'tâche'+(done.length>1?'s':'')+' faite'+(done.length>1?'s':'')]].concat(freshMw?[[mw(freshMw),'entrés dans le pipeline']]:[], calls.length?[[calls.length,'appel'+(calls.length>1?'s':'')]]:[]);
     return { W, sections, kpis };
   }
   function weekText(d){ return [d.W.label].concat(d.kpis.map(([n,l])=>n+' '+l).join(' · '), ...d.sections.filter(s=>s[1].length).map(([h,l])=>['', h+' ('+l.length+')'].concat(l.map(x=>'• '+x)).join('\n'))).join('\n'); }
@@ -3785,6 +3795,7 @@
       inp.addEventListener('change', ()=>{ const v=parseFloat(inp.value.replace(/\s/g,'').replace(',','.')); if(v>0) goals[year]=v; else delete goals[year];
         try{ localStorage.setItem('pipe-goals', JSON.stringify(goals)); }catch(e){} if(window.todoSettingsChanged) window.todoSettingsChanged(); renderPipeline(); });
       board.appendChild(g); }
+    { const wb=document.createElement('button'); wb.type='button'; wb.className='pipe-bar-btn pd-week'; wb.textContent='Résumé de la semaine à copier'; wb.title='Signés, offres, avancées, nouveaux dossiers, appels, bloqués : prêt à coller dans un mail ou Teams'; wb.onclick=()=>openWeek('this'); board.appendChild(wb); }
     const grid=document.createElement('div'); grid.className='pd-grid'; board.appendChild(grid);
     const card=(title,hint)=>{ const c=document.createElement('section'); c.className='pd-card'; const h=document.createElement('h4'); h.textContent=title; c.appendChild(h); if(hint){ const p=document.createElement('p'); p.className='pd-hint'; p.textContent=hint; c.appendChild(p); } grid.appendChild(c); return c; };
     // MWc by phase, bars to one scale
