@@ -1543,6 +1543,7 @@
     n.rolledFor=today; touch(n); saveNotes(); if(undoBase) undoRebase(); return true;
   }
   document.addEventListener('visibilitychange', ()=>{ if(!document.hidden && rollDailyNote()) renderNotes(); });
+  setInterval(()=>{ if(!document.hidden && document.activeElement!==postitTextEl && rollDailyNote()) renderNotes(); }, 5*60*1000);   // the app left open over midnight
   function openDayNotes(focusDay){
     const days=dayNotes(); let ov=$('daynotes-overlay');
     if(!ov){ ov=document.createElement('div'); ov.id='daynotes-overlay'; ov.className='modal-overlay';
