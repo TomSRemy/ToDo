@@ -7212,17 +7212,21 @@
     const row=(title,sub,val,fn,cls)=>{ const r=document.createElement(fn?'button':'div'); if(fn){ r.type='button'; r.onclick=()=>{ closeCompanySheet(); fn(); }; } r.className='co-row'+(cls?' '+cls:'');
       r.innerHTML='<span class="k"><b></b><span></span></span><span class="v"></span>'; r.querySelector('b').textContent=title; r.querySelector('.k span').textContent=sub||''; r.querySelector('.v').textContent=val||''; return r; };
     // what is coming up: dated tasks, contracts ending within a year
-    const next=[...open.filter(t=>t.due).map(t=>({ d:t.due, r:row(plainLinks(t.title),'Tâche',pqIsoToFr(t.due),()=>openTaskEverywhere(t.id), dueStatus(t.due)==='overdue'?'late':'') })),
+    const next=[...open.filter(t=>t.due).map(t=>({ d:t.due, id:t.id, r:row(plainLinks(t.title),'Tâche',pqIsoToFr(t.due),()=>openTaskEverywhere(t.id), dueStatus(t.due)==='overdue'?'late':'') })),
       ...parc.filter(p=>p.fin && p.fin>=today && p.fin<=in12).map(p=>({ d:p.fin, r:row('Fin de contrat : '+(p.inst||p.prod), p.kwc?fmtKwc(p.kwc):'', pqIsoToFr(p.fin), ()=>openParcItem(p)) }))]
-      .sort((a,b)=>a.d.localeCompare(b.d)).slice(0,6).map(x=>x.r);
-    section(colL,'À venir',next,'Rien de daté pour ce client.');
+      .sort((a,b)=>a.d.localeCompare(b.d)).slice(0,6);
+    const inNext=new Set(next.map(x=>x.id).filter(Boolean));
+    section(colL,'À venir',next.map(x=>x.r),'Rien de daté pour ce client.');
     section(colL,'Contacts',cts.map(c=>row([c.firstName,c.lastName].filter(Boolean).join(' ')||'(sans nom)',[c.role,c.email].filter(Boolean).join(' · '),c.phone1||c.phone2||'',()=>openContactEverywhere(c.id))),'Aucun contact.');
     section(colL,'Pipeline',live.map(o=>row(oppName(o),stageLabel(o.stage)+(o.dept?' · '+o.dept:''),fmtKwc(o.kwc),()=>{ gsTab('pipeline'); setTimeout(()=>openOppDetail(o.id),30); })),'Aucune opportunité en cours.'+(gone?' ('+gone+' terminée'+(gone>1?'s':'')+')':''));
     section(colR,'Portefeuille',parc.slice().sort((a,b)=>(a.statut==='Gagné'?0:1)-(b.statut==='Gagné'?0:1)||(a.fin||'9').localeCompare(b.fin||'9')).slice(0,8)
       .map(p=>row(p.inst||p.prod||'(sans nom)',[p.statut,p.fin?'fin '+pqIsoToFr(p.fin):''].filter(Boolean).join(' · '),p.kwc?fmtKwc(p.kwc):'',()=>openParcItem(p))),
       parcData?'Aucun contrat dans le Suivi Agrégation.':'Charge le Suivi Agrégation dans Portefeuille pour voir les contrats.');
     { const mb=mentionsBlock('co:'+pqFold(name).replace(/[^a-z0-9]/g,'')); if(mb) colR.appendChild(mb); }
-    section(colR,'Tâches ouvertes',open.slice(0,6).map(t=>row(plainLinks(t.title),t.due?'pour le '+pqIsoToFr(t.due):'sans date','',()=>openTaskEverywhere(t.id),dueStatus(t.due)==='overdue'?'late':'')),'Aucune tâche ouverte.');
+    // the open tasks not already listed in « À venir » (no repeat)
+    const others=open.filter(t=>!inNext.has(t.id));
+    section(colR,inNext.size?'Autres tâches ouvertes':'Tâches ouvertes',others.slice(0,6).map(t=>row(plainLinks(t.title),t.due?'pour le '+pqIsoToFr(t.due):'sans date','',()=>openTaskEverywhere(t.id),dueStatus(t.due)==='overdue'?'late':'')),
+      open.length?'Toutes les tâches ouvertes sont dans « À venir ».':'Aucune tâche ouverte.');
     // history: meetings, done tasks, pipeline steps, new contacts and opportunities
     const hist=companyHistory(name), all=!!opts.allHistory;
     const tl=document.createElement('div'); tl.className='co-tl';
