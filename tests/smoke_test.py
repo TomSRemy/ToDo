@@ -661,6 +661,25 @@ with sync_playwright() as p:
     check(not errors, f"no page errors ({errors})")
     page.close()
 
+    # --- Pipeline: drag a request's block (or a card) onto another phase, then pick the step
+    dd = [{"id": "rqd", "kind": "request", "company": "DRAG", "title": "Demande de pricing", "createdAt": 1, "updatedAt": 1, "deleted": False}] + \
+         [{"id": f"d{i}", "kind": "installation", "company": "DRAG", "centrale": f"Toit {i}", "title": f"Toit {i}", "requestId": "rqd", "stage": "collecte", "createdAt": 1, "updatedAt": 1, "deleted": False} for i in (1, 2)] + \
+         [{"id": "solo", "kind": "installation", "company": "SOLO", "centrale": "Seule", "title": "Seule", "stage": "onboarding", "createdAt": 1, "updatedAt": 1, "deleted": False}]
+    page, errors = new_page(browser, {"todo_todo-widget-opportunities": json.dumps(dd)}, viewport={"width": 1400, "height": 900})
+    page.add_init_script("window.todoCelebrate=()=>{};")
+    page.goto(URL); page.click('[data-tab="pipeline"]')
+    page.drag_and_drop(".pipe-req-card[data-id=rqd]", '.pipe-col[data-phase="offre"]'); page.wait_for_timeout(150)
+    check(page.is_visible(".drop-menu") and "2 installations" in page.inner_text(".drop-menu").lower() and "pricing indicatif" in page.inner_text(".drop-menu").lower(), "pipeline: a block dropped on « Offre » asks which step")
+    page.click(".drop-menu button[data-stage=pricing_indicatif]"); page.wait_for_timeout(200)
+    st = {o["id"]: o.get("stage") for o in stored(page, "todo-widget-opportunities")}
+    check(st["d1"] == "pricing_indicatif" and st["d2"] == "pricing_indicatif" and page.locator('.pipe-col[data-phase="offre"] .pipe-req-card').count() == 1, f"pipeline: both installations move together ({st})")
+    page.drag_and_drop(".pipe-card[data-id=solo]", '.pipe-col[data-phase="actif"]'); page.wait_for_timeout(200)
+    check(next(o for o in stored(page, "todo-widget-opportunities") if o["id"] == "solo")["stage"] == "actif" and not page.is_visible(".drop-menu"), "pipeline: a phase with one step takes the card at once")
+    page.drag_and_drop(".pipe-card[data-id=solo]", '.pipe-col[data-phase="contrat"]'); page.keyboard.press("Escape"); page.wait_for_timeout(100)
+    check(next(o for o in stored(page, "todo-widget-opportunities") if o["id"] == "solo")["stage"] == "actif" and not page.is_visible(".drop-menu"), "pipeline: Escape leaves the card where it was")
+    check(not errors, f"no page errors ({errors})")
+    page.close()
+
     # --- Pipeline dashboard: MWc by phase, time per step, deals that drag
     day_ms = 86400000; now_ms = int(datetime.datetime.now().timestamp() * 1000)
     pd_opps = [{"id": "p1", "kind": "installation", "company": "A", "centrale": "Alpha", "title": "Alpha", "stage": "negociation", "kwc": "2000", "createdAt": now_ms - 40 * day_ms,
