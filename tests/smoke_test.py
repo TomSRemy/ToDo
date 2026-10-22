@@ -629,7 +629,7 @@ with sync_playwright() as p:
     many = [{"id": f"k{i}", "firstName": f"P{i}", "lastName": f"Nom{i:02d}", "role": "", "company": "Gamma", "email": "", "phone1": "", "phone2": "",
              "relevance": 0, "comment": "", "createdAt": 1, "updatedAt": 1, "deleted": False} for i in range(40)]
     page, errors = new_page(browser, {"todo_todo-widget-contacts": json.dumps(many)}, viewport={"width": 1300, "height": 700})
-    page.goto(URL); page.evaluate("localStorage.removeItem('contacts-view')"); page.reload(); page.wait_for_function("document.querySelector('#contacts-view-switch .view-icon-btn.active')"); page.click('[data-tab="contacts"]')
+    page.goto(URL); page.evaluate("sessionStorage.setItem('cvs','1'); localStorage.removeItem('contacts-view')"); page.reload(); page.wait_for_function("document.querySelector('#contacts-view-switch .view-icon-btn.active')"); page.click('[data-tab="contacts"]')
     check(page.locator('#contacts-view-switch [data-view="liste"].active').count() == 1 and page.locator("#contacts-list .company-group-header").count() == 0,
           "contacts: list view by default")
     page.locator("#contacts-list .contact-row", has_text="Nom05").locator(".edit-btn").click()
