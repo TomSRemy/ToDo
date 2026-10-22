@@ -839,7 +839,7 @@
       btn.innerHTML='<svg class="meta-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></svg>';
       btn.onclick=e=>{
         e.stopPropagation();
-        navigator.clipboard.writeText(t.title).then(()=>{
+        navigator.clipboard.writeText(plainLinks(t.title)).then(()=>{
           const prev=btn.innerHTML;
           btn.innerHTML='<svg class="meta-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>';
           setTimeout(()=>{ btn.innerHTML=prev; }, 1200);
@@ -5665,7 +5665,7 @@
   function deleteTask(id){
     const t=tasks.find(x=>x.id===id);
     if(!t) return;
-    if(!confirm('Supprimer "'+t.title+'" ? (récupérable ensuite dans Archive → Corbeille)')) return;
+    if(!confirm('Supprimer "'+plainLinks(t.title)+'" ? (récupérable ensuite dans Archive → Corbeille)')) return;
     t.deleted=true; touch(t);
     if(selectedTaskId===id)selectedTaskId=null; if(editingId===id)editingId=null;
     saveTasks(); render(); renderArchive();
@@ -5728,7 +5728,7 @@
       if(notifiedIds.has(key) || isNaN(at) || at>now) return;
       notifiedIds.add(key); changed=true;
       if(now-at>86400000) return;
-      if('Notification'in window&&Notification.permission==='granted'){ new Notification('Rappel : '+t.title,{body:[t.client,t.project].filter(Boolean).join(' · ')||'Échéance à venir'}); }
+      if('Notification'in window&&Notification.permission==='granted'){ new Notification('Rappel : '+plainLinks(t.title),{body:[t.client,t.project].filter(Boolean).join(' · ')||'Échéance à venir'}); }
     });
     if(changed){ try{ localStorage.setItem('todo_reminders-notified', JSON.stringify([...notifiedIds].slice(-500))); }catch(e){} }
   }
@@ -7146,7 +7146,7 @@
       if(o.mail && byMail.has(String(o.mail).toLowerCase())) link(id, byMail.get(String(o.mail).toLowerCase()));
       (o.extraContacts||[]).forEach(x=>{ if(x && x.mail && byMail.has(String(x.mail).toLowerCase())) link(id, byMail.get(String(x.mail).toLowerCase())); }); });
     tasks.filter(t=>!t.deleted && !t.archived).forEach(t=>{
-      const id=node('tk:'+t.id, 'task', t.title, [t.client, t.due?'pour le '+pqIsoToFr(t.due):''].filter(Boolean).join(' · '), ()=>openTaskEverywhere(t.id));
+      const id=node('tk:'+t.id, 'task', plainLinks(t.title), [t.client, t.due?'pour le '+pqIsoToFr(t.due):''].filter(Boolean).join(' · '), ()=>openTaskEverywhere(t.id));
       link(id, coId(t.client));
       if(t.opportunityId){ if(seen.has('op:'+t.opportunityId)) link(id, 'op:'+t.opportunityId); else if(seen.has('rq:'+t.opportunityId)) link(id, 'rq:'+t.opportunityId); }
       if(t.project) link(id, node('pj:'+pqFold(t.project), 'project', t.project, 'Projet', ()=>{ gsTab('tasks'); }));
@@ -7177,7 +7177,7 @@
   function companyHistory(name){
     const ev=[], cts=activeContacts().filter(c=>sameCo(c.company,name)), ids=new Set(cts.map(c=>c.id));
     meetings.filter(m=>!m.deleted && ids.has(m.contactId)).forEach(m=>{ const c=cts.find(x=>x.id===m.contactId); ev.push({ at:new Date((m.date||'')+'T12:00:00').getTime()||m.createdAt, kind:'rdv', html:'<b>RDV</b> avec '+escapeHtml([c.firstName,c.lastName].filter(Boolean).join(' '))+(m.label?' : '+escapeHtml(m.label):'') }); });
-    tasks.filter(t=>!t.deleted && t.archived && sameCo(t.client,name)).forEach(t=>ev.push({ at:t.archivedAt||t.updatedAt, kind:'done', html:'Fait : '+escapeHtml(t.title) }));
+    tasks.filter(t=>!t.deleted && t.archived && sameCo(t.client,name)).forEach(t=>ev.push({ at:t.archivedAt||t.updatedAt, kind:'done', html:'Fait : '+escapeHtml(plainLinks(t.title)) }));
     opportunities.filter(o=>!o.deleted && (sameCo(o.company,name)||sameCo(o.producteur,name))).forEach(o=>{
       if(o.createdAt>1e12) ev.push({ at:o.createdAt, kind:'new', html:(o.kind==='request'?'Demande reçue : ':o.kind==='prequal'?'Pré-qualification : ':'Nouvelle opportunité : ')+'<b>'+escapeHtml(o.kind==='prequal'?'rencontre':oppName(o))+'</b>' });
       (o.stageLog||[]).forEach((s,i)=>{ if(i===0 && Math.abs(s.at-(o.createdAt||0))<60000) return; ev.push({ at:s.at, kind:'stage', html:escapeHtml(o.kind==='prequal'?'Pré-qualif':oppName(o))+' → <b>'+escapeHtml(stageLabel(s.stage))+'</b>' }); });
