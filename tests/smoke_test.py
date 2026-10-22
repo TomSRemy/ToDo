@@ -1875,6 +1875,18 @@ with sync_playwright() as p:
     check(not errors, f"no page errors ({errors})")
     page.close()
 
+    # --- Pipeline « Carte »: the deals on the map of France, coloured by phase; a département lists its plants
+    mp = [{"id": "m1", "kind": "installation", "company": "MAP", "centrale": "Toit Ouest", "title": "Toit Ouest", "stage": "pricing_indicatif", "kwc": "1200", "dept": "49 - Maine-et-Loire", "createdAt": 1, "updatedAt": 1, "deleted": False},
+          {"id": "m2", "kind": "installation", "company": "MAP", "centrale": "Toit Sud", "title": "Toit Sud", "stage": "kyc", "kwc": "800", "dept": "49 - Maine-et-Loire", "createdAt": 1, "updatedAt": 1, "deleted": False}]
+    page, errors = new_page(browser, {"todo_todo-widget-opportunities": json.dumps(mp)}, viewport={"width": 1400, "height": 900})
+    page.goto(URL); page.click('[data-tab="pipeline"]'); page.click("#pipe-map-toggle")
+    page.wait_for_selector("#pipeline-board svg.parc-map", timeout=8000)
+    side = page.inner_text("#pipeline-board .parc-map-side")
+    check("Offre" in side and "Contrat" in side and "Maine-et-Loire" in side and page.locator("#pipeline-board circle.dot").count() == 2, f"pipeline map: the deals on the map, by phase ({side[:120]!r})")
+    page.click("#pipe-map-toggle"); check(page.locator(".pipe-col").count() > 0, "pipeline map: one click back to the board")
+    check(not errors, f"no page errors ({errors})")
+    page.close()
+
     # --- Keyboard in a sheet: 1 ticks the first box, Entrée moves on and confirms, n opens the notes
     kb = [{"id": "k1", "kind": "installation", "company": "KB", "centrale": "Toit", "title": "Toit", "stage": "kyc", "createdAt": 1, "updatedAt": 1, "deleted": False}]
     page, errors = new_page(browser, {"todo_todo-widget-opportunities": json.dumps(kb)}, viewport={"width": 1400, "height": 900})

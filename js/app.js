@@ -3753,7 +3753,7 @@
 
 
   // ----- Board -----
-  let pipeShowExited=false, pipeDash=false, pipeMeet=false, pipeList=false; try{ pipeList=localStorage.getItem('pipe-list')==='1'; }catch(e){}
+  let pipeShowExited=false, pipeDash=false, pipeMeet=false, pipeList=false, pipeMap=false; try{ pipeList=localStorage.getItem('pipe-list')==='1'; }catch(e){}
   // ---------- Pipeline dashboard: MWc by phase, time spent at each step, deals that drag ----------
   const kwcNum=o=>parseFloat(String(o.kwc||'').replace(/\s/g,'').replace(',','.'))||0;
   function stageDurations(){
@@ -4070,7 +4070,7 @@
     if(st.who==='Com') pipeTallyN.me++; else pipeTallyN.others++; const d=daysInStage(o); if(d!=null && d>15) pipeTallyN.stuck++; }
   function paintPipeSummary(){ try{ paintDupBtn(); }catch(e){} let el=$('pipe-summary'); const bar=document.querySelector('#tab-pipeline .quick-add-bar'); if(!bar) return;
     if(!el){ el=document.createElement('span'); el.id='pipe-summary'; el.className='pipe-summary'; const ref=$('pipe-exited-toggle'); bar.insertBefore(el, ref); }
-    const show=pipeTallyN.on && !pipeDash && !pipeMeet && !pipeList; el.hidden=!show; if(!show) return;
+    const show=pipeTallyN.on && !pipeDash && !pipeMeet && !pipeList && !pipeMap; el.hidden=!show; if(!show) return;
     el.innerHTML='À moi <b></b> · En attente des autres <b></b>'+(pipeTallyN.stuck?' · Bloqués &gt; 15 j <b class="late"></b>':'');
     const bs=el.querySelectorAll('b'); bs[0].textContent=pipeTallyN.me; bs[1].textContent=pipeTallyN.others; if(bs[2]) bs[2].textContent=pipeTallyN.stuck; }
   // the card's « what's next »: the linked open task, else what the step asks; who has it and since when; its request
@@ -4096,12 +4096,16 @@
     board.innerHTML=''; board.classList.remove('pipe-dash','pipe-meet');
     $('pipe-dash-toggle').setAttribute('aria-pressed', String(pipeDash)); $('pipe-dash-toggle').classList.toggle('on', pipeDash);
     $('pipe-meet-toggle').setAttribute('aria-pressed', String(pipeMeet)); $('pipe-meet-toggle').classList.toggle('on', pipeMeet);
-    $('pipe-list-toggle').setAttribute('aria-pressed', String(pipeList && !pipeDash && !pipeMeet)); $('pipe-list-toggle').classList.toggle('on', pipeList && !pipeDash && !pipeMeet);
+    $('pipe-list-toggle').setAttribute('aria-pressed', String(pipeList && !pipeDash && !pipeMeet && !pipeMap)); $('pipe-list-toggle').classList.toggle('on', pipeList && !pipeDash && !pipeMeet && !pipeMap);
     board.classList.remove('pipe-list');
     $('pipe-exited-toggle').classList.toggle('hidden', pipeDash||pipeMeet);
     if(pipeDash){ renderPipeDash(board); return; }
     const q=pqFold($('opp-search').value.trim());
     if(pipeMeet){ renderPipeMeet(board, q); return; }
+    $('pipe-map-toggle').setAttribute('aria-pressed', String(pipeMap)); $('pipe-map-toggle').classList.toggle('on', pipeMap);
+    board.classList.remove('pipe-mapview');
+    if(pipeMap){ board.classList.add('pipe-mapview'); mapInPipe=true; const keepL=parcMapLayer; parcMapLayer='pipe'; try{ board.appendChild(parcMap()); } finally { parcMapLayer=keepL; } return; }
+    mapInPipe=false;
     if(pipeList){ renderPipeList(board, q); return; }
     const vp=savedViewState.pipeline && savedViewState.pipeline.pred;
     const items=opportunities.filter(o=>!o.deleted && o.kind!=='request' && o.stage!=='converti')
@@ -7296,12 +7300,13 @@
   $('prequal-save-btn').onclick=savePrequal;
   $('prequal-cancel-btn').onclick=closePrequalForm;
   $('pipe-exited-toggle').onclick=()=>{ pipeShowExited=!pipeShowExited; renderPipeline(); };
-  $('pipe-dash-toggle').onclick=()=>{ pipeDash=!pipeDash; if(pipeDash) pipeMeet=false; renderPipeline(); };
+  $('pipe-dash-toggle').onclick=()=>{ pipeDash=!pipeDash; if(pipeDash){ pipeMeet=false; pipeMap=false; } renderPipeline(); };
   $('tasks-views-btn').onclick=e=>{ e.stopPropagation(); openViewsMenu('tasks', e.currentTarget); };
   $('pipe-views-btn').onclick=e=>{ e.stopPropagation(); openViewsMenu('pipeline', e.currentTarget); };
-  $('pipe-meet-toggle').onclick=()=>{ pipeMeet=!pipeMeet; if(pipeMeet) pipeDash=false; renderPipeline(); };
+  $('pipe-meet-toggle').onclick=()=>{ pipeMeet=!pipeMeet; if(pipeMeet){ pipeDash=false; pipeMap=false; } renderPipeline(); };
   $('pipe-xs-btn').onclick=()=>openExcelSync();
-  $('pipe-list-toggle').onclick=()=>{ pipeList=!(pipeList && !pipeDash && !pipeMeet); pipeDash=false; pipeMeet=false; try{ localStorage.setItem('pipe-list', pipeList?'1':'0'); }catch(e){} renderPipeline(); };
+  $('pipe-map-toggle').onclick=()=>{ pipeMap=!pipeMap; pipeDash=false; pipeMeet=false; parcMapSel=null; parcMapView=null; renderPipeline(); };
+  $('pipe-list-toggle').onclick=()=>{ pipeMap=false; pipeList=!(pipeList && !pipeDash && !pipeMeet); pipeDash=false; pipeMeet=false; try{ localStorage.setItem('pipe-list', pipeList?'1':'0'); }catch(e){} renderPipeline(); };
   $('pq-save-btn').onclick=saveOpp;
   $('pq-next-btn').onclick=pqNext;
   $('pq-back-btn').onclick=()=>{ pqShowStep(1); pqStep1Render(); };
@@ -7623,7 +7628,7 @@
   }
   const fmtGwh=mwh=>(Math.round(mwh/100)/10).toLocaleString('fr-FR')+' GWh';
   const fmtMwc=kwc=>(Math.round(kwc/100)/10).toLocaleString('fr-FR')+' MWc';
-  function renderParc(){
+  function renderParc(){ mapInPipe=false;
     const body=$('parc-body'); if(!body) return;
     if(parcData===null) loadParc();
     body.innerHTML='';
@@ -7797,11 +7802,12 @@
   const deptCodeOf=label=>{ const m=/^\s*(\d{1,3}|2A|2B)\b/i.exec(String(label||'')); if(!m) return null; const c=m[1].toUpperCase(); return /^\d$/.test(c)?'0'+c:c; };
   // technology of a plant, for the map colours (muted, so the map stays quiet and the dots read first)
   const MAP_TECHS=[ ['PV','Solaire PV','#E3B448'], ['Eolien','Éolien','#8EC5E8'], ['Hydro','Hydro','#6E9CF0'], ['Biogaz','Biogaz','#9CC37A'], ['Autre','Autre','#8B95A5'] ];
+  const MAP_PHASES=[ ['qualif','Qualification','#7DA2CF'], ['offre','Offre','#E5B54F'], ['contrat','Contrat','#B49CFF'], ['onboarding','Onboarding','#5EEAD4'], ['actif','En service','#14D3A9'] ];
   const mapTech=v=>{ const f=pqFold(v||''); return /eol/.test(f)?'Eolien':/hydro/.test(f)?'Hydro':/bio|metha|cogen/.test(f)?'Biogaz':/pv|photo|solaire|ombri|toiture/.test(f)?'PV':'Autre'; };
   function parcMapPoints(layer){
     const today=toISO(new Date());
     if(parcKpiSet) return parcKpiSet.map(p=>({ code:deptCodeOf(p.siteDept||p.dept), kwc:p.kwc||0, tech:mapTech(p.enr), name:p.inst||p.prod, prod:p.prod||p.dev, who:p.dev, ref:{ parc:p }, extra:p.fin?'fin '+pqIsoToFr(p.fin):p.statut }));
-    if(layer==='pipe') return opportunities.filter(o=>!o.deleted && o.kind==='installation' && !isExited(o)).map(o=>({ code:deptCodeOf(o.dept), kwc:pqNum(o.kwc||'')||0, tech:mapTech(o.install), name:oppName(o), prod:o.producteur||o.company, who:o.company, ref:{ opp:o.id }, extra:stageLabel(o.stage, o) }));
+    if(layer==='pipe') return opportunities.filter(o=>!o.deleted && o.kind==='installation' && !isExited(o)).map(o=>({ code:deptCodeOf(o.dept), kwc:pqNum(o.kwc||'')||0, tech:mapTech(o.install), name:oppName(o), prod:o.producteur||o.company, who:o.company, ref:{ opp:o.id }, extra:stageLabel(o.stage, o), phase:oppPhase(o) }));
     if(!parcData) return [];
     const list=layer==='pending'?parcData.items.filter(p=>p.statut==='En attente'||p.statut==='En préparation'):parcData.items.filter(p=>p.statut==='Gagné' && (!p.fin || p.fin>=today));
     return list.map(p=>({ code:deptCodeOf(p.siteDept||p.dept), kwc:p.kwc||0, tech:mapTech(p.enr), name:p.inst||p.prod, prod:p.prod||p.dev, who:p.dev, ref:{ parc:p }, extra:p.fin?'fin '+pqIsoToFr(p.fin):p.statut }));
@@ -7812,22 +7818,26 @@
     const known=allCompanyNames(), pick=[p.who,p.prod].find(n=>n && known.some(k=>sameCo(k,n)));
     openCompanySheet(pick||p.who||p.prod||'');
   }
+  var mapInPipe=false;   // the map shown in the pipeline (« Carte ») rather than in the Portefeuille; var: renderParc may run before this line
+  function mapRerender(){ if(mapInPipe) renderPipeline(); else renderParc(); }
   function parcMap(){
     if(!FR_MAP){
       const w=document.createElement('div'); w.className='parc-block parc-map-block'; w.innerHTML='<div class="parc-h">Carte</div><p class="parc-muted">Chargement de la carte…</p>';
-      loadFrMap().then(()=>{ if(!$('tab-parc').classList.contains('hidden')) renderParc(); }).catch(()=>{ w.querySelector('p').textContent='Carte indisponible hors ligne (elle sera disponible après une ouverture avec réseau).'; });
+      loadFrMap().then(()=>{ if(mapInPipe){ if(!$('tab-pipeline').classList.contains('hidden')) renderPipeline(); } else if(!$('tab-parc').classList.contains('hidden')) mapRerender(); }).catch(()=>{ w.querySelector('p').textContent='Carte indisponible hors ligne (elle sera disponible après une ouverture avec réseau).'; });
       return w;
     }
-    const color=t=>(MAP_TECHS.find(x=>x[0]===t)||MAP_TECHS[4])[2];
-    const techLabel=t=>(MAP_TECHS.find(x=>x[0]===t)||MAP_TECHS[4])[1];
+    // the pipeline layer: dots by phase (where the deal is), else by technology
+    const byPhase=(mapInPipe || parcMapLayer==='pipe') && !parcKpiSet, KEYS=byPhase?MAP_PHASES:MAP_TECHS;
+    const color=t=>(KEYS.find(x=>x[0]===t)||KEYS[KEYS.length-1])[2];
+    const techLabel=t=>(KEYS.find(x=>x[0]===t)||KEYS[KEYS.length-1])[1];
     const wrap=document.createElement('div'); wrap.className='parc-block parc-map-block';
     const head=document.createElement('div'); head.className='map-head';
     head.innerHTML='<div class="parc-h">Carte</div>';
     const seg=document.createElement('div'); seg.className='map-seg';
-    [['won','Portefeuille'],['pending','Offres'],['pipe','Pipeline']].forEach(([k,l])=>{ const b=document.createElement('button'); b.type='button'; b.textContent=l; b.className=k===parcMapLayer?'on':''; b.onclick=()=>{ parcMapLayer=k; parcMapSel=null; parcMapView=null; renderParc(); }; seg.appendChild(b); });
-    if(!parcKpiSet) head.appendChild(seg); wrap.appendChild(head);
+    [['won','Portefeuille'],['pending','Offres'],['pipe','Pipeline']].forEach(([k,l])=>{ const b=document.createElement('button'); b.type='button'; b.textContent=l; b.className=k===parcMapLayer?'on':''; b.onclick=()=>{ parcMapLayer=k; parcMapSel=null; parcMapView=null; mapRerender(); }; seg.appendChild(b); });
+    if(!parcKpiSet && !mapInPipe) head.appendChild(seg); wrap.appendChild(head);
 
-    const pts=parcMapPoints(parcMapLayer);
+    const pts=parcMapPoints(parcMapLayer); if(byPhase) pts.forEach(p=>{ p.techName=(MAP_TECHS.find(x=>x[0]===p.tech)||MAP_TECHS[4])[1]; p.tech=p.phase||'qualif'; });
     const by={}, elsewhere=[];
     pts.forEach(p=>{ const metro=p.code && FR_MAP.deps.some(d=>d[0]===p.code); if(!metro){ elsewhere.push(p); return; } (by[p.code]=by[p.code]||{ kwc:0, n:0, names:[] }); by[p.code].kwc+=p.kwc; by[p.code].n++; by[p.code].names.push(p); });
     const maxKwc=Math.max(1,...pts.map(p=>p.kwc||0));
@@ -7908,14 +7918,14 @@
       if(moved){ moved=false; return; }
       const hit=document.elementFromPoint(e.clientX, e.clientY)||e.target, t=hit.closest && hit.closest('[data-dep]');
       if(t && !by[t.dataset.dep]) return;   // a département with no plant: nothing to open, keep the current selection
-      if(!t){ if(parcMapSel){ parcMapSel=null; renderParc(); } return; }
+      if(!t){ if(parcMapSel){ parcMapSel=null; mapRerender(); } return; }
       // in the open département, a plant opens its sheet; elsewhere the first click opens the département
       if(parcMapSel===t.dataset.dep && t.dataset.i!=null && dots[+t.dataset.i]){ openMapPoint(dots[+t.dataset.i].p); return; }
-      if(parcMapSel===t.dataset.dep){ parcMapSel=null; parcMapView=null; renderParc(); return; }
+      if(parcMapSel===t.dataset.dep){ parcMapSel=null; parcMapView=null; mapRerender(); return; }
       parcMapSel=t.dataset.dep;
       const dep=svgEl.querySelector('path[data-dep="'+parcMapSel+'"]');
       if(dep){ const bb=dep.getBBox(), w=Math.max(FULL.w/6, Math.max(bb.width, bb.height*FULL.w/FULL.h)*2.2); parcMapView=clampView({ w, h:w*FULL.h/FULL.w, x:bb.x+bb.width/2-w/2, y:bb.y+bb.height/2-w*FULL.h/FULL.w/2 }); }
-      renderParc();
+      mapRerender();
     });
     grid.appendChild(mapEl);
     requestAnimationFrame(applyView);
@@ -7928,13 +7938,13 @@
     const top=document.createElement('div'); top.className='map-figure';
     if(selV){
       const dep=FR_MAP.deps.find(d=>d[0]===parcMapSel);
-      const back=document.createElement('button'); back.type='button'; back.className='map-back'; back.textContent='← Toute la France'; back.onclick=()=>{ parcMapSel=null; parcMapView=null; renderParc(); };
+      const back=document.createElement('button'); back.type='button'; back.className='map-back'; back.textContent='← Toute la France'; back.onclick=()=>{ parcMapSel=null; parcMapView=null; mapRerender(); };
       side.appendChild(back);
       top.innerHTML='<div class="map-eyebrow">'+escapeHtml(dep[1])+' · '+parcMapSel+'</div>';
     } else top.innerHTML='<div class="map-eyebrow">'+escapeHtml(parcKpiSet?parcKpiLabel:({ won:'Portefeuille signé', pending:'Offres en attente', pipe:'Pipeline' })[parcMapLayer])+'</div>';
     top.innerHTML+='<div class="map-big">'+escapeHtml(fmtMwc(total))+'</div><div class="map-sub">'+scope.length+' installation'+(scope.length>1?'s':'')+'</div>';
     side.appendChild(top);
-    const mix=MAP_TECHS.map(([k,l,c])=>{ const list=scope.filter(p=>p.tech===k); return { k, l, c, n:list.length, kwc:list.reduce((x,p)=>x+p.kwc,0) }; }).filter(m=>m.n);
+    const mix=KEYS.map(([k,l,c])=>{ const list=scope.filter(p=>p.tech===k); return { k, l, c, n:list.length, kwc:list.reduce((x,p)=>x+p.kwc,0) }; }).filter(m=>m.n);
     if(mix.length){
       const bar=document.createElement('div'); bar.className='map-mix';
       mix.forEach(m=>{ const s=document.createElement('span'); s.style.flex=String(Math.max(m.kwc,1)); s.style.background=m.c; s.dataset.m=m.k; bar.appendChild(s); });
@@ -7956,7 +7966,7 @@
         const dep=FR_MAP.deps.find(d=>d[0]===code);
         const r=document.createElement('button'); r.type='button'; r.className='map-row map-dep';
         r.innerHTML='<span class="map-k">'+escapeHtml(dep[1])+'</span><span class="map-v">'+v.n+'</span><span class="map-v">'+escapeHtml(fmtMwc(v.kwc))+'</span><span class="map-line"><span style="width:'+Math.max(3,v.kwc/maxDep*100)+'%"></span></span>';
-        r.onclick=()=>{ parcMapSel=code; parcMapView=null; renderParc(); };
+        r.onclick=()=>{ parcMapSel=code; parcMapView=null; mapRerender(); };
         r.dataset.dep=code;
         rows.appendChild(r);
       });
@@ -7965,7 +7975,7 @@
     }
     side.appendChild(rows);
     // no inner scroll bar: the 6 biggest départements, the rest on demand
-    if(!selV && Object.keys(by).length>6){ const more=document.createElement('button'); more.type='button'; more.className='map-more'; more.textContent=parcMapAll?'Réduire':'Voir les '+Object.keys(by).length+' départements'; more.onclick=()=>{ parcMapAll=!parcMapAll; renderParc(); }; side.appendChild(more); }
+    if(!selV && Object.keys(by).length>6){ const more=document.createElement('button'); more.type='button'; more.className='map-more'; more.textContent=parcMapAll?'Réduire':'Voir les '+Object.keys(by).length+' départements'; more.onclick=()=>{ parcMapAll=!parcMapAll; mapRerender(); }; side.appendChild(more); }
     if(elsewhere.length && !selV){ const o=document.createElement('div'); o.className='map-foot'; o.textContent='Hors métropole ou non localisé : '+elsewhere.length+' · '+fmtMwc(elsewhere.reduce((s,p)=>s+p.kwc,0)); o.title=elsewhere.map(p=>p.name).join(', '); side.appendChild(o); }
     grid.appendChild(side); wrap.appendChild(grid);
     return wrap;
