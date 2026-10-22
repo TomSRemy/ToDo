@@ -3914,7 +3914,8 @@
     const card=document.createElement('div'); card.className='pipe-card pipe-req-card'; card.dataset.id=reqId;
     card.style.borderLeft='3px solid '+clientColor(company);
     const c=document.createElement('div'); c.className='pipe-card-company'; c.style.color=clientColor(company); c.textContent=company;
-    const t=document.createElement('div'); t.className='pipe-card-title'; t.textContent=(req.title||'Demande de pricing')+' · '+group.length+' installations';
+    const t=document.createElement('div'); t.className='pipe-card-title pipe-req-title'; t.title=(req.title||'Demande de pricing')+' · '+group.length+' installations';
+    { const a=document.createElement('span'); a.textContent=req.title||'Demande de pricing'; const b=document.createElement('span'); b.className='pipe-req-n'; b.textContent=group.length+' install.'; t.append(a,b); }   // the count never cut off
     card.appendChild(c); card.appendChild(t);
     const same=group.every(o=>o.stage===group[0].stage);
     if(same){ const m=document.createElement('div'); m.className='pipe-card-meta'; m.appendChild(stageChip(group[0])); card.appendChild(m); }
