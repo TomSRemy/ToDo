@@ -6324,7 +6324,7 @@
       if(box){ e.preventDefault(); box.focus(); box.select(); } return; }
     if(e.key==='Escape'){ if(snoozePopover.style.display==='flex'){ closeSnoozePopover(); return; } if(editingId){ editingId=null; render(); return; } if(document.activeElement&&document.activeElement.id==='f-title'){ closeAddForm(); return; } if(document.activeElement===quickAddInput){ quickAddInput.blur(); return; } if(document.activeElement===searchInput&&searchQuery){ searchInput.value=''; searchQuery=''; searchClear.classList.remove('show'); render(); return; } return; }
     const tag=document.activeElement.tagName; if(tag==='INPUT'||tag==='TEXTAREA'||tag==='SELECT')return;
-    if(e.key==='n'){ e.preventDefault(); quickAddInput.focus(); }
+    if(e.key==='n'){ e.preventDefault(); if(!quickAddInput.offsetParent){ const t=document.querySelector('.tab[data-tab="tasks"]'); if(t) t.click(); } quickAddInput.focus(); }   // from any tab
     else if(e.key==='p'){ e.preventDefault(); openPostit(true); }
     else if(e.key==='j'||e.key==='k'){ e.preventDefault(); moveSelection(e.key==='j'?1:-1); }
     else if(e.key==='Enter'){ if(selectedTaskId)validateTask(selectedTaskId); }

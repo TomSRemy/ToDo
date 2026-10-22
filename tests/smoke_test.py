@@ -353,6 +353,8 @@ with sync_playwright() as p:
     check(page.evaluate("document.activeElement.id") == "contact-search", "Ctrl+F: the search of the tab on screen (Contacts)")
     page.click('[data-tab="pipeline"]'); page.keyboard.press("Control+f")
     check(page.evaluate("document.activeElement.id") == "opp-search", "Ctrl+F: the search of the tab on screen (Pipeline)")
+    page.evaluate("document.activeElement.blur()"); page.keyboard.press("n")
+    check(page.is_visible("#tab-tasks") and page.evaluate("document.activeElement.id") == "quick-add-input", "« n » from another tab: Tasks, ready to type")
     check(not errors, f"no page errors ({errors})")
     page.close()
 
