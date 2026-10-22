@@ -1629,3 +1629,24 @@ html.lite .contact-net-link, html.lite #co-sheet-net, html.lite .opp-net-btn{ di
 .list-manager input[type=text]:focus, .list-manager input[type=password]:focus, .list-manager input[type=date]:focus{ outline:none; border-color:var(--accent); }
 .list-manager .search-box input[type=text]{ padding-left:28px; }   /* room for the magnifier */
 .nw-empty{ position:absolute; inset:0; display:flex; align-items:center; justify-content:center; text-align:center; color:var(--tx3); font-size:13px; line-height:1.6; padding:20px; pointer-events:none; }
+
+/* « Ma semaine » */
+.wk-card{ text-align:left; cursor:pointer; font:inherit; color:inherit; border-style:dashed; }
+.wk-card .stat-card-num{ font-size:17px; color:var(--accent); }
+.wk-card:hover{ border-color:var(--accent); }
+html.lite .wk-card{ display:none; }
+.wk-box{ max-width:760px; }
+.wk-head{ display:flex; align-items:center; gap:14px; margin-bottom:12px; }
+.wk-head h3{ margin:0; }
+.wk-switch{ display:flex; gap:6px; flex:1; }
+.wk-switch button{ background:var(--panel-2); border:1px solid var(--bd); border-radius:999px; color:var(--tx2); font:500 12px var(--font-ui); padding:4px 12px; cursor:pointer; }
+.wk-switch button.on{ color:var(--accent); border-color:var(--accent); }
+.wk-x{ position:static; }
+.wk-kpis{ display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:8px; margin-bottom:12px; }
+.wk-kpis div{ background:var(--panel-2); border:1px solid var(--bd); border-radius:8px; padding:9px 11px; display:flex; flex-direction:column; gap:2px; }
+.wk-kpis b{ font-family:var(--font-mono); font-size:20px; color:var(--accent); }
+.wk-kpis span{ font-size:11.5px; color:var(--tx3); }
+.wk-body{ max-height:52vh; overflow-y:auto; margin-bottom:12px; }
+.wk-sec h4{ font:600 11px var(--font-mono); text-transform:uppercase; letter-spacing:.05em; color:var(--tx3); margin:12px 0 4px; }
+.wk-sec ul{ margin:0; padding-left:18px; } .wk-sec li{ font-size:13px; color:var(--tx2); margin:2px 0; } .wk-sec li.wk-more{ list-style:none; color:var(--tx3); }
+@media (max-width:640px){ .wk-kpis{ grid-template-columns:repeat(2,minmax(0,1fr)); } .wk-head{ flex-wrap:wrap; } }

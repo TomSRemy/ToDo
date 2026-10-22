@@ -12,6 +12,7 @@ import tempfile
 import openpyxl
 import re
 import datetime
+import time
 import json
 import pathlib
 import sys
@@ -358,6 +359,31 @@ with sync_playwright() as p:
     check(not errors, f"no page errors ({errors})")
     page.close()
 
+    # --- « Ma semaine »: what moved this week, ready to paste in a mail
+    nowms = int(time.time() * 1000); old = nowms - 30 * 86400000; recent = nowms - 60000
+    wk_opps = [{"id": "w1", "kind": "installation", "company": "Solaris", "centrale": "Toit Nord", "title": "Toit Nord", "kwc": "1500", "stage": "demande_prix",
+                "stageLog": [{"stage": "collecte", "at": old}, {"stage": "demande_prix", "at": recent}], "createdAt": old, "updatedAt": recent, "deleted": False},
+               {"id": "w2", "kind": "installation", "company": "Ventus", "centrale": "Parc Est", "title": "Parc Est", "kwc": "4200", "stage": "onboarding", "signDate": TODAY.isoformat(),
+                "stageLog": [{"stage": "signature", "at": old}, {"stage": "onboarding", "at": recent}], "createdAt": old, "updatedAt": recent, "deleted": False},
+               {"id": "w3", "kind": "prequal", "company": "Hélios", "stage": "prequal", "createdAt": recent, "updatedAt": recent, "deleted": False},
+               {"id": "w4", "kind": "installation", "company": "Vieux", "centrale": "Ancien", "title": "Ancien", "stage": "kyc", "stageLog": [{"stage": "offre_attente", "at": old - 86400000}, {"stage": "kyc", "at": old}], "createdAt": old, "updatedAt": old, "deleted": False}]
+    page, errors = new_page(browser, {"todo_todo-widget-opportunities": json.dumps(wk_opps),
+                                      "todo_todo-widget-tasks": json.dumps([task("wd", "Envoyer le KYC à [[Ventus]]", archived=True, archivedAt=recent), task("wn", "Préparer RDV", due=(TODAY + datetime.timedelta(days=2)).isoformat())])},
+                            viewport={"width": 1300, "height": 850})
+    page.goto(URL); page.wait_for_timeout(400); page.click(".wk-card")
+    check(page.is_visible("#week-overlay"), "my week: the Today page opens the weekly summary")
+    body = page.inner_text("#week-overlay")
+    check("Parc Est" in body and "4,2 MWc" in body, f"my week: signed this week, with the MWc ({body[:200]!r})")
+    check("Toit Nord" in body and "Collecte d’infos → Demande de prix" in body, "my week: the deals that moved, from → to")
+    check("Hélios (pré-qualif)" in body and "Envoyer le KYC à Ventus" in body and "Préparer RDV" in body, "my week: new deals, tasks done (no [[ ]]), next week")
+    check("Ancien" not in body, "my week: older moves are left out")
+    page.click("#week-overlay .wk-switch [data-w=last]")
+    check("Parc Est" not in page.inner_text("#week-overlay .wk-body"), "my week: last week shows last week only")
+    page.keyboard.press("Escape")
+    check(not page.is_visible("#week-overlay"), "my week: Escape closes it")
+    check(not errors, f"no page errors ({errors})")
+    page.close()
+
     # --- small screen: the note steps aside while the full task form would be hidden behind it
     page, errors = new_page(browser, viewport={"width": 1100, "height": 720})
     page.goto(URL); page.click('[data-tab="tasks"]')
@@ -386,7 +412,7 @@ with sync_playwright() as p:
     side = page.inner_text(".nw-side")
     check("Toit Durand" in side and "Paul Durand" in side and "Solaris" in side, "network: finding a node shows its links (company and contact via the mail)")
     # drag a point like in Obsidian: it follows the mouse and pulls its neighbours; let go, it stays where it was put (until « Libérer les points »)
-    page.wait_for_timeout(1500)
+    page.press(".nw-search input", "Enter"); page.wait_for_timeout(250)   # the point is brought to the middle of the free space, away from the panel
     box = page.locator(".nw-stage canvas").bounding_box()
     p0, c0 = page.evaluate("window.todoNetworkPos('op:no1')"), page.evaluate("window.todoNetworkPos('co:solaris')")
     page.mouse.move(box["x"] + p0[0], box["y"] + p0[1]); page.mouse.down()

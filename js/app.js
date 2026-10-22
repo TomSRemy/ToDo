@@ -1440,6 +1440,8 @@
       card.appendChild(n); card.appendChild(l);
       statsRow.appendChild(card);
     });
+    { const wk=document.createElement('button'); wk.type='button'; wk.className='stat-card wk-card'; wk.title='Ce qui a bougé cette semaine, à copier dans un mail';
+      wk.innerHTML='<div class="stat-card-num">Ma semaine</div><div class="stat-card-label">résumé à copier →</div>'; wk.onclick=()=>openWeek('this'); statsRow.appendChild(wk); }
 
     const todayBadge=$('today-badge');
     const urgentCount=overdueTasks.length+todayTasks.length;
@@ -1563,6 +1565,78 @@
     search.value=''; paint(); ov.classList.remove('hidden'); setTimeout(()=>search.focus(), 30);
   }
   window.todoOpenDayNote=openDayNotes;
+
+  // ----- « Ma semaine » : what moved this week (or last week), ready to paste in a mail -----
+  function weekBounds(which){
+    const d=new Date(); d.setHours(0,0,0,0); const mon=new Date(d); mon.setDate(d.getDate()-((d.getDay()+6)%7));
+    if(which==='last'){ const a=new Date(mon); a.setDate(a.getDate()-7); return { from:a.getTime(), to:mon.getTime(), label:'Semaine du '+a.toLocaleDateString('fr-FR',{ day:'numeric', month:'long' }) }; }
+    return { from:mon.getTime(), to:Date.now()+1, label:'Semaine du '+mon.toLocaleDateString('fr-FR',{ day:'numeric', month:'long' }) };
+  }
+  function weekData(which){
+    const W=weekBounds(which), inR=ms=>ms>=W.from && ms<W.to, isoIn=v=>{ if(!/^\d{4}-\d{2}-\d{2}$/.test(v||'')) return false; const t=new Date(v+'T12:00:00').getTime(); return inR(t); };
+    const insts=opportunities.filter(o=>!o.deleted && (o.kind==='installation'||o.kind==='prequal'));
+    const mwOf=list=>list.reduce((s,o)=>s+kwcNum(o),0), mw=k=>(Math.round(k/100)/10).toLocaleString('fr-FR')+' MWc';
+    // stage moves, grouped by request (same move for several installations = one line)
+    const moves=new Map();
+    insts.forEach(o=>{ const log=(o.stageLog||[]).filter(e=>e && e.at>1e12);
+      log.forEach((e,i)=>{ if(!inR(e.at) || i===0 || OPP_EXITS[e.stage]) return; const from=log[i-1].stage; if(from===e.stage) return;
+        const k=(o.requestId||o.id)+'|'+from+'|'+e.stage; const m=moves.get(k)||{ company:o.company||'', from, to:e.stage, list:[] }; if(!m.list.includes(o)) m.list.push(o); moves.set(k,m); }); });
+    const signed=insts.filter(o=>o.kind==='installation' && (isoIn(o.signDate) || (o.stageLog||[]).some((e,i,l)=>inR(e.at) && stageIndex(e.stage)>=stageIndex('onboarding') && i>0 && stageIndex(l[i-1].stage)<stageIndex('onboarding'))));
+    const offers=insts.filter(o=>o.kind==='installation' && !signed.includes(o) && (isoIn(o.dateOffre) || (o.stageLog||[]).some(e=>inR(e.at) && e.stage==='offre_attente')));
+    const fresh=insts.filter(o=>inR(o.createdAt||0));
+    const lost=insts.filter(o=>isExited(o) && inR(o.lostAt||0));
+    const done=tasks.filter(t=>!t.deleted && t.archived && inR(t.archivedAt||0)).sort((a,b)=>(a.archivedAt||0)-(b.archivedAt||0));
+    const mts=meetings.filter(m=>!m.deleted && isoIn(m.date)).sort((a,b)=>a.date.localeCompare(b.date));
+    const today=new Date(); today.setHours(0,0,0,0); const in7=new Date(today); in7.setDate(today.getDate()+7);
+    const next=which==='last'?[]:activeTasks().filter(t=>t.due && new Date(t.due+'T00:00:00')>today && new Date(t.due+'T00:00:00')<=in7).sort((a,b)=>a.due.localeCompare(b.due));
+    const byCo=list=>{ const g=new Map(); list.forEach(o=>{ const k=o.requestId||o.id; const x=g.get(k)||{ company:o.company||'', list:[] }; x.list.push(o); g.set(k,x); }); return [...g.values()]; };
+    const coLine=x=>x.company+' — '+(x.list.length>3?x.list.length+' installations':x.list.map(oppName).join(', '))+(mwOf(x.list)?' ('+mw(mwOf(x.list))+')':'');
+    const ctName=m=>{ const c=contacts.find(x=>x.id===m.contactId); return c?[[c.firstName,c.lastName].filter(Boolean).join(' '), c.company].filter(Boolean).join(' · '):''; };
+    const sections=[
+      ['Signés', byCo(signed).map(coLine)],
+      ['Offres remises', byCo(offers).map(coLine)],
+      ['Dossiers qui ont avancé', [...moves.values()].map(m=>m.company+' — '+(m.list.length>3?m.list.length+' installations':m.list.map(oppName).join(', '))+' : '+(OPP_STAGES.find(x=>x.key===m.from)?stageLabel(m.from):'—')+' → '+stageLabel(m.to))],
+      ['Nouveaux dossiers', byCo(fresh).map(x=>x.list[0].kind==='prequal'?x.company+' (pré-qualif)':coLine(x))],
+      ['Perdus / sans suite', byCo(lost).map(x=>coLine(x)+' · '+(OPP_EXITS[x.list[0].stage]||''))],
+      ['Rendez-vous', mts.map(m=>pqIsoToFr(m.date)+' · '+[m.label, ctName(m)].filter(Boolean).join(' — '))],
+      ['Tâches faites', done.map(t=>plainLinks(t.title)+(t.client?' ('+t.client+')':''))],
+      ['La semaine prochaine', next.map(t=>pqIsoToFr(t.due).slice(0,5)+' · '+plainLinks(t.title)+(t.client?' ('+t.client+')':''))],
+    ];
+    const kpis=[[signed.length,'signé'+(signed.length>1?'s':'')+(signed.length?' · '+mw(mwOf(signed)):'')],[offers.length,'offre'+(offers.length>1?'s':'')+' remise'+(offers.length>1?'s':'')],[moves.size,'avancée'+(moves.size>1?'s':'')+' de dossier'],[done.length,'tâche'+(done.length>1?'s':'')+' faite'+(done.length>1?'s':'')]];
+    return { W, sections, kpis };
+  }
+  function weekText(d){ return [d.W.label].concat(d.kpis.map(([n,l])=>n+' '+l).join(' · '), ...d.sections.filter(s=>s[1].length).map(([h,l])=>['', h+' ('+l.length+')'].concat(l.map(x=>'• '+x)).join('\n'))).join('\n'); }
+  function weekHtml(d){
+    const e=escapeHtml;
+    return '<p style="font:600 14px Arial;margin:0 0 4px">'+e(d.W.label)+'</p><p style="font:12px Arial;color:#555;margin:0 0 10px">'+e(d.kpis.map(([n,l])=>n+' '+l).join(' · '))+'</p>'
+      +d.sections.filter(s=>s[1].length).map(([h,l])=>'<p style="font:700 12px Arial;color:#1A7B8C;margin:10px 0 4px">'+e(h)+' ('+l.length+')</p><ul style="margin:0;padding-left:18px;font:12px Arial;color:#111">'+l.map(x=>'<li>'+e(x)+'</li>').join('')+'</ul>').join('');
+  }
+  function openWeek(which){
+    which=which||'this'; let ov=$('week-overlay');
+    if(!ov){ ov=document.createElement('div'); ov.id='week-overlay'; ov.className='modal-overlay';
+      ov.innerHTML='<div class="modal-box wide wk-box" role="dialog" aria-labelledby="wk-title"><div class="wk-head"><h3 id="wk-title">Ma semaine</h3><div class="wk-switch"><button type="button" data-w="this">Cette semaine</button><button type="button" data-w="last">Semaine dernière</button></div><button type="button" class="modal-x wk-x" aria-label="Fermer">×</button></div>'
+        +'<div class="wk-kpis"></div><div class="wk-body"></div><div class="crm-form-actions"><button type="button" class="wk-copy">Copier pour mail / Teams</button><button type="button" class="ghost-btn wk-close">Fermer</button></div></div>';
+      document.body.appendChild(ov);
+      const close=()=>ov.classList.add('hidden');
+      ov.addEventListener('click', e=>{ if(e.target===ov) close(); }); ov.querySelector('.wk-x').onclick=close; ov.querySelector('.wk-close').onclick=close;
+      ov.addEventListener('keydown', e=>{ if(e.key==='Escape'){ e.stopPropagation(); close(); } });
+      ov.querySelectorAll('.wk-switch button').forEach(b=>{ b.onclick=()=>openWeek(b.dataset.w); }); }
+    const d=weekData(which);
+    ov.querySelectorAll('.wk-switch button').forEach(b=>b.classList.toggle('on', b.dataset.w===which));
+    const k=ov.querySelector('.wk-kpis'); k.innerHTML=''; d.kpis.forEach(([n,l])=>{ const c=document.createElement('div'); c.innerHTML='<b></b><span></span>'; c.firstChild.textContent=n; c.lastChild.textContent=l; k.appendChild(c); });
+    const body=ov.querySelector('.wk-body'); body.innerHTML='';
+    const filled=d.sections.filter(s=>s[1].length);
+    if(!filled.length) body.innerHTML='<p class="modal-hint">Rien de noté pour cette semaine pour l’instant.</p>';
+    filled.forEach(([h,l])=>{ const sec=document.createElement('section'); sec.className='wk-sec'; const t=document.createElement('h4'); t.textContent=h+' · '+l.length; sec.appendChild(t);
+      const ul=document.createElement('ul'); l.slice(0,30).forEach(x=>{ const li=document.createElement('li'); li.textContent=x; ul.appendChild(li); }); if(l.length>30){ const li=document.createElement('li'); li.className='wk-more'; li.textContent='+ '+(l.length-30)+' autres (dans la copie)'; ul.appendChild(li); }
+      sec.appendChild(ul); body.appendChild(sec); });
+    ov.querySelector('.wk-copy').onclick=async e=>{ const btn=e.currentTarget, html=weekHtml(d), text=weekText(d);
+      try{ await navigator.clipboard.write([new ClipboardItem({ 'text/html':new Blob([html],{ type:'text/html' }), 'text/plain':new Blob([text],{ type:'text/plain' }) })]); flashBtn(btn,'✓ Copié'); } catch(err){ copyToClipboard(text, btn); } };
+    ov.classList.remove('hidden');
+  }
+  window.todoOpenWeek=openWeek;
+  window.todoWeekText=w=>weekText(weekData(w||'this'));
+  window.todoExtraCommands=(window.todoExtraCommands||[]).concat([{ t:'Ma semaine : résumé à copier', k:'semaine resume hebdo bilan rapport manager mail', go:()=>openWeek('this') }]);
   function updatePostitTab(){
     const n=notes.find(x=>x.id===POSTIT_ID && !x.deleted);
     const first=n ? ((n.text||'').split('\n').map(l=>l.trim()).find(Boolean)||'') : '';
@@ -7002,7 +7076,7 @@
   window.addEventListener('keydown', e=>{
     if(e.key!=='Escape') return;
     const top=[['stage-advance-overlay',closeStageAdvance],['company-edit-overlay',closeCompanyEditForm],['ct-merge-overlay',()=>$('ct-merge-close').click()],
-      ['sig-paste-overlay',()=>$('sig-paste-cancel').click()],['vcf-overlay',()=>$('vcf-close').click()]].find(([id])=>{ const o=$(id); return o && !o.classList.contains('hidden'); });
+      ['sig-paste-overlay',()=>$('sig-paste-cancel').click()],['week-overlay',()=>$('week-overlay').classList.add('hidden')],['daynotes-overlay',()=>$('daynotes-overlay').classList.add('hidden')],['vcf-overlay',()=>$('vcf-close').click()]].find(([id])=>{ const o=$(id); return o && !o.classList.contains('hidden'); });
     if(!top || !$('choice-overlay').classList.contains('hidden')) return;
     e.preventDefault(); e.stopImmediatePropagation(); top[1]();
   }, true);
