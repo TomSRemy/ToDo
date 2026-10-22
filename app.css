@@ -1806,3 +1806,9 @@ html.lite .pipe-pick{ display:none; }
 .pl-table td.pl-num{ font-family:var(--font-mono); text-align:right; }
 .pl-table tr.out td{ opacity:.5; }
 body.postit-open #pipeline-board.pipe-list{ padding-bottom:300px; }
+/* « Étape suivante » : the date and its shortcuts on the left, the urgency at its natural height, buttons on one line */
+#stage-due-row{ align-items:flex-start; }
+#stage-due-row .qd{ flex:1; min-width:0; }
+#stage-due-row select{ flex:0 0 140px; }
+#stage-advance-overlay .crm-form-actions{ flex-wrap:wrap; }
+#stage-advance-overlay .crm-form-actions button{ white-space:nowrap; }

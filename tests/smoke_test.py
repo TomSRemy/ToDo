@@ -313,7 +313,7 @@ with sync_playwright() as p:
     check(page.is_visible("#gs-overlay") and page.evaluate("document.activeElement.id") == "gs-input", "search: Ctrl+K opens the global search")
     page.keyboard.type("durand")
     groups = page.eval_on_selector_all("#gs-results .gs-group", "els=>els.map(e=>e.textContent)")
-    check(groups == ["Tâches", "Contacts", "Pipeline", "Nouvelle tâche"] and page.locator("#gs-results .gs-item").count() == 5,
+    check(groups == ["Contacts", "Pipeline", "Tâches", "Nouvelle tâche"] and page.locator("#gs-results .gs-item").count() == 5,
           f"search: tasks (archived too), contacts and pipeline found at once ({groups})")
     page.fill("#gs-input", "0612000099")
     check("Paul Durand" in page.inner_text("#gs-results"), "search: a contact found by phone number")
@@ -730,6 +730,20 @@ with sync_playwright() as p:
     check(page.locator(".pl-table tbody tr").count() == 1, "pipeline list: the search filters it")
     page.click(".pl-table tbody tr"); page.wait_for_timeout(200)
     check(page.is_visible("#opp-detail-overlay") and "Toit A" in page.inner_text("#opp-detail-title"), "pipeline list: a click opens the sheet")
+    check(not errors, f"no page errors ({errors})")
+    page.close()
+
+    # --- the browser's Back button: closes the sheet on screen, then goes back to the previous tab; never leaves the app
+    page, errors = new_page(browser, {"todo_todo-widget-opportunities": json.dumps([{"id": "bk1", "kind": "installation", "company": "BACK", "centrale": "Toit", "title": "Toit", "stage": "collecte", "createdAt": 1, "updatedAt": 1, "deleted": False}])}, viewport={"width": 1300, "height": 850})
+    page.goto(URL); page.wait_for_timeout(300); start = page.url
+    page.click('[data-tab="tasks"]'); page.click('[data-tab="pipeline"]'); page.click(".pipe-card[data-id=bk1]"); page.wait_for_timeout(200)
+    page.go_back(); page.wait_for_timeout(300)
+    check(not page.is_visible("#opp-detail-overlay") and page.is_visible("#tab-pipeline") and page.url == start, "Back: closes the open sheet, stays in the app")
+    page.go_back(); page.wait_for_timeout(300)
+    check(page.is_visible("#tab-tasks") and page.url == start, "Back: then the previous tab")
+    page.click('[data-tab="pipeline"]'); page.click(".pipe-card[data-id=bk1]"); page.click("#opp-detail-actions >> text=Fermer"); page.wait_for_timeout(200)
+    page.go_back(); page.wait_for_timeout(300)
+    check(page.is_visible("#tab-tasks"), "Back: a sheet closed on screen leaves no extra step")
     check(not errors, f"no page errors ({errors})")
     page.close()
 
@@ -1201,7 +1215,9 @@ with sync_playwright() as p:
     page.goto(URL); page.click('[data-tab="pipeline"]'); page.locator(".pipe-req-name", has_text="Centrale 1").click()
     check(page.locator("#opp-detail-body .stage-scope button.on").inner_text() == "Toutes les installations (3)", "batch: by default a stage applies to all the installations")
     check(page.inner_text("#opp-detail-sum") == "3 installations", "sheet: the header sums up the opportunity (installations · power · technology · volume)")
-    page.click("#opp-detail-body .opp-stage-step:has-text('Demande de prix')"); page.wait_for_timeout(200)
+    page.click("#opp-detail-body .opp-stage-step:has-text('Demande de prix')"); page.wait_for_timeout(100)
+    check(page.is_visible("#choice-overlay") and "2 étapes" in page.inner_text("#choice-text"), "step track: jumping over a step is asked first")
+    page.click("#choice-btns >> text=Avancer"); page.wait_for_timeout(200)
     st_ = {o["id"]: o.get("stage") for o in stored(page, "todo-widget-opportunities")}
     check(st_["b1"] == st_["b2"] == st_["b3"] == "demande_prix", f"batch: the three installations moved together ({st_})")
     page.click("#opp-detail-body .stage-scope button:has-text('Seulement celle-ci')")
@@ -1211,7 +1227,7 @@ with sync_playwright() as p:
     page.click(".opp-back")
     check("1" in page.inner_text("#opp-detail-body .opp-stage-step.current:has-text('Pricing indicatif') .ost-n") and page.locator("#opp-detail-body .req-inst").count() == 3,
           "request sheet: the same step track, with the number of installations at each step")
-    page.click("#opp-detail-body .opp-stage-step:has-text('Négociation')"); page.wait_for_timeout(200)
+    page.click("#opp-detail-body .opp-stage-step:has-text('Négociation')"); page.click("#choice-btns >> text=Avancer"); page.wait_for_timeout(200)
     check(page.inner_text("#opp-detail-edit") == "Modifier les fiches" and page.locator("#opp-detail-body .req-inst-ed").count() == 3, "request sheet: edit buttons in the global view")
     st_ = {o["id"]: o.get("stage") for o in stored(page, "todo-widget-opportunities")}
     check(st_["b1"] == st_["b2"] == st_["b3"] == "negociation", "batch: from the request sheet, all installations to one stage")
@@ -1437,7 +1453,8 @@ with sync_playwright() as p:
     # Go from the installation sheet
     page.click('[data-tab="pipeline"]')
     page.locator('[data-phase="qualif"] .pipe-req-name', has_text="Le Moulin").click()
-    page.click(".opp-stage-step:has-text('Qualification')")
+    page.click(".opp-stage-step:has-text('Qualification')"); page.wait_for_timeout(100)
+    if page.is_visible("#choice-overlay"): page.click("#choice-btns >> text=Avancer")
     page.click("#opp-detail-actions >> text=Go"); page.click("#stage-advance-confirm")
     moulin = next(o for o in opps() if o.get("centrale") == "Le Moulin")
     check(moulin["stage"] == "demande_prix" and moulin.get("goDate"), "Go moves to the pricing request and records the date")
@@ -1587,8 +1604,8 @@ with sync_playwright() as p:
     box = page.inner_text("#pq-count-box")
     check("annonce 3 installations" in box and "600 kWc" in box, f"missing plant flagged against the mail ({box!r})")
     page.click("#pq-add-inst"); page.fill("#pq-2-centrale", "Mairie"); page.fill("#pq-2-kwc", "250"); page.press("#pq-2-kwc", "Tab"); page.wait_for_timeout(200)
-    check("conforme au mail" in page.inner_text("#pq-count-box"), "adding the missing plant makes the count match")
-    page.check("#pq-count-ok"); page.click("#pq-save-btn")
+    check("conforme au mail" in page.inner_text("#pq-count-box") and not page.is_visible("#pq-count-ok"), "adding the missing plant makes the count match: nothing left to confirm")
+    page.click("#pq-save-btn")
     check(len([o for o in stored(page, "todo-widget-opportunities") if o.get("kind") == "installation"]) == 3, "three installations saved after confirmation")
     check(not errors, f"no page errors ({errors})")
     page.close()

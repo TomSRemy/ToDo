@@ -4571,17 +4571,18 @@
     const issues=[];
     if(h.count && h.count!==n) issues.push('Le mail annonce '+h.count+' installations ('+h.source+'), il y en a '+n+' ici : ajoute ou retire une installation, ou confirme si le mail se trompe.');
     if(h.total && sum && Math.abs(sum-h.total)/h.total>0.02) issues.push('Puissance totale annoncée : '+fmtKwc(h.total)+' ; somme des installations : '+fmtKwc(sum)+'.');
-    const need=!st.editId && (n>=2 || issues.length>0);
-    return { n, sum, issues, need, hints:h };
+    // nothing to confirm when the mail's own count matches: the box only tells it; a gap (or no count in the mail) is asked
+    const conforme=!!h.count && h.count===n && !issues.length, show=!st.editId && (n>=2 || issues.length>0), need=show && !conforme;
+    return { n, sum, issues, need, show, conforme, hints:h };
   }
   function pqCountBox(){
-    const c=pqCountCheck(); if(!c.need) return '';
+    const c=pqCountCheck(); if(!c.show) return '';
     const st=pqState, ok=!c.issues.length;
     const list=st.installs.map(i=>(i.centrale||'(sans nom)')+(i.kwc?' '+fmtKwc(i.kwc):'')).join(' · ');
     return '<div class="pq-count '+(ok?'ok':'warn')+'" id="pq-count-box"><div class="pq-count-h">'+(ok?'✓':'⚠')+' '+c.n+' installation'+(c.n>1?'s':'')+(c.sum?' — '+fmtKwc(c.sum)+' au total':'')
       +(ok && c.hints.count?' · conforme au mail ('+escapeHtml(c.hints.source)+')':'')+'</div><div class="pq-count-list">'+escapeHtml(list)+'</div>'
       +c.issues.map(x=>'<div class="pq-count-issue">'+escapeHtml(x)+'</div>').join('')
-      +'<label class="pq-count-ok"><input type="checkbox" id="pq-count-ok"'+(st.countConfirmed===c.n?' checked':'')+'> J\u2019ai vérifié : '+c.n+' installation'+(c.n>1?'s':'')+'</label></div>';
+      +(c.need?'<label class="pq-count-ok"><input type="checkbox" id="pq-count-ok"'+(st.countConfirmed===c.n?' checked':'')+'> J\u2019ai vérifié : '+c.n+' installation'+(c.n>1?'s':'')+'</label>':'')+'</div>';
   }
   // Step 2 « Changer de contact principal »: the step-1 people and the client's contacts
   // ---------- Duplicate contacts: same mail, same phone, or same name in the same company → proposed for merging ----------
@@ -5055,8 +5056,10 @@
         after.push(ob);
       }
       (factsEl||sheet.firstChild).after(...after);
-      box.appendChild(buildRequestCompare(siblings.length>1?siblings:[o], o.id));   // every line of the « Caractéristiques Centrales » file, to fill in place
-      if(!o.requestId) appendPricingMail(box, { company:o.company }, [o]);   // a plant on its own has its pricing mail too
+      const cmp=buildRequestCompare(siblings.length>1?siblings:[o], o.id);   // every line of the « Caractéristiques Centrales » file, to fill in place
+      if(!o.requestId){ const fr=document.createElement('div'), pm=appendPricingMail(fr, { company:o.company }, [o]);   // a plant on its own has its pricing mail too, first at the pricing steps
+        if(pm.mailNow){ box.append(...fr.childNodes); box.appendChild(cmp); } else { box.appendChild(cmp); box.append(...fr.childNodes); } }
+      else box.appendChild(cmp);
       if(isExited(o)){
         actions.appendChild(oppActionBtn('Réactiver', ()=>{ o.stage=o.stageBeforeExit||'a_qualifier'; o.lostAt=null; touchCrm(o); saveCrm(); renderPipeline(); openOppDetail(o.id); }));
       } else {
@@ -5261,8 +5264,13 @@
     const mainMail=(o.mail||'').toLowerCase();
     const others=(o.otherContactIds||[]).map(id=>contacts.find(c=>c.id===id)).filter(c=>c && !c.deleted && !(mainMail && (c.email||'').toLowerCase()===mainMail));
     const contactRows=[['Producteur',[o.producteur||o.company, o.marche].filter(Boolean).join(' · ')]];
-    if(mainName||o.tel||o.mail) contactRows.push({ node:person(mainName, o.qualite, phones(o.tel), o.mail, true) });
-    else contactRows.push(['Contact principal','']);
+    // what the sheet lacks is taken from the contact known by the same mail (name, role, phones)
+    const crm=mainMail && contacts.find(c=>!c.deleted && (c.email||'').toLowerCase()===mainMail);
+    const crmName=crm?[crm.firstName,crm.lastName].filter(Boolean).join(' '):'', crmTels=crm?[crm.phone1,crm.phone2].filter(Boolean).join(' / '):'';
+    if(mainName||o.tel||o.mail) contactRows.push({ node:person(mainName||crmName, o.qualite||(crm&&crm.role), phones(o.tel||crmTels), o.mail, true) });
+    else { const team=contacts.filter(c=>!c.deleted && c.company && sameCo(c.company, o.company)).slice(0,3);   // no main contact: the company's people
+      if(team.length) team.forEach(c=>contactRows.push({ node:person([c.firstName,c.lastName].filter(Boolean).join(' '), [c.role,'contact de '+c.company].filter(Boolean).join(' · '), phones([c.phone1,c.phone2].filter(Boolean).join(' / ')), c.email, false) }));
+      else contactRows.push(['Contact principal','']); }
     others.forEach(c=>contactRows.push({ node:person([c.firstName,c.lastName].filter(Boolean).join(' '), c.role, phones([c.phone1,c.phone2].filter(Boolean).join(' / ')), c.email, false) }));
     { const people=contacts.filter(c=>!c.deleted && ((mainMail && (c.email||'').toLowerCase()===mainMail) || (o.otherContactIds||[]).includes(c.id)));
       const dup=contactDupGroups().find(g=>g.filter(c=>people.includes(c)).length>1 || (g.some(c=>people.includes(c)) && g.some(c=>mainMail && (c.email||'').toLowerCase()===mainMail) && g.length>1));
@@ -5328,7 +5336,13 @@
         const cls=row.className.split(' ')[1];
         row.innerHTML='<span class="ost-mark">'+(cls==='done'?'✓':cls==='current'?'●':'')+'</span><span class="ost-l">'+escapeHtml(st.label)+'</span><span class="ost-m">'+(st.who!=='Com'?'<span class="ost-who">'+st.who+'</span>':'')+(list.length>1&&n?'<b class="ost-n">'+n+'</b>':'')+'</span>';
         row.title=list.length>1?'Placer les '+list.length+' installations à cette étape':'Placer l\u2019installation à cette étape';
-        row.onclick=()=>{ if(list.every(x=>x.stage===st.key)) return; onPick(st.key); };
+        row.onclick=async()=>{ if(list.every(x=>x.stage===st.key)) return;
+          // one step forward: at once; several steps at a time, or back: asked first (a click on the wrong line is easy)
+          const from=lo<0?-1:lo, to=stageIndex(st.key), cur=OPP_STAGES[from];
+          if(from>=0 && (to>from+1 || to<from)){
+            const v=await askChoice(to<from?'Revenir en arrière ?':'Sauter des étapes ?', (list.length>1?list.length+' installations : ':'')+'de « '+(cur?cur.label:'')+' » à « '+st.label+' »'+(to>from+1?' ('+(to-from)+' étapes d\u2019un coup)':'')+'.', [{ label:to<from?'Revenir':'Avancer', value:'y' }]);
+            if(v!=='y') return; }
+          onPick(st.key); };
         g.appendChild(row);
       });
       track.appendChild(g);
@@ -5505,8 +5519,9 @@
       box.appendChild(sh);
       box.appendChild(buildStageTrack(liveReq, key=>{ liveReq.forEach(o=>{ if(o.stage!==key) setOppStage(o, key); }); openRequestDetail(reqId); }));
     }
-    if(list.length) box.appendChild(buildRequestCompare(list, null));
-    const pm=appendPricingMail(box, req, list), mailNow=pm.mailNow;
+    // at the pricing steps the mail is the thing to do: it comes before the long characteristics table
+    const mailFrag=document.createElement('div'), pm=appendPricingMail(mailFrag, req, list), mailNow=pm.mailNow, cmp=list.length?buildRequestCompare(list, null):null;
+    if(mailNow){ box.append(...mailFrag.childNodes); if(cmp) box.appendChild(cmp); } else { if(cmp) box.appendChild(cmp); box.append(...mailFrag.childNodes); }
     const actions=$('opp-detail-actions'); actions.innerHTML='';
     const live=list.filter(o=>!isExited(o));
     if(live.length){
@@ -7873,6 +7888,7 @@
     opportunities.filter(o=>!o.deleted).forEach(o=>add(o.company)); clientsList.forEach(add);
     return [...m.values()];
   }
+  const reqLabelOf=o=>{ const r=o.requestId && opportunities.find(x=>x.id===o.requestId); return r && !r.deleted?r.label||'':''; };
   function gsSearch(q){
     const words=pqFold(q).split(/\s+/).filter(Boolean); if(!words.length) return [];
     const hit=(...parts)=>{ const s=pqFold(parts.filter(Boolean).join(' ')); return words.every(w=>s.includes(w)); };
@@ -7880,14 +7896,18 @@
     const top=(list,n)=>list.sort((a,b)=>score(a.title)-score(b.title)||a.title.localeCompare(b.title,'fr')).slice(0,n);
     const groups=[];
     const tk=top(tasks.filter(t=>!t.deleted && hit(t.title,t.client,t.project,t.description)).map(t=>({ ic:t.archived?'✓':'T', title:plainLinks(t.title), sub:[t.client, t.archived?'archivée':(t.due?'pour le '+t.due.split('-').reverse().join('/'):'')].filter(Boolean).join(' · '), go:()=>openTaskEverywhere(t.id) })),6);
-    if(tk.length) groups.push(['Tâches',tk]);
     const ct=top(activeContacts().filter(c=>hit(c.firstName,c.lastName,c.company,c.role,c.email,(c.phone1||'').replace(/\D/g,''),(c.phone2||'').replace(/\D/g,''))).map(c=>({ ic:((c.firstName||'')[0]||'')+((c.lastName||'')[0]||'')||'?', title:[c.firstName,c.lastName].filter(Boolean).join(' ')||'(sans nom)', sub:[c.role,c.company,c.phone1].filter(Boolean).join(' · '), go:()=>openContactEverywhere(c.id) })),5);
     if(ct.length) groups.push(['Contacts',ct]);
     const co=top(allCompanyNames().filter(n=>hit(n)).map(n=>{ const nC=activeContacts().filter(c=>c.company===n).length, nO=activeOpportunities().filter(o=>o.company===n).length;
       return { ic:'S', title:n, sub:[nC?nC+' contact'+(nC>1?'s':''):'', nO?nO+' opportunité'+(nO>1?'s':''):''].filter(Boolean).join(' · ')||'Société', go:()=>openCompany(n) }; }),5);
     if(co.length) groups.push(['Sociétés',co]);
-    const op=top(opportunities.filter(o=>!o.deleted && o.kind!=='request' && hit(oppName(o),o.company,o.producteur,o.dept,o.commune)).map(o=>({ ic:'P', title:oppName(o), sub:[o.company, stageLabel(o.stage)].filter(Boolean).join(' · '), right:fmtKwc(o.kwc), go:()=>{ gsTab('pipeline'); setTimeout(()=>openOppDetail(o.id),30); } })),6);
+    const op=top(opportunities.filter(o=>!o.deleted && o.kind!=='request' && hit(oppName(o),o.company,o.producteur,o.dept,o.commune,o.cp,o.spv,o.siret,o.charge,reqLabelOf(o),codeAffaire(o))).map(o=>({ ic:'P', title:oppName(o), sub:[o.company, stageLabel(o.stage)].filter(Boolean).join(' · '), right:fmtKwc(o.kwc), go:()=>{ gsTab('pipeline'); setTimeout(()=>openOppDetail(o.id),30); } })),6);
     if(op.length) groups.push(['Pipeline',op]);
+    // a block named by hand (« Lot toitures »): the request itself
+    const rq=opportunities.filter(r=>!r.deleted && r.kind==='request' && r.label && hit(r.label, r.company)).slice(0,3).map(r=>({ ic:'▦', title:r.company+' · '+r.label, sub:requestInstalls(r.id).length+' installations', go:()=>{ gsTab('pipeline'); setTimeout(()=>openRequestDetail(r.id),30); } }));
+    if(rq.length) groups.push(['Blocs',rq]);
+    // the tasks after the people, companies and deals: « Pierre » + Entrée opens Pierre, not « Appeler Pierre »
+    if(tk.length) groups.push(['Tâches',tk]);
     const nl=[]; dayNotes().forEach(d=>d.text.split('\n').forEach(l=>{ if(l.trim() && hit(l)) nl.push({ ic:'✎', title:plainLinks(l.replace(PI_DONE,'')), sub:'Note du '+pqIsoToFr(d.day), go:()=>openDayNotes(d.day) }); }));
     if(nl.length) groups.push(['Notes', nl.slice(0,5)]);
     if(parcData===null) loadParc();
@@ -7972,6 +7992,34 @@
   $('gs-overlay').addEventListener('click', e=>{ if(e.target.id==='gs-overlay') gsClose(); });
   $('gs-open-btn').onclick=()=>gsOpen(); $('gs-open-lite').onclick=()=>gsOpen();
 
+  // ---------- the browser's (or the phone's) Back button: it closes the sheet or window on screen, else goes back to the
+  // previous tab — it no longer leaves the app. The opportunity form stays put (Back must not throw away what was typed).
+  if(!window.TODO_WIDGET && window.history && history.pushState){
+    const openOverlays=()=>[...document.querySelectorAll('.modal-overlay:not(.hidden)')].concat($('gs-overlay') && !$('gs-overlay').hidden?[$('gs-overlay')]:[]);
+    let known=new Set(), ignorePop=0, restoring=false;
+    const curTab=()=>{ const t=document.querySelector('.tab.active'); return t?t.dataset.tab:null; };
+    try{ history.replaceState({ todo:'tab', tab:curTab() }, ''); }catch(e){}
+    const watch=()=>{ const now=new Set(openOverlays());
+      now.forEach(o=>{ if(!known.has(o)){ try{ history.pushState({ todo:'ov' }, ''); }catch(e){} } });
+      known.forEach(o=>{ if(!now.has(o) && !restoring && history.state && history.state.todo==='ov'){ ignorePop++; history.back(); } });   // closed on screen: its step in the history goes too
+      known=now; };
+    new MutationObserver(()=>setTimeout(watch,0)).observe(document.body, { subtree:true, attributes:true, attributeFilter:['class','hidden'], childList:true });
+    document.addEventListener('click', e=>{ const t=e.target.closest && e.target.closest('.tab[data-tab]'); if(!t || restoring) return;
+      setTimeout(()=>{ const tab=curTab(); if(tab && !(history.state && history.state.tab===tab)){ try{ history.pushState({ todo:'tab', tab }, ''); }catch(err){} } }, 0); }, true);
+    window.addEventListener('popstate', e=>{
+      if(ignorePop>0){ ignorePop--; return; }
+      const open=openOverlays();
+      if(open.length){
+        const top=open[open.length-1];
+        if(top.id==='pq-overlay'){ try{ history.pushState({ todo:'ov' }, ''); }catch(err){} return; }
+        restoring=true; document.dispatchEvent(new KeyboardEvent('keydown', { key:'Escape', bubbles:true, cancelable:true }));
+        if(!top.classList.contains('hidden') && top.id!=='gs-overlay'){ const x=top.querySelector('.modal-x, [id$="-close"], .ghost-btn'); if(x) x.click(); else top.classList.add('hidden'); }
+        if(top.id==='gs-overlay') gsClose();
+        setTimeout(()=>{ known=new Set(openOverlays()); restoring=false; }, 0); return;
+      }
+      const st=e.state; if(st && st.todo==='tab' && st.tab && st.tab!==curTab()){ restoring=true; const t=document.querySelector('.tab[data-tab="'+st.tab+'"]'); if(t) t.click(); setTimeout(()=>{ restoring=false; }, 0); }
+    });
+  }
   // ---------- widget mode: the tasks tab in a floating panel opened from a draggable bubble ----------
   // from the app: « Widget » opens the tasks in a small window of their own, kept above the other windows (Chrome / Edge),
   // or else in a small separate window — no longer a bubble inside this same page
