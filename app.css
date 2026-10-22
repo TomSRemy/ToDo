@@ -643,8 +643,8 @@
   html.lite .today-watch{ padding:0 0 24px; }
   html.lite .today-watch .tw-row{ padding:10px 14px; } html.lite .tw-hint{ padding-left:14px; }
   #pipeline-board.pipe-dash{ display:flex; flex-direction:column; gap:16px; padding:18px 20px 30px; overflow:visible; }
-  .pd-kpis{ display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:10px; }
-  .pd-grid{ display:grid; grid-template-columns:repeat(auto-fit,minmax(320px,1fr)); gap:14px; align-items:start; }
+  .pd-kpis{ display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:10px; align-self:stretch; }
+  .pd-grid{ display:grid; grid-template-columns:repeat(auto-fit,minmax(320px,1fr)); gap:14px; align-items:start; align-self:stretch; }
   .pd-card{ border:1px solid var(--bd); border-radius:8px; background:var(--panel); padding:14px 16px; display:flex; flex-direction:column; gap:8px; min-width:0; }
   .pd-card h4{ margin:0; font:500 10.5px var(--font-mono); text-transform:uppercase; letter-spacing:.6px; color:var(--tx3); }
   .pd-hint{ margin:0; font-size:12px; color:var(--tx3); line-height:1.45; }
