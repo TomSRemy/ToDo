@@ -3378,7 +3378,12 @@
       if(name) inst.centrale=name.charAt(0).toUpperCase()+name.slice(1);
       const d=inst.cp?pqDeptFromPostal(inst.cp):pqDeptFromText(s); if(d){ inst.dept=pqDeptLabel(d); inst.region=PQ_REGIONS[d[2]]; }
       const rest=s.slice(pm.index+pm[0].length);
-      if(/mes|service|msi|cod|\d{1,2}\/\d{4}/i.test(rest)){ const dt=pqParseDateLoose(rest); if(dt) inst.mesPrev=dt; }
+      if(/mes|service|msi|cod|\d{1,2}\/\d{4}/i.test(rest)){ const dt=pqParseDateLoose(rest.replace(/\b(?:p50|p90|production|productible)\b[^,;]*/gi,'')); if(dt) inst.mesPrev=dt; }
+      // its own yearly production (« P50 2 900 MWh/an ») and place (« Prayssac (46220) »)
+      const pe=/(?:p50|production|productible)?\s*:?\s*(\d[\d\s\u202f.,]*)\s*(gwh|mwh)\b/i.exec(rest);
+      if(pe && !/p90/i.test(rest.slice(Math.max(0,pe.index-6), pe.index+4))){ let e=pqNum(pe[1].replace(/[\s\u202f]/g,'')); if(/^g/i.test(pe[2])) e*=1000; if(e>0) inst.mwh=String(Math.round(e)); }
+      const place=/([A-ZÉÈÀÂÎÔÛ][\p{L}'’ -]{1,40}?)\s*\(\s*((?:0[1-9]|[1-8]\d|9[0-5])\d{3}|97[1-6]\d{2})\s*\)/u.exec(rest);
+      if(place && !inst.cp){ inst.commune=place[1].trim(); inst.cp=place[2]; const dp=pqDeptFromPostal(inst.cp); if(dp){ inst.dept=pqDeptLabel(dp); inst.region=PQ_REGIONS[dp[2]]; } }
       // what follows the power ("– Injection totale.", "– Autoconsommation prévisionnelle de 10 %, à confirmer.")
       const note=rest.replace(/^[\s,;:–—-]+/,'').replace(/[.\s]+$/,'').trim();
       if(note && note.length<=120 && !/^(mes|msi|cod)\b/i.test(note)) inst.particularites=note;
@@ -4763,8 +4768,15 @@
       });
     } else if(xlsInstalls && xlsInstalls.length){
       const base=Object.assign({}, st.installs[0]);
+      // what the mail says for all of them (contract, duration, dates) goes to each plant; the kind of plant (toiture,
+      // ombrière, au sol…) is each one's own, from its name — not every kind mentioned piled on the first one
+      const KIND=[[/toitur/i,'Toiture'],[/ombri/i,'Ombrière'],[/\bau sol\b|\bsol\b/i,'Au sol'],[/hangar/i,'Hangar'],[/agrivolt/i,'Agrivoltaïsme']];
+      const sharedNotes=xlsInstalls.length>1?String(base.particularites||'').split(/\s*·\s*/).filter(t=>t && !KIND.some(([,w])=>w.toLowerCase()===t.toLowerCase())):null;
       st.installs=xlsInstalls.map((x,i)=>{
-        const inst=Object.assign({}, i===0?base:{install:base.install, contrat:base.contrat, dept:base.dept, region:base.region}, x);
+        const common={ install:base.install, contrat:base.contrat, dept:base.dept, region:base.region, duree:base.duree, debut:base.debut, fin:base.fin };
+        Object.keys(common).forEach(k=>{ if(common[k]==null || common[k]==='') delete common[k]; });
+        const inst=Object.assign({}, i===0?base:common, x);
+        if(sharedNotes){ const kinds=KIND.filter(([re])=>re.test(x.centrale||'')).map(([,w])=>w); const pt=kinds.concat(sharedNotes).concat(x.particularites?[x.particularites]:[]); if(pt.length) inst.particularites=[...new Set(pt)].join(' · '); else delete inst.particularites; }
         Object.keys(x).forEach(k=>st.auto.add(i+'.'+k));
         return inst;
       });

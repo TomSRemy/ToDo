@@ -1568,6 +1568,17 @@ with sync_playwright() as p:
     check(not errors, f"no page errors ({errors})")
     page.close()
 
+    # --- a mail listing its plants one per line: each one's P50, town and postal code; the shared terms (duration) on every plant
+    page, errors = new_page(browser)
+    page.goto(URL); page.click('[data-tab="pipeline"]'); page.click("#opp-add-btn"); page.fill("#pq1-company", "SCEA LIGNES"); page.click("#pq-next-btn")
+    page.fill("#pq-mail", "De : P L <p@lignes.fr>\nObjet : Projets PV\n\nNous avons deux centrales lauréates AO CRE :\n- Toiture Les Pins : 2,4 MWc, MES prévue juin 2027, P50 2 900 MWh/an, Prayssac (46220)\n"
+              "- Ombrière Le Lac : 1,8 MWc, MES septembre 2027, P50 2 100 MWh/an, Puy-l'Évêque (46700)\nPouvez-vous nous faire une offre d'agrégation sur 3 ans ?\nP L"); page.wait_for_timeout(500)
+    got = [[page.input_value(f"#pq-{i}-{k}") for k in ("mwh", "commune", "cp", "duree", "particularites")] for i in (0, 1)]
+    check(got == [["2900", "Prayssac", "46220", "3", "Toiture · Lauréat AO"], ["2100", "Puy-l'Évêque", "46700", "3", "Ombrière · Lauréat AO"]],
+          f"mail with one plant per line: each one's P50, town, postal code, kind; the duration for all ({got})")
+    check(not errors, f"no page errors ({errors})")
+    page.close()
+
     # --- Qualification: the number of plants announced by the mail is checked against the installations found
     page, errors = new_page(browser)
     page.goto(URL); page.click('[data-tab="pipeline"]'); page.click("#opp-add-btn"); page.fill("#pq1-company", "SEM"); page.click("#pq-next-btn")
