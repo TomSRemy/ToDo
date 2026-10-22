@@ -4848,7 +4848,7 @@
         if(r.node){ c.appendChild(r.node); return; }
         const [label,val,opt]=r; if(!val){ if(!(opt&&opt.optional)) missing.push(label); return; }
         const row=document.createElement('div'); row.className='os-row'+(opt&&opt.wide?' wide':'');
-        const l=document.createElement('span'); l.textContent=label; const b=document.createElement('b'); b.textContent=val;
+        const l=document.createElement('span'); l.textContent=label; const b=document.createElement('b'); if(String(val).includes('[[')) renderLinked(b, String(val)); else b.textContent=val;
         if(opt&&opt.copy) copyVal(b, val);
         if(opt&&opt.late) b.classList.add('late');
         row.append(l,b); c.appendChild(row);
