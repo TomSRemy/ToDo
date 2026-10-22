@@ -452,6 +452,10 @@ with sync_playwright() as p:
     page.fill("#ct-last", "Durant"); page.click("#contact-save-btn"); page.wait_for_timeout(300)
     lk = next(x for x in stored(page, "todo-widget-tasks") if x["id"] == "lk")["title"]
     check(lk == "Appeler [[Paul Durant]] demain" and not errors, f"links: renaming a contact updates the links to it ({lk!r})")
+    page.locator("body").click(position={"x": 5, "y": 5}); page.keyboard.press("Control+z"); page.wait_for_timeout(400)
+    lk2 = next(x for x in stored(page, "todo-widget-tasks") if x["id"] == "lk")["title"]
+    ln2 = next(c for c in stored(page, "todo-widget-contacts") if c["id"] == "lc1")["lastName"]
+    check(lk2 == "Appeler [[Paul Durand]] demain" and ln2 == "Durand", f"links: Ctrl+Z puts back the name and its links together ({lk2!r}, {ln2!r})")
     page.close()
 
     # --- Recurring tasks: monthly keeps its day (31 jan → 28 feb → 31 mar), done late → the next one after today
