@@ -1148,7 +1148,10 @@ with sync_playwright() as p:
 
     # --- Phone version (index.html?lite): bottom bar, fewer features, pipeline read-only
     page, errors = new_page(browser, {"todo_todo-widget-opportunities": json.dumps([{"id": "i3", "kind": "installation", "company": "Solaris",
-        "centrale": "Moulin Neuf", "title": "Moulin Neuf", "stage": "negociation", "createdAt": 1, "updatedAt": 1, "deleted": False}])},
+        "centrale": "Moulin Neuf", "title": "Moulin Neuf", "stage": "negociation", "createdAt": 1, "updatedAt": 1, "deleted": False},
+        {"id": "rqP", "kind": "request", "company": "Ventus", "title": "Demande de pricing", "createdAt": 1, "updatedAt": 1, "deleted": False}] +
+        [{"id": f"iP{k}", "kind": "installation", "company": "Ventus", "centrale": f"Parc {k}", "title": f"Parc {k}", "kwc": "900", "requestId": "rqP", "stage": "collecte",
+          "createdAt": 1, "updatedAt": 1, "deleted": False} for k in (1, 2)])},
         viewport={"width": 390, "height": 800}, is_mobile=True, has_touch=True)
     page.goto(URL + "?lite")
     check(page.is_visible("#lite-nav") and not page.is_visible(".app-sidebar"), "phone version: bottom bar instead of the sidebar")
@@ -1160,6 +1163,11 @@ with sync_playwright() as p:
     page.click(".pipe-card:has-text('Moulin Neuf')")
     visible = page.eval_on_selector_all("#opp-detail-actions button", "els=>els.filter(e=>e.offsetParent).map(e=>e.textContent)")
     check(visible == ["Fermer"], f"phone version: installation sheet is read-only ({visible})")
+    page.click("#opp-detail-actions >> text=Fermer"); page.locator(".pipe-req-card .pipe-card-title", has_text="Demande").click()
+    ro = page.evaluate("""[[...document.querySelectorAll('#opp-detail-body .req-inst-ed, #opp-detail-body .req-inst-rm, #opp-detail-body .stage-scope')].filter(e=>e.offsetParent).length,
+      [...document.querySelectorAll('#opp-detail-body .req-in')].every(i=>i.readOnly||i.disabled), document.querySelectorAll('#opp-detail-body .req-in').length]""")
+    check(ro[0] == 0 and ro[1] and ro[2] > 0, f"phone version: the request sheet is read-only too ({ro})")
+    page.click("#opp-detail-actions >> text=Fermer")
     check(page.evaluate("document.documentElement.scrollWidth") <= 390, "phone version fits the screen")
     check(not errors, f"no page errors ({errors})")
     page.close()

@@ -4807,6 +4807,7 @@
     });
     t+='</tbody></table>';
     sc.innerHTML=t; wrap.appendChild(sc);
+    if(window.TODO_LITE) sc.querySelectorAll('.req-in').forEach(i=>{ if(i.tagName==='SELECT') i.disabled=true; else i.readOnly=true; });   // phone: read only, like the sheets
     sc.querySelectorAll('.req-col').forEach(b=>{ b.onclick=()=>openOppDetail(b.dataset.id); });
     sc.querySelectorAll('.req-sec-h').forEach(b=>{ b.onclick=()=>{ const tb=b.closest('tbody'), f=!tb.classList.contains('folded'); tb.classList.toggle('folded', f); b.setAttribute('aria-expanded', String(!f)); try{ localStorage.setItem('req-sec-'+tb.dataset.sec, f?'0':'1'); }catch(e){} }; });
     // edits: saved on Enter or when leaving the cell; Escape puts the value back

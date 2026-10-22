@@ -1066,6 +1066,7 @@
   html.lite #opp-detail-actions button:not(.lite-keep){ display:none; }
   html.lite .opp-stage-step, html.lite .opp-onb input{ pointer-events:none; }
   html.lite .opp-req-list .pq-link, html.lite .opp-req-add{ display:none; }
+  html.lite .req-inst-ed, html.lite .req-inst-rm, html.lite .stage-scope, html.lite .req-compare-h .req-hint{ display:none; }
   html.lite .opp-info div:has(b.empty), html.lite .opp-stage-track{ display:none; }
   html.lite .modal-overlay{ padding:10px; align-items:flex-end; }
   html.lite .modal-box{ max-height:calc(100vh - 20px); }
