@@ -1945,6 +1945,35 @@ with sync_playwright() as p:
           f"damaged data: every screen opens, the records repaired ({errors[:2]})")
     page.close()
 
+    # --- « Compléter avec l'IA »: with a key the request goes to Claude (mocked here), without one it is copied and the answer pasted;
+    #     only empty lines are proposed, never over a value, and nothing is filled without a tick
+    ai = [{"id": "ai1", "kind": "installation", "company": "AI", "centrale": "Toit", "title": "Toit", "stage": "collecte", "kwc": "900", "mwh": "1080", "commune": "Cholet", "cp": "49300",
+           "dept": "49 - Maine-et-Loire", "createdAt": 1, "updatedAt": 1, "deleted": False}]
+    answer = {"ai1": {"Latitude": {"v": "47,06", "c": "sûr", "s": "commune de Cholet"}, "Altitude": {"v": "100", "c": "probable", "s": "altitude moyenne"},
+                      "Commune": {"v": "Autre", "c": "sûr"}, "SIRET SPV": {"v": "", "c": "sûr"}, "Ligne inconnue": {"v": "x"}}}
+    page, errors = new_page(browser, {"todo_todo-widget-opportunities": json.dumps(ai), "ai-key": "sk-test"}, viewport={"width": 1300, "height": 850})
+    sent = []
+    def claude_api(route):
+        sent.append(json.loads(route.request.post_data)); route.fulfill(status=200, content_type="application/json", body=json.dumps({"content": [{"type": "text", "text": "Voici :\n```json\n" + json.dumps(answer) + "\n```"}]}))
+    page.route("**/api.anthropic.com/**", claude_api)
+    page.goto(URL); page.click('[data-tab="pipeline"]'); page.locator(".pipe-card", has_text="Toit").first.click()
+    page.click("#opp-detail-body .req-ai"); page.wait_for_selector("#ai-overlay .ai-row", timeout=5000)
+    rows = page.eval_on_selector_all("#ai-overlay .ai-row", "els=>els.map(e=>e.innerText.replace(/\\s+/g,' '))")
+    check(len(sent) == 1 and "Cholet" in sent[0]["messages"][0]["content"] and len(rows) == 2 and any(r.startswith("Latitude : 47,06") for r in rows),
+          f"IA: the sheet's info goes to Claude, only empty lines come back ({rows})")
+    check(page.is_checked("#ai-overlay .ai-row:has-text('Latitude') input") and not page.is_checked("#ai-overlay .ai-row:has-text('Altitude') input"), "IA: a « probable » value is left unticked")
+    page.click("#ai-overlay .ai-fill"); page.wait_for_timeout(200)
+    o = stored(page, "todo-widget-opportunities")[0]
+    check(o.get("commune") == "Cholet" and any(v == "47,06" for v in (o.get("caract") or {}).values()) and not any(v == "100" for v in (o.get("caract") or {}).values()),
+          f"IA: only the ticked lines are filled ({o.get('caract')})")
+    page.evaluate("localStorage.removeItem('ai-key')"); page.click("#opp-detail-body .req-ai"); page.wait_for_timeout(150)
+    page.fill("#ai-answer", json.dumps({"ai1": {"Longitude": {"v": "-0,88", "c": "sûr"}}})); page.click("#ai-overlay .ai-go"); page.wait_for_timeout(150)
+    check(page.locator("#ai-overlay .ai-row").count() == 1 and len(sent) == 1, "IA: without a key, the answer pasted from claude.ai is read the same way")
+    page.fill("#ai-answer", "pas du json"); page.click("#ai-overlay .ai-go"); page.wait_for_timeout(100)
+    check("illisible" in page.inner_text("#ai-overlay"), "IA: a pasted answer that is not JSON says so")
+    check(not errors, f"no page errors ({errors})")
+    page.close()
+
     # --- Keyboard in a sheet: 1 ticks the first box, Entrée moves on and confirms, n opens the notes
     kb = [{"id": "k1", "kind": "installation", "company": "KB", "centrale": "Toit", "title": "Toit", "stage": "kyc", "createdAt": 1, "updatedAt": 1, "deleted": False}]
     page, errors = new_page(browser, {"todo_todo-widget-opportunities": json.dumps(kb)}, viewport={"width": 1400, "height": 900})

@@ -5348,6 +5348,8 @@
     tools.innerHTML='<span>Lignes :</span><button type="button" data-rows="needed">Obligatoires</button><button type="button" data-rows="all">Tout le fichier</button>';
     const paintRows=()=>{ sc.querySelector('.req-table').classList.toggle('only-needed', only); tools.querySelectorAll('button').forEach(b=>b.classList.toggle('on', (b.dataset.rows==='needed')===only)); };
     tools.querySelectorAll('button').forEach(b=>b.onclick=()=>{ only=b.dataset.rows==='needed'; try{ localStorage.setItem('req-rows', only?'needed':'all'); }catch(e){} paintRows(); });
+    if(!window.TODO_LITE){ const ai=document.createElement('button'); ai.type='button'; ai.className='req-ai'; ai.textContent='Compléter avec l\u2019IA'; ai.title='Claude propose ce qui se déduit des infos de la fiche (coordonnées, altitude, région, productible…) ; tu choisis ce qui est rempli';
+      ai.onclick=()=>openAiFill(list.filter(x=>!x.deleted), ()=>{ if(viewingOppId) openOppDetail(viewingOppId); }); tools.appendChild(ai); }
     wrap.appendChild(tools); wrap.appendChild(sc); paintRows();
     if(!window.TODO_LITE) reqFillHandle(sc);
     if(window.TODO_LITE) sc.querySelectorAll('.req-in').forEach(i=>{ if(i.tagName==='SELECT') i.disabled=true; else i.readOnly=true; });   // phone: read only, like the sheets
@@ -5808,6 +5810,81 @@
       if(ctg.length){ const p=document.createElement('p'); p.className='modal-hint dup-ct'; p.innerHTML='<span></span> <button type="button" class="pq-link">Vérifier les contacts</button>'; p.firstChild.textContent=ctg.length+' contact'+(ctg.length>1?'s':'')+' en double possible'+(ctg.length>1?'s':'')+'.'; p.querySelector('button').onclick=()=>{ close(); openContactMerge(); }; body.appendChild(p); }
     };
     paint();
+  }
+  // ---------- « Compléter avec l'IA » : Claude proposes the empty lines of the characteristics file that follow from what the sheet knows ----------
+  // Its key stays on this device (like the GitHub token); without one, the request is copied for claude.ai and the answer pasted back.
+  const AI_MODEL='claude-sonnet-5-5';
+  const aiKey=()=>{ try{ return localStorage.getItem('ai-key')||''; }catch(e){ return ''; } };
+  function aiPrompt(list){
+    const plants=list.map(o=>{ const known={}, empty=[];
+      CARACT_ROWS.forEach(l=>{ const v=caractValue(o,l); if(v!=='' && v!=null) known[l]=String(v); else empty.push(l); });
+      ['commune','cp','dept','region','particularites','install','contrat'].forEach(k=>{ if(o[k] && !Object.values(known).includes(String(o[k]))) known[k]=String(o[k]); });
+      known['Producteur']=o.producteur||o.company||'';
+      return { id:o.id, connu:known, a_completer:empty }; });
+    return ['Tu aides à remplir le fichier « Caractéristiques Centrales » de centrales électriques (photovoltaïque, éolien…) en France, pour une demande de prix d’agrégation.',
+      'Pour chaque centrale ci-dessous, propose une valeur UNIQUEMENT pour les lignes de « a_completer » qui se déduisent de façon fiable de ce qui est « connu » ou d’une connaissance publique générale :',
+      'coordonnées (latitude, longitude en degrés décimaux) et altitude (m) de la commune, département et région, productible typique (kWh/kWc/an) selon le lieu et la techno, P90 ≈ 93 % du P50 si le P50 est connu, nature du projet d’après les particularités, etc.',
+      'N’invente JAMAIS un identifiant ou un fait propre au projet (SIRET, nom de SPV, numéro de raccordement, puissance de raccordement, nombre d’onduleurs, dates) : laisse-les de côté.',
+      'Réponds UNIQUEMENT par un objet JSON, sans texte autour, de la forme :',
+      '{"<id>": {"<libellé exact de la ligne>": {"v": "<valeur>", "c": "sûr" ou "probable", "s": "<d’où vient la valeur, en quelques mots>"}}}',
+      'Garde les libellés exactement comme dans « a_completer ». Nombres au format français (virgule décimale) sans unité.',
+      '', JSON.stringify(plants, null, 1)].join('\n');
+  }
+  function aiParse(text, list){
+    let t=String(text||'').replace(/```(?:json)?/gi,''); const a=t.indexOf('{'), b=t.lastIndexOf('}'); if(a<0 || b<=a) throw new Error('Pas de JSON dans la réponse.');
+    const data=JSON.parse(t.slice(a, b+1)), rows=[];
+    list.forEach(o=>{ const d=data[o.id]; if(!d || typeof d!=='object') return;
+      Object.entries(d).forEach(([label, x])=>{ const l=CARACT_ROWS.find(r=>caractKey(r)===caractKey(label)); if(!l) return;
+        const v=x && typeof x==='object'?x.v:x; if(v==null || String(v).trim()==='' || caractValue(o,l)!=='') return;   // only empty lines, never over what is there
+        rows.push({ o, l, v:String(v).trim(), c:x && x.c||'', s:x && x.s||'' }); }); });
+    return rows;
+  }
+  async function aiAsk(prompt){
+    const r=await fetch('https://api.anthropic.com/v1/messages', { method:'POST', headers:{ 'content-type':'application/json', 'x-api-key':aiKey(), 'anthropic-version':'2023-06-01', 'anthropic-dangerous-direct-browser-access':'true' },
+      body:JSON.stringify({ model:AI_MODEL, max_tokens:4000, messages:[{ role:'user', content:prompt }] }) });
+    const j=await r.json().catch(()=>({}));
+    if(!r.ok) throw new Error(r.status===401?'Clé Claude refusée (Réf. & data).':(j.error && j.error.message)||('Erreur '+r.status));
+    return (j.content||[]).filter(c=>c.type==='text').map(c=>c.text).join('\n');
+  }
+  function openAiFill(list, done){
+    if(!list.length) return;
+    let ov=$('ai-overlay'); if(ov) ov.remove();
+    ov=document.createElement('div'); ov.id='ai-overlay'; ov.className='modal-overlay';
+    ov.innerHTML='<div class="modal-box wide ai-box" role="dialog" aria-labelledby="ai-title"><div class="opp-detail-head"><h3 id="ai-title">Compléter avec l’IA</h3></div><p class="modal-hint ai-hint"></p><div class="ai-ask"></div><div class="ai-rows"></div><div class="crm-form-actions"><button type="button" class="ai-fill" hidden></button><button type="button" class="ghost-btn ai-close">Fermer</button></div></div>';
+    document.body.appendChild(ov);
+    const close=()=>ov.remove();
+    ov.querySelector('.ai-close').onclick=close; ov.addEventListener('click', e=>{ if(e.target===ov) close(); }); ov.addEventListener('keydown', e=>{ if(e.key==='Escape'){ e.stopPropagation(); close(); } });
+    const prompt=aiPrompt(list), empties=list.reduce((n,o)=>n+CARACT_ROWS.filter(l=>caractValue(o,l)==='').length,0);
+    ov.querySelector('.ai-hint').textContent=empties+' case'+(empties>1?'s':'')+' vide'+(empties>1?'s':'')+' sur '+list.length+' installation'+(list.length>1?'s':'')+'. Claude ne propose que ce qui se déduit de la fiche (lieu, techno, production) et n’invente aucun identifiant ; rien n’est rempli sans ton accord.';
+    const ask=ov.querySelector('.ai-ask'), rowsBox=ov.querySelector('.ai-rows'), fill=ov.querySelector('.ai-fill');
+    let rows=[];
+    const show=r=>{ rows=r; rowsBox.innerHTML='';
+      if(!rows.length){ rowsBox.innerHTML='<p class="modal-hint">Rien à proposer de fiable pour les cases vides.</p>'; fill.hidden=true; return; }
+      rows.forEach(x=>{ const l=document.createElement('label'); l.className='qn-row ai-row'; const cb=document.createElement('input'); cb.type='checkbox'; cb.checked=x.c!=='probable'; x.cb=cb;
+        const sp=document.createElement('span'); sp.innerHTML='<b></b> <span class="qn-v"></span> <em></em> <small></small>';
+        sp.querySelector('b').textContent=(list.length>1?oppName(x.o)+' · ':'')+x.l+' :'; sp.querySelector('.qn-v').textContent=x.v; sp.querySelector('em').textContent=x.c==='probable'?'probable':''; sp.querySelector('small').textContent=x.s?'('+x.s+')':'';
+        cb.onchange=paint; l.append(cb, sp); rowsBox.appendChild(l); });
+      paint(); };
+    function paint(){ const n=rows.filter(x=>x.cb.checked).length; fill.hidden=!rows.length; fill.disabled=!n; fill.textContent=n?'Remplir '+n+' case'+(n>1?'s':''):'Rien de coché'; }
+    fill.onclick=()=>{ const ok=rows.filter(x=>x.cb.checked); const touched=new Set(); ok.forEach(x=>{ caractSet(x.o, x.l, x.v); touched.add(x.o); }); touched.forEach(o=>touchCrm(o)); saveCrm(); renderPipeline(); close(); if(done) done(); };
+    const copyBtn=document.createElement('button'); copyBtn.type='button'; copyBtn.className='ghost-btn'; copyBtn.textContent='Copier la demande pour Claude'; copyBtn.onclick=e=>copyToClipboard(prompt, e.target);
+    if(aiKey()){
+      const go=document.createElement('button'); go.type='button'; go.className='ai-go'; go.textContent='Demander à Claude';
+      go.onclick=async()=>{ go.disabled=true; go.textContent='Claude réfléchit…';
+        try{ show(aiParse(await aiAsk(prompt), list)); go.textContent='Redemander'; }catch(err){ rowsBox.innerHTML=''; const p2=document.createElement('p'); p2.className='modal-hint ai-err'; p2.textContent=err.message||String(err); rowsBox.appendChild(p2); go.textContent='Réessayer'; }
+        go.disabled=false; };
+      ask.append(go, copyBtn);
+      setTimeout(()=>go.click(), 0);
+    } else {
+      const steps=document.createElement('ol'); steps.className='ai-steps';
+      steps.innerHTML='<li></li><li>Colle-la dans Claude (claude.ai), puis copie sa réponse.</li><li>Colle la réponse ici :</li>';
+      steps.firstChild.appendChild(copyBtn);
+      const ta=document.createElement('textarea'); ta.className='qn-text ai-answer'; ta.id='ai-answer'; ta.rows=5; ta.placeholder='{ … la réponse de Claude … }';
+      const read=document.createElement('button'); read.type='button'; read.className='ai-go'; read.textContent='Lire la réponse';
+      read.onclick=()=>{ try{ show(aiParse(ta.value, list)); }catch(err){ rowsBox.innerHTML=''; const p2=document.createElement('p'); p2.className='modal-hint ai-err'; p2.textContent='Réponse illisible : '+(err.message||err); rowsBox.appendChild(p2); } };
+      const tip=document.createElement('p'); tip.className='modal-hint'; tip.textContent='Avec une clé Claude enregistrée dans Réf. & data, la demande part directement, sans copier-coller.';
+      ask.append(steps, ta, read, tip);
+    }
   }
   // ---------- Notes express / mode appel: notes typed in bulk, the app spots the figures and offers to fill the sheet ----------
   const QN_LABELS={ kwc:'Puissance', mwh:'P50', p90:'P90', mesPrev:'MES prévisionnelle', mesEff:'MES effective', dept:'Département', commune:'Commune', cp:'Code postal',
@@ -7390,6 +7467,8 @@
   $('pipe-views-btn').onclick=e=>{ e.stopPropagation(); openViewsMenu('pipeline', e.currentTarget); };
   $('pipe-meet-toggle').onclick=()=>{ pipeMeet=!pipeMeet; if(pipeMeet){ pipeDash=false; pipeMap=false; } renderPipeline(); };
   $('pipe-xs-btn').onclick=()=>openExcelSync({ scope:'pipe' });
+  { const st=()=>{ const k=aiKey(); $('ai-key-status').textContent=k?'Clé enregistrée (…'+k.slice(-4)+'). Vide le champ et enregistre pour l\u2019oublier.':'Pas de clé : copier-coller avec claude.ai.'; };
+    if($('ai-key-save')){ $('ai-key-save').onclick=()=>{ const v=$('ai-key-input').value.trim(); try{ if(v) localStorage.setItem('ai-key', v); else localStorage.removeItem('ai-key'); }catch(e){} $('ai-key-input').value=''; st(); }; st(); } }
   if($('parc-xs-btn')){ $('parc-xs-btn').onclick=()=>openExcelSync({ scope:'parc' }); if(ON_PHONE) $('parc-xs-btn').hidden=true; }
   $('pipe-map-toggle').onclick=()=>{ pipeMap=!pipeMap; pipeDash=false; pipeMeet=false; parcMapSel=null; parcMapView=null; renderPipeline(); };
   $('pipe-list-toggle').onclick=()=>{ pipeMap=false; pipeList=!(pipeList && !pipeDash && !pipeMeet); pipeDash=false; pipeMeet=false; try{ localStorage.setItem('pipe-list', pipeList?'1':'0'); }catch(e){} renderPipeline(); };
