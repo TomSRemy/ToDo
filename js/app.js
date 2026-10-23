@@ -1604,7 +1604,7 @@
   }
   // ---------- settings shared between devices: saved views, network layout, goals… ride along in the note as « pref_<key> » fields ----------
   // (merged field by field by the sync; the note's date is left alone so the morning roll is not disturbed)
-  const PREF_PREFIX='pref_', SYNCED_PREFS=['saved-views-tasks','saved-views-pipeline','network-pins','network-hidden','pipe-goals','pipe-meet-phases'];
+  const PREF_PREFIX='pref_', SYNCED_PREFS=['saved-views-tasks','saved-views-pipeline','network-pins','network-hidden','pipe-goals','pipe-meet-phases','pipe-meet-cols','map-color'];
   const lsGet=k=>{ try{ return localStorage.getItem(k); }catch(e){ return null; } }, lsSet=(k,v)=>{ try{ localStorage.setItem(k,v); }catch(e){} };
   function prefsToNote(){
     if(window.TODO_WIDGET) return;
@@ -3794,7 +3794,7 @@
 
 
   // ----- Board -----
-  let pipeShowExited=false, pipeDash=false, pipeMeet=false, pipeList=false, pipeMap=false; try{ pipeList=localStorage.getItem('pipe-list')==='1'; }catch(e){}
+  let pipeShowExited=false, pipeDash=false, pipeMeet=false, pipeList=false, pipeMap=false, meetColsOpen=false; try{ pipeList=localStorage.getItem('pipe-list')==='1'; }catch(e){}
   // ---------- Pipeline dashboard: MWc by phase, time spent at each step, deals that drag ----------
   const kwcNum=o=>parseFloat(String(o.kwc||'').replace(/\s/g,'').replace(',','.'))||0;
   function stageDurations(){
@@ -3931,6 +3931,15 @@
   }
   // ----- Meeting view: what is coming, one line per installation, to share with the pricing team -----
   const MEET_PHASES=[{ key:'qualif', label:'Qualification · à venir' }, { key:'offre', label:'Offre · pricing en cours' }, { key:'contrat', label:'Contrat · pricing ferme' }];
+  function meetHiddenCols(){ try{ const v=JSON.parse(localStorage.getItem('pipe-meet-cols')||'[]'); return Array.isArray(v)?v:[]; }catch(e){ return []; } }
+  const meetVis=()=>{ const h=meetHiddenCols(); return MEET_COLS.map((c,i)=>i<2 || !h.includes(c)); };
+  const meetPick=(arr, vis)=>arr.filter((_,i)=>vis[i]);
+  // the key figures over the table (screen, mail, Excel): in play, likely, plants, production, stuck
+  function meetFigures(groups){
+    const list=groups.flatMap(g=>g.list), kw=list.reduce((x,o)=>x+kwcNum(o),0), mwh=list.reduce((x,o)=>x+(pqNum(String(o.mwh||''))||0),0);
+    const likely=list.reduce((x,o)=>x+kwcNum(o)*(MES_WEIGHTS[o.stage]||0),0), stuck=list.filter(o=>{ const d=daysInStage(o); return d!=null && d>15; }).length;
+    return [[fmtMwc(kw),'en jeu'],[fmtMwc(likely),'probables (pondéré par l\u2019étape)'],[String(list.length),'installation'+(list.length>1?'s':'')],[mwh?(mwh>=1000?(Math.round(mwh/100)/10).toLocaleString('fr-FR')+' GWh':Math.round(mwh).toLocaleString('fr-FR')+' MWh'):'—','par an (P50)'],[String(stuck),'bloquée'+(stuck>1?'s':'')+' > 15 j']];
+  }
   function meetPhasesOn(){ try{ const v=JSON.parse(localStorage.getItem('pipe-meet-phases')||'null'); if(Array.isArray(v) && v.length) return v; }catch(e){} return MEET_PHASES.map(p=>p.key); }
   const MEET_COLS=['Producteur','Centrale','Techno','Puissance','P50 (MWh/an)','Dépt','MES','Contrat','Mécanisme','Étape','Prochaine échéance','Chargé','Lot / demande','Depuis'];
   // the block an installation belongs to in the meeting view: same request, same lot, same step
@@ -3965,14 +3974,16 @@
   // the same table as HTML with inline styles (pasted into Outlook / Teams, or printed)
   function meetHtml(groups){
     const e=escapeHtml, th='style="text-align:left;padding:5px 8px;border-bottom:2px solid #1A7B8C;font:600 11px Arial;color:#333;white-space:nowrap"', td='style="padding:4px 8px;border-bottom:1px solid #ddd;font:12px Arial;color:#111;vertical-align:top"';
-    let h='<p style="font:600 14px Arial;margin:0 0 8px">'+e(meetTitle())+'</p><table style="border-collapse:collapse"><thead><tr>'+MEET_COLS.map(c=>'<th '+th+'>'+e(c)+'</th>').join('')+'</tr></thead><tbody>';
+    const vis=meetVis(), cols=meetPick(MEET_COLS, vis);
+    const figs='<table style="border-collapse:collapse;margin:0 0 12px"><tr>'+meetFigures(groups).map(([v,l])=>'<td style="padding:6px 14px 6px 0;vertical-align:top"><div style="font:700 16px Arial;color:#111">'+e(v)+'</div><div style="font:11px Arial;color:#666">'+e(l)+'</div></td>').join('')+'</tr></table>';
+    let h='<p style="font:600 14px Arial;margin:0 0 8px">'+e(meetTitle())+'</p>'+figs+'<table style="border-collapse:collapse"><thead><tr>'+cols.map(c=>'<th '+th+'>'+e(c)+'</th>').join('')+'</tr></thead><tbody>';
     groups.forEach(g=>{ if(!g.rows.length) return;
-      h+='<tr><td colspan="'+MEET_COLS.length+'" style="padding:10px 8px 4px;font:700 12px Arial;color:#1A7B8C">'+e(g.phase.label)+' — '+e(meetTotal(g.kwc,g.mwh,g.rows.length))+'</td></tr>';
-      g.rows.forEach(r=>{ h+='<tr>'+r.map((v,i)=>'<td '+td.replace('"padding','"'+(i<2?'font-weight:600;':'')+'padding')+'>'+e(v)+'</td>').join('')+'</tr>'; }); });
+      h+='<tr><td colspan="'+cols.length+'" style="padding:10px 8px 4px;font:700 12px Arial;color:#1A7B8C">'+e(g.phase.label)+' — '+e(meetTotal(g.kwc,g.mwh,g.rows.length))+'</td></tr>';
+      g.rows.forEach(r=>{ h+='<tr>'+meetPick(r, vis).map((v,i)=>'<td '+td.replace('"padding','"'+(i<2?'font-weight:600;':'')+'padding')+'>'+e(v)+'</td>').join('')+'</tr>'; }); });
     return h+'</tbody></table>';
   }
   async function meetCopy(groups, btn){
-    const html=meetHtml(groups), text=[meetTitle(), MEET_COLS.join('\t')].concat(...groups.filter(g=>g.rows.length).map(g=>[g.phase.label+' — '+meetTotal(g.kwc,g.mwh,g.rows.length)].concat(g.rows.map(r=>r.join('\t'))))).join('\n');
+    const vis=meetVis(), html=meetHtml(groups), text=[meetTitle(), meetFigures(groups).map(([v,l])=>v+' '+l).join(' · '), '', meetPick(MEET_COLS, vis).join('\t')].concat(...groups.filter(g=>g.rows.length).map(g=>[g.phase.label+' — '+meetTotal(g.kwc,g.mwh,g.rows.length)].concat(g.rows.map(r=>meetPick(r, vis).join('\t'))))).join('\n');
     try{ await navigator.clipboard.write([new ClipboardItem({ 'text/html':new Blob([html],{ type:'text/html' }), 'text/plain':new Blob([text],{ type:'text/plain' }) })]); flashBtn(btn,'✓ Copié'); }
     catch(e){ copyToClipboard(text, btn); }
   }
@@ -3980,10 +3991,10 @@
   async function meetXlsx(groups, btn){
     try{
       await loadXlsxLib();
-      const aoa=[[meetTitle()],[],MEET_COLS];
-      groups.forEach(g=>{ if(!g.rows.length) return; aoa.push([g.phase.label+' — '+meetTotal(g.kwc,g.mwh,g.rows.length)]); g.list.forEach((o,i)=>{ const r=g.rows[i].slice(); r[3]=pqNum(String(o.kwc||''))||''; r[4]=Math.round(pqNum(String(o.mwh||'')))||''; aoa.push(r); }); aoa.push([]); });
-      aoa[2][3]='Puissance (kWc)';
-      const ws=XLSX.utils.aoa_to_sheet(aoa); ws['!cols']=[22,24,9,14,12,6,14,24,14,22,26,10,22,8].map(w=>({ wch:w }));
+      const vis=meetVis(), head=MEET_COLS.slice(); head[3]='Puissance (kWc)';
+      const aoa=[[meetTitle()],[meetFigures(groups).map(([v,l])=>v+' '+l).join(' · ')],meetPick(head, vis)];
+      groups.forEach(g=>{ if(!g.rows.length) return; aoa.push([g.phase.label+' — '+meetTotal(g.kwc,g.mwh,g.rows.length)]); g.list.forEach((o,i)=>{ const r=g.rows[i].slice(); r[3]=pqNum(String(o.kwc||''))||''; r[4]=Math.round(pqNum(String(o.mwh||'')))||''; aoa.push(meetPick(r, vis)); }); aoa.push([]); });
+      const ws=XLSX.utils.aoa_to_sheet(aoa); ws['!cols']=meetPick([22,24,9,14,12,6,14,24,14,22,26,10,22,8], vis).map(w=>({ wch:w }));
       const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'Ce qui arrive');
       const d=new Date(); XLSX.writeFile(wb, String(d.getFullYear()).slice(2)+pqPad(d.getMonth()+1)+pqPad(d.getDate())+'_Pipe agrégation - réunion pricing.xlsx');
       flashBtn(btn,'✓ Fichier créé');
@@ -4042,7 +4053,14 @@
     mk('Copier pour mail / Teams', b=>meetCopy(groups,b), 'Le tableau, prêt à coller dans un mail Outlook ou dans Teams');
     mk('Excel', b=>meetXlsx(groups,b), 'Télécharger le tableau en .xlsx');
     mk('Imprimer / PDF', ()=>meetPrint(groups), 'Imprimer, ou enregistrer en PDF (paysage)');
+    const colBtn=mk('Colonnes ▾', ()=>{ meetColsOpen=!meetColsOpen; renderPipeline(); }, 'Choisir les colonnes du tableau (aussi pour la copie, l\u2019Excel et l\u2019impression)');
+    colBtn.classList.add('meet-cols-btn'); colBtn.setAttribute('aria-expanded', String(meetColsOpen));
     board.appendChild(head);
+    if(meetColsOpen){ const cc=document.createElement('div'); cc.className='meet-chips meet-cols'; const hid=meetHiddenCols();
+      cc.innerHTML='<span class="meet-cols-l">Colonnes :</span>';
+      MEET_COLS.slice(2).forEach(c=>{ const b=document.createElement('button'); b.type='button'; b.className='meet-chip'+(hid.includes(c)?'':' on'); b.textContent=c; b.dataset.col=c; b.setAttribute('aria-pressed', String(!hid.includes(c)));
+        b.onclick=()=>{ let v=meetHiddenCols(); v=v.includes(c)?v.filter(x=>x!==c):v.concat(c); try{ localStorage.setItem('pipe-meet-cols', JSON.stringify(v)); }catch(e){} prefsToNote(); renderPipeline(); }; cc.appendChild(b); });
+      board.appendChild(cc); }
     // which phases to show (remembered on this device)
     const chips=document.createElement('div'); chips.className='meet-chips'; const on=meetPhasesOn();
     MEET_PHASES.forEach(p=>{ const c=document.createElement('button'); c.type='button'; c.className='meet-chip'+(on.includes(p.key)?' on':''); c.textContent=p.label; c.dataset.phase=p.key; c.setAttribute('aria-pressed', String(on.includes(p.key)));
@@ -4052,18 +4070,19 @@
     if(!n){ const e=document.createElement('div'); e.className='today-empty'; e.textContent='Aucune installation dans ces phases.'; board.appendChild(e); return; }
     board.appendChild(meetVisuals(groups));
     const wrap=document.createElement('div'); wrap.className='meet-scroll';
-    let t='<table class="meet-table"><thead><tr>'+MEET_COLS.map(c=>'<th>'+escapeHtml(c)+'</th>').join('')+'</tr></thead><tbody>';
+    const vis=meetVis(), ncol=vis.filter(Boolean).length;
+    let t='<table class="meet-table"><thead><tr>'+meetPick(MEET_COLS, vis).map(c=>'<th>'+escapeHtml(c)+'</th>').join('')+'</tr></thead><tbody>';
     groups.forEach(g=>{ if(!g.rows.length) return;
-      t+='<tr class="meet-sec" data-phase="'+g.phase.key+'"><th colspan="'+MEET_COLS.length+'"><i style="background:'+(MAP_PHASES.find(x=>x[0]===g.phase.key)||[0,0,'#888'])[2]+'"></i>'+escapeHtml(g.phase.label)+'<span>'+escapeHtml(meetTotal(g.kwc,g.mwh,g.rows.length))+'</span></th></tr>';
+      t+='<tr class="meet-sec" data-phase="'+g.phase.key+'"><th colspan="'+ncol+'"><i style="background:'+(MAP_PHASES.find(x=>x[0]===g.phase.key)||[0,0,'#888'])[2]+'"></i>'+escapeHtml(g.phase.label)+'<span>'+escapeHtml(meetTotal(g.kwc,g.mwh,g.rows.length))+'</span></th></tr>';
       let lastKey=null;
       g.rows.forEach((r,i)=>{ const o=g.list[i], k=meetBlockKey(o), mates=g.list.filter(x=>meetBlockKey(x)===k);
         if(mates.length>1 && k!==lastKey){   // a lot, or a request at one step: one title line, the installations under it
           const st=oppStage(o.stage), d=daysInStage(o), kw=mates.reduce((x,y)=>x+kwcNum(y),0);
-          t+='<tr class="meet-blk" data-blk="'+escapeHtml(k)+'" data-req="'+escapeHtml(o.requestId)+'" data-ids="'+escapeHtml(mates.map(x=>x.id).join(','))+'"><td colspan="'+MEET_COLS.length+'"><b>'+escapeHtml(o.company||'')+'</b>'
+          t+='<tr class="meet-blk" data-blk="'+escapeHtml(k)+'" data-req="'+escapeHtml(o.requestId)+'" data-ids="'+escapeHtml(mates.map(x=>x.id).join(','))+'"><td colspan="'+ncol+'"><b>'+escapeHtml(o.company||'')+'</b>'
             +(meetBlockName(o)?' <span class="meet-blk-name">'+escapeHtml(meetBlockName(o))+'</span>':'')
             +' <span class="meet-blk-sum">'+escapeHtml([mates.length+' installations', kw?fmtKwc(kw):'', stageLabel(o.stage, o), st?WHO[st.who]||st.who:'', d!=null?'depuis '+d+' j':''].filter(Boolean).join(' · '))+'</span></td></tr>'; }
         lastKey=k;
-        t+='<tr data-id="'+escapeHtml(o.id)+'"'+(mates.length>1?' class="meet-inblk"':'')+'>'+r.map((v,j)=>'<td'+(j===1?' class="meet-name"':'')+'>'+escapeHtml(v)+'</td>').join('')+'</tr>'; }); });
+        t+='<tr data-id="'+escapeHtml(o.id)+'"'+(mates.length>1?' class="meet-inblk"':'')+'>'+meetPick(r, vis).map((v,j)=>'<td'+(j===1?' class="meet-name"':'')+'>'+escapeHtml(v)+'</td>').join('')+'</tr>'; }); });
     wrap.innerHTML=t+'</tbody></table>';
     wrap.querySelectorAll('tr[data-id]').forEach(tr=>{ tr.onclick=()=>openOppDetail(tr.dataset.id); });
     wrap.querySelectorAll('tr.meet-blk').forEach(tr=>{ tr.onclick=()=>openRequestDetail(tr.dataset.req, tr.dataset.ids.split(',')); });
@@ -7999,6 +8018,7 @@
     const known=allCompanyNames(), pick=[p.who,p.prod].find(n=>n && known.some(k=>sameCo(k,n)));
     openCompanySheet(pick||p.who||p.prod||'');
   }
+  function mapColorBy(){ try{ return localStorage.getItem('map-color')==='techno'?'techno':'phase'; }catch(e){ return 'phase'; } }   // function: the map may draw before this line runs
   var mapInPipe=false;   // the map shown in the pipeline (« Carte ») rather than in the Portefeuille; var: renderParc may run before this line
   function mapRerender(){ if(mapInPipe) renderPipeline(); else renderParc(); }
   function parcMap(){
@@ -8008,7 +8028,7 @@
       return w;
     }
     // the pipeline layer: dots by phase (where the deal is), else by technology
-    const byPhase=(mapInPipe || parcMapLayer==='pipe') && !parcKpiSet, KEYS=byPhase?MAP_PHASES:MAP_TECHS;
+    const byPhase=(mapInPipe || parcMapLayer==='pipe') && !parcKpiSet && mapColorBy()==='phase', KEYS=byPhase?MAP_PHASES:MAP_TECHS;
     const color=t=>(KEYS.find(x=>x[0]===t)||KEYS[KEYS.length-1])[2];
     const techLabel=t=>(KEYS.find(x=>x[0]===t)||KEYS[KEYS.length-1])[1];
     const wrap=document.createElement('div'); wrap.className='parc-block parc-map-block';
@@ -8016,7 +8036,11 @@
     head.innerHTML='<div class="parc-h">Carte</div>';
     const seg=document.createElement('div'); seg.className='map-seg';
     [['won','Portefeuille'],['pending','Offres'],['pipe','Pipeline']].forEach(([k,l])=>{ const b=document.createElement('button'); b.type='button'; b.textContent=l; b.className=k===parcMapLayer?'on':''; b.onclick=()=>{ parcMapLayer=k; parcMapSel=null; parcMapView=null; mapRerender(); }; seg.appendChild(b); });
-    if(!parcKpiSet && !mapInPipe) head.appendChild(seg); wrap.appendChild(head);
+    if(!parcKpiSet && !mapInPipe) head.appendChild(seg);
+    if(!parcKpiSet && (mapInPipe || parcMapLayer==='pipe')){ const cb=document.createElement('div'); cb.className='map-seg map-color';
+      [['phase','Par phase'],['techno','Par techno']].forEach(([k,l])=>{ const b=document.createElement('button'); b.type='button'; b.textContent=l; b.dataset.c=k; b.className=mapColorBy()===k?'on':''; b.onclick=()=>{ try{ localStorage.setItem('map-color', k); }catch(e){} prefsToNote(); mapRerender(); }; cb.appendChild(b); });
+      head.appendChild(cb); }
+    wrap.appendChild(head);
 
     const pts=parcMapPoints(parcMapLayer); if(byPhase) pts.forEach(p=>{ p.techName=(MAP_TECHS.find(x=>x[0]===p.tech)||MAP_TECHS[4])[1]; p.tech=p.phase||'qualif'; });
     const by={}, elsewhere=[];
