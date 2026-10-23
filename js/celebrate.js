@@ -3,13 +3,14 @@
    seconds, never catch a click, and shrink to the message alone when the device asks for less motion. */
 (function(){
   'use strict';
-  const VARIANTS={ won:['panel','turbine','battery'], signed:['gun','gong','champagne'], lost:['umbrella','nowind','plane'] };
-  const LENGTH={ panel:3400, turbine:3400, battery:3400, gun:6600, gong:3800, champagne:4000, umbrella:4000, nowind:4200, plane:3900 };
+  const VARIANTS={ won:['panel','turbine','battery'], signed:['gun','gong','champagne'], lost:['umbrella','nowind','plane'], goal:['g75','g90','g100'] };   // goal: chosen by the milestone, not at random
+  const LENGTH={ panel:3400, turbine:3400, battery:3400, gun:6600, gong:3800, champagne:4000, umbrella:4000, nowind:4200, plane:3900, g75:4200, g90:4600, g100:5200 };
   const COLORS=['#14D3A9','#FFFD82','#ED6965','#7DD3FC','#8B7FB5','#CA6702'];
   const MSG={
     panel:'Offre acceptée ! 😎', turbine:'Offre acceptée ! 🚁', battery:'Offre acceptée ! ⚡ 100 %',
     gun:'Contrat signé ! 💶', gong:'Contrat signé ! 🔔', champagne:'Contrat signé ! 🥂',
-    umbrella:'Offre perdue', nowind:'Offre perdue', plane:'Offre perdue'
+    umbrella:'Offre perdue', nowind:'Offre perdue', plane:'Offre perdue',
+    g75:'75 % de l\u2019objectif ! 🧗', g90:'90 % de l\u2019objectif ! 🚀', g100:'Objectif atteint ! 🏆'
   };
   const BLADE='<path d="M130 78c-4-20-2-48 3-60c4 14 3 40-3 60z"/>';
   const blades=cls=>'<g class="'+cls+'">'+BLADE+BLADE.replace('/>',' transform="rotate(120 130 78)"/>')+BLADE.replace('/>',' transform="rotate(240 130 78)"/>')+'<circle cx="130" cy="78" r="6" fill="#B7C3D0"/></g>';
@@ -85,6 +86,19 @@
       +'<g class="cx-swish"><text x="210" y="150" text-anchor="middle" font-family="Impact,\'Arial Black\',system-ui,sans-serif" font-weight="900" font-size="16" fill="#FFD23F" stroke="#E2463A" stroke-width="1">Swish !</text></g>'
       +'<path d="M20 214h220" stroke="#2C3A4A" stroke-width="3" stroke-linecap="round"/>'
   };
+  // the year's goal: 75 % a climber plants a flag three quarters up the mountain; 90 % a rocket counts down and lifts off; 100 % a trophy rises in fireworks
+  SVG.g75='<path d="M10 220L100 70L140 120L170 90L250 220z" fill="#2C4A66"/><path d="M100 70L118 100L108 96L100 108L92 98L84 102z" fill="#E8EEF5"/><path d="M170 90L182 110L172 106L166 114L160 108z" fill="#E8EEF5"/>'
+    +'<path d="M40 170L95 80" stroke="#7FA9D6" stroke-width="2" stroke-dasharray="4 5" fill="none"/>'
+    +'<g class="cx-climb"><circle cx="0" cy="-26" r="6" fill="#FFD54A"/><path d="M0 -20v16M0 -4l-7 12M0 -4l7 12M0 -14l-9 -6M0 -14l9 4" stroke="#FFD54A" stroke-width="3.5" stroke-linecap="round" fill="none"/></g>'
+    +'<g class="cx-flag"><path d="M110 92v-34" stroke="#E8EEF5" stroke-width="2.5"/><path class="cx-flagcloth" d="M110 58h26l-6 7l6 7h-26z" fill="#14D3A9"/><text x="121" y="68" font-size="7" font-weight="800" fill="#04070C" text-anchor="middle">75</text></g>';
+  SVG.g90='<ellipse class="cx-smoke" cx="130" cy="218" rx="60" ry="12" fill="#9AA8B8" opacity=".6"/>'
+    +'<g class="cx-rocket"><path d="M130 40c18 18 24 50 20 100h-40c-4-50 2-82 20-100z" fill="#E8EEF5" stroke="#7FA9D6" stroke-width="2"/><circle cx="130" cy="88" r="11" fill="#1E3A5F" stroke="#7FA9D6" stroke-width="3"/>'
+    +'<path d="M110 120l-18 26h20zM150 120l18 26h-20z" fill="#ED6965"/><path class="cx-flame" d="M116 140q14 46 28 0q-6 18-14 30q-8-12-14-30z" fill="#FFD54A"/></g>'
+    +'<text class="cx-count" x="210" y="70" font-size="34" font-weight="800" fill="#14D3A9" text-anchor="middle">3</text>'
+    +'<text x="210" y="96" font-size="11" fill="#9AA8B8" text-anchor="middle">90 %</text>';
+  SVG.g100='<g class="cx-fw">'+[[60,60,'#14D3A9',0],[200,50,'#FFD54A',.35],[130,30,'#ED6965',.7],[40,120,'#7DD3FC',1],[220,120,'#B49CFF',1.25]].map(([x,y,c,d])=>'<g transform="translate('+x+' '+y+')" style="--d:'+d+'s">'+[0,45,90,135,180,225,270,315].map(a=>'<path class="cx-ray" d="M0 0L0 -22" stroke="'+c+'" stroke-width="3" stroke-linecap="round" transform="rotate('+a+')"/>').join('')+'</g>').join('')+'</g>'
+    +'<g class="cx-trophy"><path d="M96 92h68v20c0 26-14 44-34 48c-20-4-34-22-34-48z" fill="#E8C547" stroke="#9C6B12" stroke-width="3"/><path d="M96 100h-16c0 22 10 30 22 32M164 100h16c0 22-10 30-22 32" stroke="#E8C547" stroke-width="6" fill="none"/>'
+    +'<rect x="122" y="160" width="16" height="22" fill="#C9A04A"/><rect x="104" y="182" width="52" height="14" rx="3" fill="#7A4E2A"/><text x="130" y="128" font-size="18" font-weight="800" fill="#7A4E2A" text-anchor="middle">100</text></g>';
   const GUN='<svg viewBox="0 0 160 100" aria-hidden="true"><rect x="40" y="10" width="62" height="22" rx="3" fill="#2E9E6A" stroke="#9EE6C0" stroke-width="2"/><rect x="44" y="6" width="54" height="6" rx="2" fill="#1F7A50"/>'
     +'<path d="M18 34h118a6 6 0 0 1 6 6v14a6 6 0 0 1-6 6H60l-10 34a6 6 0 0 1-6 4H26a5 5 0 0 1-5-6l9-32h-12a6 6 0 0 1-6-6V40a6 6 0 0 1 6-6z" fill="#1C2733" stroke="#E8C547" stroke-width="2.5"/>'
     +'<path d="M62 60q8 14 20 6" stroke="#E8C547" stroke-width="3" fill="none" stroke-linecap="round"/><rect x="128" y="38" width="22" height="18" rx="3" fill="#E8C547"/>'
@@ -210,6 +224,9 @@
     champagne(el){ setTimeout(()=>{ if(el.isConnected) popSound(); }, 900); hiss(1,1.1,{ filter:'highpass', f:5000, vol:.04, attack:.05, release:.6 }); setTimeout(()=>{ if(el.isConnected) clinkSound(); }, 2050); },   // pop, fizz, « ting »
     umbrella(){ hiss(.3,3.4,{ filter:'lowpass', f:1800, q:.5, vol:.05, attack:.8, release:.8 }); tone(392,1.7,.5,{ vol:.07 }); tone(330,2.15,.8,{ vol:.07 }); },   // rain, two sad notes
     nowind(){ tromboneSound(); },
+    g75(){ [523,659,784,1047].forEach((f,i)=>tone(f, .9+i*.14, .35, { type:'triangle', vol:.09 })); },   // a rising arpeggio as the flag goes up
+    g90(){ [0,.8,1.6].forEach(t=>tone(880, t, .12, { type:'square', vol:.05 })); tone(1320, 2.4, .25, { type:'square', vol:.06 }); hiss(2.4, 1.8, { f:400, fto:2400, q:.7, vol:.07, attack:.1, release:.8 }); },   // 3, 2, 1… lift-off
+    g100(){ const n=[[523,0,.18],[523,.2,.18],[523,.4,.18],[659,.6,.5],[587,1.15,.18],[659,1.35,.18],[784,1.55,.9]]; n.forEach(([f,t,d])=>{ tone(f, t+.3, d, { type:'sawtooth', vol:.05 }); tone(f/2, t+.3, d, { type:'triangle', vol:.05 }); }); },   // a short fanfare
     plane(){ hiss(.1,1.9,{ f:700, fto:1600, q:1.2, vol:.05, attack:.4, release:.4 }); hiss(2.05,.18,{ filter:'lowpass', f:600, vol:.14, attack:.005, release:.15 }); tone(110,2.05,.25,{ vol:.12, to:60 }); }   // whoosh, thud in the bin
   };
   function tromboneSound(){ // « wah wah wah waaah »
@@ -240,6 +257,8 @@
       if(v==='battery'){ const t=el.querySelector('.cx-pct'); let n=0; setTimeout(()=>{ const iv=setInterval(()=>{ n=Math.min(100,n+5); if(t) t.textContent=n+' %'; if(n>=100) clearInterval(iv); },45); },550); }
       if(v==='gun') setTimeout(()=>moneyGun(fx), 150);
       if(v==='gong' || v==='champagne') confetti(fx, 70);
+      if(v==='g75' || v==='g100') confetti(fx, v==='g100'?120:50);
+      if(v==='g90'){ const c=el.querySelector('.cx-count'); [['2',800],['1',1600],['Go !',2400]].forEach(([txt,t])=>setTimeout(()=>{ if(c) c.textContent=txt; }, t)); }
       if(SOUND[v]) SOUND[v](el);
     }
     const len=less?1800:LENGTH[v];

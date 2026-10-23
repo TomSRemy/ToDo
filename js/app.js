@@ -1604,7 +1604,7 @@
   }
   // ---------- settings shared between devices: saved views, network layout, goals… ride along in the note as « pref_<key> » fields ----------
   // (merged field by field by the sync; the note's date is left alone so the morning roll is not disturbed)
-  const PREF_PREFIX='pref_', SYNCED_PREFS=['saved-views-tasks','saved-views-pipeline','network-pins','network-hidden','pipe-goals','pipe-meet-phases','pipe-meet-cols','map-color'];
+  const PREF_PREFIX='pref_', SYNCED_PREFS=['saved-views-tasks','saved-views-pipeline','network-pins','network-hidden','pipe-goals','pipe-meet-phases','pipe-meet-cols','map-color','goal-milestones'];
   const lsGet=k=>{ try{ return localStorage.getItem(k); }catch(e){ return null; } }, lsSet=(k,v)=>{ try{ localStorage.setItem(k,v); }catch(e){} };
   function prefsToNote(){
     if(window.TODO_WIDGET) return;
@@ -7903,6 +7903,27 @@
   }
   const fmtGwh=mwh=>(Math.round(mwh/100)/10).toLocaleString('fr-FR')+' GWh';
   const fmtMwc=kwc=>(Math.round(kwc/100)/10).toLocaleString('fr-FR')+' MWc';
+  // the year's goal (Suivi, GWh): crossing 75, 90 then 100 % plays its animation once, with a summary ready for the manager
+  function checkGoalMilestones(won){
+    if(!parcData || !parcData.objectives) return;
+    const cy=new Date().getFullYear(), obj=parcData.objectives[cy]; if(!obj) return;
+    const active=won.filter(p=>(p.vols[cy]||0)>0), vol=active.reduce((x,p)=>x+(p.vols[cy]||0),0)/1000, pct=vol/obj*100, reached=[100,90,75].find(l=>pct>=l)||0;
+    let m={}; try{ m=JSON.parse(localStorage.getItem('goal-milestones')||'{}')||{}; }catch(e){}
+    const key=String(cy), save=()=>{ try{ localStorage.setItem('goal-milestones', JSON.stringify(m)); }catch(e){} prefsToNote(); };
+    if(m[key]==null){ m[key]=reached; save(); return; }   // the first look: no fanfare for old news
+    if(reached<=m[key]) return;
+    m[key]=reached; save();
+    const f1=n=>(Math.round(n*10)/10).toLocaleString('fr-FR');
+    if(window.todoCelebrate) window.todoCelebrate('goal', { sub:Math.round(pct)+' % · '+f1(vol)+' GWh sur '+f1(obj)+' GWh' }, 'g'+reached);
+    const text='Objectif agrégation '+cy+' : '+Math.round(pct)+' % atteint — '+f1(vol)+' GWh sur '+f1(obj)+' GWh, '+active.length+' contrat'+(active.length>1?'s':'')+' actif'+(active.length>1?'s':'')+'.'
+      +(pct<100?' Il reste '+f1(obj-vol)+' GWh pour atteindre l’objectif.':' Objectif atteint, '+f1(vol-obj)+' GWh au-delà.');
+    let t=$('goal-toast'); if(t) t.remove();
+    t=document.createElement('div'); t.id='goal-toast'; t.className='goal-toast'; t.setAttribute('role','status');
+    t.innerHTML='<b></b><p></p><div><button type="button" class="goal-copy">Copier pour mon manager</button><button type="button" class="ghost-btn goal-close">Fermer</button></div>';
+    t.querySelector('b').textContent=reached===100?'Objectif '+cy+' atteint !':reached+' % de l’objectif '+cy; t.querySelector('p').textContent=text;
+    t.querySelector('.goal-copy').onclick=e=>copyToClipboard(text, e.target); t.querySelector('.goal-close').onclick=()=>t.remove();
+    setTimeout(()=>{ if(!t.isConnected) document.body.appendChild(t); }, reached===100?4200:3200);
+  }
   function renderParc(){ mapInPipe=false;
     const body=$('parc-body'); if(!body) return;
     if(parcData===null) loadParc();
@@ -7928,6 +7949,7 @@
     const obj=objs.length===yrs.length?objs.reduce((s,v)=>s+v,0):null;
     const soon=renewalCandidates();
     const pending=parcData.items.filter(p=>p.statut==='En attente');
+    checkGoalMilestones(won);
 
     // year chips
     const years=document.createElement('div'); years.className='parc-years';

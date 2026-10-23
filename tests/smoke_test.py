@@ -2004,6 +2004,20 @@ with sync_playwright() as p:
     check(not errors, f"no page errors ({errors})")
     page.close()
 
+    # --- The year's goal: crossing 75 % plays its animation once, with a summary for the manager; the first look stays quiet
+    cy = datetime.date.today().year
+    pdat = {"fileName": "suivi.xlsx", "importedAt": int(time.time() * 1000), "objectives": {str(cy): 100},
+            "items": [{"id": "p1", "prod": "A", "inst": "A1", "dev": "A", "statut": "Gagné", "kwc": 1000, "p50": 1200, "vols": {str(cy): 80000}, "siteDept": "", "dept": "", "cadre": "CR", "enr": "PV"}]}
+    page, errors = new_page(browser, {"todo_parc-data": json.dumps(pdat), "goal-milestones": json.dumps({str(cy): 0})}, viewport={"width": 1300, "height": 850})
+    page.goto(URL); page.click('[data-tab="parc"]'); page.wait_for_timeout(300)
+    check(page.locator(".celebrate-goal").count() == 1 and page.get_attribute(".celebrate-goal", "data-variant") == "g75", "goal: crossing 75 % plays the 75 % animation")
+    page.wait_for_selector("#goal-toast", timeout=5000)
+    check("80 % atteint" in page.inner_text("#goal-toast") and "Il reste 20 GWh" in page.inner_text("#goal-toast"), f"goal: a summary ready for the manager ({page.inner_text('#goal-toast')!r})")
+    page.click("#goal-toast .goal-close"); page.click('[data-tab="today"]'); page.click('[data-tab="parc"]'); page.wait_for_timeout(300)
+    check(page.locator("#goal-toast").count() == 0 and page.evaluate("JSON.parse(localStorage.getItem('goal-milestones'))")[str(cy)] == 75, "goal: played once, remembered")
+    check(not errors, f"no page errors ({errors})")
+    page.close()
+
     # --- Keyboard in a sheet: 1 ticks the first box, Entrée moves on and confirms, n opens the notes
     kb = [{"id": "k1", "kind": "installation", "company": "KB", "centrale": "Toit", "title": "Toit", "stage": "kyc", "createdAt": 1, "updatedAt": 1, "deleted": False}]
     page, errors = new_page(browser, {"todo_todo-widget-opportunities": json.dumps(kb)}, viewport={"width": 1400, "height": 900})

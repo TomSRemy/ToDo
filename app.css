@@ -2188,3 +2188,31 @@ details.req-compare > .req-compare-h{ font-size:12.5px; }
 .ps-overlay:fullscreen .ps-bar-ui{ opacity:0; transition:opacity .2s; } .ps-overlay:fullscreen .ps-bar-ui:hover{ opacity:1; }
 .ps-body{ justify-content:flex-start; padding-top:1.2cqw; }
 .ps-context{ margin:0; font-size:1.45cqw; line-height:1.45; color:var(--ink); border-left:.3cqw solid var(--accent); padding-left:1.4cqw; } .ps-context .ps-k{ margin-bottom:.3cqw; }
+/* the year's goal: 75 % climber + flag, 90 % countdown + lift-off, 100 % trophy + fireworks */
+.cxv-g75 .cx-climb{ transform:translate(40px,170px); }
+.cx-play.cxv-g75 .cx-climb{ animation:cxClimb 1.4s cubic-bezier(.45,.1,.4,1) .2s forwards; }
+@keyframes cxClimb{ to{ transform:translate(96px,86px); } }
+.cxv-g75 .cx-flag{ transform-origin:110px 92px; transform:scaleY(0); }
+.cx-play.cxv-g75 .cx-flag{ animation:cxFlagUp .5s ease-out 1.5s forwards; }
+@keyframes cxFlagUp{ to{ transform:scaleY(1); } }
+.cx-play.cxv-g75 .cx-flagcloth{ transform-origin:110px 65px; animation:cxWave .6s ease-in-out 2s infinite alternate; }
+@keyframes cxWave{ from{ transform:skewY(0); } to{ transform:skewY(-6deg) scaleX(.94); } }
+.cxv-g90 .cx-flame{ opacity:0; transform-origin:130px 140px; }
+.cx-play.cxv-g90 .cx-flame{ animation:cxFlame .15s ease-in-out 2.3s infinite alternate; }
+@keyframes cxFlame{ from{ opacity:1; transform:scaleY(.8); } to{ opacity:1; transform:scaleY(1.25); } }
+.cx-play.cxv-g90 .cx-rocket{ animation:cxShake .08s linear 1.8s 8 alternate, cxLift 1.8s cubic-bezier(.6,0,.9,.6) 2.5s forwards; }
+@keyframes cxShake{ from{ transform:translateX(-1.5px); } to{ transform:translateX(1.5px); } }
+@keyframes cxLift{ to{ transform:translateY(-320px); } }
+.cx-play.cxv-g90 .cx-smoke{ animation:cxSmoke 1.6s ease-out 2.4s forwards; transform-origin:130px 218px; }
+@keyframes cxSmoke{ to{ transform:scale(2.2,1.8); opacity:0; } }
+.cxv-g100 .cx-trophy{ transform:translateY(80px) scale(.6); opacity:0; transform-origin:130px 190px; }
+.cx-play.cxv-g100 .cx-trophy{ animation:cxTrophy .9s cubic-bezier(.3,1.5,.5,1) .2s forwards; }
+@keyframes cxTrophy{ to{ transform:none; opacity:1; } }
+.cxv-g100 .cx-ray{ opacity:0; }
+.cxv-g100 .cx-ray{ stroke-dasharray:22; stroke-dashoffset:22; }
+.cx-play.cxv-g100 .cx-fw g .cx-ray{ animation:cxBurst 1s ease-out 2; animation-delay:calc(1s + var(--d)); }
+@keyframes cxBurst{ 0%{ opacity:1; stroke-dashoffset:22; } 55%{ opacity:1; stroke-dashoffset:0; } 100%{ opacity:0; stroke-dashoffset:-22; } }
+.cx-less .cx-climb, .cx-less .cx-flag, .cx-less .cx-trophy{ animation:none !important; transform:none; opacity:1; }
+.goal-toast{ position:fixed; left:50%; bottom:24px; transform:translateX(-50%); z-index:25000; width:min(520px, calc(100vw - 32px)); background:var(--panel); border:1px solid var(--accent); border-radius:12px; padding:14px 16px; box-shadow:0 18px 48px rgba(0,0,0,.5); display:flex; flex-direction:column; gap:8px; }
+.goal-toast b{ font-size:15px; color:var(--tx1); } .goal-toast p{ margin:0; font-size:13px; line-height:1.45; color:var(--tx2); } .goal-toast div{ display:flex; gap:8px; }
+.goal-copy{ background:var(--accent); border:none; border-radius:var(--radius); color:#04070C; font:600 12.5px var(--font-ui); padding:7px 12px; cursor:pointer; }
