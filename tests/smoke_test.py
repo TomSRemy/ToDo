@@ -1835,6 +1835,7 @@ with sync_playwright() as p:
            "prenom": "Jeanne", "nom": "TEST", "tel": "06 00 00 00 00", "createdAt": 1, "updatedAt": 1, "deleted": False}]
     page, errors = new_page(browser, {"todo_todo-widget-opportunities": json.dumps(qn)}, viewport={"width": 1400, "height": 900})
     page.goto(URL); page.click('[data-tab="pipeline"]'); page.locator(".pipe-card", has_text="Hangar").first.click()
+    check(page.locator("#opp-detail-body .req-ai").count() == 0, "IA set aside: no « Compléter avec l'IA » button unless turned on")
     page.click("#opp-detail-body .sheet-sec:has-text('Notes express') > summary")
     page.fill("#qn-text", "P50 1200, P90 950 MWh, MES juin 2027, 49300 Cholet, RDV 2 le 12/11, offre engageante. SPV : SOLAR TEST SAS")
     rows = page.eval_on_selector_all(".qn-row", "els=>els.map(e=>e.innerText.replace(/\\s+/g,' '))")
@@ -1952,7 +1953,7 @@ with sync_playwright() as p:
            "dept": "49 - Maine-et-Loire", "createdAt": 1, "updatedAt": 1, "deleted": False}]
     answer = {"ai1": {"Latitude": {"v": "47,06", "c": "sûr", "s": "commune de Cholet"}, "Altitude": {"v": "100", "c": "probable", "s": "altitude moyenne"},
                       "Commune": {"v": "Autre", "c": "sûr"}, "SIRET SPV": {"v": "", "c": "sûr"}, "Ligne inconnue": {"v": "x"}}}
-    page, errors = new_page(browser, {"todo_todo-widget-opportunities": json.dumps(ai), "ai-key": "sk-test"}, viewport={"width": 1300, "height": 850})
+    page, errors = new_page(browser, {"todo_todo-widget-opportunities": json.dumps(ai), "ai-key": "sk-test", "feat-ai": "1"}, viewport={"width": 1300, "height": 850})
     sent = []
     def claude_api(route):
         sent.append(json.loads(route.request.post_data)); route.fulfill(status=200, content_type="application/json", body=json.dumps({"content": [{"type": "text", "text": "Voici :\n```json\n" + json.dumps(answer) + "\n```"}]}))
@@ -1971,6 +1972,18 @@ with sync_playwright() as p:
     check(page.is_visible("#ai-key-here") and len(sent) == 1, "IA: without a key, the window asks for it (nothing sent yet)")
     page.fill("#ai-key-here", "sk-autre"); page.click("#ai-overlay button:has-text('Enregistrer et demander')"); page.wait_for_selector("#ai-overlay .ai-row", timeout=5000)
     check(len(sent) == 2 and page.evaluate("localStorage.getItem('ai-key')") == "sk-autre", "IA: the key typed in the window is kept on this device and the request goes at once")
+    check(not errors, f"no page errors ({errors})")
+    page.close()
+
+    # --- Conflicts: the same field of the same record logged at each sync = one line; the app's bookkeeping is never a question
+    cf = lambda i, f, l, r: {"id": "cf%s" % i, "entityType": "opportunity", "entityId": "o1", "entityName": "x", "field": f, "fieldLabel": f, "localValue": l, "remoteValue": r, "resolvedValue": l, "at": i}
+    confl = [cf(1, "kwc", "900", "1000"), cf(2, "kwc", "900", "1100"), cf(3, "kwc", "950", "1100"), cf(4, "excelSent", {"pipe": 1}, {"pipe": 2}), cf(5, "stageLog", [], [1]), cf(6, "stage", "kyc", "negociation")]
+    page, errors = new_page(browser, {"todo_sync-conflicts": json.dumps(confl), "todo_todo-widget-opportunities": json.dumps([{"id": "o1", "kind": "installation", "company": "CF", "centrale": "Toit", "stage": "kyc", "createdAt": 1, "updatedAt": 1, "deleted": False}])},
+                            viewport={"width": 1300, "height": 850})
+    page.goto(URL); page.click('[data-tab="lists"]'); page.wait_for_timeout(200)
+    rows = page.eval_on_selector_all("#conflicts-list .conflict-head", "els=>els.map(e=>e.textContent)")
+    vals = page.inner_text("#conflicts-list")
+    check(len(rows) == 2 and "[object" not in vals and "KYC + solvabilité" in vals and "950" in vals, f"conflicts: one line per record and field, no bookkeeping, readable values ({rows})")
     check(not errors, f"no page errors ({errors})")
     page.close()
 

@@ -77,6 +77,10 @@
     try{ const r=await window.storage.get(OPPS_KEY,false); opportunities=r&&r.value?JSON.parse(r.value):[]; }catch(e){ opportunities=[]; }
     try{ const r=await window.storage.get(COMPANY_TYPES_KEY,false); companyTypesList=r&&r.value?JSON.parse(r.value):[]; }catch(e){ companyTypesList=[]; }
     try{ const r=await window.storage.get('sync-conflicts',false); conflicts=r&&r.value?JSON.parse(r.value):[]; }catch(e){ conflicts=[]; }
+    // the conflicts already logged: one per record and field (the latest), none about the app's own bookkeeping or logs
+    { const before=conflicts.length, seen=new Set(), keep=[];
+      conflicts.slice().reverse().forEach(c=>{ const k=c.entityType+'|'+c.entityId+'|'+c.field; if(seen.has(k) || SILENT_MERGE.has(c.field) || ['notesLog','stageLog','checks'].includes(c.field)) return; seen.add(k); keep.unshift(c); });
+      if(keep.length!==before){ conflicts=keep; try{ await window.storage.set('sync-conflicts', JSON.stringify(conflicts), false); }catch(e){} } }
     // post-it conflicts are no longer kept (its lines are merged): clear the old ones
     if(conflicts.some(c=>c.entityType==='note')){ conflicts=conflicts.filter(c=>c.entityType!=='note'); try{ await window.storage.set('sync-conflicts', JSON.stringify(conflicts), false); }catch(e){} }
     try{ const r=await window.storage.get('sync-tasks-base',false); tasksBaseSnapshot=r&&r.value?JSON.parse(r.value):null; }catch(e){ tasksBaseSnapshot=null; }
@@ -341,7 +345,7 @@
     company:{ name:c=>c.name, fields:{whatTheyDo:'Activité',website:'Site web',marketScope:'Périmètre',type:'Type',relevance:'Pertinence'} },
     contact:{ name:c=>[c.firstName,c.lastName].filter(Boolean).join(' ')||'(sans nom)', fields:{firstName:'Prénom',lastName:'Nom',role:'Rôle',company:'Société',email:'Email',phone1:'Téléphone 1',phone2:'Téléphone 2',relevance:'Pertinence',comment:'Commentaire'} },
     meeting:{ name:m=>m.label, fields:{label:'Intitulé',date:'Date'} },
-    opportunity:{ name:o=>o.title, fields:{title:'Intitulé',company:'Société',stage:'Étape'} },
+    opportunity:{ name:o=>[o.company, o.kind==='request'?(o.label||'demande'):(o.centrale||o.title)].filter(Boolean).join(' — ')||'(sans nom)', fields:{title:'Intitulé',company:'Société',stage:'Étape',centrale:'Centrale',kwc:'Puissance',mwh:'P50',mesPrev:'MES prévisionnelle',lot:'Lot',nature:'Offre demandée',dept:'Département',commune:'Commune',requestId:'Demande'} },
     note:{ name:n=>'Post-it « '+(n.text||'').slice(0,30)+' »', fields:{text:'Texte',kind:'Type',forDate:'Pour le'} }
   };
 
@@ -363,8 +367,12 @@
     return out.join('\n').replace(/\n{3,}/g,'\n\n');
   }
   // src: where each version comes from, shown with the choice ({ a:'Sur cet appareil…', b:'Dans le fichier…' })
+  // fields the user never needs to arbitrate: the app's own bookkeeping
+  const SILENT_MERGE=new Set(['caract','excelSent','excelPrev','excelKeep','mailSentAt','caractSentAt','pipeSentAt','bddSentAt','notDupOf','lostAt','goDate','signDate','taskId','stageBeforeExit','createdAt','archivedAt','lastSeen']);
   function logConflict(entityType, entity, field, localValue, remoteValue, resolvedValue, src){
     const meta=CONFLICT_ENTITY_LABELS[entityType];
+    // the same field of the same record, again at the next sync: one line, the latest, not a new one each time
+    { const i=conflicts.findIndex(c=>c.entityType===entityType && c.entityId===entity.id && c.field===field); if(i>=0) conflicts.splice(i, 1); }
     if(conflicts.length>=200) conflicts.splice(0, conflicts.length-199);   // keep the log readable
     conflicts.push({
       id:'cf_'+Date.now()+'_'+Math.random().toString(36).slice(2,6),
@@ -424,6 +432,13 @@
         if(localChanged && remoteChanged && field==='checks' && local[field] && remote[field] && typeof local[field]==='object' && typeof remote[field]==='object'){
           const m={}; new Set([...Object.keys(remote[field]), ...Object.keys(local[field])]).forEach(k=>{ m[k]=Object.assign({}, remote[field][k]||{}, local[field][k]||{}); });
           result[field]=m; return; }
+        // what the app keeps for itself (Excel sends, characteristics file, a date something happened): merged quietly, never a question
+        if(localChanged && remoteChanged && SILENT_MERGE.has(field)){
+          const l=local[field], r=remote[field], newer=(remote.updatedAt||0)>(local.updatedAt||0);
+          if(l && r && typeof l==='object' && typeof r==='object' && !Array.isArray(l) && !Array.isArray(r)) result[field]=newer?Object.assign({}, l, r):Object.assign({}, r, l);
+          else if(typeof l==='number' && typeof r==='number') result[field]=Math.max(l, r);
+          else result[field]=newer?r:l;
+          return; }
         if(localChanged && remoteChanged){
           const takeRemote=(remote.updatedAt||0) > (local.updatedAt||0);
           result[field]=takeRemote?remote[field]:local[field];
@@ -1970,7 +1985,7 @@
       function buildChoiceBtn(label, value){
         const btn=document.createElement('button');
         const lab=document.createElement('span'); lab.className='conflict-choice-label'; lab.textContent=label;
-        const val=document.createElement('span'); val.className='conflict-choice-value'; val.textContent=String(value||'—');
+        const val=document.createElement('span'); val.className='conflict-choice-value'; val.textContent=value==null||value===''?'—':Array.isArray(value)?value.length+' élément'+(value.length>1?'s':''):typeof value==='object'?Object.keys(value).length+' valeur'+(Object.keys(value).length>1?'s':''):cf.field==='stage'?stageLabel(value):String(value);
         btn.appendChild(lab); btn.appendChild(val);
         if(JSON.stringify(value)===JSON.stringify(cf.resolvedValue)){
           const kept=document.createElement('span'); kept.className='conflict-kept'; kept.textContent=' (gardée)';
@@ -5348,7 +5363,7 @@
     tools.innerHTML='<span>Lignes :</span><button type="button" data-rows="needed">Obligatoires</button><button type="button" data-rows="all">Tout le fichier</button>';
     const paintRows=()=>{ sc.querySelector('.req-table').classList.toggle('only-needed', only); tools.querySelectorAll('button').forEach(b=>b.classList.toggle('on', (b.dataset.rows==='needed')===only)); };
     tools.querySelectorAll('button').forEach(b=>b.onclick=()=>{ only=b.dataset.rows==='needed'; try{ localStorage.setItem('req-rows', only?'needed':'all'); }catch(e){} paintRows(); });
-    if(!window.TODO_LITE){ const ai=document.createElement('button'); ai.type='button'; ai.className='req-ai'; ai.textContent='Compléter avec l\u2019IA'; ai.title='Claude propose ce qui se déduit des infos de la fiche (coordonnées, altitude, région, productible…) ; tu choisis ce qui est rempli';
+    if(!window.TODO_LITE && aiOn()){ const ai=document.createElement('button'); ai.type='button'; ai.className='req-ai'; ai.textContent='Compléter avec l\u2019IA'; ai.title='Claude propose ce qui se déduit des infos de la fiche (coordonnées, altitude, région, productible…) ; tu choisis ce qui est rempli';
       ai.onclick=()=>openAiFill(list.filter(x=>!x.deleted), ()=>{ if(viewingOppId) openOppDetail(viewingOppId); }); tools.appendChild(ai); }
     wrap.appendChild(tools); wrap.appendChild(sc); paintRows();
     if(!window.TODO_LITE) reqFillHandle(sc);
@@ -5814,6 +5829,8 @@
   // ---------- « Compléter avec l'IA » : Claude proposes the empty lines of the characteristics file that follow from what the sheet knows ----------
   // Its key stays on this device (like the GitHub token); without one, the request is copied for claude.ai and the answer pasted back.
   const AI_MODEL='claude-sonnet-5-5';
+  // set aside for now (2026-10-23): hidden unless turned on for this device (localStorage feat-ai = 1)
+  const aiOn=()=>{ try{ return localStorage.getItem('feat-ai')==='1'; }catch(e){ return false; } };
   const aiKey=()=>{ try{ return localStorage.getItem('ai-key')||''; }catch(e){ return ''; } };
   function aiPrompt(list){
     const plants=list.map(o=>{ const known={}, empty=[];
@@ -7465,6 +7482,7 @@
   $('pipe-views-btn').onclick=e=>{ e.stopPropagation(); openViewsMenu('pipeline', e.currentTarget); };
   $('pipe-meet-toggle').onclick=()=>{ pipeMeet=!pipeMeet; if(pipeMeet){ pipeDash=false; pipeMap=false; } renderPipeline(); };
   $('pipe-xs-btn').onclick=()=>openExcelSync({ scope:'pipe' });
+  if($('ai-section')) $('ai-section').hidden=!aiOn();
   { const st=()=>{ const k=aiKey(); $('ai-key-status').textContent=k?'Clé enregistrée (…'+k.slice(-4)+'). Vide le champ et enregistre pour l\u2019oublier.':'Pas de clé : copier-coller avec claude.ai.'; };
     if($('ai-key-save')){ $('ai-key-save').onclick=()=>{ const v=$('ai-key-input').value.trim(); try{ if(v) localStorage.setItem('ai-key', v); else localStorage.removeItem('ai-key'); }catch(e){} $('ai-key-input').value=''; st(); }; st(); } }
   if($('parc-xs-btn')){ $('parc-xs-btn').onclick=()=>openExcelSync({ scope:'parc' }); if(ON_PHONE) $('parc-xs-btn').hidden=true; }
