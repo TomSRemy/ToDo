@@ -2624,6 +2624,11 @@
     edit.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>';
     edit.onclick=e=>{ e.stopPropagation(); openContactForm(c); };
     actions.appendChild(edit);
+    if(!window.TODO_LITE){ const call=document.createElement('button'); call.type='button'; call.className='ct-call-btn'; call.title='Mode appel'; call.setAttribute('aria-label','Appeler '+([c.firstName,c.lastName].filter(Boolean).join(' ')||'le contact')+' en Mode appel');
+      call.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;"><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.4 1.8.7 2.7a2 2 0 0 1-.5 2.1L8 9.8a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.8.6 2.7.7a2 2 0 0 1 1.7 2z"/></svg>';
+      call.onclick=e=>{ e.stopPropagation(); const mailC=(c.email||'').toLowerCase(), deals=opportunities.filter(o=>!o.deleted && o.kind==='installation' && !isExited(o) && ((mailC && (o.mail||'').toLowerCase()===mailC) || (c.company && sameCo(o.company||'', c.company))));
+        openCallMode(deals, ()=>renderContacts(), c); };
+      actions.appendChild(call); }
     row.ondblclick=()=>openContactForm(c);
     const del=document.createElement('button'); del.className='del-btn'; del.title='Supprimer';
     del.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="width:14px;height:14px;"><path d="M18 6L6 18M6 6l12 12"/></svg>';
@@ -3756,6 +3761,7 @@
     return changed;
   }
   function renderCrm(){
+    try{ paintDupBanner(); }catch(e){}
     if(normalizeOpps()) saveCrmLocalOnly();
     if(migrateCompanyStars()) saveCrmLocalOnly();
     if(!$('tab-pipeline').classList.contains('hidden')) renderPipeline();
@@ -4276,7 +4282,7 @@
   function pipeTallyReset(){ pipeTallyN={ me:0, others:0, stuck:0, on:true }; }
   function pipeTally(g){ const o=g[0]; if(o.kind!=='installation' || isExited(o)) return; const st=oppStage(o.stage); if(!st) return;
     if(st.who==='Com') pipeTallyN.me++; else pipeTallyN.others++; const d=daysInStage(o); if(d!=null && d>15) pipeTallyN.stuck++; }
-  function paintPipeSummary(){ try{ paintDupBtn(); }catch(e){} let el=$('pipe-summary'); const bar=document.querySelector('#tab-pipeline .quick-add-bar'); if(!bar) return;
+  function paintPipeSummary(){ try{ paintDupBtn(); paintDupBanner(); }catch(e){} let el=$('pipe-summary'); const bar=document.querySelector('#tab-pipeline .quick-add-bar'); if(!bar) return;
     if(!el){ el=document.createElement('span'); el.id='pipe-summary'; el.className='pipe-summary'; const ref=$('pipe-exited-toggle'); bar.insertBefore(el, ref); }
     const show=pipeTallyN.on && !pipeDash && !pipeMeet && !pipeList && !pipeMap; el.hidden=!show; if(!show) return;
     el.innerHTML='À moi <b></b> · En attente des autres <b></b>'+(pipeTallyN.stuck?' · Bloqués &gt; 15 j <b class="late"></b>':'');
@@ -4322,7 +4328,7 @@
     const live=items.filter(o=>!isExited(o)), exited=items.filter(isExited);
     $('pipe-exited-toggle').textContent=pipeShowExited?'Masquer les sorties':('Sorties ('+exited.length+')');
     pipeTallyReset();
-    PIPE_PHASES.forEach(ph=>{
+    PIPE_PHASES.filter(ph=>ph.key!=='actif').forEach(ph=>{   // in service lives in the Portefeuille (backlog decision 14)
       const col=document.createElement('div'); col.className='pipe-col'; col.dataset.phase=ph.key;
       const inPhase=live.filter(o=>oppPhase(o)===ph.key).sort((a,b)=>(a.company||'').localeCompare(b.company||'','fr'));
       const head=document.createElement('div'); head.className='pipe-col-head';
@@ -5911,6 +5917,11 @@
       x.deleted=true; touchCrm(x); });
     touchCrm(keep); saveTasks(); saveCrm(); renderPipeline(); render();
   }
+  // duplicates are serious (MWc counted twice, two lines in the Pipe): a banner at the top of every page while there are some (backlog decision 10)
+  function paintDupBanner(){ const el=$('dup-banner'); if(!el) return; if(window.TODO_WIDGET || window.TODO_LITE){ el.hidden=true; return; }
+    let ig=0, cg=0; try{ ig=instDupGroups().length; cg=coDupGroups().length; }catch(e){}
+    el.hidden=!(ig+cg); if(!(ig+cg)) return;
+    $('dup-banner-text').textContent='Doublons possibles : '+[ig?ig+' installation'+(ig>1?'s':'')+' saisie'+(ig>1?'s':'')+' deux fois':'', cg?cg+' société'+(cg>1?'s':'')+' écrite'+(cg>1?'s':'')+' de deux façons':''].filter(Boolean).join(', ')+'. Les totaux peuvent être faussés.'; }
   function paintDupBtn(){ const bar=document.querySelector('#tab-pipeline .quick-add-bar'); if(!bar || window.TODO_LITE) return; let b=$('pipe-dup-btn');
     const n=dupCount(); if(!n){ if(b) b.hidden=true; return; }
     if(!b){ b=document.createElement('button'); b.type='button'; b.id='pipe-dup-btn'; b.className='pipe-bar-btn pipe-dup-btn'; b.title='Même installation saisie deux fois, même société écrite de deux façons'; b.onclick=()=>openDupes(); bar.insertBefore(b, $('pipe-exited-toggle')); }
@@ -5920,7 +5931,7 @@
     ov=document.createElement('div'); ov.id='dup-overlay'; ov.className='modal-overlay';
     ov.innerHTML='<div class="modal-box wide dup-box" role="dialog" aria-labelledby="dup-title"><div class="opp-detail-head"><h3 id="dup-title">Doublons</h3></div><div class="dup-body"></div><div class="crm-form-actions"><button type="button" class="ghost-btn dup-close">Fermer</button></div></div>';
     document.body.appendChild(ov);
-    const close=()=>{ ov.remove(); renderPipeline(); };
+    const close=()=>{ ov.remove(); renderPipeline(); paintDupBanner(); };
     ov.querySelector('.dup-close').onclick=close; ov.addEventListener('click', e=>{ if(e.target===ov) close(); }); ov.addEventListener('keydown', e=>{ if(e.key==='Escape'){ e.stopPropagation(); close(); } });
     const paint=()=>{ const body=ov.querySelector('.dup-body'); body.innerHTML='';
       const ig=instDupGroups(), cg=coDupGroups(), ctg=contactDupGroups();
@@ -6099,7 +6110,7 @@
     let rows=[];
     const targets=()=>{ const id=pick && pick.querySelector('select').value; return id?live.filter(o=>o.id===id):live; };
     const paint=()=>{
-      rows=quickNoteProposals(ta.value, targets()); prop.innerHTML='';
+      rows=live.length?quickNoteProposals(ta.value, targets()):[]; prop.innerHTML='';
       if(pick) pick.hidden=!rows.some(r=>QN_PER_PLANT.has(r.k));
       rows.forEach(r=>{ const l=document.createElement('label'); l.className='qn-row'; const cb=document.createElement('input'); cb.type='checkbox'; cb.checked=true; r.cb=cb;
         const sp=document.createElement('span'); sp.innerHTML='<b></b> <span class="qn-v"></span> <small></small>'; sp.querySelector('b').textContent=QN_LABELS[r.k]+' :'; sp.querySelector('.qn-v').textContent=qnShow(r.k, r.v); sp.querySelector('small').textContent=r.old?'(avant : '+r.old.split(' / ').map(v=>qnShow(r.k, v)).join(' / ')+')':'(vide)';
@@ -6127,19 +6138,21 @@
     pricing_indicatif:['Le pricing est en cours chez Ops','Une info manque-t-elle pour le prix ?'], offre_remise:['Présenter l’offre'], offre_attente:['A-t-il pu regarder l’offre ?','Des questions, une contre-proposition ?'],
     kyc:['Documents KYC à envoyer (Kbis, statuts, RIB, pièce d’identité)'], negociation:['Les points restant à régler'], pricing_ferme:['Le prix ferme arrive (Ops)'],
     mise_signature:['Le DocuSign est-il bien arrivé ?'], signature:['Signé de son côté ?'], onboarding:['Accès, ARPE, données techniques'], actif:['Tout va bien sur la valorisation ?'] };
-  function openCallMode(list, back){
-    const live=list.filter(x=>!isExited(x)).length?list.filter(x=>!isExited(x)):list; if(!live.length) return;
-    const first=live[0], st=oppStage(first.stage), started=Date.now();
-    const mail=(first.mail||'').toLowerCase(), crm=mail && contacts.find(c=>!c.deleted && (c.email||'').toLowerCase()===mail);
-    const name=[first.prenom, first.nom].filter(Boolean).join(' ')||(crm?[crm.firstName,crm.lastName].filter(Boolean).join(' '):''), tel=first.tel||(crm?crm.phone1:'');
+  // person: a contact called from the Contacts tab (backlog decision 6) — the call is about that person, with their company's deals if any
+  function openCallMode(list, back, person){
+    const live=list.filter(x=>!isExited(x)).length?list.filter(x=>!isExited(x)):list; if(!live.length && !person) return;
+    const first=live[0]||null, st=first?oppStage(first.stage):null, started=Date.now();
+    const mail=((person?person.email:first.mail)||'').toLowerCase(), crm=person||(mail && contacts.find(c=>!c.deleted && (c.email||'').toLowerCase()===mail));
+    const name=person?[person.firstName,person.lastName].filter(Boolean).join(' '):[first.prenom, first.nom].filter(Boolean).join(' ')||(crm?[crm.firstName,crm.lastName].filter(Boolean).join(' '):''), tel=person?(person.phone1||person.phone2||''):first.tel||(crm?crm.phone1:'');
+    const company=person?person.company||'':first.company;
     closeOppDetail();
     let ov=$('call-overlay'); if(ov) ov.remove();
     ov=document.createElement('div'); ov.id='call-overlay'; ov.className='modal-overlay';
     const bx=document.createElement('div'); bx.className='modal-box wide call-box'; bx.setAttribute('role','dialog'); bx.setAttribute('aria-label','Mode appel'); ov.appendChild(bx);
     const head=document.createElement('div'); head.className='call-head';
     head.innerHTML='<div><div class="sp-k">Mode appel <span class="call-timer">0:00</span></div><h3></h3><div class="call-sub"></div></div><div class="call-tel"></div>';
-    head.querySelector('h3').textContent=(name||first.company)+(name?' · '+first.company:'');
-    head.querySelector('.call-sub').textContent=[live.length>1?live.length+' installations':oppName(first), fmtKwc(live.reduce((s2,x)=>s2+kwcNum(x),0)), st?stageLabel(st.key, first)+(daysInStage(first)!=null?' depuis '+daysInStage(first)+' j':''):''].filter(Boolean).join(' · ');
+    head.querySelector('h3').textContent=(name||company)+(name && company?' · '+company:'');
+    head.querySelector('.call-sub').textContent=first?[live.length>1?live.length+' installations':oppName(first), fmtKwc(live.reduce((s2,x)=>s2+kwcNum(x),0)), st?stageLabel(st.key, first)+(daysInStage(first)!=null?' depuis '+daysInStage(first)+' j':''):''].filter(Boolean).join(' · '):[person && person.role, 'aucun dossier en cours'].filter(Boolean).join(' · ');
     if(tel){ const a=document.createElement('a'); a.href='tel:'+tel.replace(/[^\d+]/g,''); a.className='call-num'; a.textContent=tel; head.querySelector('.call-tel').appendChild(a); }
     if(mail){ const a=document.createElement('a'); a.href='mailto:'+mail; a.className='os-link'; a.textContent=mail; head.querySelector('.call-tel').appendChild(a); }
     if(!tel && !mail){ const n=document.createElement('span'); n.className='call-sub'; n.textContent='Pas de numéro sur la fiche'; head.querySelector('.call-tel').appendChild(n); }
@@ -6147,10 +6160,10 @@
     const grid=document.createElement('div'); grid.className='call-grid'; bx.appendChild(grid);
     const left=document.createElement('section'); left.className='call-col'; grid.appendChild(left);
     // what to talk about at this step, then what is missing in the sheet (typed right there)
-    const talk=CALL_TALK[first.stage]||[];
+    const talk=first?CALL_TALK[first.stage]||[]:['Présenter Selfee et l\u2019agrégation','Des projets en cours ou à venir ? Combien de centrales, quelle puissance, quel contrat ?','Qui décide, et quand se reparler ?'];
     if(talk.length){ const h=document.createElement('div'); h.className='sp-k'; h.textContent='À aborder'; left.appendChild(h); const ul=document.createElement('ul'); ul.className='call-talk'; talk.forEach(x=>{ const li=document.createElement('li'); li.textContent=x; ul.appendChild(li); }); left.appendChild(ul); }
     const asks=document.createElement('div'); asks.className='call-asks'; left.appendChild(asks);
-    const paintAsks=()=>{ asks.innerHTML='';
+    const paintAsks=()=>{ asks.innerHTML=''; if(!live.length) return;
       const miss=[]; live.forEach(o=>CARACT_ROWS.forEach(l=>{ const k=caractKey(l); if(REQ_NEEDED.has(k) && caractValue(o,l)==='') miss.push({ o, l, k }); }));
       const h=document.createElement('div'); h.className='sp-k'; h.textContent=miss.length?'À demander · '+miss.length:'Fiche complète'; asks.appendChild(h);
       miss.forEach(x=>{ const r=document.createElement('label'); r.className='call-ask'; const q=document.createElement('span'); q.textContent=(live.length>1?oppName(x.o)+' — ':'')+(QN_ASK[x.k]||x.l);
@@ -6167,7 +6180,9 @@
     const timer=setInterval(()=>{ const s2=Math.floor((Date.now()-started)/1000); const el=bx.querySelector('.call-timer'); if(el) el.textContent=Math.floor(s2/60)+':'+String(s2%60).padStart(2,'0'); }, 1000);
     const close=save=>{ clearInterval(timer);
       if(save){ if(qn.qn.rows().some(r=>r.cb.checked)) qn.qn.fill.click();   // what was spotted and left ticked goes into the sheet
-        const mins=Math.max(1, Math.round((Date.now()-started)/60000)); logNote(live, 'appel', qn.qn.ta.value, { min:mins }); }
+        const mins=Math.max(1, Math.round((Date.now()-started)/60000)); if(live.length) logNote(live, 'appel', qn.qn.ta.value, { min:mins });
+        if(person){ const said=qn.qn.ta.value.trim();   // the contact has no journal: the call goes at the top of its Commentaire
+          person.comment=['Appel du '+new Date().toLocaleDateString('fr-FR')+' ('+mins+' min)'+(said?' : '+said:''), person.comment||''].filter(Boolean).join('\n'); touchCrm(person); saveCrm(); } }
       ov.remove(); if(back) back(); };
     const end=document.createElement('button'); end.type='button'; end.className='call-end'; end.textContent='Terminer l’appel'; end.title='Garde la note et la durée dans l’historique'; end.onclick=()=>close(true);
     const cancel=document.createElement('button'); cancel.type='button'; cancel.className='ghost-btn'; cancel.textContent='Annuler'; cancel.onclick=()=>close(false);
@@ -7493,6 +7508,7 @@
 
   $('card-scan-btn').onclick=()=>$('card-scan-input').click();
   $('card-scan-input').addEventListener('change', e=>{ const f=e.target.files[0]; e.target.value=''; scanCard(f); });
+  $('dup-banner-btn').onclick=()=>openDupes();
   $('vcf-import-btn').onclick=phoneImportStart;
   $('vcf-import-input').addEventListener('change', async e=>{ const f=e.target.files[0]; e.target.value=''; if(!f) return; const list=parseVcf(await f.text()); if(!list.length){ alert('Aucun contact lu dans ce fichier (.vcf attendu).'); return; } openPhoneImport(list); });
   $('sig-paste-btn').onclick=()=>{
@@ -9168,7 +9184,7 @@
   window.addEventListener('offline', paintSyncPill);
   $('storage-alert-close').onclick=()=>{ $('storage-alert').hidden=true; };
   $('storage-alert-see').onclick=()=>{ $('storage-alert').hidden=true; openStorageSection(); };
-  loadAll().then(()=>{
+  loadAll().then(()=>{ try{ paintDupBanner(); }catch(e){}
     paintSyncPill(); checkStorageFull(); setInterval(checkStorageFull, 10*60*1000);
     $('sync-token-exp').value=syncConfig.tokenExpires||'';
     if(location.hash==='#sync' && !window.TODO_LITE) openSyncSettings();

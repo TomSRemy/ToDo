@@ -2247,3 +2247,9 @@ details.req-compare > .req-compare-h{ font-size:12.5px; }
 .ps-slide.ps-divider{ background:linear-gradient(135deg,#0F1B2D 0%,#16324A 100%); color:#fff; justify-content:center; }
 .ps-div-in h1{ margin:1cqw 0; font:800 5cqw var(--font-ui); } .ps-div-in p{ margin:0; font-size:1.6cqw; color:#B8C6D6; }
 .card-scan-status{ font-size:12px; color:var(--accent); align-self:center; }
+/* duplicates: a banner at the top of every page while there are some */
+.dup-banner{ flex:none; display:flex; align-items:center; gap:12px; padding:8px 16px; background:color-mix(in srgb, #E5B54F 14%, var(--bg)); border-bottom:1px solid #E5B54F66; color:var(--tx1); font-size:13px; }
+.dup-banner[hidden]{ display:none; }
+.dup-banner span::before{ content:'⚠ '; color:#E5B54F; }
+.dup-banner button{ margin-left:auto; flex:none; background:#E5B54F; border:none; border-radius:var(--radius); color:#04070C; font:600 12.5px var(--font-ui); padding:5px 12px; cursor:pointer; }
+html.widget .dup-banner{ display:none; }

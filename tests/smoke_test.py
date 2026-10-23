@@ -697,11 +697,13 @@ with sync_playwright() as p:
     check(st["d1"] == "pricing_indicatif" and st["d2"] == "pricing_indicatif" and page.locator('.pipe-col[data-phase="offre"] .pipe-req-card').count() == 1, f"pipeline: both installations move together ({st})")
     check(page.is_visible("#opp-detail-overlay") and page.is_visible("#opp-mail-body"), "pipeline: moved to the pricing (the Go), the sheet opens on the pricing mail")
     page.click("#opp-detail-actions >> text=Fermer")
-    page.drag_and_drop(".pipe-card[data-id=solo]", '.pipe-col[data-phase="actif"]'); page.wait_for_timeout(100)
+    check(page.locator('.pipe-col[data-phase="actif"]').count() == 0, "pipeline: no « En service » column (in service = the Portefeuille)")
+    page.drag_and_drop(".pipe-card[data-id=solo]", '.pipe-col[data-phase="onboarding"]'); page.wait_for_timeout(100)
     if page.is_visible("#stage-advance-overlay"): page.click("#stage-advance-confirm"); page.wait_for_timeout(200)
-    check(next(o for o in stored(page, "todo-widget-opportunities") if o["id"] == "solo")["stage"] == "actif" and not page.is_visible(".drop-menu"), "pipeline: a phase with one step takes the card at once (no step to choose)")
+    if page.is_visible("#opp-detail-overlay"): page.click("#opp-detail-actions >> text=Fermer")
+    check(next(o for o in stored(page, "todo-widget-opportunities") if o["id"] == "solo")["stage"] == "onboarding" and not page.is_visible(".drop-menu"), "pipeline: a phase with one step takes the card at once (no step to choose)")
     page.drag_and_drop(".pipe-card[data-id=solo]", '.pipe-col[data-phase="contrat"]'); page.keyboard.press("Escape"); page.wait_for_timeout(100)
-    check(next(o for o in stored(page, "todo-widget-opportunities") if o["id"] == "solo")["stage"] == "actif" and not page.is_visible(".drop-menu"), f"pipeline: Escape leaves the card where it was ({next(o for o in stored(page, 'todo-widget-opportunities') if o['id'] == 'solo')['stage']}, {page.is_visible('.drop-menu')})")
+    check(next(o for o in stored(page, "todo-widget-opportunities") if o["id"] == "solo")["stage"] == "onboarding" and not page.is_visible(".drop-menu"), f"pipeline: Escape leaves the card where it was ({next(o for o in stored(page, 'todo-widget-opportunities') if o['id'] == 'solo')['stage']}, {page.is_visible('.drop-menu')})")
     check(not errors, f"no page errors ({errors})")
     page.close()
 
@@ -1877,6 +1879,30 @@ with sync_playwright() as p:
     check(not errors, f"no page errors ({errors})")
     page.close()
 
+    # --- Mode appel from the Contacts tab: with the company's deal when there is one, alone otherwise; the call is kept
+    cm = [{"id": "cm1", "kind": "installation", "company": "Solaris", "centrale": "Toit Nord", "title": "Toit Nord", "stage": "collecte", "kwc": "500", "createdAt": 1, "updatedAt": 1, "deleted": False}]
+    cc = [{"id": "cc1", "firstName": "Paul", "lastName": "Durand", "company": "Solaris", "phone1": "06 11 22 33 44", "comment": "Vu au salon", "createdAt": 1, "updatedAt": 1, "deleted": False},
+          {"id": "cc2", "firstName": "Léa", "lastName": "Martin", "company": "Ventus", "phone1": "06 99 88 77 66", "createdAt": 1, "updatedAt": 1, "deleted": False}]
+    page, errors = new_page(browser, {"todo_todo-widget-opportunities": json.dumps(cm), "todo_todo-widget-contacts": json.dumps(cc)}, viewport={"width": 1400, "height": 900})
+    page.goto(URL); page.click('[data-tab="contacts"]')
+    page.locator(".contact-row", has_text="Durand").locator(".ct-call-btn").click()
+    check(page.is_visible("#call-overlay") and "06 11 22 33 44" in page.inner_text(".call-head") and "Toit Nord" in page.inner_text(".call-sub"),
+          f"contacts: Mode appel opens with the company's deal ({page.inner_text('.call-head')!r})")
+    page.fill("#call-notes", "Intéressé, rappeler en janvier"); page.click(".call-end"); page.wait_for_timeout(200)
+    o = next(x for x in stored(page, "todo-widget-opportunities") if x["id"] == "cm1"); c = next(x for x in stored(page, "todo-widget-contacts") if x["id"] == "cc1")
+    check(len(o.get("notesLog") or []) == 1 and c["comment"].startswith("Appel du ") and "rappeler en janvier" in c["comment"] and c["comment"].endswith("Vu au salon"),
+          f"contacts: the call is kept on the deal and at the top of the contact's comment ({c['comment']!r})")
+    page.locator(".contact-row", has_text="Martin").locator(".ct-call-btn").click()
+    check(page.is_visible("#call-overlay") and "aucun dossier" in page.inner_text(".call-sub") and "Selfee" in page.inner_text(".call-talk"),
+          "contacts: Mode appel without any deal — the generic points to talk about")
+    page.fill("#call-notes", "P50 1200"); page.wait_for_timeout(100)
+    check(page.locator(".qn-row").count() == 0, "contacts: no plant, nothing to fill from the notes")
+    page.click(".call-end"); page.wait_for_timeout(200)
+    c2 = next(x for x in stored(page, "todo-widget-contacts") if x["id"] == "cc2")
+    check("P50 1200" in (c2.get("comment") or "") and not page.is_visible("#call-overlay"), "contacts: the call is kept on the contact alone")
+    check(not errors, f"no page errors ({errors})")
+    page.close()
+
     # --- Doublons: a company written two ways, a plant entered twice; merged in one click, or marked as different
     du = [{"id": "d1", "kind": "installation", "company": "GAEC Dupont", "centrale": "Hangar Est", "title": "Hangar Est", "stage": "pricing_indicatif", "kwc": "900", "createdAt": 1, "updatedAt": 5, "deleted": False},
           {"id": "d2", "kind": "installation", "company": "Gaec Dupont SARL", "centrale": "Centrale Hangar Est", "title": "Centrale Hangar Est", "stage": "collecte", "mwh": "1100", "commune": "Cholet",
@@ -1886,6 +1912,9 @@ with sync_playwright() as p:
     page, errors = new_page(browser, {"todo_todo-widget-opportunities": json.dumps(du), "todo_todo-widget-tasks": json.dumps([dict(task("dt", "Relancer"), opportunityId="d2")])}, viewport={"width": 1400, "height": 900})
     page.goto(URL); page.click('[data-tab="pipeline"]')
     check(page.is_visible("#pipe-dup-btn") and "Doublons · 2" in page.inner_text("#pipe-dup-btn"), f"doublons: the pipeline says there are some ({page.inner_text('#pipe-dup-btn') if page.is_visible('#pipe-dup-btn') else ''})")
+    page.click('[data-tab="today"]'); page.wait_for_timeout(100)
+    check(page.is_visible("#dup-banner") and "1 installation saisie deux fois" in page.inner_text("#dup-banner"), f"doublons: a banner at the top of every page ({page.inner_text('#dup-banner') if page.is_visible('#dup-banner') else ''})")
+    page.click('[data-tab="pipeline"]')
     page.click("#pipe-dup-btn")
     check("Gaec Dupont SARL" in page.inner_text("#dup-overlay") and "GAEC Dupont" in page.inner_text("#dup-overlay"), "doublons: the company written two ways")
     page.click("#dup-overlay .dup-group:has-text('Gaec Dupont SARL') .dup-merge"); page.wait_for_timeout(200)
@@ -1898,6 +1927,7 @@ with sync_playwright() as p:
     check("Aucune installation ni société en double" in page.inner_text("#dup-overlay"), "doublons: nothing left")
     page.click("#dup-overlay .dup-close"); page.wait_for_timeout(150)
     check(not page.is_visible("#pipe-dup-btn"), "doublons: the button goes away")
+    check(not page.is_visible("#dup-banner"), "doublons: the banner goes away too")
     page.click('[data-tab="parc"]'); page.click("#parc-xs-btn"); page.wait_for_timeout(200)
     check(page.is_visible("#xs-overlay") and "on" in (page.get_attribute("#xs-overlay .xs-scope [data-s=parc]", "class") or ""), "Portefeuille: « Excel ⇄ » opens on the signed installations")
     page.keyboard.press("Escape"); page.click("#xs-overlay .xs-x") if page.is_visible("#xs-overlay") else None
