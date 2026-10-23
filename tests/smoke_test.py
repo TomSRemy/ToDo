@@ -2018,6 +2018,29 @@ with sync_playwright() as p:
     check(not errors, f"no page errors ({errors})")
     page.close()
 
+    # --- Phone → app: a .vcf file; a known contact only gets its empty boxes; a business card photo fills a new contact
+    known = [{"id": "kc", "firstName": "Anne", "lastName": "Roux", "company": "Solaris", "email": "anne@solaris.fr", "phone1": "", "phone2": "", "role": "", "comment": "", "relevance": 0, "createdAt": 1, "updatedAt": 1, "deleted": False}]
+    vcf = ("BEGIN:VCARD\r\nVERSION:3.0\r\nN:Roux;Anne;;;\r\nFN:Anne Roux\r\nEMAIL;TYPE=INTERNET:anne@solaris.fr\r\nTEL;TYPE=CELL:+33 6 11 22 33 44\r\nEND:VCARD\r\n"
+           "BEGIN:VCARD\r\nVERSION:3.0\r\nN:Martin;Paul;;;\r\nORG:Ventus;\r\nTITLE:Gérant\r\nEMAIL:paul@ventus.fr\r\nTEL;TYPE=WORK:01 02 03 04 05\r\nEND:VCARD\r\n")
+    vf = pathlib.Path(tempfile.mkdtemp()) / "contacts.vcf"; vf.write_text(vcf, encoding="utf-8")
+    page, errors = new_page(browser, {"todo_todo-widget-contacts": json.dumps(known)}, viewport={"width": 1300, "height": 850})
+    page.route("**/tesseract.min.js", lambda r: r.fulfill(status=200, content_type="application/javascript",
+               body="window.Tesseract={ recognize: async()=>({ data:{ text:'Claire Dubois\\nDirectrice des achats\\nHélio Ouest\\nclaire.dubois@helio-ouest.fr\\n06 12 34 56 78' } }) };"))
+    page.goto(URL); page.click('[data-tab="contacts"]')
+    page.set_input_files("#vcf-import-input", str(vf)); page.wait_for_timeout(200)
+    summ = page.inner_text("#phone-import-overlay .pi-sum")
+    check("2 contacts lus : 1 nouveau, 1 déjà connu à compléter" in summ, f"phone import: new and known told apart ({summ!r})")
+    page.click("#phone-import-overlay .pi-go"); page.wait_for_timeout(150)
+    cs = {c["email"]: c for c in stored(page, "todo-widget-contacts") if not c.get("deleted")}
+    check(len(cs) == 2 and cs["anne@solaris.fr"]["phone1"] == "06 11 22 33 44" and cs["anne@solaris.fr"]["company"] == "Solaris" and cs["paul@ventus.fr"]["company"] == "Ventus" and cs["paul@ventus.fr"]["role"] == "Gérant",
+          f"phone import: the new one added, the known one only completed ({[(c['firstName'], c['phone1'], c['company']) for c in cs.values()]})")
+    page.click("#phone-import-overlay .pi-close")
+    page.set_input_files("#card-scan-input", files=[{"name": "carte.jpg", "mimeType": "image/jpeg", "buffer": b"fake"}]); page.wait_for_timeout(500)
+    check(page.input_value("#ct-first") == "Claire" and page.input_value("#ct-email") == "claire.dubois@helio-ouest.fr" and "Directrice" in page.input_value("#ct-role"),
+          f"business card: the photo's text fills a new contact ({page.input_value('#ct-first')!r}, {page.input_value('#ct-role')!r})")
+    check(not errors, f"no page errors ({errors})")
+    page.close()
+
     # --- Keyboard in a sheet: 1 ticks the first box, Entrée moves on and confirms, n opens the notes
     kb = [{"id": "k1", "kind": "installation", "company": "KB", "centrale": "Toit", "title": "Toit", "stage": "kyc", "createdAt": 1, "updatedAt": 1, "deleted": False}]
     page, errors = new_page(browser, {"todo_todo-widget-opportunities": json.dumps(kb)}, viewport={"width": 1400, "height": 900})

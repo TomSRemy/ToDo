@@ -260,6 +260,11 @@
       </div>
       <button id="contact-add-btn" type="button" class="primary-btn">Nouveau contact</button>
       <button id="vcf-btn" type="button" class="pipe-bar-btn">Vers le téléphone</button>
+      <button id="vcf-import-btn" type="button" class="pipe-bar-btn" title="Importer les contacts du téléphone (fichier .vcf, ou le répertoire sur Android) ; ceux déjà connus ne reçoivent que leurs cases vides">Depuis le téléphone</button>
+      <button id="card-scan-btn" type="button" class="pipe-bar-btn" title="Photographier une carte de visite : le texte est lu sur l’appareil et le contact pré-rempli">Carte de visite</button>
+      <input type="file" id="vcf-import-input" accept=".vcf,text/vcard,text/x-vcard" class="hidden">
+      <input type="file" id="card-scan-input" accept="image/*" capture="environment" class="hidden">
+      <span id="card-scan-status" class="card-scan-status" hidden></span>
       <button id="sig-paste-btn" type="button">Coller une signature</button>
       <button id="contact-import-btn" type="button">Importer Excel</button>
       <button id="contact-export-btn" type="button">Exporter Excel</button>
@@ -446,6 +451,8 @@
         <section data-g="contacts" hidden>
           <h4>Contacts</h4>
           <ul>
+            <li><b>Carte de visite</b> : le bouton ouvre l'appareil photo (ou un fichier image) ; le texte est lu sur l'appareil et le contact s'ouvre pré-rempli, à vérifier avant d'enregistrer.</li>
+            <li><b>Depuis le téléphone</b> : importe le fichier de contacts exporté par le téléphone (.vcf) ; sur Android, choix direct dans le répertoire. Les contacts déjà connus (même mail, téléphone ou nom dans la même société) ne reçoivent que leurs cases vides ; rien n'est effacé. « Vers le téléphone » fait l'inverse.</li>
             <li>Tri en cliquant sur les en-têtes Contact, Société, Pertinence. Clic sur un nom = la fiche ; l'icône copie le mail ou le téléphone.</li>
             <li>« Coller une signature » crée un contact depuis une signature (texte ou image).</li>
             <li><b>Vers le téléphone</b> : fichier .vcf des contacts jamais exportés (les doublons de l'app sont fusionnés). Après le tout premier import sur un téléphone qui avait déjà des contacts, lance « Fusionner les doublons » du téléphone.</li>

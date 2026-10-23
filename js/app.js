@@ -7491,6 +7491,10 @@
     };
   });
 
+  $('card-scan-btn').onclick=()=>$('card-scan-input').click();
+  $('card-scan-input').addEventListener('change', e=>{ const f=e.target.files[0]; e.target.value=''; scanCard(f); });
+  $('vcf-import-btn').onclick=phoneImportStart;
+  $('vcf-import-input').addEventListener('change', async e=>{ const f=e.target.files[0]; e.target.value=''; if(!f) return; const list=parseVcf(await f.text()); if(!list.length){ alert('Aucun contact lu dans ce fichier (.vcf attendu).'); return; } openPhoneImport(list); });
   $('sig-paste-btn').onclick=()=>{
     $('sig-paste-text').value='';
     clearSigImage();
@@ -8397,6 +8401,77 @@
     return b;
   }
 
+  // ---------- Phone → contacts: a .vcf file (what a phone exports), or the phone's own picker (Android) ----------
+  function parseVcf(text){
+    const raw=String(text||'').replace(/\r\n?/g,'\n').replace(/\n[ \t]/g,'');   // folded lines
+    const un=v=>String(v||'').replace(/\\n/gi,'\n').replace(/\\([,;\\])/g,'$1').trim();
+    const qp=v=>{ try{ return decodeURIComponent(v.replace(/=\n/g,'').replace(/(=[0-9A-F]{2})+/gi, m=>m.replace(/=/g,'%'))); }catch(e){ return v; } };
+    const out=[];
+    raw.split(/BEGIN:VCARD/i).slice(1).forEach(card=>{
+      const c={ firstName:'', lastName:'', company:'', role:'', email:'', phone1:'', phone2:'', comment:'' }, tels=[];
+      card.split('\n').forEach(line=>{ const m=/^([^:;]+)((?:;[^:]*)?):(.*)$/.exec(line.trim()); if(!m) return;
+        const key=m[1].toUpperCase().replace(/^ITEM\d+\./,''), params=m[2].toUpperCase(); let val=m[3]; if(/QUOTED-PRINTABLE/.test(params)) val=qp(val);
+        if(key==='N'){ const [last,first]=val.split(';'); c.lastName=un(last); c.firstName=un(first); }
+        else if(key==='FN' && !c.firstName && !c.lastName){ const w=un(val).split(/\s+/); c.firstName=w.shift()||''; c.lastName=w.join(' '); }
+        else if(key==='ORG'){ c.company=un(val.split(';')[0]); }
+        else if(key==='TITLE'){ c.role=un(val); }
+        else if(key==='EMAIL' && !c.email){ c.email=un(val).toLowerCase(); }
+        else if(key==='TEL'){ tels.push({ v:un(val).replace(/^tel:/i,''), cell:/CELL|MOBILE|IPHONE/.test(params) }); }
+        else if(key==='NOTE'){ c.comment=un(val); } });
+      tels.sort((a,b)=>b.cell-a.cell); c.phone1=tels[0]?pqFmtPhone(tels[0].v):''; c.phone2=tels[1]?pqFmtPhone(tels[1].v):'';
+      if(c.firstName||c.lastName||c.email||c.phone1) out.push(c); });
+    return out;
+  }
+  // which of these are already known (same mail, phone, or name in the same company): those only get their empty boxes filled
+  function phoneImportPlan(list){
+    const live=contacts.filter(c=>!c.deleted), byKey=new Map(); live.forEach(c=>contactDupKeys(c).forEach(k=>byKey.set(k,c)));
+    return list.map(c=>{ const known=contactDupKeys(c).map(k=>byKey.get(k)).find(Boolean)||null;
+      const adds=known?['firstName','lastName','company','role','email','phone1','phone2'].filter(k=>c[k] && !known[k]):[];
+      return { c, known, adds }; });
+  }
+  function openPhoneImport(list){
+    const plan=phoneImportPlan(list); let ov=$('phone-import-overlay'); if(ov) ov.remove();
+    ov=document.createElement('div'); ov.id='phone-import-overlay'; ov.className='modal-overlay';
+    const fresh=plan.filter(x=>!x.known), upd=plan.filter(x=>x.known && x.adds.length), same=plan.filter(x=>x.known && !x.adds.length);
+    ov.innerHTML='<div class="modal-box wide" role="dialog" aria-labelledby="pi-title"><h3 id="pi-title">Contacts du téléphone</h3><p class="modal-hint pi-sum"></p><div class="pi-list"></div><div class="crm-form-actions"><button type="button" class="pi-go"></button><button type="button" class="ghost-btn pi-close">Fermer</button></div></div>';
+    document.body.appendChild(ov);
+    ov.querySelector('.pi-sum').textContent=plan.length+' contact'+(plan.length>1?'s':'')+' lu'+(plan.length>1?'s':'')+' : '+fresh.length+' nouveau'+(fresh.length>1?'x':'')+', '+upd.length+' déjà connu'+(upd.length>1?'s':'')+' à compléter, '+same.length+' déjà à jour. Rien n’est effacé ni remplacé : un contact connu ne reçoit que ses cases vides.';
+    const box=ov.querySelector('.pi-list'), name=c=>[c.firstName,c.lastName].filter(Boolean).join(' ')||c.email||c.phone1;
+    const row=(x, label)=>{ const l=document.createElement('label'); l.className='qn-row pi-row'; const cb=document.createElement('input'); cb.type='checkbox'; cb.checked=true; x.cb=cb;
+      const sp=document.createElement('span'); sp.innerHTML='<b></b> <small></small>'; sp.querySelector('b').textContent=name(x.c)+(x.c.company?' · '+x.c.company:''); sp.querySelector('small').textContent=label; cb.onchange=paint; l.append(cb, sp); box.appendChild(l); };
+    if(fresh.length){ const h=document.createElement('h4'); h.className='dup-h'; h.textContent='Nouveaux · '+fresh.length; box.appendChild(h); fresh.forEach(x=>row(x, [x.c.email, x.c.phone1].filter(Boolean).join(' · '))); }
+    if(upd.length){ const h=document.createElement('h4'); h.className='dup-h'; h.textContent='Déjà connus, cases vides à compléter · '+upd.length; box.appendChild(h);
+      const L={ firstName:'prénom', lastName:'nom', company:'société', role:'fonction', email:'mail', phone1:'téléphone', phone2:'2e téléphone' }; upd.forEach(x=>row(x, '+ '+x.adds.map(k=>L[k]).join(', '))); }
+    const go=ov.querySelector('.pi-go');
+    function paint(){ const n=plan.filter(x=>x.cb && x.cb.checked).length; go.disabled=!n; go.textContent=n?'Importer '+n+' contact'+(n>1?'s':''):'Rien de coché'; }
+    paint();
+    go.onclick=()=>{ let made=0, filled=0;
+      plan.filter(x=>x.cb && x.cb.checked).forEach(x=>{
+        if(x.known){ x.adds.forEach(k=>{ x.known[k]=k==='company'?ensureCompany(x.c[k]):x.c[k]; }); touchCrm(x.known); filled++; }
+        else { const c=Object.assign({ id:'ct_'+Date.now()+'_'+Math.random().toString(36).slice(2,7), createdAt:Date.now(), deleted:false, relevance:0 }, x.c);
+          if(c.company) c.company=ensureCompany(c.company); c.vcfAt=Date.now(); contacts.push(c); touchCrm(c); made++; } });
+      saveCrm(); if(typeof renderContacts==='function') renderContacts();
+      ov.querySelector('.pi-sum').textContent='✓ '+made+' contact'+(made>1?'s':'')+' ajouté'+(made>1?'s':'')+(filled?', '+filled+' complété'+(filled>1?'s':''):'')+'.'; box.innerHTML=''; go.hidden=true; };
+    const close=()=>ov.remove(); ov.querySelector('.pi-close').onclick=close; ov.addEventListener('click', e=>{ if(e.target===ov) close(); }); ov.addEventListener('keydown', e=>{ if(e.key==='Escape'){ e.stopPropagation(); close(); } });
+  }
+  async function phoneImportStart(){
+    // Android (Chrome): the phone's own contact picker; elsewhere: a .vcf file exported from the phone
+    if('contacts' in navigator && 'ContactsManager' in window){
+      try{ const sel=await navigator.contacts.select(['name','email','tel'], { multiple:true });
+        if(sel && sel.length) openPhoneImport(sel.map(x=>{ const w=String((x.name||[])[0]||'').trim().split(/\s+/); const t=(x.tel||[]).map(pqFmtPhone);
+          return { firstName:w.shift()||'', lastName:w.join(' '), company:'', role:'', email:String((x.email||[])[0]||'').toLowerCase(), phone1:t[0]||'', phone2:t[1]||'', comment:'' }; }));
+        return; }catch(e){ /* picker refused: the file way */ } }
+    $('vcf-import-input').click();
+  }
+  // a business card, photographed: the text is read on the device, then the contact form opens filled in
+  async function scanCard(file){
+    if(!file) return; const st=$('card-scan-status'); if(st){ st.hidden=false; st.textContent='Lecture de la carte…'; }
+    try{ await loadTesseract(); const { data }=await Tesseract.recognize(file, 'fra+eng'); const g=parseSignatureText(data.text||'');
+      if(st) st.hidden=true;
+      if(!g.firstName && !g.lastName && !g.email && !g.phone1){ alert('Je n’ai pas réussi à lire la carte. Essaie avec plus de lumière, la carte bien à plat.'); return; }
+      openContactForm(null, Object.assign({}, g, { comment:[g.comment, 'Carte de visite scannée le '+new Date().toLocaleDateString('fr-FR')].filter(Boolean).join('\n') }));
+    }catch(e){ if(st) st.hidden=true; alert('La lecture de la carte a échoué (connexion nécessaire la première fois).'); }
+  }
   // ---------- Contacts → phone (vCard), without duplicates ----------
   // Each contact remembers when it was last exported (vcfAt, synced), so a second export only sends new ones.
   // Contacts sharing an email or a phone number inside the app are exported once.
