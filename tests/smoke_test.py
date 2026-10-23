@@ -1831,6 +1831,15 @@ with sync_playwright() as p:
     vals = [[c for c in r] for r in ws.iter_rows(values_only=True)]
     check(f.name.endswith("_Pipe agrégation - réunion pricing.xlsx") and vals[2][3] == "Puissance (kWc)" and any(r[1] == "CS du Moulin" and r[3] == 4500 for r in vals),
           f"meeting view: Excel file with real numbers ({f.name})")
+    page.click(".meet-present-btn"); page.wait_for_timeout(150)
+    cnt = page.inner_text("#present-overlay .ps-count")
+    check(page.is_visible("#present-overlay") and cnt.startswith("1 / ") and int(cnt.split("/")[1]) >= 6, f"meeting view: « Présenter » opens the deck ({cnt})")
+    page.keyboard.press("ArrowRight"); page.keyboard.press("ArrowRight"); page.keyboard.press("n")
+    check(page.inner_text("#present-overlay .ps-count").startswith("3 / ") and page.locator("#present-overlay .ps-slide h2").count() == 1 and page.evaluate("document.activeElement.id") != "quick-add-input",
+          "presentation: arrows move on, the app's own shortcuts stay quiet")
+    page.keyboard.press("End"); check("débloquer" in page.inner_text("#present-overlay h2") or page.locator("#present-overlay h2").count() == 1, "presentation: End goes to the last slide")
+    page.keyboard.press("Escape"); page.wait_for_timeout(100)
+    check(page.locator("#present-overlay").count() == 0, "presentation: Escape closes it")
     page.click("#pipe-meet-toggle"); check(page.locator(".pipe-col").count() > 0, "meeting view: back to the board")
     check(not errors, f"no page errors ({errors})")
     ctx.close()

@@ -2131,3 +2131,60 @@ details.req-compare > .req-compare-h{ font-size:12.5px; }
 .meet-cols{ align-items:center; } .meet-cols-l{ font-size:12px; color:var(--tx3); margin-right:2px; }
 .map-color{ margin-left:auto; }
 .parc-table tbody tr[data-pid]{ cursor:pointer; } .parc-table tbody tr[data-pid]:hover td{ background:var(--panel-3, rgba(255,255,255,.04)); }
+/* ---------- « Présenter » : a consultant's deck. White 16:9 slides, one message per title, big figures, little text ---------- */
+.ps-overlay{ position:fixed; inset:0; z-index:30000; background:#0E1218; display:flex; flex-direction:column; outline:none; }
+.ps-stage{ flex:1; display:flex; align-items:center; justify-content:center; padding:2vh 2vw 0; min-height:0; cursor:pointer; }
+.ps-slide{ --ink:#0F1B2D; --mute:#5B6878; --line:#DDE3EA; --accent:#0E9C7E; --warn:#C27A00;
+  width:min(96vw, calc((100vh - 64px) * 16 / 9)); aspect-ratio:16/9; background:#FFFFFF; color:var(--ink); border-radius:6px; box-shadow:0 20px 60px rgba(0,0,0,.5);
+  container-type:inline-size; display:flex; flex-direction:column; padding:4.2cqw 5cqw 2.6cqw; box-sizing:border-box; font-family:var(--font-ui); cursor:default; overflow:hidden; }
+.ps-slide header{ border-bottom:.18cqw solid var(--ink); padding-bottom:1.4cqw; margin-bottom:2.4cqw; }
+.ps-kicker{ font:600 1.15cqw var(--font-ui); letter-spacing:.12em; text-transform:uppercase; color:var(--accent); margin-bottom:.6cqw; }
+.ps-slide h2{ margin:0; font:700 2.7cqw/1.2 var(--font-ui); color:var(--ink); text-wrap:balance; }
+.ps-body{ flex:1; min-height:0; display:flex; flex-direction:column; justify-content:center; gap:2cqw; }
+.ps-slide footer{ display:flex; justify-content:space-between; font:500 1cqw var(--font-ui); color:var(--mute); border-top:.08cqw solid var(--line); padding-top:1cqw; margin-top:1.6cqw; }
+.ps-note{ margin:0; font-size:1.2cqw; color:var(--mute); }
+/* cover */
+.ps-slide.ps-cover{ background:linear-gradient(135deg,#0F1B2D 0%,#16324A 100%); color:#fff; justify-content:center; }
+.ps-cover-in{ display:flex; flex-direction:column; gap:2cqw; }
+.ps-cover-k{ font:600 1.3cqw var(--font-ui); letter-spacing:.14em; text-transform:uppercase; color:#5EEAD4; }
+.ps-cover h1{ margin:0; font:800 6cqw/1 var(--font-ui); }
+.ps-cover-sub{ font-size:1.9cqw; color:#B8C6D6; }
+.ps-cover-figs{ display:flex; gap:5cqw; margin-top:3cqw; border-top:.12cqw solid rgba(255,255,255,.25); padding-top:2.4cqw; }
+.ps-cover-figs b{ display:block; font:700 3.4cqw var(--font-ui); color:#fff; } .ps-cover-figs span{ font-size:1.3cqw; color:#B8C6D6; }
+/* summary */
+.ps-kpis{ display:grid; grid-template-columns:repeat(5,1fr); gap:1.6cqw; }
+.ps-kpi{ border-top:.4cqw solid var(--accent); padding-top:1.2cqw; } .ps-kpi b{ display:block; font:700 3.4cqw var(--font-ui); color:var(--ink); } .ps-kpi span{ font-size:1.25cqw; color:var(--mute); }
+.ps-kpi.warn{ border-color:var(--warn); } .ps-kpi.warn b{ color:var(--warn); }
+.ps-facts{ margin:0; padding-left:2cqw; display:flex; flex-direction:column; gap:1cqw; font-size:1.9cqw; color:var(--ink); } .ps-facts li::marker{ color:var(--accent); }
+/* bars */
+.ps-bars{ display:flex; flex-direction:column; gap:1.3cqw; }
+.ps-bar{ display:grid; grid-template-columns:18cqw 1fr 14cqw; gap:1.6cqw; align-items:center; font-size:1.6cqw; }
+.ps-bar .b{ height:2.2cqw; background:#EEF2F6; border-radius:.3cqw; overflow:hidden; } .ps-bar .b i{ display:block; height:100%; border-radius:.3cqw; }
+.ps-bar .v{ font-weight:600; text-align:right; font-variant-numeric:tabular-nums; }
+/* the forecast chart, redrawn in the slide's colours */
+.ps-chart .pd-mes{ height:20cqw; gap:1.4cqw; } .ps-chart .pd-mes-col .v{ font-size:1.4cqw; color:var(--ink); } .ps-chart .pd-mes-col .q{ font-size:1.2cqw; color:var(--mute); }
+.ps-chart .pd-mes-col .bars{ max-width:none; width:62%; } .ps-chart .pd-mes-col .a{ background:#CFE9E2; } .ps-chart .pd-mes-col .l{ background:var(--accent); }
+/* who */
+.ps-who{ display:grid; grid-template-columns:repeat(auto-fit,minmax(0,1fr)); gap:2cqw; }
+.ps-who-c{ display:flex; flex-direction:column; gap:.5cqw; border-left:.3cqw solid var(--line); padding-left:1.4cqw; }
+.ps-who-c b{ font:700 4.4cqw var(--font-ui); } .ps-who-c span{ font-size:1.5cqw; color:var(--mute); } .ps-who-c em{ font-style:normal; font-size:1.3cqw; color:var(--mute); }
+.ps-chip{ align-self:flex-start; font:700 1.3cqw var(--font-ui) !important; color:var(--ink) !important; border-bottom:.35cqw solid var(--c); padding-bottom:.2cqw; }
+/* a deal */
+.ps-deal{ display:flex; flex-direction:column; gap:2.4cqw; }
+.ps-deal-figs{ display:grid; grid-template-columns:repeat(3,1fr); gap:2cqw; } .ps-deal-figs b{ display:block; font:700 3.6cqw var(--font-ui); } .ps-deal-figs span{ font-size:1.3cqw; color:var(--mute); }
+.ps-track{ display:grid; grid-template-columns:repeat(5,1fr); }
+.ps-track div{ display:flex; flex-direction:column; gap:.6cqw; position:relative; } .ps-track i{ height:.6cqw; background:#E3E8EE; margin-right:.4cqw; border-radius:.3cqw; }
+.ps-track .done i{ background:#9ED9CB; } .ps-track .on i{ background:var(--accent); } .ps-track span{ font-size:1.15cqw; color:var(--mute); } .ps-track .on span{ color:var(--ink); font-weight:700; }
+.ps-deal-next{ display:grid; grid-template-columns:2fr 1fr 1fr; gap:2cqw; background:#F5F8FA; border-radius:.5cqw; padding:1.6cqw 2cqw; }
+.ps-k{ display:block; font:600 1cqw var(--font-ui); letter-spacing:.1em; text-transform:uppercase; color:var(--mute); margin-bottom:.4cqw; }
+.ps-deal-next b{ font:600 1.7cqw/1.3 var(--font-ui); } .ps-deal-next b.warn{ color:var(--warn); }
+.ps-plants{ display:flex; flex-wrap:wrap; gap:.8cqw; } .ps-plants span{ font-size:1.2cqw; border:.08cqw solid var(--line); border-radius:99cqw; padding:.3cqw 1cqw; color:var(--ink); }
+/* table */
+.ps-table{ width:100%; border-collapse:collapse; font-size:1.45cqw; } .ps-table th{ text-align:left; font:600 1.05cqw var(--font-ui); letter-spacing:.08em; text-transform:uppercase; color:var(--mute); border-bottom:.12cqw solid var(--ink); padding:.6cqw .8cqw; }
+.ps-table td{ padding:.8cqw; border-bottom:.08cqw solid var(--line); } .ps-table .n{ text-align:right; font-variant-numeric:tabular-nums; }
+/* the controls under the slide */
+.ps-bar-ui{ display:flex; align-items:center; justify-content:center; gap:10px; padding:10px; color:#B8C6D6; font:500 13px var(--font-ui); }
+.ps-bar-ui button{ background:#1C2633; border:1px solid #2C3A4A; color:#E8EEF5; border-radius:8px; padding:6px 12px; font:600 13px var(--font-ui); cursor:pointer; }
+.ps-overlay:fullscreen .ps-bar-ui{ opacity:0; transition:opacity .2s; } .ps-overlay:fullscreen .ps-bar-ui:hover{ opacity:1; }
+.ps-body{ justify-content:flex-start; padding-top:1.2cqw; }
+.ps-context{ margin:0; font-size:1.45cqw; line-height:1.45; color:var(--ink); border-left:.3cqw solid var(--accent); padding-left:1.4cqw; } .ps-context .ps-k{ margin-bottom:.3cqw; }

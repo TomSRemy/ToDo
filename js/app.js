@@ -4042,6 +4042,79 @@
         r.querySelector('.m').textContent=(avg!=null?avg+' j en moyenne':'')+(late?' · '+late+' > 15 j':''); if(late) r.classList.add('late'); c.appendChild(r); }); }
     return box;
   }
+  // ---------- « Présenter » : the meeting as a consultant's deck — one message per slide, big figures, little text ----------
+  function meetPresent(groups){
+    const list=groups.flatMap(g=>g.list); if(!list.length) return;
+    const e=escapeHtml, date=new Date().toLocaleDateString('fr-FR',{ day:'numeric', month:'long', year:'numeric' });
+    const mw=k=>fmtMwc(k), kwOf=l=>l.reduce((x,o)=>x+kwcNum(o),0), daysOf=o=>daysInStage(o);
+    const figs=meetFigures(groups), kw=kwOf(list), likely=list.reduce((x,o)=>x+kwcNum(o)*(MES_WEIGHTS[o.stage]||0),0);
+    const stuck=list.filter(o=>{ const d=daysOf(o); return d!=null && d>15; }).sort((a,b)=>daysOf(b)-daysOf(a));
+    const slides=[];
+    const slide=(title, body, kicker, cls)=>slides.push({ title, body, kicker:kicker||'', cls:cls||'' });
+    // 1. cover
+    slides.push({ cover:true, title:'Réunion pricing', body:'<div class="ps-cover-sub">Pipe agrégation · '+e(date)+'</div><div class="ps-cover-figs">'+figs.slice(0,3).map(([v,l])=>'<div><b>'+e(v)+'</b><span>'+e(l)+'</span></div>').join('')+'</div>' });
+    // 2. summary: the message first, then the figures and three facts
+    const byPhase=groups.filter(g=>g.list.length).map(g=>({ g, kw:kwOf(g.list) })).sort((a,b)=>b.kw-a.kw);
+    const top=byPhase[0], ops=list.filter(o=>{ const st=oppStage(o.stage); return st && (st.who==='Ops' || st.who==='SC'); });
+    const facts=[top?Math.round(top.kw/Math.max(1,kw)*100)+' % du volume est en « '+top.g.phase.label.split(' · ')[0]+' »':'',
+      ops.length?ops.length+' dossier'+(ops.length>1?'s':'')+' attend'+(ops.length>1?'ent':'')+' Ops ('+mw(kwOf(ops))+')':'',
+      stuck.length?stuck.length+' dossier'+(stuck.length>1?'s':'')+' bloqué'+(stuck.length>1?'s':'')+' depuis plus de 15 jours':'Aucun dossier bloqué depuis plus de 15 jours'].filter(Boolean);
+    slide(mw(likely)+' probables sur '+mw(kw)+' en jeu', '<div class="ps-kpis">'+figs.map(([v,l],i)=>'<div class="ps-kpi'+(i===4 && stuck.length?' warn':'')+'"><b>'+e(v)+'</b><span>'+e(l)+'</span></div>').join('')+'</div><ul class="ps-facts">'+facts.map(f=>'<li>'+e(f)+'</li>').join('')+'</ul>', 'Synthèse');
+    // 3. where the deals are: MWc by step
+    const steps=OPP_STAGES.map(st=>{ const l=list.filter(o=>o.stage===st.key); return { st, n:l.length, kw:kwOf(l) }; }).filter(x=>x.n), mx=Math.max(1,...steps.map(x=>x.kw));
+    const big=steps.slice().sort((a,b)=>b.kw-a.kw)[0];
+    slide('« '+big.st.label+' » concentre '+mw(big.kw)+' sur '+mw(kw), '<div class="ps-bars">'+steps.map(x=>'<div class="ps-bar"><span class="l">'+e(x.st.label)+'</span><span class="b"><i style="width:'+Math.max(2,x.kw/mx*100)+'%;background:'+(MAP_PHASES.find(p=>p[0]===x.st.phase)||[0,0,'#7DA2CF'])[2]+'"></i></span><span class="v">'+e(mw(x.kw))+' · '+x.n+'</span></div>').join('')+'</div><p class="ps-note">Volume de chaque étape en MWc, et nombre de dossiers ; couleur = phase (qualification, offre, contrat).</p>', 'Où en sont les dossiers');
+    // 4. commissioning to come
+    { const f=mesForecast(list); if(f.tot){ const host=document.createElement('div'); host.appendChild(f.chart); slide(mw(f.tot)+' probables à mettre en service d’ici deux ans', '<div class="ps-chart">'+host.innerHTML+'</div><p class="ps-note">Barre claire : en jeu · foncée : probable, selon l’étape (pricing 25 %, offre en attente 40 %, KYC 60 %, signature 90 %).</p>', 'Mises en service'); } }
+    // 5. who holds the deals
+    { const by={}; list.forEach(o=>{ const st=oppStage(o.stage); if(!st) return; const w=st.who==='SC'?'Ops':st.who; (by[w]=by[w]||[]).push(o); });
+      const order=['Com','Ops','Jur','Client','Dir'].filter(w=>by[w]), lead=order.slice().sort((a,b)=>by[b].length-by[a].length)[0];
+      slide((lead==='Com'?'La plupart des dossiers attendent une action commerciale':'La plupart des dossiers attendent '+(lead==='Ops'?'Ops':lead==='Jur'?'le Juridique':lead==='Client'?'les producteurs':'la Direction'))+' ('+by[lead].length+')',
+        '<div class="ps-who">'+order.map(w=>{ const l=by[w], ds=l.map(daysOf).filter(d=>d!=null), avg=ds.length?Math.round(ds.reduce((x,y)=>x+y,0)/ds.length):null, late=ds.filter(d=>d>15).length;
+          return '<div class="ps-who-c"><span class="ps-chip" style="--c:'+WHO_COLORS[w]+'">'+e(w==='Com'?'Commercial':WHO[w])+'</span><b>'+l.length+'</b><span>'+e(mw(kwOf(l)))+'</span><em>'+(avg!=null?avg+' j en moyenne':'')+(late?' · '+late+' > 15 j':'')+'</em></div>'; }).join('')+'</div><p class="ps-note">Qui doit agir pour que chaque dossier avance, et depuis combien de temps en moyenne.</p>', 'Qui a la main'); }
+    // 6. one slide per block (a lot, a request at one step, or a plant on its own), the biggest first within each phase
+    const blocks=new Map(); groups.forEach(g=>g.list.forEach(o=>{ const k=meetBlockKey(o); if(!blocks.has(k)) blocks.set(k,{ g, list:[] }); blocks.get(k).list.push(o); }));
+    [...blocks.values()].sort((a,b)=>MEET_PHASES.findIndex(p=>p.key===b.g.phase.key)-MEET_PHASES.findIndex(p=>p.key===a.g.phase.key) || kwOf(b.list)-kwOf(a.list)).forEach(bk=>{
+      const o=bk.list[0], st=oppStage(o.stage), d=daysOf(o), name=meetBlockName(o), k=kwOf(bk.list), mwh=bk.list.reduce((x,y)=>x+(pqNum(String(y.mwh||''))||0),0);
+      const ids=new Set(bk.list.map(x=>x.id).concat(o.requestId?[o.requestId]:[])), tk=activeTasks().filter(t=>t.opportunityId && ids.has(t.opportunityId)).sort((a,b)=>(a.due||'9').localeCompare(b.due||'9'))[0];
+      const next=(tk && plainLinks(tk.title||'').replace(/\s+—\s+.*$/,'').trim())||(st?stageTaskOf(st, o):'');
+      const waiting=st && st.who!=='Com'?'En attente '+(st.who==='Ops'?'d’Ops':st.who==='Jur'?'du Juridique':st.who==='Client'?'du producteur':'de la Direction'):'À moi';
+      const title=(o.company||'')+(name && bk.list.length>1?' — '+name:bk.list.length===1?' — '+oppName(o):'')+' · '+(st?stageLabel(o.stage, o):'')+(d!=null?' depuis '+d+' jour'+(d>1?'s':''):'');
+      const lastNote=bk.list.flatMap(x=>x.notesLog||[]).filter(n=>n && n.text).sort((a,b)=>b.at-a.at)[0];
+      const phases=PIPE_PHASES.filter(p=>p.key!=='prequal'), cur=phases.findIndex(p=>p.key===(st&&st.phase));
+      const track='<div class="ps-track">'+phases.map((p,i)=>'<div class="'+(i<cur?'done':i===cur?'on':'')+'"><i></i><span>'+e(p.label)+'</span></div>').join('')+'</div>';
+      const mes=o.mesEff||o.mesPrev||'';
+      const body='<div class="ps-deal"><div class="ps-deal-figs"><div><b>'+e(k?mw(k):'—')+'</b><span>'+bk.list.length+' installation'+(bk.list.length>1?'s':'')+'</span></div><div><b>'+e(mwh?Math.round(mwh).toLocaleString('fr-FR')+' MWh':'—')+'</b><span>par an (P50)</span></div><div><b>'+e(mes||'—')+'</b><span>mise en service</span></div></div>'
+        +track+'<div class="ps-deal-next"><div><span class="ps-k">Prochaine action</span><b>'+e(next||'—')+'</b></div><div><span class="ps-k">Qui</span><b'+(d!=null && d>15?' class="warn"':'')+'>'+e(waiting)+(d!=null?' · '+d+' j':'')+'</b></div>'+(o.contrat?'<div><span class="ps-k">Contrat</span><b>'+e(o.contrat+(o.duree?' · '+o.duree+' ans':''))+'</b></div>':'')+'</div>'
+        +(lastNote?'<p class="ps-context"><span class="ps-k">Dernier échange · '+e(new Date(lastNote.at).toLocaleDateString('fr-FR'))+'</span>'+e(lastNote.text.length>180?lastNote.text.slice(0,180)+'…':lastNote.text)+'</p>':o.particularites?'<p class="ps-context"><span class="ps-k">À savoir</span>'+e(String(o.particularites).slice(0,180))+'</p>':'')
+        +(bk.list.length>1?'<div class="ps-plants">'+bk.list.slice(0,6).map(x=>'<span>'+e(oppName(x))+(x.kwc?' · '+e(fmtKwc(x.kwc)):'')+'</span>').join('')+(bk.list.length>6?'<span>+ '+(bk.list.length-6)+' autres</span>':'')+'</div>':'')+'</div>';
+      slide(title, body, bk.g.phase.label.split(' · ')[0]);
+    });
+    // 7. what needs attention
+    if(stuck.length) slide(stuck.length+' dossier'+(stuck.length>1?'s':'')+' à débloquer', '<table class="ps-table"><thead><tr><th>Dossier</th><th>Étape</th><th>Chez</th><th class="n">Depuis</th><th class="n">Puissance</th></tr></thead><tbody>'+stuck.slice(0,8).map(o=>{ const st=oppStage(o.stage); return '<tr><td><b>'+e(o.company||'')+'</b> '+e(oppName(o))+'</td><td>'+e(stageLabel(o.stage, o))+'</td><td>'+e(st?WHO[st.who]||st.who:'')+'</td><td class="n">'+daysOf(o)+' j</td><td class="n">'+e(fmtKwc(o.kwc)||'—')+'</td></tr>'; }).join('')+'</tbody></table>'+'<p class="ps-note">Dossiers à la même étape depuis plus de 15 jours, le plus ancien en premier'+(stuck.length>8?' ; et '+(stuck.length-8)+' autres':'')+'.</p>', 'Points d’attention');
+    // the deck
+    let ov=$('present-overlay'); if(ov) ov.remove();
+    ov=document.createElement('div'); ov.id='present-overlay'; ov.className='ps-overlay'; ov.tabIndex=-1; ov.setAttribute('role','dialog'); ov.setAttribute('aria-label','Présentation de la réunion');
+    ov.innerHTML='<div class="ps-stage"><div class="ps-slide"></div></div><div class="ps-bar-ui"><button type="button" class="ps-prev" aria-label="Slide précédente">‹</button><span class="ps-count"></span><button type="button" class="ps-next" aria-label="Slide suivante">›</button><button type="button" class="ps-full" title="Plein écran (F)">Plein écran</button><button type="button" class="ps-close" title="Fermer (Échap)">Fermer</button></div>';
+    document.body.appendChild(ov);
+    let i=0; const box=ov.querySelector('.ps-slide');
+    const show=n=>{ i=Math.max(0, Math.min(slides.length-1, n)); const sl=slides[i];
+      box.className='ps-slide'+(sl.cover?' ps-cover':'')+(sl.cls?' '+sl.cls:'');
+      box.innerHTML=sl.cover?'<div class="ps-cover-in"><div class="ps-cover-k">Selfee · agrégation</div><h1>'+e(sl.title)+'</h1>'+sl.body+'</div>'
+        :'<header>'+(sl.kicker?'<div class="ps-kicker">'+e(sl.kicker)+'</div>':'')+'<h2>'+e(sl.title)+'</h2></header><div class="ps-body">'+sl.body+'</div><footer><span>Pipe agrégation · '+e(date)+'</span><span>'+(i+1)+' / '+slides.length+'</span></footer>';
+      ov.querySelector('.ps-count').textContent=(i+1)+' / '+slides.length; };
+    const close=()=>{ if(document.fullscreenElement) try{ document.exitFullscreen(); }catch(e2){} ov.remove(); };
+    ov.querySelector('.ps-prev').onclick=()=>show(i-1); ov.querySelector('.ps-next').onclick=()=>show(i+1); ov.querySelector('.ps-close').onclick=close;
+    ov.querySelector('.ps-full').onclick=()=>{ try{ document.fullscreenElement?document.exitFullscreen():ov.requestFullscreen(); }catch(e2){} };
+    ov.querySelector('.ps-stage').addEventListener('click', ev=>{ const r=ov.getBoundingClientRect(); show(ev.clientX>r.left+r.width/3?i+1:i-1); });
+    ov.addEventListener('keydown', ev=>{ const k=ev.key; ev.stopPropagation();   // the app's own shortcuts (n, p, Ctrl K…) stay quiet while presenting
+      if(['ArrowRight','ArrowDown','PageDown',' ','Enter'].includes(k)){ ev.preventDefault(); show(i+1); }
+      else if(['ArrowLeft','ArrowUp','PageUp','Backspace'].includes(k)){ ev.preventDefault(); show(i-1); }
+      else if(k==='Home'){ ev.preventDefault(); show(0); } else if(k==='End'){ ev.preventDefault(); show(slides.length-1); }
+      else if(k==='f' || k==='F'){ ev.preventDefault(); ov.querySelector('.ps-full').click(); }
+      else if(k==='Escape'){ ev.preventDefault(); ev.stopPropagation(); if(!document.fullscreenElement) close(); } });
+    show(0); ov.focus();
+  }
   function renderPipeMeet(board, q){
     board.classList.add('pipe-meet');
     const groups=meetData(q), n=groups.reduce((t,g)=>t+g.rows.length,0);
@@ -4053,6 +4126,8 @@
     mk('Copier pour mail / Teams', b=>meetCopy(groups,b), 'Le tableau, prêt à coller dans un mail Outlook ou dans Teams');
     mk('Excel', b=>meetXlsx(groups,b), 'Télécharger le tableau en .xlsx');
     mk('Imprimer / PDF', ()=>meetPrint(groups), 'Imprimer, ou enregistrer en PDF (paysage)');
+    const pres=mk('Présenter', ()=>meetPresent(groups), 'La réunion en slides, plein écran ; flèches du clavier pour avancer');
+    pres.classList.add('meet-present-btn');
     const colBtn=mk('Colonnes ▾', ()=>{ meetColsOpen=!meetColsOpen; renderPipeline(); }, 'Choisir les colonnes du tableau (aussi pour la copie, l\u2019Excel et l\u2019impression)');
     colBtn.classList.add('meet-cols-btn'); colBtn.setAttribute('aria-expanded', String(meetColsOpen));
     board.appendChild(head);
