@@ -5876,13 +5876,24 @@
       ask.append(go, copyBtn);
       setTimeout(()=>go.click(), 0);
     } else {
+      // with a Claude subscription (Pro, Team): claude.ai opens with the request written in; the answer comes back through the clipboard
       const steps=document.createElement('ol'); steps.className='ai-steps';
-      steps.innerHTML='<li></li><li>Colle-la dans Claude (claude.ai), puis copie sa réponse.</li><li>Colle la réponse ici :</li>';
-      steps.firstChild.appendChild(copyBtn);
-      const ta=document.createElement('textarea'); ta.className='qn-text ai-answer'; ta.id='ai-answer'; ta.rows=5; ta.placeholder='{ … la réponse de Claude … }';
+      steps.innerHTML='<li></li><li>Dans Claude, envoie la demande puis clique sur « Copier » sous sa réponse.</li><li></li>';
+      const open=document.createElement('button'); open.type='button'; open.className='ai-go ai-open'; open.textContent='Ouvrir dans Claude';
+      open.title='Ouvre claude.ai avec ton compte, la demande déjà écrite (elle est aussi copiée : Ctrl+V si le champ est vide)';
+      open.onclick=e=>{ copyToClipboard(prompt, null); const short=prompt.length<=6000;
+        window.open('https://claude.ai/new'+(short?'?q='+encodeURIComponent(prompt):''), '_blank', 'noopener');
+        flashBtn(e.target, short?'✓ Ouvert dans Claude':'✓ Ouvert : colle la demande (Ctrl+V)'); };
+      steps.firstChild.append(open, copyBtn);
+      const ta=document.createElement('textarea'); ta.className='qn-text ai-answer'; ta.id='ai-answer'; ta.rows=4; ta.placeholder='… ou colle ici la réponse de Claude';
       const read=document.createElement('button'); read.type='button'; read.className='ai-go'; read.textContent='Lire la réponse';
-      read.onclick=()=>{ try{ show(aiParse(ta.value, list)); }catch(err){ rowsBox.innerHTML=''; const p2=document.createElement('p'); p2.className='modal-hint ai-err'; p2.textContent='Réponse illisible : '+(err.message||err); rowsBox.appendChild(p2); } };
-      const tip=document.createElement('p'); tip.className='modal-hint'; tip.textContent='Avec une clé Claude enregistrée dans Réf. & data, la demande part directement, sans copier-coller.';
+      const readNow=()=>{ try{ show(aiParse(ta.value, list)); }catch(err){ rowsBox.innerHTML=''; const p2=document.createElement('p'); p2.className='modal-hint ai-err'; p2.textContent='Réponse illisible : '+(err.message||err); rowsBox.appendChild(p2); } };
+      read.onclick=readNow;
+      ta.addEventListener('paste', ()=>setTimeout(readNow, 0));   // pasted: read at once
+      const paste=document.createElement('button'); paste.type='button'; paste.className='ai-go'; paste.textContent='Coller la réponse';
+      paste.onclick=async()=>{ try{ ta.value=await navigator.clipboard.readText(); readNow(); }catch(err){ ta.focus(); flashBtn(paste, 'Colle avec Ctrl+V dans le champ'); } };
+      steps.lastChild.append(paste);
+      const tip=document.createElement('p'); tip.className='modal-hint'; tip.textContent='Ça passe par ton compte Claude (Pro ou Team) sur claude.ai. Une clé API (Réf. & data) éviterait l’aller-retour, mais elle se paie à part.';
       ask.append(steps, ta, read, tip);
     }
   }

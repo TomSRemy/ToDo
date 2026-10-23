@@ -7,6 +7,7 @@ GitHub is mocked (no network, no real token); Google Fonts is blocked so the
 tests don't depend on the network either.
 """
 import base64
+import urllib.parse
 import tempfile
 
 import openpyxl
@@ -1967,9 +1968,14 @@ with sync_playwright() as p:
     check(o.get("commune") == "Cholet" and any(v == "47,06" for v in (o.get("caract") or {}).values()) and not any(v == "100" for v in (o.get("caract") or {}).values()),
           f"IA: only the ticked lines are filled ({o.get('caract')})")
     page.evaluate("localStorage.removeItem('ai-key')"); page.click("#opp-detail-body .req-ai"); page.wait_for_timeout(150)
-    page.fill("#ai-answer", json.dumps({"ai1": {"Longitude": {"v": "-0,88", "c": "sûr"}}})); page.click("#ai-overlay .ai-go"); page.wait_for_timeout(150)
-    check(page.locator("#ai-overlay .ai-row").count() == 1 and len(sent) == 1, "IA: without a key, the answer pasted from claude.ai is read the same way")
-    page.fill("#ai-answer", "pas du json"); page.click("#ai-overlay .ai-go"); page.wait_for_timeout(100)
+    page.evaluate("()=>{ window.__opened=[]; window.open=(u)=>{ window.__opened.push(u); return null; }; }")
+    page.click("#ai-overlay .ai-open"); page.wait_for_timeout(100)
+    opened = page.evaluate("window.__opened")
+    check(len(opened) == 1 and opened[0].startswith("https://claude.ai/new?q=") and "Cholet" in urllib.parse.unquote(opened[0]), f"IA: with a Claude subscription, claude.ai opens with the request written in ({opened[0][:60] if opened else None})")
+    page.evaluate("()=>{ window.__clip=" + json.dumps(json.dumps({"ai1": {"Longitude": {"v": "-0,88", "c": "sûr"}}})) + "; navigator.clipboard.readText=async()=>window.__clip; }")
+    page.click("#ai-overlay button:has-text('Coller la réponse')"); page.wait_for_timeout(150)
+    check(page.locator("#ai-overlay .ai-row").count() == 1 and len(sent) == 1, "IA: « Coller la réponse » reads the answer copied in claude.ai")
+    page.fill("#ai-answer", "pas du json"); page.click("#ai-overlay button:has-text('Lire la réponse')"); page.wait_for_timeout(100)
     check("illisible" in page.inner_text("#ai-overlay"), "IA: a pasted answer that is not JSON says so")
     check(not errors, f"no page errors ({errors})")
     page.close()
