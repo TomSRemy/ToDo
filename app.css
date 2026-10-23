@@ -2253,3 +2253,41 @@ details.req-compare > .req-compare-h{ font-size:12.5px; }
 .dup-banner span::before{ content:'⚠ '; color:#E5B54F; }
 .dup-banner button{ margin-left:auto; flex:none; background:#E5B54F; border:none; border-radius:var(--radius); color:#04070C; font:600 12.5px var(--font-ui); padding:5px 12px; cursor:pointer; }
 html.widget .dup-banner{ display:none; }
+/* slides that fill the page: the main block takes the free height (no empty half-slides) */
+.ps-fill{ flex:1 1 auto; min-height:0; }
+.ps-bars.ps-fill{ justify-content:space-evenly; gap:.8cqw; } .ps-bars.ps-fill .ps-bar .b{ height:2.8cqw; }
+.ps-table-fill td{ vertical-align:middle; }
+.ps-table tr.ps-ph td{ font:700 1.2cqw var(--font-ui); letter-spacing:.06em; text-transform:uppercase; color:var(--ink); background:#F5F8FA; border-bottom:.12cqw solid var(--line); padding:.7cqw .8cqw; }
+.ps-table tr.ps-ph i{ display:inline-block; width:1cqw; height:1cqw; border-radius:.2cqw; margin-right:.8cqw; vertical-align:-.1cqw; }
+.ps-table tr.ps-ph span{ margin-left:1.2cqw; font-weight:500; letter-spacing:0; text-transform:none; color:var(--mute); }
+.ps-table tr.ps-ph td:last-child{ color:var(--ink); }
+.ps-chart.ps-fill{ display:flex; flex-direction:column; } .ps-chart.ps-fill .pd-mes{ height:auto; flex:1; min-height:14cqw; }
+.ps-who.ps-fill{ align-items:stretch; }
+.ps-who-c{ background:#F7F9FB; border-radius:.5cqw; padding:1.4cqw 1.6cqw; }
+.ps-who-l{ list-style:none; margin:auto 0 0; padding:1cqw 0 0; border-top:.08cqw solid var(--line); display:flex; flex-direction:column; gap:.55cqw; }
+.ps-who-l li{ display:flex; justify-content:space-between; gap:1cqw; font-size:1.25cqw; color:var(--ink); } .ps-who-l li span{ overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.ps-who-l li i{ font-style:normal; color:var(--mute); font-variant-numeric:tabular-nums; } .ps-who-l li i.warn{ color:var(--warn); font-weight:700; } .ps-who-l li.more{ color:var(--mute); }
+.ps-cards{ display:grid; grid-template-columns:repeat(var(--cols,3),minmax(0,1fr)); grid-auto-rows:1fr; gap:1.6cqw; }
+.ps-card{ display:flex; flex-direction:column; gap:.4cqw; background:#F7F9FB; border-top:.4cqw solid var(--warn); border-radius:.5cqw; padding:1.4cqw 1.6cqw; min-height:0; overflow:hidden; }
+.ps-card-t{ font:700 1.8cqw/1.2 var(--font-ui); color:var(--ink); } .ps-card-s{ font-size:1.2cqw; color:var(--mute); }
+.ps-card strong{ font:800 4cqw/1 var(--font-ui); margin-top:auto; padding-top:1cqw; } .ps-card strong.warn{ color:var(--warn); }
+.ps-card p{ margin:.8cqw 0 0; font-size:1.3cqw; line-height:1.35; color:var(--ink); } .ps-card .ps-card-n{ color:var(--mute); }
+.ps-deal-more{ flex:1; min-height:0; display:grid; grid-template-columns:1fr 1fr; gap:3cqw; border-top:.08cqw solid var(--line); padding-top:1.8cqw; }
+.ps-deal{ flex:1; min-height:0; }
+.ps-mini{ font-size:1.3cqw; } .ps-mini td{ padding:.6cqw .5cqw; }
+.ps-kv{ display:grid; grid-template-columns:auto 1fr; gap:.6cqw 2cqw; margin:0; font-size:1.35cqw; } .ps-kv dt{ color:var(--mute); } .ps-kv dd{ margin:0; color:var(--ink); font-weight:600; }
+.ps-hist{ list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:.8cqw; font-size:1.3cqw; color:var(--ink); line-height:1.35; }
+.ps-hist li{ display:grid; grid-template-columns:8.5cqw 1fr; gap:1cqw; } .ps-hist li span{ color:var(--mute); font-variant-numeric:tabular-nums; }
+.ps-empty{ margin:0; font-size:1.3cqw; color:var(--mute); font-style:italic; }
+/* the space left is spread between the parts, never one hole at the bottom */
+.ps-who-l{ margin-top:1.2cqw; }
+.ps-who-c{ justify-content:flex-start; } .ps-who-c b{ font-size:5cqw; }
+.ps-card{ justify-content:center; gap:.6cqw; } .ps-card strong{ margin-top:.6cqw; padding-top:.6cqw; font-size:4.6cqw; }
+.ps-card-t{ font-size:2.1cqw; } .ps-card p{ font-size:1.45cqw; }
+.ps-deal{ justify-content:space-between; }
+.ps-deal-more{ flex:0 1 auto; padding-top:2.2cqw; }
+.ps-deal-more .ps-mini, .ps-kv, .ps-hist{ font-size:1.55cqw; } .ps-mini td{ padding:.9cqw .6cqw; } .ps-hist{ gap:1.1cqw; } .ps-kv{ row-gap:.9cqw; }
+.ps-deal-figs b{ font-size:4.2cqw; }
+/* the hidden stage where the slides are drawn one by one for the PowerPoint export */
+.ps-export-host{ position:fixed; left:-30000px; top:0; width:1280px; pointer-events:none; }
+.ps-export-host .ps-slide{ width:1280px !important; box-shadow:none; border-radius:0; }

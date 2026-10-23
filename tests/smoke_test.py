@@ -1846,6 +1846,21 @@ with sync_playwright() as p:
     check(page.inner_text("#present-overlay .ps-count").startswith("3 / ") and page.locator("#present-overlay .ps-slide h2").count() == 1 and page.evaluate("document.activeElement.id") != "quick-add-input",
           "presentation: arrows move on, the app's own shortcuts stay quiet")
     page.keyboard.press("End"); check("débloquer" in page.inner_text("#present-overlay h2") or page.locator("#present-overlay h2").count() == 1, "presentation: End goes to the last slide")
+    # no slide runs over its page, none is left half empty; the deck goes out as an editable PowerPoint (library stubbed: no network in tests)
+    fits = page.evaluate("""(()=>{ const out=[]; const n=+document.querySelector('#present-overlay .ps-count').textContent.split('/')[1]; document.querySelector('#present-overlay').dispatchEvent(new KeyboardEvent('keydown',{key:'Home',bubbles:true}));
+      for(let k=0;k<n;k++){ const sl=document.querySelector('#present-overlay .ps-slide'), b=sl.querySelector('.ps-body'); if(b){ const last=[...b.children].pop(); out.push(Math.round(b.getBoundingClientRect().bottom-last.getBoundingClientRect().bottom)); }
+        sl.querySelectorAll('.ps-fill > table').forEach(t=>{ if(t.offsetHeight>t.parentNode.clientHeight+2) out.push('overflow '+k); });
+        document.querySelector('#present-overlay').dispatchEvent(new KeyboardEvent('keydown',{key:'ArrowRight',bubbles:true})); } return out; })()""")
+    check(not any(isinstance(x, str) for x in fits) and all(x > -3 for x in fits if not isinstance(x, str)), f"presentation: nothing runs over a slide ({fits})")
+    page.route("https://cdn.jsdelivr.net/npm/pptxgenjs**", lambda r: r.fulfill(status=200, content_type="application/javascript", body="""
+      window.__pp={ slides:[], file:null }; window.PptxGenJS=function(){ this.addSlide=()=>{ const s={ texts:[], tables:0, shapes:0 }; window.__pp.slides.push(s);
+        return { addText:(t)=>s.texts.push(Array.isArray(t)?t.map(x=>x.text).join(''):String(t)), addShape:()=>s.shapes++, addTable:()=>s.tables++, set background(v){ s.bg=v; } }; };
+        this.writeFile=o=>{ window.__pp.file=o.fileName; return Promise.resolve(); }; };"""))
+    page.click("#present-overlay .ps-pptx"); page.wait_for_function("window.__pp && window.__pp.file", timeout=5000)
+    pp = page.evaluate("window.__pp"); nsl = int(page.inner_text("#present-overlay .ps-count").split("/")[1])
+    check(len(pp["slides"]) == nsl and pp["file"].endswith(".pptx") and any("probables" in t for t in pp["slides"][0]["texts"]) and any(s["tables"] for s in pp["slides"])
+          and all(s["texts"] for s in pp["slides"]) and page.locator(".ps-export-host").count() == 0,
+          f"presentation: « PowerPoint » makes one editable slide per slide, texts and tables ({len(pp['slides'])}/{nsl}, {pp['file']})")
     page.keyboard.press("Escape"); page.wait_for_timeout(100)
     check(page.locator("#present-overlay").count() == 0, "presentation: Escape closes it")
     page.click("#pipe-meet-toggle"); check(page.locator(".pipe-col").count() > 0, "meeting view: back to the board")

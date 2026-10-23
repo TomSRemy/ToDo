@@ -4050,6 +4050,56 @@
   }
   // ---------- « Présenter » : the meeting as a consultant's deck (pyramid principle): the answer on slide 1, then one message
   // per slide that details it — an action title (a sentence with a number), one exhibit, « À retenir », source and page; the deals in appendix ----------
+  let pptxLoading=null;
+  function loadPptx(){
+    if(window.PptxGenJS) return Promise.resolve();
+    return pptxLoading||(pptxLoading=new Promise((resolve, reject)=>{ const s=document.createElement('script'); s.src='https://cdn.jsdelivr.net/npm/pptxgenjs@3.12.0/dist/pptxgen.bundle.js';
+      s.onload=()=>resolve(); s.onerror=()=>{ pptxLoading=null; s.remove(); reject(new Error('PowerPoint')); }; document.head.appendChild(s); }));
+  }
+  const pxHex=c=>{ const m=/rgba?\(\s*([\d.]+)[,\s]+([\d.]+)[,\s]+([\d.]+)(?:\s*[,/]\s*([\d.]+))?/.exec(c||''); if(!m || (m[4]!=null && +m[4]<0.08)) return null; return [m[1],m[2],m[3]].map(x=>Math.round(+x).toString(16).padStart(2,'0')).join('').toUpperCase(); };
+  function slideToPptx(pptx, el){
+    const sl=pptx.addSlide(), R=el.getBoundingClientRect(), k=13.333/R.width, pt=px=>Math.max(6, Math.round(px*k*72*10)/10);
+    const at=r=>({ x:(r.left-R.left)*k, y:(r.top-R.top)*k, w:Math.max(.02, r.width*k), h:Math.max(.02, r.height*k) });
+    const cs0=getComputedStyle(el), grad=/rgba?\([^)]*\)/.exec(cs0.backgroundImage||'');
+    sl.background={ color:(cs0.backgroundImage!=='none' && grad && pxHex(grad[0]))||pxHex(cs0.backgroundColor)||'FFFFFF' };
+    const runOf=(txt, cs)=>({ text:cs.textTransform==='uppercase'?txt.toUpperCase():txt, options:{ bold:+cs.fontWeight>=600, italic:cs.fontStyle==='italic', color:pxHex(cs.color)||'0F1B2D', fontSize:pt(parseFloat(cs.fontSize)) } });
+    const runsOf=node=>{ const out=[]; node.childNodes.forEach(c=>{
+        if(c.nodeType===3){ const t=c.textContent.replace(/\s+/g,' '); if(t.trim()) out.push(runOf(t, getComputedStyle(node))); }
+        else if(c.nodeType===1){ const cs=getComputedStyle(c); if(cs.display==='none') return; if(cs.display==='inline'){ const t=c.innerText.replace(/\s+/g,' '); if(t.trim()) out.push(runOf(t, cs)); } } });
+      if(out.length){ out[0].text=out[0].text.replace(/^\s+/,''); out[out.length-1].text=out[out.length-1].text.replace(/\s+$/,''); }
+      return out.filter(r=>r.text); };
+    const isBlockText=n=>{ const cs=getComputedStyle(n); return cs.display!=='inline' && cs.display!=='none' && [...n.childNodes].some(c=>(c.nodeType===3 && c.textContent.trim()) || (c.nodeType===1 && getComputedStyle(c).display==='inline' && c.innerText.trim())); };
+    el.querySelectorAll('*').forEach(n=>{
+      if(n.closest('table') && n.tagName!=='TABLE') return;
+      const cs=getComputedStyle(n), r=n.getBoundingClientRect(); if(cs.display==='none' || cs.visibility==='hidden' || r.width<1 || r.height<1) return;
+      if(n.tagName==='TABLE'){
+        const rows=[...n.rows].map(tr=>[...tr.cells].map(td=>{ const c=getComputedStyle(td), runs=runsOf(td), bg=pxHex(c.backgroundColor)||pxHex(getComputedStyle(tr).backgroundColor);
+          const bb=parseFloat(c.borderBottomWidth)>0?{ type:'solid', pt:Math.max(.5, parseFloat(c.borderBottomWidth)*k*72), color:pxHex(c.borderBottomColor)||'DDE3EA' }:{ type:'none' };
+          return { text:runs.length?runs:'', options:Object.assign({ align:c.textAlign==='right'?'right':'left', valign:'middle', margin:[0,4,0,4], border:[{ type:'none' },{ type:'none' },bb,{ type:'none' }] }, bg?{ fill:{ color:bg } }:{}, td.colSpan>1?{ colspan:td.colSpan }:{}) }; }));
+        const full=[...n.rows].find(tr=>tr.cells.length===Math.max(...[...n.rows].map(x=>x.cells.length)));
+        sl.addTable(rows, Object.assign(at(r), { colW:[...full.cells].map(td=>td.getBoundingClientRect().width*k), rowH:[...n.rows].map(tr=>tr.getBoundingClientRect().height*k), fontFace:'Arial', autoPage:false }));
+        return; }
+      const bg=pxHex(cs.backgroundColor), rad=parseFloat(cs.borderTopLeftRadius)||0;
+      if(bg) sl.addShape(rad>=Math.min(r.width,r.height)/2-1 && Math.abs(r.width-r.height)<2?'ellipse':'rect', Object.assign(at(r), { fill:{ color:bg }, line:{ type:'none' } }));
+      [['Top',0],['Bottom',0],['Left',1],['Right',1]].forEach(([sd,vert])=>{ const w=parseFloat(cs['border'+sd+'Width']), col=pxHex(cs['border'+sd+'Color']); if(!(w>=.5) || !col || cs['border'+sd+'Style']==='none') return;
+        const b={ left:r.left, top:r.top, width:vert?w:r.width, height:vert?r.height:w }; if(sd==='Bottom') b.top=r.bottom-w; if(sd==='Right') b.left=r.right-w;
+        sl.addShape('rect', Object.assign(at(b), { fill:{ color:col }, line:{ type:'none' } })); });
+      if(n.matches('.ps-exec-r li')){ const d=r.height>0?Math.min(r.height*.6, R.width*.028):0, cb=getComputedStyle(n,'::before');   // the numbered circles are drawn by CSS
+        const box={ left:r.left, top:r.top+(r.height-d)/2, width:d, height:d }; sl.addShape('ellipse', Object.assign(at(box), { fill:{ color:pxHex(cb.backgroundColor)||'0F1B2D' }, line:{ type:'none' } }));
+        sl.addText(String([...n.parentNode.children].indexOf(n)+1), Object.assign(at(box), { align:'center', valign:'middle', margin:0, bold:true, color:'FFFFFF', fontSize:pt(parseFloat(cb.fontSize)||14), fontFace:'Arial' })); }
+      if(isBlockText(n)){ const runs=runsOf(n); if(!runs.length) return;
+        // where the text itself sits (a label above it, drawn by a block child, keeps its own place)
+        const own=[...n.childNodes].filter(c=>(c.nodeType===3 && c.textContent.trim()) || (c.nodeType===1 && getComputedStyle(c).display==='inline' && c.innerText.trim()));
+        const rg=document.createRange(); rg.setStartBefore(own[0]); rg.setEndAfter(own[own.length-1]); const tr=rg.getBoundingClientRect();
+        const pl=parseFloat(cs.paddingLeft)+parseFloat(cs.borderLeftWidth||0), pr=parseFloat(cs.paddingRight)+parseFloat(cs.borderRightWidth||0);
+        const one=tr.height<parseFloat(cs.fontSize)*1.9, align=cs.textAlign==='right' || cs.textAlign==='end'?'right':cs.textAlign==='center'?'center':'left';
+        let left=r.left+pl, width=Math.max(4, r.width-pl-pr);
+        if(/grid|flex/.test(cs.display)){ left=tr.left; width=Math.max(4, Math.min(tr.width, r.right-pr-tr.left)); }   // a loose text inside a grid or flex row has its own cell
+        if(cs.textOverflow==='ellipsis' && n.scrollWidth>n.clientWidth+1 && runs.length===1){ const keep=Math.max(1, Math.floor(runs[0].text.length*n.clientWidth/n.scrollWidth)-1); runs[0].text=runs[0].text.slice(0,keep).trimEnd()+'…'; }
+        if(one){ const extra=width*.06+6; width+=extra; if(align==='right') left-=extra; else if(align==='center') left-=extra/2; }   // PowerPoint's fonts run a little wider: one line stays one line
+        sl.addText(runs, Object.assign(at({ left, top:tr.top, width, height:Math.max(4, tr.height) }), { margin:0, valign:'top', align, fontFace:'Arial', wrap:!one, lineSpacingMultiple:.95 })); }
+    });
+  }
   function meetPresent(groups){
     const list=groups.flatMap(g=>g.list); if(!list.length) return;
     const e=escapeHtml, date=new Date().toLocaleDateString('fr-FR',{ day:'numeric', month:'long', year:'numeric' });
@@ -4079,26 +4129,33 @@
     // 1. the answer: every key figure and the four messages, each pointing to the slide that details it
     const S1=add({ sec:'Synthèse' });
     const pStep=add({ sec:'Étapes', title:'« '+big.st.label+' » concentre '+mw(big.kw)+', soit '+pct(big.kw,kw)+' % du volume en jeu',
-      body:'<div class="ps-bars">'+steps.map(x=>'<div class="ps-bar"><span class="l">'+e(x.st.label)+'</span><span class="b"><i style="width:'+Math.max(2,x.kw/bySize[0].kw*100)+'%;background:'+(MAP_PHASES.find(p=>p[0]===x.st.phase)||[0,0,'#7DA2CF'])[2]+'"></i></span><span class="v">'+e(mw(x.kw))+'</span><span class="n">'+plural(x.n,'install.').replace('install.s','install.')+'</span></div>').join('')+'</div>'
+      body:'<div class="ps-bars ps-fill">'+steps.map(x=>'<div class="ps-bar"><span class="l">'+e(x.st.label)+'</span><span class="b"><i style="width:'+Math.max(2,x.kw/bySize[0].kw*100)+'%;background:'+(MAP_PHASES.find(p=>p[0]===x.st.phase)||[0,0,'#7DA2CF'])[2]+'"></i></span><span class="v">'+e(mw(x.kw))+'</span><span class="n">'+plural(x.n,'install.').replace('install.s','install.')+'</span></div>').join('')+'</div>'
         +takeaway(big2?'Après « '+big.st.label+' », c’est « '+big2.st.label+' » qui pèse le plus ('+mw(big2.kw)+').':'Tout le volume est à cette étape.') });
-    // dossiers: one table per phase (8 lines a slide), the biggest first
+    // dossiers: one table for every phase (a line per phase inside), cut into balanced pages so none is half empty
     let pDeals=null;
-    phases.forEach(ph=>{ const rows=blocks.filter(b=>b.g===ph.g).map(bInfo).sort((a,b)=>b.kw-a.kw);
-      for(let k=0;k<rows.length;k+=8){ const part=rows.slice(k,k+8), late=part.filter(r=>r.d!=null && r.d>15);
-        const n=add({ sec:'Dossiers', title:ph.short+' : '+plural(rows.length,'dossier')+', '+mw(ph.kw)+(k?' (suite)':''),
-          body:'<table class="ps-table"><thead><tr><th>Dossier</th><th class="n">Puissance</th><th>Étape</th><th>Chez</th><th class="n">Depuis</th><th>Prochaine action</th></tr></thead><tbody>'
-            +part.map(r=>'<tr><td><b>'+e(r.label)+'</b>'+(r.n>1?'<small> · '+r.n+' install.</small>':'')+'</td><td class="n">'+e(r.kw?mw(r.kw):'—')+'</td><td>'+e(r.st?stageLabel(r.o.stage, r.o):'')+'</td><td>'+e(r.who)+'</td><td class="n'+(r.d!=null && r.d>15?' warn':'')+'">'+(r.d!=null?r.d+' j':'—')+'</td><td>'+e(r.next)+'</td></tr>').join('')+'</tbody></table>'
-            +takeaway(late.length?plural(late.length,'dossier')+' ici attend'+(late.length>1?'ent':'')+' depuis plus de 15 jours : '+late.slice(0,2).map(r=>r.label.split(' — ')[0]).join(', ')+'.':'Aucun dossier de cette phase n’attend depuis plus de 15 jours.') });
-        if(!pDeals) pDeals=n; } });
+    { const rowsAll=[]; phases.forEach(ph=>blocks.filter(b=>b.g===ph.g).map(bInfo).sort((a,b)=>b.kw-a.kw).forEach(r=>rowsAll.push(Object.assign(r, { ph }))));
+      const pages=Math.max(1, Math.ceil((rowsAll.length+phases.length)/11)), per=Math.ceil(rowsAll.length/pages), lead=phases.slice().sort((a,b)=>b.kw-a.kw)[0];
+      for(let pg=0; pg<pages; pg++){ const part=rowsAll.slice(pg*per, (pg+1)*per); if(!part.length) break; const late=part.filter(r=>r.d!=null && r.d>15);
+        let body='', last=null;
+        part.forEach(r=>{ if(r.ph!==last){ const nPh=rowsAll.filter(x=>x.ph===r.ph).length; body+='<tr class="ps-ph"><td colspan="6"><i style="background:'+r.ph.color+'"></i>'+e(r.ph.short)+'<span>'+plural(nPh,'dossier')+' · '+e(mw(r.ph.kw))+(last===null && pg && rowsAll[pg*per-1].ph===r.ph?' · suite':'')+'</span></td></tr>'; last=r.ph; }
+          body+='<tr><td><b>'+e(r.label)+'</b>'+(r.n>1?'<small> · '+r.n+' install.</small>':'')+'</td><td class="n">'+e(r.kw?mw(r.kw):'—')+'</td><td>'+e(r.st?stageLabel(r.o.stage, r.o):'')+'</td><td>'+e(r.who)+'</td><td class="n'+(r.d!=null && r.d>15?' warn':'')+'">'+(r.d!=null?r.d+' j':'—')+'</td><td>'+e(r.next)+'</td></tr>'; });
+        const n=add({ sec:'Dossiers', title:plural(blocks.length,'dossier')+' en cours, '+mw(kw)+' : '+lead.short+' en porte '+pct(lead.kw,kw)+' %'+(pages>1?' ('+(pg+1)+'/'+pages+')':''),
+          body:'<div class="ps-fill"><table class="ps-table ps-table-fill"><thead><tr><th>Dossier</th><th class="n">Puissance</th><th>Étape</th><th>Chez</th><th class="n">Depuis</th><th>Prochaine action</th></tr></thead><tbody>'+body+'</tbody></table></div>'
+            +takeaway(late.length?plural(late.length,'dossier')+(pages>1?' de cette page':'')+' attend'+(late.length>1?'ent':'')+' depuis plus de 15 jours : '+[...new Set(late.map(r=>r.label.split(' — ')[0]))].slice(0,3).join(', ')+'.':'Aucun de ces dossiers n’attend depuis plus de 15 jours.') });
+        if(!pDeals) pDeals=n; } }
     const pMes=fc.tot?add({ sec:'Mises en service', title:mw(fc.tot)+' probables à mettre en service d’ici deux ans'+(fcPeak?', surtout au '+fcPeak.q.replace(/(\d\d)$/,'20$1'):''),
-      body:'<div class="ps-chart">'+fc.chart.outerHTML+'</div><p class="ps-note">Barre claire : en jeu · foncée : probable, pondéré par l’étape (pricing 25 %, offre en attente 40 %, KYC 60 %, signature 90 %, signé 100 %). Chiffre : MWc probables.</p>'
+      body:'<div class="ps-chart ps-fill">'+fc.chart.outerHTML+'</div><p class="ps-note">Barre claire : en jeu · foncée : probable, pondéré par l’étape (pricing 25 %, offre en attente 40 %, KYC 60 %, signature 90 %, signé 100 %). Chiffre : MWc probables.</p>'
         +takeaway('Sur '+mw(fc.all)+' en jeu, '+mw(fc.tot)+' sont probables : c’est le volume sur lequel on peut compter.') }):null;
     const pWho=add({ sec:'Qui a la main', title:whoName(whoLead)+' a la main sur '+plural(who[whoLead].length,'dossier')+' ('+mw(kwOf(who[whoLead]))+')',
-      body:'<div class="ps-who">'+whoOrder.map(w=>{ const l=who[w], avg=avgOf(l), late=lateOf(l);
-        return '<div class="ps-who-c"><span class="ps-chip" style="--c:'+WHO_COLORS[w]+'">'+e(w==='Com'?'Commercial':WHO[w])+'</span><b>'+l.length+'</b><span>'+e(mw(kwOf(l)))+'</span><em'+(late?' class="warn"':'')+'>'+(avg!=null?avg+' j en moyenne':'')+(late?' · '+late+' > 15 j':'')+'</em></div>'; }).join('')+'</div>'
+      body:'<div class="ps-who ps-fill">'+whoOrder.map(w=>{ const l=who[w], avg=avgOf(l), late=lateOf(l);
+        const top=[...new Map(l.slice().sort((a,b)=>(daysOf(b)||0)-(daysOf(a)||0)).map(o=>[meetBlockKey(o), o])).values()], max=5;
+        return '<div class="ps-who-c"><span class="ps-chip" style="--c:'+WHO_COLORS[w]+'">'+e(w==='Com'?'Commercial':WHO[w])+'</span><b>'+l.length+'</b><span>'+e(mw(kwOf(l)))+'</span><em'+(late?' class="warn"':'')+'>'+(avg!=null?avg+' j en moyenne':'')+(late?' · '+late+' > 15 j':'')+'</em>'
+          +'<ul class="ps-who-l">'+top.slice(0,max).map(o=>{ const d=daysOf(o); return '<li><span>'+e(o.company||oppName(o))+'</span><i'+(d!=null && d>15?' class="warn"':'')+'>'+(d!=null?d+' j':'')+'</i></li>'; }).join('')+(top.length>max?'<li class="more">+ '+(top.length-max)+' autres</li>':'')+'</ul></div>'; }).join('')+'</div>'
         +takeaway(who.Ops?'Ops porte '+plural(who.Ops.length,'dossier')+(lateOf(who.Ops)?', dont '+lateOf(who.Ops)+' depuis plus de 15 jours : à relancer.':' ; rien de bloqué de son côté.'):'Aucun dossier n’attend Ops.') });
     const pAtt=add({ sec:'Attention', title:stuck.length?plural(stuck.length,'dossier')+' à débloquer, le plus ancien depuis '+daysOf(stuck[0])+' jours':'Aucun dossier bloqué depuis plus de 15 jours',
-      body:stuck.length?'<table class="ps-table"><thead><tr><th>Dossier</th><th>Étape</th><th>Chez</th><th class="n">Depuis</th><th class="n">Puissance</th></tr></thead><tbody>'+stuck.slice(0,8).map(o=>{ const st=oppStage(o.stage); return '<tr><td><b>'+e(o.company||'')+'</b> '+e(oppName(o))+'</td><td>'+e(stageLabel(o.stage, o))+'</td><td>'+e(st?(st.who==='Com'?'Commercial':WHO[st.who]||st.who):'')+'</td><td class="n warn">'+daysOf(o)+' j</td><td class="n">'+e(fmtKwc(o.kwc)||'—')+'</td></tr>'; }).join('')+'</tbody></table>'
+      body:stuck.length?'<div class="ps-cards ps-fill" style="--cols:'+Math.min(4, stuck.slice(0,8).length)+'">'+stuck.slice(0,8).map(o=>{ const st=oppStage(o.stage), r=bInfo({ list:[o] }), nt=(o.notesLog||[]).filter(x=>x && x.text).sort((x,y)=>y.at-x.at)[0];
+          return '<div class="ps-card"><span class="ps-k">'+e(stageLabel(o.stage, o))+' · '+e(st?(st.who==='Com'?'Commercial':WHO[st.who]||st.who):'')+'</span><b class="ps-card-t">'+e(o.company||'')+'</b><span class="ps-card-s">'+e(oppName(o))+(kwcNum(o)?' · '+e(mw(kwcNum(o))):'')+'</span>'
+            +'<strong class="warn">'+daysOf(o)+' j</strong><span class="ps-card-s">sans bouger</span><p><span class="ps-k">Prochaine action</span>'+e(r.next||'—')+'</p>'+(nt?'<p class="ps-card-n"><span class="ps-k">Dernier échange · '+e(new Date(nt.at).toLocaleDateString('fr-FR'))+'</span>'+e(nt.text.length>110?nt.text.slice(0,110)+'…':nt.text)+'</p>':'')+'</div>'; }).join('')+'</div>'
         +takeaway('Décider en séance qui relance qui, et pour quand.'):takeaway('Rien n’est à la même étape depuis plus de 15 jours.') });
     // the answer, written now that every page number is known
     const msgs=[
@@ -4112,7 +4169,16 @@
         +[[mw(kw),'en jeu'],[mw(likely),'probables'],[String(list.length),'installations · '+plural(blocks.length,'dossier')],[mwh?(mwh>=1000?(Math.round(mwh/100)/10).toLocaleString('fr-FR')+' GWh':Math.round(mwh).toLocaleString('fr-FR')+' MWh'):'—','par an (P50)']].map(([v,l])=>'<div class="ps-ex-k"><b>'+e(v)+'</b><span>'+e(l)+'</span></div>').join('')
         +'<div class="ps-split"><div class="ps-split-bar">'+phases.map(p=>'<i style="flex:'+Math.max(p.kw,1)+';background:'+p.color+'"></i>').join('')+'</div><div class="ps-split-l">'+phases.map(p=>'<span><i style="background:'+p.color+'"></i>'+e(p.short)+' '+e(mw(p.kw))+'</span>').join('')+'</div></div>'
         +'</div><ol class="ps-exec-r">'+msgs.map(m=>'<li'+(m.warn?' class="warn"':'')+'><b>'+e(m.b)+'</b>'+(m.s?'<span>'+e(m.s)+'</span>':'')+'<em>p. '+m.p+'</em></li>').join('')+'</ol></div>' };
-    // appendix: one page per deal
+    // appendix: one page per deal; under the figures, the plants (or the plant's sheet) and what happened lately
+    const dealMore=l=>{
+      let left;
+      if(l.length>1) left='<div><span class="ps-k">Centrales</span><table class="ps-table ps-mini"><tbody>'+l.slice(0,6).map(x=>'<tr><td><b>'+e(oppName(x))+'</b></td><td class="n">'+e(x.kwc?fmtKwc(x.kwc):'—')+'</td><td class="n">'+e(x.mwh?Math.round(pqNum(String(x.mwh))||0).toLocaleString('fr-FR')+' MWh':'—')+'</td><td>'+e(x.commune||'')+'</td><td>'+e(x.mesEff||x.mesPrev||'')+'</td></tr>').join('')+(l.length>6?'<tr><td colspan="5">+ '+(l.length-6)+' autres</td></tr>':'')+'</tbody></table></div>';
+      else { const o=l[0], keys=['Commune','Département','Nature Projet',"Type d'injection",'Puissance raccordement (kVA)','Stockage','P90 annuel (indicatif) (MWh/an)','Productible (P50) (kWh/kWc/an)','Nom SPV','Système de gestion des heures négatives','Première injection'];
+        const kv=keys.map(k=>[k.replace(/ \(.*$/,''), caractValue(o,k)]).filter(x=>x[1]!=='' && x[1]!=null).slice(0,10);
+        left='<div><span class="ps-k">Caractéristiques</span>'+(kv.length?'<dl class="ps-kv">'+kv.map(([k,v])=>'<dt>'+e(k)+'</dt><dd>'+e(String(v))+'</dd>').join('')+'</dl>':'<p class="ps-empty">Fiche Caractéristiques pas encore remplie.</p>')+'</div>'; }
+      const h=buildHistory(l), ev=h?[...h.querySelectorAll('li')].slice(0,6).map(li=>[li.firstChild.textContent, li.lastChild.textContent]):[];
+      const right='<div><span class="ps-k">Historique récent</span>'+(ev.length?'<ul class="ps-hist">'+ev.map(([d,t])=>'<li><span>'+e(d)+'</span>'+e(t.length>90?t.slice(0,90)+'…':t)+'</li>').join('')+'</ul>':'<p class="ps-empty">Rien de noté pour l’instant.</p>')+'</div>';
+      return '<div class="ps-deal-more">'+left+right+'</div>'; };
     add({ divider:true, title:'Annexe', sub:'Une fiche par dossier, dans l’ordre des tableaux' });
     blocks.slice().sort((a,b)=>MEET_PHASES.findIndex(p=>p.key===b.g.phase.key)-MEET_PHASES.findIndex(p=>p.key===a.g.phase.key) || kwOf(b.list)-kwOf(a.list)).forEach(bk=>{
       const r=bInfo(bk), o=r.o, mwhB=bk.list.reduce((x,y)=>x+(pqNum(String(y.mwh||''))||0),0), mes=o.mesEff||o.mesPrev||'';
@@ -4123,22 +4189,35 @@
           +'<div class="ps-track">'+ph.map((p,i)=>'<div class="'+(i<cur?'done':i===cur?'on':'')+'"><i></i><span>'+e(p.label)+'</span></div>').join('')+'</div>'
           +'<div class="ps-deal-next"><div><span class="ps-k">Prochaine action</span><b>'+e(r.next||'—')+'</b></div><div><span class="ps-k">Chez</span><b'+(r.d!=null && r.d>15?' class="warn"':'')+'>'+e(r.who)+(r.d!=null?' · '+r.d+' j':'')+'</b></div>'+(o.contrat?'<div><span class="ps-k">Contrat</span><b>'+e(o.contrat+(o.duree?' · '+o.duree+' ans':''))+'</b></div>':'')+'</div>'
           +(lastNote?'<p class="ps-context"><span class="ps-k">Dernier échange · '+e(new Date(lastNote.at).toLocaleDateString('fr-FR'))+'</span>'+e(lastNote.text.length>180?lastNote.text.slice(0,180)+'…':lastNote.text)+'</p>':'')
-          +(bk.list.length>1?'<div class="ps-plants">'+bk.list.slice(0,6).map(x=>'<span>'+e(oppName(x))+(x.kwc?' · '+e(fmtKwc(x.kwc)):'')+'</span>').join('')+(bk.list.length>6?'<span>+ '+(bk.list.length-6)+' autres</span>':'')+'</div>':'')+'</div>' });
+          +dealMore(bk.list)+'</div>' });
     });
     // the deck
     let ov=$('present-overlay'); if(ov) ov.remove();
     ov=document.createElement('div'); ov.id='present-overlay'; ov.className='ps-overlay'; ov.tabIndex=-1; ov.setAttribute('role','dialog'); ov.setAttribute('aria-label','Présentation de la réunion');
-    ov.innerHTML='<div class="ps-stage"><div class="ps-slide"></div></div><div class="ps-bar-ui"><button type="button" class="ps-prev" aria-label="Slide précédente">‹</button><span class="ps-count"></span><button type="button" class="ps-next" aria-label="Slide suivante">›</button><button type="button" class="ps-full" title="Plein écran (F)">Plein écran</button><button type="button" class="ps-close" title="Fermer (Échap)">Fermer</button></div>';
+    ov.innerHTML='<div class="ps-stage"><div class="ps-slide"></div></div><div class="ps-bar-ui"><button type="button" class="ps-prev" aria-label="Slide précédente">‹</button><span class="ps-count"></span><button type="button" class="ps-next" aria-label="Slide suivante">›</button><button type="button" class="ps-full" title="Plein écran (F)">Plein écran</button><button type="button" class="ps-pptx" title="Télécharger en PowerPoint (.pptx) pour retoucher les slides à la main">PowerPoint</button><button type="button" class="ps-close" title="Fermer (Échap)">Fermer</button></div>';
     document.body.appendChild(ov);
     let i=0; const box=ov.querySelector('.ps-slide');
     const tracker=sec=>'<nav class="ps-tracker">'+SECTIONS.map(x=>'<span'+(x===sec?' class="on"':'')+'>'+e(x)+'</span>').join('')+'</nav>';
-    const show=n=>{ i=Math.max(0, Math.min(slides.length-1, n)); const sl=slides[i];
+    const paint=(box, n)=>{ const sl=slides[n];
       box.className='ps-slide'+(sl.divider?' ps-divider':'')+(sl.exec?' ps-execs':'');
       box.innerHTML=sl.divider?'<div class="ps-div-in"><div class="ps-cover-k">Réunion pricing · '+e(date)+'</div><h1>'+e(sl.title)+'</h1><p>'+e(sl.sub)+'</p></div>'
         :'<header>'+(sl.sec!=='Annexe'?tracker(sl.sec):'<nav class="ps-tracker"><span class="on">Annexe · fiche dossier</span></nav>')+(sl.exec?'<div class="ps-kicker">Réunion pricing · '+e(date)+'</div>':'')+'<h2>'+e(sl.title)+'</h2></header><div class="ps-body">'+sl.body+'</div>'
-          +'<footer><span>Source : Pipe agrégation (appli ToDo), au '+e(date)+'</span><span>'+(i+1)+'</span></footer>';
-      ov.querySelector('.ps-count').textContent=(i+1)+' / '+slides.length; };
-    const close=()=>{ if(document.fullscreenElement) try{ document.exitFullscreen(); }catch(e2){} ov.remove(); };
+          +'<footer><span>Source : Pipe agrégation (appli ToDo), au '+e(date)+'</span><span>'+(n+1)+'</span></footer>';
+      box.querySelectorAll('.ps-fill > .ps-table-fill').forEach(t=>{ t.style.height='auto'; t.style.fontSize=''; const room=t.parentNode.clientHeight;
+        for(let f=1.45; t.offsetHeight>room && f>1.2; f-=0.06){ t.style.fontSize=f.toFixed(2)+'cqw'; t.querySelectorAll('td').forEach(td=>{ td.style.paddingTop=td.style.paddingBottom=(f*0.32).toFixed(2)+'cqw'; }); }   // too many lines: smaller, never cut
+        const nat=t.offsetHeight; if(room>nat) t.style.height=Math.min(room, nat*2.2)+'px'; }); };
+    const show=n=>{ i=Math.max(0, Math.min(slides.length-1, n)); paint(box, i); ov.querySelector('.ps-count').textContent=(i+1)+' / '+slides.length; };
+    // « PowerPoint » : the same slides as a .pptx, every text and table editable
+    ov.querySelector('.ps-pptx').onclick=async ev=>{ ev.stopPropagation(); const b=ev.currentTarget, was=b.textContent; b.disabled=true; b.textContent='Préparation…';
+      try{ await loadPptx(); const host=document.createElement('div'); host.className='ps-export-host'; const sb=document.createElement('div'); host.appendChild(sb); document.body.appendChild(host);
+        const pptx=new window.PptxGenJS(); pptx.layout='LAYOUT_WIDE'; pptx.title='Réunion pricing · '+date;
+        try{ slides.forEach((x,n)=>{ paint(sb, n); slideToPptx(pptx, sb); }); } finally { host.remove(); }
+        await pptx.writeFile({ fileName:'Reunion pricing '+toISO(new Date())+'.pptx' }); b.textContent='Téléchargé ✓'; }
+      catch(err){ console.error(err); b.textContent='Échec (hors ligne ?)'; }
+      ov.focus();   // the button is disabled a moment: the arrows and Échap keep working
+      setTimeout(()=>{ b.textContent=was; b.disabled=false; }, 2500); };
+    const onResize=()=>{ if(document.body.contains(ov)) show(i); }; window.addEventListener('resize', onResize);   // full screen: the tables are spread again
+    const close=()=>{ if(document.fullscreenElement) try{ document.exitFullscreen(); }catch(e2){} window.removeEventListener('resize', onResize); ov.remove(); };
     ov.querySelector('.ps-prev').onclick=()=>show(i-1); ov.querySelector('.ps-next').onclick=()=>show(i+1); ov.querySelector('.ps-close').onclick=close;
     ov.querySelector('.ps-full').onclick=()=>{ try{ document.fullscreenElement?document.exitFullscreen():ov.requestFullscreen(); }catch(e2){} };
     ov.querySelector('.ps-stage').addEventListener('click', ev=>{ const pg=ev.target.closest('.ps-exec-r li'); if(pg){ const m=/p\. (\d+)/.exec(pg.textContent); if(m){ show(+m[1]-1); return; } }
