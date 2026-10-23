@@ -4042,77 +4042,107 @@
         r.querySelector('.m').textContent=(avg!=null?avg+' j en moyenne':'')+(late?' · '+late+' > 15 j':''); if(late) r.classList.add('late'); c.appendChild(r); }); }
     return box;
   }
-  // ---------- « Présenter » : the meeting as a consultant's deck — one message per slide, big figures, little text ----------
+  // ---------- « Présenter » : the meeting as a consultant's deck (pyramid principle): the answer on slide 1, then one message
+  // per slide that details it — an action title (a sentence with a number), one exhibit, « À retenir », source and page; the deals in appendix ----------
   function meetPresent(groups){
     const list=groups.flatMap(g=>g.list); if(!list.length) return;
     const e=escapeHtml, date=new Date().toLocaleDateString('fr-FR',{ day:'numeric', month:'long', year:'numeric' });
-    const mw=k=>fmtMwc(k), kwOf=l=>l.reduce((x,o)=>x+kwcNum(o),0), daysOf=o=>daysInStage(o);
-    const figs=meetFigures(groups), kw=kwOf(list), likely=list.reduce((x,o)=>x+kwcNum(o)*(MES_WEIGHTS[o.stage]||0),0);
+    const mw=k=>fmtMwc(k), kwOf=l=>l.reduce((x,o)=>x+kwcNum(o),0), daysOf=o=>daysInStage(o), pct=(a,b)=>Math.round(a/Math.max(1,b)*100);
+    const plural=(n,w)=>n+' '+w+(n>1?'s':'');
+    const kw=kwOf(list), likely=list.reduce((x,o)=>x+kwcNum(o)*(MES_WEIGHTS[o.stage]||0),0), mwh=list.reduce((x,o)=>x+(pqNum(String(o.mwh||''))||0),0);
     const stuck=list.filter(o=>{ const d=daysOf(o); return d!=null && d>15; }).sort((a,b)=>daysOf(b)-daysOf(a));
-    const slides=[];
-    const slide=(title, body, kicker, cls)=>slides.push({ title, body, kicker:kicker||'', cls:cls||'' });
-    // 1. cover
-    slides.push({ cover:true, title:'Réunion pricing', body:'<div class="ps-cover-sub">Pipe agrégation · '+e(date)+'</div><div class="ps-cover-figs">'+figs.slice(0,3).map(([v,l])=>'<div><b>'+e(v)+'</b><span>'+e(l)+'</span></div>').join('')+'</div>' });
-    // 2. summary: the message first, then the figures and three facts
-    const byPhase=groups.filter(g=>g.list.length).map(g=>({ g, kw:kwOf(g.list) })).sort((a,b)=>b.kw-a.kw);
-    const top=byPhase[0], ops=list.filter(o=>{ const st=oppStage(o.stage); return st && (st.who==='Ops' || st.who==='SC'); });
-    const facts=[top?Math.round(top.kw/Math.max(1,kw)*100)+' % du volume est en « '+top.g.phase.label.split(' · ')[0]+' »':'',
-      ops.length?ops.length+' dossier'+(ops.length>1?'s':'')+' attend'+(ops.length>1?'ent':'')+' Ops ('+mw(kwOf(ops))+')':'',
-      stuck.length?stuck.length+' dossier'+(stuck.length>1?'s':'')+' bloqué'+(stuck.length>1?'s':'')+' depuis plus de 15 jours':'Aucun dossier bloqué depuis plus de 15 jours'].filter(Boolean);
-    slide(mw(likely)+' probables sur '+mw(kw)+' en jeu', '<div class="ps-kpis">'+figs.map(([v,l],i)=>'<div class="ps-kpi'+(i===4 && stuck.length?' warn':'')+'"><b>'+e(v)+'</b><span>'+e(l)+'</span></div>').join('')+'</div><ul class="ps-facts">'+facts.map(f=>'<li>'+e(f)+'</li>').join('')+'</ul>', 'Synthèse');
-    // 3. where the deals are: MWc by step
-    const steps=OPP_STAGES.map(st=>{ const l=list.filter(o=>o.stage===st.key); return { st, n:l.length, kw:kwOf(l) }; }).filter(x=>x.n), mx=Math.max(1,...steps.map(x=>x.kw));
-    const big=steps.slice().sort((a,b)=>b.kw-a.kw)[0];
-    slide('« '+big.st.label+' » concentre '+mw(big.kw)+' sur '+mw(kw), '<div class="ps-bars">'+steps.map(x=>'<div class="ps-bar"><span class="l">'+e(x.st.label)+'</span><span class="b"><i style="width:'+Math.max(2,x.kw/mx*100)+'%;background:'+(MAP_PHASES.find(p=>p[0]===x.st.phase)||[0,0,'#7DA2CF'])[2]+'"></i></span><span class="v">'+e(mw(x.kw))+' · '+x.n+'</span></div>').join('')+'</div><p class="ps-note">Volume de chaque étape en MWc, et nombre de dossiers ; couleur = phase (qualification, offre, contrat).</p>', 'Où en sont les dossiers');
-    // 4. commissioning to come
-    { const f=mesForecast(list); if(f.tot){ const host=document.createElement('div'); host.appendChild(f.chart); slide(mw(f.tot)+' probables à mettre en service d’ici deux ans', '<div class="ps-chart">'+host.innerHTML+'</div><p class="ps-note">Barre claire : en jeu · foncée : probable, selon l’étape (pricing 25 %, offre en attente 40 %, KYC 60 %, signature 90 %).</p>', 'Mises en service'); } }
-    // 5. who holds the deals
-    { const by={}; list.forEach(o=>{ const st=oppStage(o.stage); if(!st) return; const w=st.who==='SC'?'Ops':st.who; (by[w]=by[w]||[]).push(o); });
-      const order=['Com','Ops','Jur','Client','Dir'].filter(w=>by[w]), lead=order.slice().sort((a,b)=>by[b].length-by[a].length)[0];
-      slide((lead==='Com'?'La plupart des dossiers attendent une action commerciale':'La plupart des dossiers attendent '+(lead==='Ops'?'Ops':lead==='Jur'?'le Juridique':lead==='Client'?'les producteurs':'la Direction'))+' ('+by[lead].length+')',
-        '<div class="ps-who">'+order.map(w=>{ const l=by[w], ds=l.map(daysOf).filter(d=>d!=null), avg=ds.length?Math.round(ds.reduce((x,y)=>x+y,0)/ds.length):null, late=ds.filter(d=>d>15).length;
-          return '<div class="ps-who-c"><span class="ps-chip" style="--c:'+WHO_COLORS[w]+'">'+e(w==='Com'?'Commercial':WHO[w])+'</span><b>'+l.length+'</b><span>'+e(mw(kwOf(l)))+'</span><em>'+(avg!=null?avg+' j en moyenne':'')+(late?' · '+late+' > 15 j':'')+'</em></div>'; }).join('')+'</div><p class="ps-note">Qui doit agir pour que chaque dossier avance, et depuis combien de temps en moyenne.</p>', 'Qui a la main'); }
-    // 6. one slide per block (a lot, a request at one step, or a plant on its own), the biggest first within each phase
-    const blocks=new Map(); groups.forEach(g=>g.list.forEach(o=>{ const k=meetBlockKey(o); if(!blocks.has(k)) blocks.set(k,{ g, list:[] }); blocks.get(k).list.push(o); }));
-    [...blocks.values()].sort((a,b)=>MEET_PHASES.findIndex(p=>p.key===b.g.phase.key)-MEET_PHASES.findIndex(p=>p.key===a.g.phase.key) || kwOf(b.list)-kwOf(a.list)).forEach(bk=>{
-      const o=bk.list[0], st=oppStage(o.stage), d=daysOf(o), name=meetBlockName(o), k=kwOf(bk.list), mwh=bk.list.reduce((x,y)=>x+(pqNum(String(y.mwh||''))||0),0);
+    // the blocks (a lot, a request at one step, a plant alone), the unit people talk about in the meeting
+    const blocks=[]; { const m=new Map(); groups.forEach(g=>g.list.forEach(o=>{ const k=meetBlockKey(o); if(!m.has(k)){ m.set(k,{ g, list:[] }); blocks.push(m.get(k)); } m.get(k).list.push(o); })); }
+    const bInfo=bk=>{ const o=bk.list[0], st=oppStage(o.stage), d=daysOf(o), name=meetBlockName(o);
       const ids=new Set(bk.list.map(x=>x.id).concat(o.requestId?[o.requestId]:[])), tk=activeTasks().filter(t=>t.opportunityId && ids.has(t.opportunityId)).sort((a,b)=>(a.due||'9').localeCompare(b.due||'9'))[0];
-      const next=(tk && plainLinks(tk.title||'').replace(/\s+—\s+.*$/,'').trim())||(st?stageTaskOf(st, o):'');
-      const waiting=st && st.who!=='Com'?'En attente '+(st.who==='Ops'?'d’Ops':st.who==='Jur'?'du Juridique':st.who==='Client'?'du producteur':'de la Direction'):'À moi';
-      const title=(o.company||'')+(name && bk.list.length>1?' — '+name:bk.list.length===1?' — '+oppName(o):'')+' · '+(st?stageLabel(o.stage, o):'')+(d!=null?' depuis '+d+' jour'+(d>1?'s':''):'');
+      return { o, st, d, kw:kwOf(bk.list), n:bk.list.length, label:(o.company||'')+(bk.list.length>1 && name?' — '+name:bk.list.length===1?' — '+oppName(o):''),
+        who:st?(st.who==='Com'?'Commercial':WHO[st.who]||st.who):'', next:(tk && plainLinks(tk.title||'').replace(/\s+—\s+.*$/,'').trim())||(st?stageTaskOf(st, o):'') }; };
+    // the facts every slide is built from
+    const steps=OPP_STAGES.map(st=>{ const l=list.filter(o=>o.stage===st.key); return { st, n:l.length, kw:kwOf(l) }; }).filter(x=>x.n);
+    const bySize=steps.slice().sort((a,b)=>b.kw-a.kw), big=bySize[0], big2=bySize[1];
+    const phases=groups.filter(g=>g.list.length).map(g=>({ g, kw:kwOf(g.list), color:(MAP_PHASES.find(p=>p[0]===g.phase.key)||[0,0,'#7DA2CF'])[2], short:g.phase.label.split(' · ')[0] }));
+    const who={}; list.forEach(o=>{ const st=oppStage(o.stage); if(!st) return; const w=st.who==='SC'?'Ops':st.who; (who[w]=who[w]||[]).push(o); });
+    const whoOrder=['Com','Ops','Jur','Client','Dir'].filter(w=>who[w]), whoLead=whoOrder.slice().sort((a,b)=>who[b].length-who[a].length)[0];
+    const whoName=w=>w==='Com'?'Le commercial':w==='Ops'?'Ops':w==='Jur'?'Le Juridique':w==='Client'?'Les producteurs':'La Direction';
+    const lateOf=l=>l.filter(o=>{ const d=daysOf(o); return d!=null && d>15; }).length, avgOf=l=>{ const ds=l.map(daysOf).filter(d=>d!=null); return ds.length?Math.round(ds.reduce((x,y)=>x+y,0)/ds.length):null; };
+    const fc=mesForecast(list), fcPeak=(()=>{ const cols=[...fc.chart.querySelectorAll('.pd-mes-col')].map(c=>({ q:c.querySelector('.q').textContent, v:c.querySelector('.v').textContent })).filter(c=>c.v); return cols.sort((a,b)=>pqNum(b.v)-pqNum(a.v))[0]; })();
+    // the deck's sections (the tracker at the top of each slide) and the slides
+    const SECTIONS=['Synthèse','Étapes','Dossiers','Mises en service','Qui a la main','Attention'];
+    const slides=[]; const add=o=>{ slides.push(o); return slides.length; };
+    const takeaway=t=>'<aside class="ps-take"><span class="ps-k">À retenir</span>'+e(t)+'</aside>';
+    // 1. the answer: every key figure and the four messages, each pointing to the slide that details it
+    const S1=add({ sec:'Synthèse' });
+    const pStep=add({ sec:'Étapes', title:'« '+big.st.label+' » concentre '+mw(big.kw)+', soit '+pct(big.kw,kw)+' % du volume en jeu',
+      body:'<div class="ps-bars">'+steps.map(x=>'<div class="ps-bar"><span class="l">'+e(x.st.label)+'</span><span class="b"><i style="width:'+Math.max(2,x.kw/bySize[0].kw*100)+'%;background:'+(MAP_PHASES.find(p=>p[0]===x.st.phase)||[0,0,'#7DA2CF'])[2]+'"></i></span><span class="v">'+e(mw(x.kw))+'</span><span class="n">'+plural(x.n,'install.').replace('install.s','install.')+'</span></div>').join('')+'</div>'
+        +takeaway(big2?'Après « '+big.st.label+' », c’est « '+big2.st.label+' » qui pèse le plus ('+mw(big2.kw)+').':'Tout le volume est à cette étape.') });
+    // dossiers: one table per phase (8 lines a slide), the biggest first
+    let pDeals=null;
+    phases.forEach(ph=>{ const rows=blocks.filter(b=>b.g===ph.g).map(bInfo).sort((a,b)=>b.kw-a.kw);
+      for(let k=0;k<rows.length;k+=8){ const part=rows.slice(k,k+8), late=part.filter(r=>r.d!=null && r.d>15);
+        const n=add({ sec:'Dossiers', title:ph.short+' : '+plural(rows.length,'dossier')+', '+mw(ph.kw)+(k?' (suite)':''),
+          body:'<table class="ps-table"><thead><tr><th>Dossier</th><th class="n">Puissance</th><th>Étape</th><th>Chez</th><th class="n">Depuis</th><th>Prochaine action</th></tr></thead><tbody>'
+            +part.map(r=>'<tr><td><b>'+e(r.label)+'</b>'+(r.n>1?'<small> · '+r.n+' install.</small>':'')+'</td><td class="n">'+e(r.kw?mw(r.kw):'—')+'</td><td>'+e(r.st?stageLabel(r.o.stage, r.o):'')+'</td><td>'+e(r.who)+'</td><td class="n'+(r.d!=null && r.d>15?' warn':'')+'">'+(r.d!=null?r.d+' j':'—')+'</td><td>'+e(r.next)+'</td></tr>').join('')+'</tbody></table>'
+            +takeaway(late.length?plural(late.length,'dossier')+' ici attend'+(late.length>1?'ent':'')+' depuis plus de 15 jours : '+late.slice(0,2).map(r=>r.label.split(' — ')[0]).join(', ')+'.':'Aucun dossier de cette phase n’attend depuis plus de 15 jours.') });
+        if(!pDeals) pDeals=n; } });
+    const pMes=fc.tot?add({ sec:'Mises en service', title:mw(fc.tot)+' probables à mettre en service d’ici deux ans'+(fcPeak?', surtout au '+fcPeak.q.replace(/(\d\d)$/,'20$1'):''),
+      body:'<div class="ps-chart">'+fc.chart.outerHTML+'</div><p class="ps-note">Barre claire : en jeu · foncée : probable, pondéré par l’étape (pricing 25 %, offre en attente 40 %, KYC 60 %, signature 90 %, signé 100 %). Chiffre : MWc probables.</p>'
+        +takeaway('Sur '+mw(fc.all)+' en jeu, '+mw(fc.tot)+' sont probables : c’est le volume sur lequel on peut compter.') }):null;
+    const pWho=add({ sec:'Qui a la main', title:whoName(whoLead)+' a la main sur '+plural(who[whoLead].length,'dossier')+' ('+mw(kwOf(who[whoLead]))+')',
+      body:'<div class="ps-who">'+whoOrder.map(w=>{ const l=who[w], avg=avgOf(l), late=lateOf(l);
+        return '<div class="ps-who-c"><span class="ps-chip" style="--c:'+WHO_COLORS[w]+'">'+e(w==='Com'?'Commercial':WHO[w])+'</span><b>'+l.length+'</b><span>'+e(mw(kwOf(l)))+'</span><em'+(late?' class="warn"':'')+'>'+(avg!=null?avg+' j en moyenne':'')+(late?' · '+late+' > 15 j':'')+'</em></div>'; }).join('')+'</div>'
+        +takeaway(who.Ops?'Ops porte '+plural(who.Ops.length,'dossier')+(lateOf(who.Ops)?', dont '+lateOf(who.Ops)+' depuis plus de 15 jours : à relancer.':' ; rien de bloqué de son côté.'):'Aucun dossier n’attend Ops.') });
+    const pAtt=add({ sec:'Attention', title:stuck.length?plural(stuck.length,'dossier')+' à débloquer, le plus ancien depuis '+daysOf(stuck[0])+' jours':'Aucun dossier bloqué depuis plus de 15 jours',
+      body:stuck.length?'<table class="ps-table"><thead><tr><th>Dossier</th><th>Étape</th><th>Chez</th><th class="n">Depuis</th><th class="n">Puissance</th></tr></thead><tbody>'+stuck.slice(0,8).map(o=>{ const st=oppStage(o.stage); return '<tr><td><b>'+e(o.company||'')+'</b> '+e(oppName(o))+'</td><td>'+e(stageLabel(o.stage, o))+'</td><td>'+e(st?(st.who==='Com'?'Commercial':WHO[st.who]||st.who):'')+'</td><td class="n warn">'+daysOf(o)+' j</td><td class="n">'+e(fmtKwc(o.kwc)||'—')+'</td></tr>'; }).join('')+'</tbody></table>'
+        +takeaway('Décider en séance qui relance qui, et pour quand.'):takeaway('Rien n’est à la même étape depuis plus de 15 jours.') });
+    // the answer, written now that every page number is known
+    const msgs=[
+      { b:'« '+big.st.label+' » concentre '+mw(big.kw)+' ('+pct(big.kw,kw)+' %)', s:plural(big.n,'installation')+(big2?' ; ensuite « '+big2.st.label+' » ('+mw(big2.kw)+')':''), p:pStep },
+      { b:whoName(whoLead)+' a la main sur '+plural(who[whoLead].length,'dossier'), s:whoOrder.filter(w=>w!==whoLead).map(w=>(w==='Com'?'commercial':WHO[w])+' '+who[w].length).join(' · '), p:pWho },
+      fc.tot?{ b:mw(fc.tot)+' probables à mettre en service d’ici deux ans', s:fcPeak?'Le plus au '+fcPeak.q.replace(/(\d\d)$/,'20$1')+' ('+fcPeak.v+' MWc)':'', p:pMes }:null,
+      { b:stuck.length?plural(stuck.length,'dossier')+' bloqué'+(stuck.length>1?'s':'')+' depuis plus de 15 jours':'Aucun dossier bloqué', s:[...new Map(stuck.map(o=>[o.company||'', daysOf(o)])).entries()].slice(0,3).map(([c,d])=>c+' ('+d+' j)').join(' · '), p:pAtt, warn:!!stuck.length }
+    ].filter(Boolean);
+    slides[S1-1]={ sec:'Synthèse', exec:true, title:mw(likely)+' probables sur '+mw(kw)+' en jeu'+(stuck.length?' ; '+plural(stuck.length,'dossier')+' à débloquer':''),
+      body:'<div class="ps-exec"><div class="ps-exec-l">'
+        +[[mw(kw),'en jeu'],[mw(likely),'probables'],[String(list.length),'installations · '+plural(blocks.length,'dossier')],[mwh?(mwh>=1000?(Math.round(mwh/100)/10).toLocaleString('fr-FR')+' GWh':Math.round(mwh).toLocaleString('fr-FR')+' MWh'):'—','par an (P50)']].map(([v,l])=>'<div class="ps-ex-k"><b>'+e(v)+'</b><span>'+e(l)+'</span></div>').join('')
+        +'<div class="ps-split"><div class="ps-split-bar">'+phases.map(p=>'<i style="flex:'+Math.max(p.kw,1)+';background:'+p.color+'"></i>').join('')+'</div><div class="ps-split-l">'+phases.map(p=>'<span><i style="background:'+p.color+'"></i>'+e(p.short)+' '+e(mw(p.kw))+'</span>').join('')+'</div></div>'
+        +'</div><ol class="ps-exec-r">'+msgs.map(m=>'<li'+(m.warn?' class="warn"':'')+'><b>'+e(m.b)+'</b>'+(m.s?'<span>'+e(m.s)+'</span>':'')+'<em>p. '+m.p+'</em></li>').join('')+'</ol></div>' };
+    // appendix: one page per deal
+    add({ divider:true, title:'Annexe', sub:'Une fiche par dossier, dans l’ordre des tableaux' });
+    blocks.slice().sort((a,b)=>MEET_PHASES.findIndex(p=>p.key===b.g.phase.key)-MEET_PHASES.findIndex(p=>p.key===a.g.phase.key) || kwOf(b.list)-kwOf(a.list)).forEach(bk=>{
+      const r=bInfo(bk), o=r.o, mwhB=bk.list.reduce((x,y)=>x+(pqNum(String(y.mwh||''))||0),0), mes=o.mesEff||o.mesPrev||'';
       const lastNote=bk.list.flatMap(x=>x.notesLog||[]).filter(n=>n && n.text).sort((a,b)=>b.at-a.at)[0];
-      const phases=PIPE_PHASES.filter(p=>p.key!=='prequal'), cur=phases.findIndex(p=>p.key===(st&&st.phase));
-      const track='<div class="ps-track">'+phases.map((p,i)=>'<div class="'+(i<cur?'done':i===cur?'on':'')+'"><i></i><span>'+e(p.label)+'</span></div>').join('')+'</div>';
-      const mes=o.mesEff||o.mesPrev||'';
-      const body='<div class="ps-deal"><div class="ps-deal-figs"><div><b>'+e(k?mw(k):'—')+'</b><span>'+bk.list.length+' installation'+(bk.list.length>1?'s':'')+'</span></div><div><b>'+e(mwh?Math.round(mwh).toLocaleString('fr-FR')+' MWh':'—')+'</b><span>par an (P50)</span></div><div><b>'+e(mes||'—')+'</b><span>mise en service</span></div></div>'
-        +track+'<div class="ps-deal-next"><div><span class="ps-k">Prochaine action</span><b>'+e(next||'—')+'</b></div><div><span class="ps-k">Qui</span><b'+(d!=null && d>15?' class="warn"':'')+'>'+e(waiting)+(d!=null?' · '+d+' j':'')+'</b></div>'+(o.contrat?'<div><span class="ps-k">Contrat</span><b>'+e(o.contrat+(o.duree?' · '+o.duree+' ans':''))+'</b></div>':'')+'</div>'
-        +(lastNote?'<p class="ps-context"><span class="ps-k">Dernier échange · '+e(new Date(lastNote.at).toLocaleDateString('fr-FR'))+'</span>'+e(lastNote.text.length>180?lastNote.text.slice(0,180)+'…':lastNote.text)+'</p>':o.particularites?'<p class="ps-context"><span class="ps-k">À savoir</span>'+e(String(o.particularites).slice(0,180))+'</p>':'')
-        +(bk.list.length>1?'<div class="ps-plants">'+bk.list.slice(0,6).map(x=>'<span>'+e(oppName(x))+(x.kwc?' · '+e(fmtKwc(x.kwc)):'')+'</span>').join('')+(bk.list.length>6?'<span>+ '+(bk.list.length-6)+' autres</span>':'')+'</div>':'')+'</div>';
-      slide(title, body, bk.g.phase.label.split(' · ')[0]);
+      const ph=PIPE_PHASES.filter(p=>p.key!=='prequal'), cur=ph.findIndex(p=>p.key===(r.st&&r.st.phase));
+      add({ sec:'Annexe', title:r.label+' · '+(r.st?stageLabel(o.stage, o):'')+(r.d!=null?' depuis '+r.d+' jour'+(r.d>1?'s':''):''),
+        body:'<div class="ps-deal"><div class="ps-deal-figs"><div><b>'+e(r.kw?mw(r.kw):'—')+'</b><span>'+plural(r.n,'installation')+'</span></div><div><b>'+e(mwhB?Math.round(mwhB).toLocaleString('fr-FR')+' MWh':'—')+'</b><span>par an (P50)</span></div><div><b>'+e(mes||'—')+'</b><span>mise en service</span></div></div>'
+          +'<div class="ps-track">'+ph.map((p,i)=>'<div class="'+(i<cur?'done':i===cur?'on':'')+'"><i></i><span>'+e(p.label)+'</span></div>').join('')+'</div>'
+          +'<div class="ps-deal-next"><div><span class="ps-k">Prochaine action</span><b>'+e(r.next||'—')+'</b></div><div><span class="ps-k">Chez</span><b'+(r.d!=null && r.d>15?' class="warn"':'')+'>'+e(r.who)+(r.d!=null?' · '+r.d+' j':'')+'</b></div>'+(o.contrat?'<div><span class="ps-k">Contrat</span><b>'+e(o.contrat+(o.duree?' · '+o.duree+' ans':''))+'</b></div>':'')+'</div>'
+          +(lastNote?'<p class="ps-context"><span class="ps-k">Dernier échange · '+e(new Date(lastNote.at).toLocaleDateString('fr-FR'))+'</span>'+e(lastNote.text.length>180?lastNote.text.slice(0,180)+'…':lastNote.text)+'</p>':'')
+          +(bk.list.length>1?'<div class="ps-plants">'+bk.list.slice(0,6).map(x=>'<span>'+e(oppName(x))+(x.kwc?' · '+e(fmtKwc(x.kwc)):'')+'</span>').join('')+(bk.list.length>6?'<span>+ '+(bk.list.length-6)+' autres</span>':'')+'</div>':'')+'</div>' });
     });
-    // 7. what needs attention
-    if(stuck.length) slide(stuck.length+' dossier'+(stuck.length>1?'s':'')+' à débloquer', '<table class="ps-table"><thead><tr><th>Dossier</th><th>Étape</th><th>Chez</th><th class="n">Depuis</th><th class="n">Puissance</th></tr></thead><tbody>'+stuck.slice(0,8).map(o=>{ const st=oppStage(o.stage); return '<tr><td><b>'+e(o.company||'')+'</b> '+e(oppName(o))+'</td><td>'+e(stageLabel(o.stage, o))+'</td><td>'+e(st?WHO[st.who]||st.who:'')+'</td><td class="n">'+daysOf(o)+' j</td><td class="n">'+e(fmtKwc(o.kwc)||'—')+'</td></tr>'; }).join('')+'</tbody></table>'+'<p class="ps-note">Dossiers à la même étape depuis plus de 15 jours, le plus ancien en premier'+(stuck.length>8?' ; et '+(stuck.length-8)+' autres':'')+'.</p>', 'Points d’attention');
     // the deck
     let ov=$('present-overlay'); if(ov) ov.remove();
     ov=document.createElement('div'); ov.id='present-overlay'; ov.className='ps-overlay'; ov.tabIndex=-1; ov.setAttribute('role','dialog'); ov.setAttribute('aria-label','Présentation de la réunion');
     ov.innerHTML='<div class="ps-stage"><div class="ps-slide"></div></div><div class="ps-bar-ui"><button type="button" class="ps-prev" aria-label="Slide précédente">‹</button><span class="ps-count"></span><button type="button" class="ps-next" aria-label="Slide suivante">›</button><button type="button" class="ps-full" title="Plein écran (F)">Plein écran</button><button type="button" class="ps-close" title="Fermer (Échap)">Fermer</button></div>';
     document.body.appendChild(ov);
     let i=0; const box=ov.querySelector('.ps-slide');
+    const tracker=sec=>'<nav class="ps-tracker">'+SECTIONS.map(x=>'<span'+(x===sec?' class="on"':'')+'>'+e(x)+'</span>').join('')+'</nav>';
     const show=n=>{ i=Math.max(0, Math.min(slides.length-1, n)); const sl=slides[i];
-      box.className='ps-slide'+(sl.cover?' ps-cover':'')+(sl.cls?' '+sl.cls:'');
-      box.innerHTML=sl.cover?'<div class="ps-cover-in"><div class="ps-cover-k">Selfee · agrégation</div><h1>'+e(sl.title)+'</h1>'+sl.body+'</div>'
-        :'<header>'+(sl.kicker?'<div class="ps-kicker">'+e(sl.kicker)+'</div>':'')+'<h2>'+e(sl.title)+'</h2></header><div class="ps-body">'+sl.body+'</div><footer><span>Pipe agrégation · '+e(date)+'</span><span>'+(i+1)+' / '+slides.length+'</span></footer>';
+      box.className='ps-slide'+(sl.divider?' ps-divider':'')+(sl.exec?' ps-execs':'');
+      box.innerHTML=sl.divider?'<div class="ps-div-in"><div class="ps-cover-k">Réunion pricing · '+e(date)+'</div><h1>'+e(sl.title)+'</h1><p>'+e(sl.sub)+'</p></div>'
+        :'<header>'+(sl.sec!=='Annexe'?tracker(sl.sec):'<nav class="ps-tracker"><span class="on">Annexe · fiche dossier</span></nav>')+(sl.exec?'<div class="ps-kicker">Réunion pricing · '+e(date)+'</div>':'')+'<h2>'+e(sl.title)+'</h2></header><div class="ps-body">'+sl.body+'</div>'
+          +'<footer><span>Source : Pipe agrégation (appli ToDo), au '+e(date)+'</span><span>'+(i+1)+'</span></footer>';
       ov.querySelector('.ps-count').textContent=(i+1)+' / '+slides.length; };
     const close=()=>{ if(document.fullscreenElement) try{ document.exitFullscreen(); }catch(e2){} ov.remove(); };
     ov.querySelector('.ps-prev').onclick=()=>show(i-1); ov.querySelector('.ps-next').onclick=()=>show(i+1); ov.querySelector('.ps-close').onclick=close;
     ov.querySelector('.ps-full').onclick=()=>{ try{ document.fullscreenElement?document.exitFullscreen():ov.requestFullscreen(); }catch(e2){} };
-    ov.querySelector('.ps-stage').addEventListener('click', ev=>{ const r=ov.getBoundingClientRect(); show(ev.clientX>r.left+r.width/3?i+1:i-1); });
+    ov.querySelector('.ps-stage').addEventListener('click', ev=>{ const pg=ev.target.closest('.ps-exec-r li'); if(pg){ const m=/p\. (\d+)/.exec(pg.textContent); if(m){ show(+m[1]-1); return; } }
+      const r=ov.getBoundingClientRect(); show(ev.clientX>r.left+r.width/3?i+1:i-1); });
     ov.addEventListener('keydown', ev=>{ const k=ev.key; ev.stopPropagation();   // the app's own shortcuts (n, p, Ctrl K…) stay quiet while presenting
       if(['ArrowRight','ArrowDown','PageDown',' ','Enter'].includes(k)){ ev.preventDefault(); show(i+1); }
       else if(['ArrowLeft','ArrowUp','PageUp','Backspace'].includes(k)){ ev.preventDefault(); show(i-1); }
       else if(k==='Home'){ ev.preventDefault(); show(0); } else if(k==='End'){ ev.preventDefault(); show(slides.length-1); }
       else if(k==='f' || k==='F'){ ev.preventDefault(); ov.querySelector('.ps-full').click(); }
-      else if(k==='Escape'){ ev.preventDefault(); ev.stopPropagation(); if(!document.fullscreenElement) close(); } });
+      else if(k==='Escape'){ ev.preventDefault(); if(!document.fullscreenElement) close(); } });
     show(0); ov.focus();
   }
   function renderPipeMeet(board, q){
