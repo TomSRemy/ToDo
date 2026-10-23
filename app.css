@@ -2130,3 +2130,4 @@ details.req-compare > .req-compare-h{ font-size:12.5px; }
 .ai-key-row{ display:flex; gap:8px; width:100%; } .ai-key-in{ flex:1; min-width:0; background:var(--panel-2); border:1px solid var(--bd); border-radius:6px; color:var(--tx1); font:13px var(--font-ui); padding:7px 10px; }
 .meet-cols{ align-items:center; } .meet-cols-l{ font-size:12px; color:var(--tx3); margin-right:2px; }
 .map-color{ margin-left:auto; }
+.parc-table tbody tr[data-pid]{ cursor:pointer; } .parc-table tbody tr[data-pid]:hover td{ background:var(--panel-3, rgba(255,255,255,.04)); }

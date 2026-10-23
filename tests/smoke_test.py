@@ -2198,10 +2198,16 @@ Responsable technique
     page.click(".parc-map .dot[data-dep='30']"); page.wait_for_timeout(100)
     check("gard" in page.inner_text(".parc-map-side").lower(), "portefeuille: a plant is placed where it is (Département2), not at the contract's département")
     check(page.inner_text(".parc-map-side .map-row.two .map-p") == "SOLARIS", "portefeuille: each installation of the département shows its producer")
-    page.click(".parc-map-side .map-plant"); page.wait_for_timeout(150)
-    check(page.is_visible("#co-sheet-overlay") and page.inner_text("#co-sheet-title") == "Solaris" and "CS DU MOULIN" in page.inner_text("#co-sheet-overlay"),
-          "map: a plant of the open département opens its client's sheet, with the contract")
-    page.click("#co-sheet-close"); page.click('[data-tab="parc"]'); page.wait_for_timeout(100)
+    page.click(".parc-map-side .map-plant"); page.wait_for_timeout(200)
+    pt = page.inner_text("#opp-detail-title") if page.is_visible("#opp-detail-overlay") else ""
+    check("CS DU MOULIN" in pt and page.evaluate("document.querySelector('#opp-detail-body details.req-compare').open"), f"map: a plant opens its own sheet, its characteristics open ({pt!r})")
+    made = [o for o in stored(page, "todo-widget-opportunities") if o.get("fromSuivi")]
+    check(len(made) == 1 and made[0]["kwc"] == "2990" and made[0]["mwh"] == "4500" and made[0]["stage"] in ("actif", "onboarding"), f"map: the sheet is made from the Suivi line ({[(o.get('kwc'), o.get('mwh'), o.get('stage')) for o in made]})")
+    page.keyboard.press("Escape"); page.wait_for_timeout(100)
+    page.locator(".parc-table tr[data-pid]", has_text="CS DU MOULIN").first.click(); page.wait_for_timeout(200)
+    check("CS DU MOULIN" in page.inner_text("#opp-detail-title") and len([o for o in stored(page, "todo-widget-opportunities") if o.get("fromSuivi")]) == 1,
+          "portefeuille: a line of the table opens the same sheet (no second one made)")
+    page.keyboard.press("Escape"); page.click('[data-tab="parc"]'); page.wait_for_timeout(100)
     vb0 = page.get_attribute(".parc-map", "viewBox")
     page.click(".map-zoom button >> nth=0"); page.wait_for_timeout(100)
     check(page.get_attribute(".parc-map", "viewBox") != vb0, "portefeuille: the map zooms in")

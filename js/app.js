@@ -5347,7 +5347,7 @@
     const lo=Math.min(...list.filter(x=>!isExited(x)).map(x=>stageIndex(x.stage)).filter(i=>i>=0)), early=!(lo>stageIndex('pricing_indicatif')), key='req-compare-open'+(early?'':'-late');
     let open=early; try{ const v=localStorage.getItem(key); if(v!=null) open=v!=='0'; }catch(e){}
     wrap.open=open;
-    wrap.addEventListener('toggle', ()=>{ try{ localStorage.setItem(key, wrap.open?'1':'0'); }catch(e){} });
+    wrap.addEventListener('toggle', ()=>{ if(wrap.dataset.noRemember){ delete wrap.dataset.noRemember; return; } try{ localStorage.setItem(key, wrap.open?'1':'0'); }catch(e){} });
     const missing=list.reduce((s,x)=>s+CARACT_ROWS.filter(l=>REQ_NEEDED.has(caractKey(l)) && caractValue(x,l)==='').length,0);
     wrap.innerHTML='<summary class="opp-phase-h req-compare-h">'+(list.length>1?'Les '+list.length+' installations côte à côte':'Caractéristiques centrales')+(missing?' <span class="req-miss">'+missing+' case'+(missing>1?'s':'')+' à compléter</span>':'')+'<span class="req-hint">cliquer dans une case pour la modifier · tirer le petit carré pour recopier</span></summary>';
     const sc=document.createElement('div'); sc.className='req-compare-scroll';
@@ -8013,8 +8013,34 @@
     return list.map(p=>({ code:deptCodeOf(p.siteDept||p.dept), kwc:p.kwc||0, tech:mapTech(p.enr), name:p.inst||p.prod, prod:p.prod||p.dev, who:p.dev, ref:{ parc:p }, extra:p.fin?'fin '+pqIsoToFr(p.fin):p.statut }));
   }
   // a plant of the map → its opportunity (pipeline) or its client's sheet (contract of the Portefeuille)
+  // a plant of the Portefeuille (a line of the Suivi): its sheet in the app — found by producer + plant, or made from the Suivi line
+  const parcPlantKey=(prod, inst)=>coDupKey(prod||'')+'|'+pqFold(inst||'').replace(/[^a-z0-9]/g,'');
+  function findOppForParc(p){
+    const keys=new Set([parcPlantKey(p.prod, p.inst), parcPlantKey(p.dev, p.inst)]);
+    return opportunities.find(o=>!o.deleted && o.kind==='installation' && (keys.has(o.parcKey) || keys.has(parcPlantKey(o.producteur||o.company, oppName(o))) || keys.has(parcPlantKey(o.company, oppName(o)))));
+  }
+  function openParcPlant(p){
+    let o=findOppForParc(p);
+    if(!o){
+      const today=toISO(new Date()), st=pqFold(p.statut||''), started=[p.mes, p.debut].some(d=>d && d<=today);
+      const stage=/perdu|abandon|no go|resili|sans suite/.test(st)?'perdu':/gagn/.test(st)?(started || !(p.mes||p.debut)?'actif':'onboarding'):/attente/.test(st)?'offre_attente':/prepar/.test(st)?'pricing_indicatif':'actif';
+      const tech=mapTech(p.enr), fr=d=>d?pqIsoToFr(d):'', now=Date.now();
+      o={ id:'opp_'+now+'_'+Math.random().toString(36).slice(2,7), kind:'installation', company:p.dev||p.prod, producteur:p.prod||p.dev, centrale:p.inst||p.prod, title:p.inst||p.prod,
+        stage, kwc:p.kwc?String(p.kwc):'', mwh:p.p50?String(Math.round(p.p50)):'', install:tech==='Eolien'?'Eolien':tech==='Hydro'?'Hydro':tech==='Biogaz'?'BIOGAZ':tech==='PV'?'PV':'',
+        contrat:[p.ao, p.cadre].filter(Boolean).join(' ')||'', dept:p.siteDept||p.dept||'', region:p.siteRegion||p.region||'', charge:p.charge||'',
+        mesEff:started?fr(p.mes):'', mesPrev:started?'':fr(p.mes), debut:fr(p.debut), fin:fr(p.fin), dateOffre:p.dateOffre||'', signDate:p.sign||'', nature:/engag/i.test(p.typeOffre||'')?'Engageante':'',
+        parcKey:parcPlantKey(p.prod, p.inst), fromSuivi:true, lostAt:stage==='perdu'?now:null, createdAt:now, updatedAt:now, deleted:false, stageLog:[{ stage, at:now }],
+        notesLog:[{ at:now, kind:'note', text:'Fiche créée depuis le Suivi Agrégation'+(p.statut?' (statut « '+p.statut+' »)':'')+(p.comment?' — '+p.comment:'') }] };
+      opportunities.push(o); touchCrm(o); saveCrm();
+    }
+    openOppDetail(o.id);
+    // from the Portefeuille, what matters is the plant itself: its details and characteristics open (not remembered as the new default)
+    const body=$('opp-detail-body'); body.querySelectorAll('details.sheet-sec').forEach(d=>{ if(/Détails de la centrale/.test(d.querySelector('summary').textContent)) d.open=true; });
+    const cmp=body.querySelector('details.req-compare'); if(cmp && !cmp.open){ cmp.dataset.noRemember='1'; cmp.open=true; }
+  }
   function openMapPoint(p){
     if(p.ref && p.ref.opp){ gsTab('pipeline'); setTimeout(()=>openOppDetail(p.ref.opp),30); return; }
+    if(p.ref && p.ref.parc && (p.ref.parc.inst || p.ref.parc.prod)){ openParcPlant(p.ref.parc); return; }
     const known=allCompanyNames(), pick=[p.who,p.prod].find(n=>n && known.some(k=>sameCo(k,n)));
     openCompanySheet(pick||p.who||p.prod||'');
   }
@@ -8234,9 +8260,10 @@
       .sort((a,c)=>(a.prod||'').localeCompare(c.prod||'','fr'));
     const wrap=document.createElement('div'); wrap.className='parc-table-wrap';
     let t='<table class="parc-table"><thead><tr><th>Producteur</th><th>Installation</th><th>Dépt</th><th>EnR</th><th class="n">Puissance</th><th class="n">P50</th><th>Cadre</th><th>Statut</th><th>Fin</th></tr></thead><tbody>';
-    list.forEach(p=>{ t+='<tr><td>'+escapeHtml(p.prod)+'</td><td>'+escapeHtml(p.inst)+'</td><td>'+escapeHtml((p.siteDept||p.dept).replace(/\s-\s.*/,''))+'</td><td>'+escapeHtml(p.enr)+'</td><td class="n">'+(p.kwc?escapeHtml(fmtKwc(p.kwc)):'')+'</td><td class="n">'+(p.p50?Math.round(p.p50).toLocaleString('fr-FR'):'')+'</td><td>'+escapeHtml(p.cadre)+'</td><td>'+escapeHtml(p.statut)+(p.renouv==='A renouveler'?' <span class="parc-flag">à renouveler</span>':'')+'</td><td>'+escapeHtml(pqIsoToFr(p.fin))+'</td></tr>'; });
+    list.forEach(p=>{ t+='<tr data-pid="'+escapeHtml(p.id)+'" title="Ouvrir la fiche de la centrale"><td>'+escapeHtml(p.prod)+'</td><td>'+escapeHtml(p.inst)+'</td><td>'+escapeHtml((p.siteDept||p.dept).replace(/\s-\s.*/,''))+'</td><td>'+escapeHtml(p.enr)+'</td><td class="n">'+(p.kwc?escapeHtml(fmtKwc(p.kwc)):'')+'</td><td class="n">'+(p.p50?Math.round(p.p50).toLocaleString('fr-FR'):'')+'</td><td>'+escapeHtml(p.cadre)+'</td><td>'+escapeHtml(p.statut)+(p.renouv==='A renouveler'?' <span class="parc-flag">à renouveler</span>':'')+'</td><td>'+escapeHtml(pqIsoToFr(p.fin))+'</td></tr>'; });
     t+='</tbody></table>';
     wrap.innerHTML=t+(list.length?'':'<p class="parc-muted">Aucune installation.</p>');
+    wrap.querySelectorAll('tr[data-pid]').forEach(tr=>{ tr.onclick=()=>{ const p=list.find(x=>x.id===tr.dataset.pid); if(p) openParcPlant(p); }; });
     b.appendChild(wrap);
     const n=document.createElement('div'); n.className='parc-muted'; n.textContent=list.length+' installation'+(list.length>1?'s':'')+' · '+fmtMwc(list.reduce((s,p)=>s+p.kwc,0));
     b.appendChild(n);
