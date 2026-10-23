@@ -2098,3 +2098,21 @@ details.req-compare:not([open]) > .req-compare-h::before{ transform:none; }
 #pipeline-board.pipe-mapview .parc-map-grid{ grid-template-columns:minmax(0,1.6fr) minmax(260px,1fr); gap:32px; }
 #pipeline-board.pipe-mapview .parc-map-wrap{ max-width:min(820px, calc((100vh - 170px) * 1.05)); }
 @media (max-width:760px){ #pipeline-board.pipe-mapview .parc-map-grid{ grid-template-columns:1fr; } }
+/* the sheet a size smaller: step title, checklist, buttons, the side boxes */
+.sp-title{ font-size:17px; }
+.sp-check{ font-size:12.5px; } .sp-check input[type=checkbox]{ width:15px; height:15px; }
+.sp-checks{ gap:5px; }
+.sp-next{ font-size:13px; padding:9px 14px; border-radius:8px; }
+.sp-alt{ font-size:12px; padding:8px 12px; border-radius:8px; }
+.sp-main{ padding:13px 15px; gap:8px; }
+.sp-box{ padding:10px 13px; gap:4px; }
+.sp-big{ font-size:12.5px; }
+.sp-box .os-link{ font-size:12px; display:block; width:fit-content; }
+.sp-figs b{ font-size:12.5px; }
+.opp-stage-track .opp-stage-step{ font-size:11px; }
+.sheet-sec > summary b{ font-size:12.5px; } .sheet-sec > summary span{ font-size:11.5px; }
+.opp-mail-fold > summary, .opp-history > summary{ font-size:12.5px; }
+details.req-compare > .req-compare-h{ font-size:12.5px; }
+.req-inst-name b{ font-size:12.5px; }
+@media (max-width:760px){ .sp-actions .sp-next{ font-size:14px; padding:12px 14px; } }
+.xs-head{ flex-wrap:wrap; } .xs-scope{ margin-left:auto; }

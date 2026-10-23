@@ -835,6 +835,8 @@ with sync_playwright() as p:
     page.click("#opp-detail-actions >> text=Fermer")
     page.locator(".pipe-card", has_text="Hangar").first.click()
     check("à compléter" in page.inner_text("#opp-detail-body .sp-check:has-text('Infos obligatoires')"), "checklist: the missing boxes are counted next to the line")
+    page.click("#opp-detail-body .sp-check:has-text('Fichier Caractéristiques reçu') input"); page.wait_for_timeout(200)
+    check(page.is_checked("#opp-detail-body .sp-check:has-text('Fichier Caractéristiques reçu') input"), "checklist: a line the app ticks itself can also be ticked by hand")
     page.click("#opp-detail-body .sp-act:has-text('Compléter')"); page.wait_for_timeout(300)
     check(page.evaluate("document.querySelector('#opp-detail-body details.req-compare').open"), "checklist: « Compléter » opens the table of the plant")
     page.click("#opp-detail-actions >> text=Fermer")
@@ -889,7 +891,7 @@ with sync_playwright() as p:
     page, errors = new_page(browser, {"todo_todo-widget-opportunities": json.dumps(pd_opps)}, viewport={"width": 1300, "height": 900})
     page.goto(URL); page.click('[data-tab="pipeline"]'); page.click("#pipe-dash-toggle")
     dash = page.inner_text("#pipeline-board")
-    check("2,5 MWc" in dash and "sortis en" in dash.lower() and page.locator(".pd-bar-row:not(.pd-who-row)").count() == 5, "pipeline dashboard: MWc in progress, exits of the year, one bar per phase")
+    check("2,5 MWc" in dash and "sortis en" in dash.lower() and page.locator(".pd-bar-row:not(.pd-who-row)").count() == 4, "pipeline dashboard: MWc in progress, exits of the year, one bar per phase in process (in service = Portefeuille)")
     rows = page.eval_on_selector_all(".pd-trow", "els=>els.map(e=>e.innerText.replace(/\\s+/g,' '))")
     check(any(r.startswith("Pricing indicatif 11 j") for r in rows) and any(r.startswith("Négociation 20 j") for r in rows), f"pipeline dashboard: average days per step from the history ({rows})")
     check("Alpha" in page.inner_text(".pd-card:has-text('Dossiers qui traînent')"), "pipeline dashboard: the deal stuck for 20 days is listed")
@@ -1880,6 +1882,9 @@ with sync_playwright() as p:
     check("Aucune installation ni société en double" in page.inner_text("#dup-overlay"), "doublons: nothing left")
     page.click("#dup-overlay .dup-close"); page.wait_for_timeout(150)
     check(not page.is_visible("#pipe-dup-btn"), "doublons: the button goes away")
+    page.click('[data-tab="parc"]'); page.click("#parc-xs-btn"); page.wait_for_timeout(200)
+    check(page.is_visible("#xs-overlay") and "on" in (page.get_attribute("#xs-overlay .xs-scope [data-s=parc]", "class") or ""), "Portefeuille: « Excel ⇄ » opens on the signed installations")
+    page.keyboard.press("Escape"); page.click("#xs-overlay .xs-x") if page.is_visible("#xs-overlay") else None
     check(not errors, f"no page errors ({errors})")
     page.close()
 

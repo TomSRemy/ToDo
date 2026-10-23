@@ -3695,6 +3695,8 @@
   // The offer's pricing step is « indicatif » or « engageant » after the kind of offer asked (Nature offre); an offer
   // engageante from the start already carries the firm price: the contract's « Pricing ferme » is then included (skipped).
   const isEngageant=o=>!!o && o.nature==='Engageante';
+  // still in process: an installation not lost and not yet in service (in service lives in the Portefeuille)
+  const inProcess=o=>!isExited(o) && o.stage!=='actif';
   function stageLabel(key, o){ if(key==='prequal') return 'Pré-qualif'; if(OPP_EXITS[key]) return OPP_EXITS[key];
     if(key==='pricing_indicatif' && isEngageant(o)) return 'Pricing engageant';
     const s=oppStage(LEGACY_STAGE[key]||key); return s?s.label:key; }
@@ -3813,7 +3815,7 @@
   function renderPipeDash(board){
     board.classList.add('pipe-dash');
     const all=opportunities.filter(o=>!o.deleted && o.kind!=='request' && o.stage!=='converti');
-    const live=all.filter(o=>!isExited(o)), year=String(new Date().getFullYear());
+    const live=all.filter(o=>!isExited(o) && o.stage!=='actif'), year=String(new Date().getFullYear());   // the pipeline's views: deals still in process (in service = the Portefeuille)
     const yr=ms=>ms && new Date(ms).getFullYear()===+year;
     const signedYr=all.filter(o=>!isExited(o) && stageIndex(o.stage)>=stageIndex('onboarding') && ((o.stageLog||[]).some(e=>(e.stage==='onboarding'||e.stage==='actif') && yr(e.at)) || (!(o.stageLog||[]).length && yr(o.updatedAt))));
     const lostYr=all.filter(o=>isExited(o) && yr(o.lostAt));
@@ -3844,7 +3846,7 @@
     const grid=document.createElement('div'); grid.className='pd-grid'; board.appendChild(grid);
     const card=(title,hint)=>{ const c=document.createElement('section'); c.className='pd-card'; const h=document.createElement('h4'); h.textContent=title; c.appendChild(h); if(hint){ const p=document.createElement('p'); p.className='pd-hint'; p.textContent=hint; c.appendChild(p); } grid.appendChild(c); return c; };
     // MWc by phase, bars to one scale
-    const ph=PIPE_PHASES.filter(p=>p.key!=='prequal').map(p=>{ const l=live.filter(o=>oppPhase(o)===p.key); return { label:p.label, n:l.length, kwc:l.reduce((s,o)=>s+kwcNum(o),0) }; });
+    const ph=PIPE_PHASES.filter(p=>p.key!=='prequal' && p.key!=='actif').map(p=>{ const l=live.filter(o=>oppPhase(o)===p.key); return { label:p.label, n:l.length, kwc:l.reduce((s,o)=>s+kwcNum(o),0) }; });
     const maxK=Math.max(1,...ph.map(p=>p.kwc));
     const c1=card('MWc par phase','Dossiers en cours, hors pré-qualifications ; puissance renseignée sur la fiche.');
     ph.forEach(p=>{ const r=document.createElement('div'); r.className='pd-bar-row'; r.innerHTML='<span class="pd-l"></span><span class="pd-bar"><span></span></span><span class="pd-v"></span>';
@@ -3889,7 +3891,7 @@
     board.classList.add('pipe-list');
     let sort={ k:'stage', dir:-1 }; try{ const v=JSON.parse(localStorage.getItem('pipe-list-sort')||'null'); if(v && PL_COLS.some(c=>c[0]===v.k)) sort=v; }catch(e){}
     const vp=savedViewState.pipeline && savedViewState.pipeline.pred;
-    const rows=opportunities.filter(o=>!o.deleted && o.kind==='installation' && (pipeShowExited || !isExited(o)))
+    const rows=opportunities.filter(o=>!o.deleted && o.kind==='installation' && o.stage!=='actif' && (pipeShowExited || !isExited(o)))
       .filter(o=>!q || pqFold([o.company,o.centrale,o.title,o.dept,o.commune,o.contrat].join(' ')).includes(q)).filter(o=>!vp || vp(o));
     const col=PL_COLS.find(c=>c[0]===sort.k), val=col[2];
     rows.sort((a,b)=>{ const x=val(a), y=val(b); const c=typeof x==='number'&&typeof y==='number'?x-y:String(x).localeCompare(String(y),'fr',{ numeric:true }); return c*sort.dir || (a.company||'').localeCompare(b.company||'','fr') || oppName(a).localeCompare(oppName(b),'fr',{ numeric:true }); });
@@ -4155,7 +4157,7 @@
   }
   // how many lines wait for the Excel files (or changed there), on the « Excel ⇄ » button
   function paintXsCount(){ const b=$('pipe-xs-btn'); if(!b || ON_PHONE) return; let n=0;
-    try{ xsList().forEach(o=>{ if(xsTodo(xsState('pipe',o)) || (xsBddApplies(o) && xsTodo(xsState('bdd',o)))) n++; }); }catch(e){}
+    try{ xsList().filter(o=>isExited(o) || stageIndex(o.stage)<stageIndex('onboarding')).forEach(o=>{ if(xsTodo(xsState('pipe',o)) || (xsBddApplies(o) && xsTodo(xsState('bdd',o)))) n++; }); }catch(e){}
     b.textContent='Excel ⇄'+(n?' · '+n:''); b.classList.toggle('xs-pending', n>0); }
   function renderPipelineInner(){
     if(normalizeOpps()) saveCrmLocalOnly();
@@ -5641,8 +5643,10 @@
     if(stage==='onboarding') return ONBOARDING_STEPS.map(stp=>({ id:'onb_'+stp.k, label:stp.label, who:stp.who, done:list.every(o=>o['onb_'+stp.k]), auto:false, onb:true }));
     return (STEP_CHECKS[stage]||[]).map(c=>{
       const at=list.map(o=>o.checks && o.checks[stage] && o.checks[stage][c.id]);
-      const done=c.auto?!!c.auto(list):c.date?list.every(o=>o[c.date]):at.every(Boolean);
-      const when=!c.auto && !c.date && done && at.every(v=>typeof v==='number')?Math.max(...at):null;
+      // an « auto » line the app knows can still be ticked (or unticked) by hand: the hand wins
+      const hand=at.every(v=>v!=null && v!==undefined)?(at.every(v=>v===false)?false:at.every(Boolean)?true:null):null;
+      const done=c.auto?(hand!=null?hand:!!c.auto(list)):c.date?list.every(o=>o[c.date]):at.every(Boolean);
+      const when=!c.date && done && at.every(v=>typeof v==='number')?Math.max(...at):null;
       return { id:c.id, label:c.label, auto:!!c.auto, date:c.date||null, act:c.act && (!c.act.show || c.act.show(list))?c.act:null, note:c.note?c.note(list):'', done, when };
     });
   }
@@ -5682,7 +5686,7 @@
     if(same){ const items=stepChecklist(live, st.key);
       if(items.length){ const ul=document.createElement('div'); ul.className='sp-checks';
         items.forEach(it=>{ const row=document.createElement('div'); row.className='sp-check'+(it.done?' done':'');
-          const lab=document.createElement('label'); const cb=document.createElement('input'); cb.type='checkbox'; cb.checked=it.done; cb.disabled=it.auto || !!window.TODO_LITE;
+          const lab=document.createElement('label'); const cb=document.createElement('input'); cb.type='checkbox'; cb.checked=it.done; cb.disabled=!!window.TODO_LITE;
           cb.onchange=()=>{ toggleCheck(live, st.key, it, cb.checked); renderPipeline(); reopen(); }; const sp=document.createElement('span'); sp.textContent=it.label; lab.append(cb, sp); row.appendChild(lab);
           if(it.who && it.who!=='Com'){ const w=document.createElement('em'); w.textContent=WHO[it.who]||it.who; sp.appendChild(w); }
           if(it.date){ const di=document.createElement('input'); di.type='date'; di.className='sp-date'; di.value=first[it.date]||''; di.disabled=!!window.TODO_LITE; di.setAttribute('aria-label', it.label+' (date)');
@@ -6489,7 +6493,11 @@
     if(/abandon|sans suite|no ?go/.test(s) && !isExited(o)) return { label:'Marquer abandonné', run:()=>{ o.stageBeforeExit=o.stage; o.stage='abandonne'; o.lostAt=Date.now(); touchCrm(o); saveCrm(); } };
     return null;
   }
+  // which lines the panel shows: the pipeline's (not signed yet, lost ones included), the Portefeuille's (signed), or all
+  let xsScope='pipe';
+  const xsInScope=o=>xsScope==='all'?true:xsScope==='parc'?(!isExited(o) && stageIndex(o.stage)>=stageIndex('onboarding')):(isExited(o) || stageIndex(o.stage)<stageIndex('onboarding'));
   async function openExcelSync(opts){
+    xsScope=opts && opts.scope || 'pipe';
     let ov=$('xs-overlay');
     if(!ov){ ov=document.createElement('div'); ov.id='xs-overlay'; ov.className='modal-overlay';
       ov.innerHTML='<div class="modal-box wide xs-box" role="dialog" aria-labelledby="xs-title"><div class="xs-head"><h3 id="xs-title">Excel ⇄ appli</h3><div class="xs-filter"><button type="button" data-f="todo" class="on">À traiter</button><button type="button" data-f="all">Tout</button></div><button type="button" class="modal-x xs-x" aria-label="Fermer">×</button></div>'
@@ -6499,9 +6507,11 @@
       ov.querySelectorAll('.xs-filter button').forEach(b=>b.onclick=()=>{ ov.querySelectorAll('.xs-filter button').forEach(x=>x.classList.toggle('on', x===b)); paintExcelSync(); });
       ov.querySelector('.xs-read').onclick=async e=>{ const b=e.currentTarget, t=b.textContent; b.disabled=true; b.textContent='Lecture…';
         try{ await xsReadFile('pipe'); await xsReadFile('bdd'); importParcFromBridge(true); }catch(err){ showBridgeMsg(err.message, false); } b.disabled=false; b.textContent=t; paintExcelSync(); };
-      ov.querySelectorAll('.xs-send').forEach(b=>b.onclick=async()=>{ const kind=b.dataset.k, list=xsList().filter(o=>(kind==='pipe'||xsBddApplies(o)) && xsTodo(xsState(kind,o)) && !((xsState(kind,o).diffs||[]).some(d=>d.byExcel))); if(!list.length) return;
+      ov.querySelectorAll('.xs-send').forEach(b=>b.onclick=async()=>{ const kind=b.dataset.k, list=xsList().filter(xsInScope).filter(o=>(kind==='pipe'||xsBddApplies(o)) && xsTodo(xsState(kind,o)) && !((xsState(kind,o).diffs||[]).some(d=>d.byExcel))); if(!list.length) return;
         await sendToExcel(kind, list, b); if(bridgeConfigured()){ try{ await xsReadFile(kind); }catch(e){} } paintExcelSync(); });
     }
+    { let sc=ov.querySelector('.xs-scope'); if(!sc){ sc=document.createElement('div'); sc.className='xs-scope xs-filter'; ov.querySelector('.xs-head').appendChild(sc);
+        [['pipe','Pipeline'],['parc','Portefeuille (signés)'],['all','Tout']].forEach(([k,l])=>{ const b=document.createElement('button'); b.type='button'; b.dataset.s=k; b.textContent=l; b.onclick=()=>{ xsScope=k; paintExcelSync(); }; sc.appendChild(b); }); } }
     ov.classList.remove('hidden'); paintExcelSync();
     if(bridgeConfigured() && !(opts&&opts.noRead) && (!xsRead.pipe || Date.now()-xsRead.pipe.at>120000)){ try{ await xsReadFile('pipe'); await xsReadFile('bdd'); }catch(e){} paintExcelSync(); }
   }
@@ -6512,7 +6522,8 @@
     ov.querySelector('.xs-info').textContent=bridgeConfigured()
       ? 'Pipe '+(xsRead.pipe?'relu le '+fmtD(xsRead.pipe.at)+' à '+new Date(xsRead.pipe.at).toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'}):'pas encore relu')+' · Suivi '+(xsRead.bdd?'relu':'pas encore relu')+'. Envoyer ne remplace jamais une case modifiée par un collègue : elle te sera demandée.'
       : 'Pont Excel non connecté sur cet ordinateur : la colonne « appli » dit ce qui a été envoyé ; le Suivi est relu depuis le Portefeuille (fichier chargé). Le pont se règle dans Réf. & data.';
-    const rows=xsList().map(o=>({ o, p:xsState('pipe',o), b:xsBddApplies(o)?xsState('bdd',o):null }));
+    ov.querySelectorAll('.xs-scope button').forEach(b=>b.classList.toggle('on', b.dataset.s===xsScope));
+    const rows=xsList().filter(xsInScope).map(o=>({ o, p:xsState('pipe',o), b:xsBddApplies(o)?xsState('bdd',o):null }));
     const todo=rows.filter(r=>xsTodo(r.p) || (r.b && xsTodo(r.b)));
     const cntP=rows.filter(r=>xsTodo(r.p) && !r.p.diffs.some(d=>d.byExcel)).length, cntB=rows.filter(r=>r.b && xsTodo(r.b) && !r.b.diffs.some(d=>d.byExcel)).length;
     ov.querySelectorAll('.xs-send').forEach(b=>{ const n=b.dataset.k==='pipe'?cntP:cntB; b.textContent='Envoyer au '+(b.dataset.k==='pipe'?'Pipe':'Suivi')+' ('+n+')'; b.disabled=!n || !bridgeConfigured(); b.title=bridgeConfigured()?'':'Pont Excel non connecté'; });
@@ -7378,7 +7389,8 @@
   $('tasks-views-btn').onclick=e=>{ e.stopPropagation(); openViewsMenu('tasks', e.currentTarget); };
   $('pipe-views-btn').onclick=e=>{ e.stopPropagation(); openViewsMenu('pipeline', e.currentTarget); };
   $('pipe-meet-toggle').onclick=()=>{ pipeMeet=!pipeMeet; if(pipeMeet){ pipeDash=false; pipeMap=false; } renderPipeline(); };
-  $('pipe-xs-btn').onclick=()=>openExcelSync();
+  $('pipe-xs-btn').onclick=()=>openExcelSync({ scope:'pipe' });
+  if($('parc-xs-btn')){ $('parc-xs-btn').onclick=()=>openExcelSync({ scope:'parc' }); if(ON_PHONE) $('parc-xs-btn').hidden=true; }
   $('pipe-map-toggle').onclick=()=>{ pipeMap=!pipeMap; pipeDash=false; pipeMeet=false; parcMapSel=null; parcMapView=null; renderPipeline(); };
   $('pipe-list-toggle').onclick=()=>{ pipeMap=false; pipeList=!(pipeList && !pipeDash && !pipeMeet); pipeDash=false; pipeMeet=false; try{ localStorage.setItem('pipe-list', pipeList?'1':'0'); }catch(e){} renderPipeline(); };
   $('pq-save-btn').onclick=saveOpp;
@@ -7881,7 +7893,7 @@
   function parcMapPoints(layer){
     const today=toISO(new Date());
     if(parcKpiSet) return parcKpiSet.map(p=>({ code:deptCodeOf(p.siteDept||p.dept), kwc:p.kwc||0, tech:mapTech(p.enr), name:p.inst||p.prod, prod:p.prod||p.dev, who:p.dev, ref:{ parc:p }, extra:p.fin?'fin '+pqIsoToFr(p.fin):p.statut }));
-    if(layer==='pipe') return opportunities.filter(o=>!o.deleted && o.kind==='installation' && !isExited(o)).map(o=>({ code:deptCodeOf(o.dept), kwc:pqNum(o.kwc||'')||0, tech:mapTech(o.install), name:oppName(o), prod:o.producteur||o.company, who:o.company, ref:{ opp:o.id }, extra:stageLabel(o.stage, o), phase:oppPhase(o) }));
+    if(layer==='pipe') return opportunities.filter(o=>!o.deleted && o.kind==='installation' && inProcess(o)).map(o=>({ code:deptCodeOf(o.dept), kwc:pqNum(o.kwc||'')||0, tech:mapTech(o.install), name:oppName(o), prod:o.producteur||o.company, who:o.company, ref:{ opp:o.id }, extra:stageLabel(o.stage, o), phase:oppPhase(o) }));
     if(!parcData) return [];
     const list=layer==='pending'?parcData.items.filter(p=>p.statut==='En attente'||p.statut==='En préparation'):parcData.items.filter(p=>p.statut==='Gagné' && (!p.fin || p.fin>=today));
     return list.map(p=>({ code:deptCodeOf(p.siteDept||p.dept), kwc:p.kwc||0, tech:mapTech(p.enr), name:p.inst||p.prod, prod:p.prod||p.dev, who:p.dev, ref:{ parc:p }, extra:p.fin?'fin '+pqIsoToFr(p.fin):p.statut }));
