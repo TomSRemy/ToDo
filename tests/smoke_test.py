@@ -1968,15 +1968,9 @@ with sync_playwright() as p:
     check(o.get("commune") == "Cholet" and any(v == "47,06" for v in (o.get("caract") or {}).values()) and not any(v == "100" for v in (o.get("caract") or {}).values()),
           f"IA: only the ticked lines are filled ({o.get('caract')})")
     page.evaluate("localStorage.removeItem('ai-key')"); page.click("#opp-detail-body .req-ai"); page.wait_for_timeout(150)
-    page.evaluate("()=>{ window.__opened=[]; window.open=(u)=>{ window.__opened.push(u); return null; }; }")
-    page.click("#ai-overlay .ai-open"); page.wait_for_timeout(100)
-    opened = page.evaluate("window.__opened")
-    check(len(opened) == 1 and opened[0].startswith("https://claude.ai/new?q=") and "Cholet" in urllib.parse.unquote(opened[0]), f"IA: with a Claude subscription, claude.ai opens with the request written in ({opened[0][:60] if opened else None})")
-    page.evaluate("()=>{ window.__clip=" + json.dumps(json.dumps({"ai1": {"Longitude": {"v": "-0,88", "c": "sûr"}}})) + "; navigator.clipboard.readText=async()=>window.__clip; }")
-    page.click("#ai-overlay button:has-text('Coller la réponse')"); page.wait_for_timeout(150)
-    check(page.locator("#ai-overlay .ai-row").count() == 1 and len(sent) == 1, "IA: « Coller la réponse » reads the answer copied in claude.ai")
-    page.fill("#ai-answer", "pas du json"); page.click("#ai-overlay button:has-text('Lire la réponse')"); page.wait_for_timeout(100)
-    check("illisible" in page.inner_text("#ai-overlay"), "IA: a pasted answer that is not JSON says so")
+    check(page.is_visible("#ai-key-here") and len(sent) == 1, "IA: without a key, the window asks for it (nothing sent yet)")
+    page.fill("#ai-key-here", "sk-autre"); page.click("#ai-overlay button:has-text('Enregistrer et demander')"); page.wait_for_selector("#ai-overlay .ai-row", timeout=5000)
+    check(len(sent) == 2 and page.evaluate("localStorage.getItem('ai-key')") == "sk-autre", "IA: the key typed in the window is kept on this device and the request goes at once")
     check(not errors, f"no page errors ({errors})")
     page.close()
 

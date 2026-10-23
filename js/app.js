@@ -5867,35 +5867,22 @@
       paint(); };
     function paint(){ const n=rows.filter(x=>x.cb.checked).length; fill.hidden=!rows.length; fill.disabled=!n; fill.textContent=n?'Remplir '+n+' case'+(n>1?'s':''):'Rien de coché'; }
     fill.onclick=()=>{ const ok=rows.filter(x=>x.cb.checked); const touched=new Set(); ok.forEach(x=>{ caractSet(x.o, x.l, x.v); touched.add(x.o); }); touched.forEach(o=>touchCrm(o)); saveCrm(); renderPipeline(); close(); if(done) done(); };
-    const copyBtn=document.createElement('button'); copyBtn.type='button'; copyBtn.className='ghost-btn'; copyBtn.textContent='Copier la demande pour Claude'; copyBtn.onclick=e=>copyToClipboard(prompt, e.target);
-    if(aiKey()){
-      const go=document.createElement('button'); go.type='button'; go.className='ai-go'; go.textContent='Demander à Claude';
-      go.onclick=async()=>{ go.disabled=true; go.textContent='Claude réfléchit…';
-        try{ show(aiParse(await aiAsk(prompt), list)); go.textContent='Redemander'; }catch(err){ rowsBox.innerHTML=''; const p2=document.createElement('p'); p2.className='modal-hint ai-err'; p2.textContent=err.message||String(err); rowsBox.appendChild(p2); go.textContent='Réessayer'; }
-        go.disabled=false; };
-      ask.append(go, copyBtn);
-      setTimeout(()=>go.click(), 0);
-    } else {
-      // with a Claude subscription (Pro, Team): claude.ai opens with the request written in; the answer comes back through the clipboard
-      const steps=document.createElement('ol'); steps.className='ai-steps';
-      steps.innerHTML='<li></li><li>Dans Claude, envoie la demande puis clique sur « Copier » sous sa réponse.</li><li></li>';
-      const open=document.createElement('button'); open.type='button'; open.className='ai-go ai-open'; open.textContent='Ouvrir dans Claude';
-      open.title='Ouvre claude.ai avec ton compte, la demande déjà écrite (elle est aussi copiée : Ctrl+V si le champ est vide)';
-      open.onclick=e=>{ copyToClipboard(prompt, null); const short=prompt.length<=6000;
-        window.open('https://claude.ai/new'+(short?'?q='+encodeURIComponent(prompt):''), '_blank', 'noopener');
-        flashBtn(e.target, short?'✓ Ouvert dans Claude':'✓ Ouvert : colle la demande (Ctrl+V)'); };
-      steps.firstChild.append(open, copyBtn);
-      const ta=document.createElement('textarea'); ta.className='qn-text ai-answer'; ta.id='ai-answer'; ta.rows=4; ta.placeholder='… ou colle ici la réponse de Claude';
-      const read=document.createElement('button'); read.type='button'; read.className='ai-go'; read.textContent='Lire la réponse';
-      const readNow=()=>{ try{ show(aiParse(ta.value, list)); }catch(err){ rowsBox.innerHTML=''; const p2=document.createElement('p'); p2.className='modal-hint ai-err'; p2.textContent='Réponse illisible : '+(err.message||err); rowsBox.appendChild(p2); } };
-      read.onclick=readNow;
-      ta.addEventListener('paste', ()=>setTimeout(readNow, 0));   // pasted: read at once
-      const paste=document.createElement('button'); paste.type='button'; paste.className='ai-go'; paste.textContent='Coller la réponse';
-      paste.onclick=async()=>{ try{ ta.value=await navigator.clipboard.readText(); readNow(); }catch(err){ ta.focus(); flashBtn(paste, 'Colle avec Ctrl+V dans le champ'); } };
-      steps.lastChild.append(paste);
-      const tip=document.createElement('p'); tip.className='modal-hint'; tip.textContent='Ça passe par ton compte Claude (Pro ou Team) sur claude.ai. Une clé API (Réf. & data) éviterait l’aller-retour, mais elle se paie à part.';
-      ask.append(steps, ta, read, tip);
-    }
+    // everything in the app: Claude answers here, through the key kept on this device (asked here the first time)
+    const go=document.createElement('button'); go.type='button'; go.className='ai-go'; go.textContent='Demander à Claude';
+    go.onclick=async()=>{ go.disabled=true; go.textContent='Claude réfléchit…';
+      try{ show(aiParse(await aiAsk(prompt), list)); go.textContent='Redemander'; }
+      catch(err){ rowsBox.innerHTML=''; const p2=document.createElement('p'); p2.className='modal-hint ai-err'; p2.textContent=err.message||String(err); rowsBox.appendChild(p2); go.textContent='Réessayer'; if(/refusée|401/.test(p2.textContent)) askKey(); }
+      go.disabled=false; };
+    const askKey=()=>{ ask.innerHTML='';
+      const p2=document.createElement('p'); p2.className='modal-hint'; p2.textContent='Une fois pour cet appareil : colle ta clé de l’API Claude. Elle reste ici (jamais synchronisée ni exportée).';
+      const inp=document.createElement('input'); inp.type='password'; inp.id='ai-key-here'; inp.className='ai-key-in'; inp.placeholder='sk-ant-…'; inp.autocomplete='off';
+      const save=document.createElement('button'); save.type='button'; save.className='ai-go'; save.textContent='Enregistrer et demander';
+      const link=document.createElement('a'); link.href='https://console.anthropic.com/settings/keys'; link.target='_blank'; link.rel='noopener'; link.className='sync-token-link'; link.textContent='Créer une clé sur la console Anthropic ↗';
+      save.onclick=()=>{ const v=inp.value.trim(); if(!v){ inp.focus(); return; } try{ localStorage.setItem('ai-key', v); }catch(e){} ask.innerHTML=''; ask.appendChild(go); go.click(); };
+      inp.addEventListener('keydown', e=>{ if(e.key==='Enter') save.click(); });
+      const row=document.createElement('div'); row.className='ai-key-row'; row.append(inp, save);
+      ask.append(p2, row, link); setTimeout(()=>inp.focus(), 30); };
+    if(aiKey()){ ask.appendChild(go); setTimeout(()=>go.click(), 0); } else askKey();
   }
   // ---------- Notes express / mode appel: notes typed in bulk, the app spots the figures and offers to fill the sheet ----------
   const QN_LABELS={ kwc:'Puissance', mwh:'P50', p90:'P90', mesPrev:'MES prévisionnelle', mesEff:'MES effective', dept:'Département', commune:'Commune', cp:'Code postal',
