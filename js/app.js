@@ -59,6 +59,14 @@
   const NOTES_KEY='todo-widget-notes', SYNC_NOTES_PATH='data/notes.json';
   let notes=[], notesBaseSnapshot=null, lastKnownNotesSha=null, notesSyncPushTimer=null;
 
+  // only real records (an object with an id): a damaged file or an old bug never breaks the app
+  const recs=v=>Array.isArray(v)?v.filter(x=>x && typeof x==='object' && !Array.isArray(x) && x.id!=null && x.id!==''):[];
+  const asText=v=>v==null?'':Array.isArray(v)||typeof v==='object'?'':String(v);
+  function cleanRecords(){
+    tasks=recs(tasks); companies=recs(companies); contacts=recs(contacts); meetings=recs(meetings); opportunities=recs(opportunities);
+    tasks.forEach(t=>{ if(typeof t.title!=='string') t.title=asText(t.title); ['due','reminder'].forEach(k=>{ if(t[k] && !/^\d{4}-\d{2}-\d{2}/.test(String(t[k]))) t[k]=''; }); if(!Array.isArray(t.subtasks)) t.subtasks=(t.subtasks==null?[]:[]); t.subtasks=t.subtasks.filter(x=>x && typeof x==='object'); });
+    contacts.forEach(c=>['firstName','lastName','company','email','phone1','phone2','role','comment'].forEach(k=>{ if(c[k]!=null && typeof c[k]!=='string') c[k]=asText(c[k]); }));
+  }
   async function loadAll(){
     try{ const r=await window.storage.get(TASKS_KEY,false); tasks=r&&r.value?JSON.parse(r.value):[]; }catch(e){ tasks=[]; }
     try{ const r=await window.storage.get(CLIENTS_KEY,false); clientsList=r&&r.value?JSON.parse(r.value):[]; }catch(e){ clientsList=[]; }
@@ -76,6 +84,7 @@
     try{ const r=await window.storage.get(NOTES_KEY,false); notes=r&&r.value?JSON.parse(r.value):[]; }catch(e){ notes=[]; }
     try{ const r=await window.storage.get('sync-notes-base',false); notesBaseSnapshot=r&&r.value?JSON.parse(r.value):null; }catch(e){ notesBaseSnapshot=null; }
     try{ const r=await window.storage.get('visible-columns',false); if(r&&r.value) visibleColumns=Object.assign(visibleColumns, JSON.parse(r.value)); }catch(e){}
+    cleanRecords();
     let seeded=false, crmSeeded=false;
     if(companyTypesList.length===0){
       companyTypesList=['Client','Consultant','Fournisseur','Partenaire','Concurrent'];
@@ -375,6 +384,7 @@
   // Without a base (first sync ever), falls back to whole-record
   // most-recent-wins, same as before.
   function threeWayMerge(entityType, localList, remoteList, baseList){
+    localList=recs(localList); remoteList=recs(remoteList); baseList=recs(baseList);
     const baseById={}; (baseList||[]).forEach(b=>{ baseById[b.id]=b; });
     const localById={}; localList.forEach(l=>{ localById[l.id]=l; });
     const remoteById={}; remoteList.forEach(r=>{ remoteById[r.id]=r; });
@@ -631,11 +641,11 @@
     undoCommit();   // what came from another tab is not an action of this one: not undone here
     try{
       const v=JSON.parse(e.newValue);
-      if(k===TASKS_KEY){ tasks=v; refreshAllViews(); }
-      else if(k===COMPANIES_KEY){ companies=v; renderCrm(); }
-      else if(k===CONTACTS_KEY){ contacts=v; renderCrm(); }
-      else if(k===MEETINGS_KEY){ meetings=v; }
-      else if(k===OPPS_KEY){ opportunities=v; renderCrm(); }
+      if(k===TASKS_KEY){ tasks=recs(v); refreshAllViews(); }
+      else if(k===COMPANIES_KEY){ companies=recs(v); renderCrm(); }
+      else if(k===CONTACTS_KEY){ contacts=recs(v); renderCrm(); }
+      else if(k===MEETINGS_KEY){ meetings=recs(v); }
+      else if(k===OPPS_KEY){ opportunities=recs(v); renderCrm(); }
       else if(k===NOTES_KEY){ if(!postitDirty){ notes=v; renderNotes(); } }
       else if(k==='sync-tasks-base') tasksBaseSnapshot=v;
       else if(k==='sync-crm-base') crmBaseSnapshot=v;
@@ -798,8 +808,8 @@
   const projectColor=n=>hashColor(n,PROJECT_PALETTE);
   // date formats made once (toLocaleDateString builds a new formatter at every call: slow on long lists)
   const DF_DM=new Intl.DateTimeFormat('fr-FR',{day:'2-digit',month:'2-digit'}), DF_DMY=new Intl.DateTimeFormat('fr-FR',{day:'2-digit',month:'2-digit',year:'2-digit'}), DF_HM=new Intl.DateTimeFormat('fr-FR',{hour:'2-digit',minute:'2-digit'});
-  function fmtDateShort(d){ if(!d)return null; return DF_DM.format(new Date(d+'T00:00:00')); }
-  function fmtDateTime(ts){ const dt=new Date(ts); return DF_DMY.format(dt)+' '+DF_HM.format(dt); }
+  function fmtDateShort(d){ if(!d)return null; const dt=new Date(d+'T00:00:00'); return isNaN(dt)?String(d):DF_DM.format(dt); }   // a date typed wrong is shown as is, never breaks the list
+  function fmtDateTime(ts){ const dt=new Date(ts); return isNaN(dt)?'':DF_DMY.format(dt)+' '+DF_HM.format(dt); }
   function dueStatus(due){ if(!due)return ''; const t=new Date();t.setHours(0,0,0,0); const d=new Date(due+'T00:00:00'); const diff=Math.round((d-t)/86400000); if(diff<0)return 'overdue'; if(diff<=2)return 'soon'; return ''; }
 
   function activeTasks(){ return tasks.filter(t=>!t.archived && !t.deleted); }
@@ -3711,10 +3721,17 @@
   // Older records (kanban v1) → installations on the new stages. Deterministic, so both devices converge.
   function normalizeOpps(){
     let changed=false;
+    if(opportunities.some(o=>!o || typeof o!=='object' || o.id==null || o.id==='')){ opportunities=recs(opportunities); changed=true; }
+    opportunities.forEach(o=>{ if(o.kind!=='request' && o.kind!=='prequal' && o.company!=null && typeof o.company!=='string'){ o.company=asText(o.company); changed=true; } });
     opportunities.forEach(o=>{
       if(!o.kind){ o.kind='installation'; changed=true; }
       if(o.kind==='installation'){
         if(LEGACY_STAGE[o.stage]){ o.stage=LEGACY_STAGE[o.stage]; changed=true; }
+        if(!oppStage(o.stage) && !OPP_EXITS[o.stage] && o.stage!=='converti'){ o.stage='a_qualifier'; changed=true; }   // a step the app doesn't know: back to the start, not lost
+        ['notesLog','stageLog'].forEach(k=>{ if(o[k]!=null && !Array.isArray(o[k])){ o[k]=[]; changed=true; } else if(Array.isArray(o[k]) && o[k].some(e=>!e || typeof e!=='object')){ o[k]=o[k].filter(e=>e && typeof e==='object'); changed=true; } });
+        if(o.checks!=null && (typeof o.checks!=='object' || Array.isArray(o.checks))){ o.checks={}; changed=true; }
+        ['company','centrale','lot','producteur'].forEach(k=>{ if(o[k]!=null && typeof o[k]!=='string'){ o[k]=asText(o[k]); changed=true; } });
+        ['mesPrev','mesEff','dateOffre','debut','fin','dept'].forEach(k=>{ if(o[k]!=null && typeof o[k]==='object'){ o[k]=''; changed=true; } });
         if(!o.centrale && o.title){ o.centrale=o.title; changed=true; }
         if(!o.producteur && o.company){ o.producteur=o.company; changed=true; }
       }
@@ -4128,7 +4145,7 @@
     const o=group[0], st=oppStage(o.stage); if(!st || isExited(o)) return;
     const ids=new Set(group.map(x=>x.id).concat(reqId?[reqId]:[]));
     const tk=activeTasks().filter(t=>t.opportunityId && ids.has(t.opportunityId)).sort((a,b)=>(a.due||'9').localeCompare(b.due||'9'))[0];
-    const nx=document.createElement('div'); nx.className='pipe-next'; const what=tk?plainLinks(tk.title).replace(/\s+—\s+.*$/,''):stageTaskOf(st, o); nx.textContent='→ '+(st.who!=='Com' && (!tk || tk.status==='en_attente')?'En attente '+(st.who==='Ops'?'d\u2019Ops':st.who==='Jur'?'du Juridique':st.who==='Client'?'du producteur':'de la Direction')+' : '+what.charAt(0).toLowerCase()+what.slice(1):what); card.appendChild(nx);
+    const nx=document.createElement('div'); nx.className='pipe-next'; const what=(tk && plainLinks(tk.title||'').replace(/\s+—\s+.*$/,'').trim())||stageTaskOf(st, o); nx.textContent='→ '+(st.who!=='Com' && (!tk || tk.status==='en_attente')?'En attente '+(st.who==='Ops'?'d\u2019Ops':st.who==='Jur'?'du Juridique':st.who==='Client'?'du producteur':'de la Direction')+' : '+what.charAt(0).toLowerCase()+what.slice(1):what); card.appendChild(nx);
     const m=document.createElement('div'); m.className='pipe-who-row';
     const w=document.createElement('span'); w.className='who-chip who-'+String(st.who).toLowerCase(); w.textContent=WHO[st.who]||st.who; m.appendChild(w);
     const d=daysInStage(o); if(d!=null){ const sp=document.createElement('span'); sp.className='pipe-days'+(d>15?' late':''); sp.textContent=d===0?'aujourd’hui':'depuis '+d+' j'; m.appendChild(sp); }
@@ -6967,12 +6984,13 @@
         if(!data||!Array.isArray(data.tasks)) throw new Error('format');
         const extra=[data.crm?'les contacts/CRM':null, Array.isArray(data.notes)?'le calepin':null].filter(Boolean);
         if(!confirm('Remplacer les '+tasks.length+' tâche(s) actuelles par les '+data.tasks.length+' du fichier'+(extra.length?(' (ainsi que '+extra.join(' et ')+')'):'')+' ?')) return;
-        tasks=data.tasks; clientsList=data.clients||[]; projectsList=data.projects||[];
+        tasks=recs(data.tasks); clientsList=data.clients||[]; projectsList=data.projects||[];
         tasks.forEach(t=>{ if(t.subtasks===undefined)t.subtasks=[]; if(t.recur===undefined)t.recur=null; if(t.archived===undefined)t.archived=false; });
         saveTasks(); saveClients(); saveProjects(); render(); renderArchive(); renderLists();
         if(Array.isArray(data.notes)){ notes=data.notes; consolidateNotes(); saveNotes(); renderNotes(); }
         if(data.crm){
           companies=data.crm.companies||[]; contacts=data.crm.contacts||[]; meetings=data.crm.meetings||[]; opportunities=data.crm.opportunities||[];
+          cleanRecords();
           if(Array.isArray(data.crm.companyTypes)&&data.crm.companyTypes.length) companyTypesList=data.crm.companyTypes;
           saveCrm(); if(typeof renderContacts==='function') renderContacts(); if(typeof renderPipeline==='function') renderPipeline();
         }

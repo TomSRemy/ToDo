@@ -1920,6 +1920,26 @@ with sync_playwright() as p:
     check(not errors, f"no page errors ({errors})")
     page.close()
 
+    # --- Damaged data (an old bug, a file edited by hand): nothing breaks, every screen opens
+    dmg = [{"id": "x1", "kind": "installation", "company": None, "centrale": None, "stage": "xyz", "kwc": 1200, "createdAt": "hier", "updatedAt": None, "deleted": False},
+           {"id": "x2", "kind": "installation", "company": "B", "centrale": "Deux", "stage": "kyc", "stageLog": "pas une liste", "notesLog": "texte", "checks": ["a"], "lot": 5, "createdAt": 1, "updatedAt": 1, "deleted": False},
+           {"id": "x3", "kind": "installation", "company": "B", "centrale": "Trois", "stage": "offre_attente", "mesPrev": {"a": 1}, "notesLog": [None, {"kind": "appel"}], "createdAt": 1, "updatedAt": 1, "deleted": False},
+           {"kind": "installation", "company": "SansId", "stage": "collecte"}, "une chaîne", None, 42]
+    page, errors = new_page(browser, {"todo_todo-widget-opportunities": json.dumps(dmg), "todo_todo-widget-tasks": json.dumps([{"id": "tx", "title": None, "due": "demain", "subtasks": "non", "createdAt": 1, "updatedAt": 1, "deleted": False}, None])},
+                            viewport={"width": 1300, "height": 850})
+    page.goto(URL)
+    for tb in ["tasks", "today", "pipeline"]:
+        page.click(f'[data-tab="{tb}"]'); page.wait_for_timeout(150)
+    for v in ["#pipe-meet-toggle", "#pipe-dash-toggle", "#pipe-list-toggle", "#pipe-list-toggle"]:
+        page.click(v); page.wait_for_timeout(150)
+    for i in range(page.locator(".pipe-card").count()):
+        page.locator(".pipe-card").nth(i).click(); page.wait_for_timeout(80); page.keyboard.press("Escape")
+    page.evaluate("window.todoOpenWeek('this')"); page.keyboard.press("Escape")
+    ops = stored(page, "todo-widget-opportunities")
+    check(not errors and len(ops) == 3 and next(o for o in ops if o["id"] == "x1")["stage"] == "a_qualifier" and next(o for o in ops if o["id"] == "x2")["notesLog"] == [],
+          f"damaged data: every screen opens, the records repaired ({errors[:2]})")
+    page.close()
+
     # --- Keyboard in a sheet: 1 ticks the first box, Entrée moves on and confirms, n opens the notes
     kb = [{"id": "k1", "kind": "installation", "company": "KB", "centrale": "Toit", "title": "Toit", "stage": "kyc", "createdAt": 1, "updatedAt": 1, "deleted": False}]
     page, errors = new_page(browser, {"todo_todo-widget-opportunities": json.dumps(kb)}, viewport={"width": 1400, "height": 900})
