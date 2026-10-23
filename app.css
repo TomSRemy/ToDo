@@ -2084,3 +2084,17 @@ details.req-compare:not([open]) > .req-compare-h::before{ transform:none; }
 .meet-table tr.meet-inblk td:first-child{ padding-left:30px; }
 @media (max-width:1100px){ .meet-cards{ grid-template-columns:1fr 1fr; } .meet-kpis{ grid-template-columns:repeat(3,minmax(0,1fr)); } }
 @media (max-width:760px){ #pipeline-board.pipe-meet{ padding:12px 10px 30px; } .meet-cards, .meet-kpis{ grid-template-columns:1fr 1fr; } .meet-cards{ grid-template-columns:1fr; } }
+/* Portefeuille on a wide screen: the whole width; the yearly chart and the map side by side, the rest across */
+@media (min-width:1600px){
+  #parc-body{ max-width:none; display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); align-items:start; }
+  #parc-body > *{ grid-column:1 / -1; min-width:0; }
+  #parc-body > .parc-chart-block{ grid-column:1; align-self:stretch; }
+  #parc-body > .parc-map-block{ grid-column:2; align-self:stretch; }
+  #parc-body .parc-chart{ max-width:none; }
+  #parc-body > .parc-map-block .parc-map-grid{ grid-template-columns:minmax(0,1.2fr) minmax(200px,1fr); gap:18px; }
+}
+/* the pipeline's map view: the whole width, a bigger map (kept within the screen's height) */
+#pipeline-board.pipe-mapview .parc-map-block{ max-width:none; }
+#pipeline-board.pipe-mapview .parc-map-grid{ grid-template-columns:minmax(0,1.6fr) minmax(260px,1fr); gap:32px; }
+#pipeline-board.pipe-mapview .parc-map-wrap{ max-width:min(820px, calc((100vh - 170px) * 1.05)); }
+@media (max-width:760px){ #pipeline-board.pipe-mapview .parc-map-grid{ grid-template-columns:1fr; } }

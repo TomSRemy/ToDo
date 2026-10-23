@@ -7821,7 +7821,7 @@
   }
   const tipRow=(color,label,value)=>'<span class="tip-row">'+(color?'<i style="background:'+color+'"></i>':'')+'<span>'+escapeHtml(label)+'</span><em>'+escapeHtml(value)+'</em></span>';
   function parcChart(won){
-    const wrap=document.createElement('div'); wrap.className='parc-block';
+    const wrap=document.createElement('div'); wrap.className='parc-block parc-chart-block';
     wrap.innerHTML='<div class="parc-h">Volume agrégé par année (GWh), contrats gagnés</div>';
     const years=parcYearsShown();
     if(!years.length){ wrap.innerHTML+='<p class="parc-muted">Pas de volume renseigné.</p>'; return wrap; }
