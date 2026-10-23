@@ -1762,17 +1762,23 @@ with sync_playwright() as p:
     page.locator(".pipe-req-name", has_text="W1").click(); page.click("#opp-detail-body .opp-back")
     page.click("#opp-detail-body .sp-next")
     check("Retour sur l\u2019offre" in page.inner_text("#stage-advance-text"), "after « offre à remettre » comes the wait for the producer's answer")
+    check("se crée seule" in page.inner_text("#stage-advance-text") and not page.is_visible("#stage-create-task"), "offer sent: the dialog says the follow-up task is made alone")
     page.click("#stage-advance-confirm")
     st = {o["id"]: o.get("stage") for o in stored(page, "todo-widget-opportunities")}
     check(st["w1"] == st["w2"] == "offre_attente", f"both installations wait for the answer ({st})")
     t = [t for t in stored(page, "todo-widget-tasks") if t.get("opportunityId") == "r8"]
-    check(len(t) == 1 and t[0]["status"] == "en_attente" and "Relancer" in t[0]["title"], "a follow-up task « en attente » to chase the producer")
+    import datetime as _dt
+    in7 = (_dt.date.today() + _dt.timedelta(days=7)).isoformat()
+    check(len(t) == 1 and t[0]["status"] == "a_faire" and "Relancer" in t[0]["title"] and t[0].get("autoRelance") and t[0]["due"] == in7 and "2 installations" in t[0]["title"],
+          f"offer sent: one « Relancer le producteur » task made alone, due in 7 days, for the whole request ({[(x['title'], x['due'], x['status']) for x in t]})")
     check(page.is_visible("#opp-detail-overlay") and "Retour sur l\u2019offre" in page.inner_text("#opp-detail-body .sp-title"), "after moving on from a sheet, the sheet opens again on the new step")
     page.click("#opp-detail-body .sp-next:has-text('Offre acceptée')"); page.click("#stage-advance-confirm")
     page.wait_for_selector(".celebrate-won", timeout=2000)
     check(page.locator(".celebrate-won .confetti").count() > 20 and "Offre acceptée" in page.inner_text(".celebrate-won") and page.locator(".celebrate").count() == 1,
           "offer accepted: one confetti animation for the whole request")
     check(all(o["stage"] == "kyc" for o in stored(page, "todo-widget-opportunities") if o.get("requestId") == "r8"), "accepted: the installations move to KYC")
+    t = [t for t in stored(page, "todo-widget-tasks") if t.get("autoRelance")]
+    check(len(t) == 1 and t[0]["deleted"], f"accepted: the follow-up task disappears alone ({t})")
     page.click("#opp-detail-actions >> text=Fermer")
     page.locator('[data-phase="contrat"] .pipe-card').first.click()   # the animation never blocks a click
     page.click("#opp-detail-actions >> text=Fermer")

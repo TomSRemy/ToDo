@@ -5593,11 +5593,11 @@
   function exitList(list, kind){
     if(list.length===1) return exitOpp(list[0], kind);
     if(!confirm(list.length+' installations ('+(list[0].company||'')+') : '+OPP_EXITS[kind]+' ?')) return;
-    list.forEach(o=>{ o.stageBeforeExit=o.stage; o.stage=kind; o.lostAt=Date.now(); touchCrm(o); }); saveCrm(); closeOppDetail(); renderPipeline();
+    list.forEach(o=>{ relanceOnMove(o, null); o.stageBeforeExit=o.stage; o.stage=kind; o.lostAt=Date.now(); touchCrm(o); }); saveCrm(); closeOppDetail(); renderPipeline();
   }
   function exitOpp(o, kind){
     if(!confirm('« '+oppName(o)+' » : '+OPP_EXITS[kind]+' ?')) return;
-    o.stageBeforeExit=o.stage; o.stage=kind; o.lostAt=Date.now(); touchCrm(o); saveCrm();
+    relanceOnMove(o, null); o.stageBeforeExit=o.stage; o.stage=kind; o.lostAt=Date.now(); touchCrm(o); saveCrm();
     closeOppDetail(); renderPipeline();
   }
   // a lost deal (one installation or a whole request at once), with its little animation
@@ -5611,7 +5611,7 @@
     if(!list.length) return;
     const what=list.length>1?list.length+' installations ('+list[0].company+')':'« '+oppName(list[0])+' »';
     if(!confirm(what+' : offre perdue ?')) return;
-    list.forEach(o=>{ o.stageBeforeExit=o.stage; o.stage='perdu'; o.lostAt=Date.now(); touchCrm(o); closeRenewalTask(o); });
+    list.forEach(o=>{ relanceOnMove(o, null); o.stageBeforeExit=o.stage; o.stage='perdu'; o.lostAt=Date.now(); touchCrm(o); closeRenewalTask(o); });
     saveCrm(); closeOppDetail(); renderPipeline();
     celebrate('lost', list);
   }
@@ -5684,7 +5684,28 @@
     // the offer accepted (into the contract phase), then the contract signed: a little celebration
     if(prev>=0 && prev<stageIndex('kyc') && next>=stageIndex('kyc')) celebrate(next>stageIndex('signature')?'signed':'won', [o]);
     else if(prev>=0 && prev<=stageIndex('signature') && next>stageIndex('signature')) celebrate('signed', [o]);
+    relanceOnMove(o, key);
     o.stage=key; touchCrm(o); saveCrm(); renderPipeline();
+  }
+  // Backlog decision 3: the offer goes out → « Relancer le producteur » is created alone, due in 7 days;
+  // the deal moves on (accepted, refused, any other step) → that task disappears alone if it was not done.
+  // A request's installations share one task, which goes once none of them is waiting any more.
+  const RELANCE_DAYS=7;
+  function relanceOnMove(o, key){
+    if(!o || o.kind!=='installation' || o.stage===key) return;
+    const req=o.requestId && opportunities.find(x=>x.id===o.requestId && !x.deleted), target=req||o;
+    const open=()=>tasks.find(t=>!t.deleted && !t.archived && t.autoRelance && t.opportunityId===target.id);
+    if(key==='offre_attente'){
+      if(open()) return;
+      const sibs=req?requestInstalls(req.id).filter(x=>!isExited(x)):[o];
+      const t=createTask({ title:'Relancer le producteur sur l\u2019offre — '+(sibs.length>1?sibs.length+' installations':oppName(o)), client:o.company||'', due:pqAddDays(RELANCE_DAYS), urgency:'moyenne', status:'a_faire',
+        description:'Créée seule quand l\u2019offre est partie ; elle disparaît seule quand le dossier avance.' });
+      t.opportunityId=target.id; t.autoRelance=true; t.stageLabel=oppStage('offre_attente').label; touch(t); saveTasks(); render();
+    } else if(o.stage==='offre_attente'){
+      if(req && requestInstalls(req.id).some(x=>x.id!==o.id && x.stage==='offre_attente')) return;   // others still waiting on the same offer
+      const t=open(); if(!t) return;
+      t.deleted=true; touch(t); saveTasks(); render();
+    }
   }
 
   // ----- Stage advance (after a linked task is validated, or from a detail view) -----
@@ -5722,6 +5743,8 @@
       : label+' : chaque installation passe à son étape suivante ('+moves.map(m=>oppName(m.o)+' → '+oppStage(m.key).label).join(', ')+') ?';
     $('stage-advance-nogo').classList.toggle('hidden', !moves.every(m=>m.o.stage==='qualif_en_cours'));
     $('stage-create-task').checked=true; $('stage-due').value=next.who!=='Com'?pqAddDays(7):''; $('stage-urgency').value='moyenne'; $('stage-due-row').style.display='flex';
+    const autoRel=moves.every(m=>m.key==='offre_attente');   // the follow-up task is made alone (relanceOnMove): nothing to choose here
+    $('stage-create-task').closest('.crm-form-row').style.display=autoRel?'none':''; if(autoRel){ $('stage-due-row').style.display='none'; $('stage-advance-text').textContent+=' La tâche « Relancer le producteur » se crée seule, pour dans '+RELANCE_DAYS+' jours, et disparaît dès que le dossier avance.'; }
     $('stage-advance-overlay').classList.remove('hidden');
   }
   function confirmStageAdvance(){
@@ -5739,6 +5762,7 @@
         const req=group.length>1 && group[0].requestId ? opportunities.find(x=>x.id===group[0].requestId) : null;
         const target=req||group[0];
         const s=oppStage(key), other=s.who!=='Com';
+        if(key==='offre_attente' && tasks.some(t=>!t.deleted && !t.archived && t.autoRelance && t.opportunityId===target.id)) return;
         const task=createTask({ title:stageTaskOf(s, group[0])+' — '+(req?group.length+' installations':oppName(group[0])), client:group[0].company, due:$('stage-due').value, urgency:$('stage-urgency').value, status:other?'en_attente':'a_faire', description:other?'À suivre : étape portée par '+s.who+'.':'' });
         task.opportunityId=target.id; task.stageLabel=s.label; touch(task); saveTasks();
         target.taskId=task.id; touchCrm(target);
@@ -5750,7 +5774,7 @@
   }
   function noGoFromAdvance(){
     if(!pendingAdvance) return;
-    pendingAdvance.moves.map(m=>opportunities.find(x=>x.id===m.id)).filter(Boolean).forEach(o=>{ o.stageBeforeExit=o.stage; o.stage='no_go'; o.lostAt=Date.now(); touchCrm(o); });
+    pendingAdvance.moves.map(m=>opportunities.find(x=>x.id===m.id)).filter(Boolean).forEach(o=>{ relanceOnMove(o, null); o.stageBeforeExit=o.stage; o.stage='no_go'; o.lostAt=Date.now(); touchCrm(o); });
     const back=closeStageAdvance(); saveCrm(); renderPipeline(); if(back) back();
   }
   // returns the way back to the sheet the move was started from (if any)
@@ -6720,8 +6744,8 @@
   function xsStatutAction(o, statut){
     const s=pqFold(statut||'');
     if(/gagne/.test(s) && stageIndex(o.stage)<stageIndex('onboarding')) return { label:'Passer à Onboarding', run:()=>{ setOppStage(o,'onboarding'); } };
-    if(/perdu/.test(s) && !isExited(o)) return { label:'Marquer perdu', run:()=>{ o.stageBeforeExit=o.stage; o.stage='perdu'; o.lostAt=Date.now(); touchCrm(o); saveCrm(); } };
-    if(/abandon|sans suite|no ?go/.test(s) && !isExited(o)) return { label:'Marquer abandonné', run:()=>{ o.stageBeforeExit=o.stage; o.stage='abandonne'; o.lostAt=Date.now(); touchCrm(o); saveCrm(); } };
+    if(/perdu/.test(s) && !isExited(o)) return { label:'Marquer perdu', run:()=>{ relanceOnMove(o, null); o.stageBeforeExit=o.stage; o.stage='perdu'; o.lostAt=Date.now(); touchCrm(o); saveCrm(); } };
+    if(/abandon|sans suite|no ?go/.test(s) && !isExited(o)) return { label:'Marquer abandonné', run:()=>{ relanceOnMove(o, null); o.stageBeforeExit=o.stage; o.stage='abandonne'; o.lostAt=Date.now(); touchCrm(o); saveCrm(); } };
     return null;
   }
   // which lines the panel shows: the pipeline's (not signed yet, lost ones included), the Portefeuille's (signed), or all
@@ -8070,7 +8094,7 @@
         else if(!window.TODO_LITE){ const nb=document.createElement('button'); nb.type='button'; nb.className='pq-link parc-due-nogo'; nb.textContent='Non renouvelé';
           nb.onclick=()=>{ if(opp){ loseOpps([opp]); renderParc(); return; }
             if(!confirm('« '+(p.inst||p.prod)+' » (fin le '+pqIsoToFr(p.fin)+') : non renouvelé ?')) return;
-            const o=renewalToPipeline(p); o.stageBeforeExit=o.stage; o.stage='perdu'; o.lostAt=Date.now(); touchCrm(o); closeRenewalTask(o); saveCrm(); renderPipeline(); renderParc(); celebrate('lost', [o]); };
+            const o=renewalToPipeline(p); relanceOnMove(o, null); o.stageBeforeExit=o.stage; o.stage='perdu'; o.lostAt=Date.now(); touchCrm(o); closeRenewalTask(o); saveCrm(); renderPipeline(); renderParc(); celebrate('lost', [o]); };
           act.appendChild(nb); }
         r.appendChild(act);
         s.appendChild(r);
