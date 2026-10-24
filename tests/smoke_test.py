@@ -2173,6 +2173,28 @@ with sync_playwright() as p:
     check(not errors, f"no page errors ({errors})")
     page.close()
 
+    # Ctrl+Z after a sync: it undoes what was done on this device, never what came from the other device
+    mine = [{"id": "u1", "title": "Ancien titre", "urgency": "moyenne", "status": "a_faire", "subtasks": [], "archived": False, "deleted": False, "createdAt": 1, "updatedAt": 1}]
+    theirs = [dict(mine[0], title="Titre venu de l'autre appareil", updatedAt=9)]
+    def gh_u(route):
+        u_, m_ = route.request.url, route.request.method
+        if "tasks.json" in u_ and m_ == "GET": route.fulfill(status=200, content_type="application/json", body=json.dumps({"sha": "t1", "content": base64.b64encode(json.dumps(theirs).encode()).decode()}))
+        elif m_ == "PUT": route.fulfill(status=200, content_type="application/json", body=json.dumps({"content": {"sha": "t2"}}))
+        else: route.fulfill(status=404, body="{}")
+    page, errors = new_page(browser, {"todo_sync-config": json.dumps({"owner": "o", "repo": "r", "token": "t", "enabled": True}), "todo_todo-widget-tasks": json.dumps(mine), "todo_sync-tasks-base": json.dumps(mine)}, viewport={"width": 1300, "height": 850})
+    page.route("https://api.github.com/**", gh_u)
+    page.goto(URL)
+    for _ in range(50):
+        if any(t["title"] == "Titre venu de l'autre appareil" for t in stored(page, "todo-widget-tasks")): break
+        page.wait_for_timeout(200)
+    page.click('[data-tab="tasks"]'); page.fill("#quick-add-input", "Tâche faite ici"); page.press("#quick-add-input", "Enter"); page.wait_for_timeout(900)
+    page.click("body", position={"x": 5, "y": 5}); page.keyboard.press("Control+z"); page.wait_for_timeout(300); page.keyboard.press("Control+z"); page.wait_for_timeout(300)
+    st_u = {t["title"]: t for t in stored(page, "todo-widget-tasks")}
+    check("Titre venu de l'autre appareil" in st_u and not st_u["Titre venu de l'autre appareil"]["deleted"] and (("Tâche faite ici" not in st_u) or st_u["Tâche faite ici"]["deleted"]),
+          f"undo after a sync: the task added here is undone, the change from the other device stays ({ {k: v['deleted'] for k, v in st_u.items()} })")
+    check(not errors, f"no page errors ({errors})")
+    page.close()
+
     # an Excel attachment that can't be read is said, not silently dropped
     eml = ("From: Paul <paul@example.fr>\r\nSubject: Caracteristiques\r\nMIME-Version: 1.0\r\nContent-Type: multipart/mixed; boundary=XX\r\n\r\n--XX\r\nContent-Type: text/plain; charset=utf-8\r\n\r\n"
            "Bonjour, ci-joint le fichier.\r\n--XX\r\nContent-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet; name=\"centrales.xlsx\"\r\nContent-Disposition: attachment; filename=\"centrales.xlsx\"\r\n"

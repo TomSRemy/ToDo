@@ -14,6 +14,8 @@ const ASSETS = [
   './js/go-widget.js',
   './js/celebrate.js',
   './js/network.js',
+  './js/merge.js',
+  './js/parse.js',
   './js/app.js',
   './mobile.html',
   './manifest-lite.json',
