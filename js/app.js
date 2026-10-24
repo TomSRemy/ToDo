@@ -8583,6 +8583,8 @@
         if(sel && sel.length) openPhoneImport(sel.map(x=>{ const w=String((x.name||[])[0]||'').trim().split(/\s+/); const t=(x.tel||[]).map(pqFmtPhone);
           return { firstName:w.shift()||'', lastName:w.join(' '), company:'', role:'', email:String((x.email||[])[0]||'').toLowerCase(), phone1:t[0]||'', phone2:t[1]||'', comment:'' }; }));
         return; }catch(e){ /* picker refused: the file way */ } }
+    // iPhone (backlog decision 26, the user has both): Safari can't read the address book, it takes the contacts exported as a file
+    if(/iPhone|iPad|iPod/.test(navigator.userAgent) && !confirm('Sur iPhone : ouvre l’app Contacts, touche « Listes », reste appuyé sur une liste (ou « Tous les contacts ») puis « Exporter » et enregistre le fichier .vcf dans Fichiers. Choisis ensuite ce fichier ici.\n\nContinuer ?')) return;
     $('vcf-import-input').click();
   }
   // a business card, photographed: the text is read on the device, then the contact form opens filled in

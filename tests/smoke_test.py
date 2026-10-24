@@ -2144,6 +2144,11 @@ with sync_playwright() as p:
     check(len(cs) == 2 and cs["anne@solaris.fr"]["phone1"] == "06 11 22 33 44" and cs["anne@solaris.fr"]["company"] == "Solaris" and cs["paul@ventus.fr"]["company"] == "Ventus" and cs["paul@ventus.fr"]["role"] == "Gérant",
           f"phone import: the new one added, the known one only completed ({[(c['firstName'], c['phone1'], c['company']) for c in cs.values()]})")
     page.click("#phone-import-overlay .pi-close")
+    # on an iPhone the address book can't be read: the app first says how to export it as a file
+    page.evaluate("Object.defineProperty(navigator, 'userAgent', { get:()=>'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X)' })")
+    said = []; page.once("dialog", lambda d: (said.append(d.message), d.dismiss()))
+    page.click("#vcf-import-btn"); page.wait_for_timeout(150)
+    check(said and "Exporter" in said[0] and ".vcf" in said[0], f"phone import on iPhone: how to export the contacts first ({said})")
     page.set_input_files("#card-scan-input", files=[{"name": "carte.jpg", "mimeType": "image/jpeg", "buffer": b"fake"}]); page.wait_for_timeout(500)
     check(page.input_value("#ct-first") == "Claire" and page.input_value("#ct-email") == "claire.dubois@helio-ouest.fr" and "Directrice" in page.input_value("#ct-role"),
           f"business card: the photo's text fills a new contact ({page.input_value('#ct-first')!r}, {page.input_value('#ct-role')!r})")
