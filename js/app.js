@@ -8837,15 +8837,7 @@
     root.querySelector('.mk-frame').src=url; root.querySelector('.mk-open').href=url;
     mkWire(root);
   }
-  // the note stays in view (it is never moved): the dashboard leaves it its column on the right
-  function mkMakeRoom(){
-    const root=$('market-root'), n=$('postit'); if(!root) return; let pr='';
-    if(n && !n.classList.contains('hidden') && !$('tab-market').classList.contains('hidden') && innerWidth>700){ const r=n.getBoundingClientRect(), rr=root.getBoundingClientRect(); if(r.width && r.left>rr.left+rr.width*.5) pr=Math.max(22, Math.round(rr.right-r.left+14))+'px'; }
-    if(root.style.paddingRight!==pr) root.style.paddingRight=pr;
-  }
-  { const n=$('postit'); if(n){ new MutationObserver(mkMakeRoom).observe(n, { attributes:true, attributeFilter:['class','style'] }); if(window.ResizeObserver) new ResizeObserver(mkMakeRoom).observe(n); } window.addEventListener('resize', mkMakeRoom); }
   function mkWire(root){
-    mkMakeRoom();
     const sel=root.querySelector('.mk-board');
     sel.onchange=()=>{ let v=sel.value;
       if(v==='own'){ const u=prompt('Colle le lien de ton tableau de bord PowerKlock (General › API › « A whole dashboard ») :', mkOwn(mkPick())||''); if(u==null){ renderMarket(); return; } if(!mkOwn(u)){ alert('Ce n’est pas un lien de tableau PowerKlock (il contient « #solo= »).'); renderMarket(); return; } v=u.trim(); }

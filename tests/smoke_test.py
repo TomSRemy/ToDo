@@ -1958,7 +1958,7 @@ with sync_playwright() as p:
     own = "https://tomsremy.github.io/PowerKlock/index.html#board=zAbC_d-1"
     page.once("dialog", lambda d: d.accept(own)); page.select_option(".mk-board", "own"); page.wait_for_timeout(200)
     check(page.get_attribute(".mk-frame", "src") == own.replace("#board=", "#solo=") and page.input_value(".mk-board") == "own", "market: my own dashboard, from a link copied on the site")
-    check(page.is_visible("#postit") and page.evaluate("parseFloat(getComputedStyle(document.getElementById('market-root')).paddingRight)") > 250, "market: the dashboard leaves the note its room")
+    check(page.is_visible("#postit") and page.evaluate("parseFloat(getComputedStyle(document.getElementById('market-root')).paddingRight)") < 40, "market: the note floats over the dashboard, nothing moves for it")
     page.click(".mk-copy"); page.wait_for_timeout(300); txt = page.evaluate("navigator.clipboard.readText()")
     check("Spot France (day-ahead) : 61,5 €/MWh" in txt and "1,5 h à prix négatif" in txt and "août 2026 : 110,0 / 104,0 / 77,7 (CRE)" in txt and "estimation PowerKlock" in txt
           and "solaire 40,0 (64 %)" in txt and "Sources :" in txt, f"market: « Copier pour un mail » sums up spot, M0 and capture prices with their sources ({txt[:400]!r})")
