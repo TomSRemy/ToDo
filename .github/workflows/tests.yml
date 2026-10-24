@@ -16,6 +16,7 @@ jobs:
       - run: pip install playwright==1.63.0 openpyxl
       - run: python -m playwright install --with-deps chromium
       - run: python tests/smoke_test.py
+      - run: python tests/csp_test.py   # the app under the security headers of _headers (Cloudflare Pages)
       - run: python tests/mail_accuracy.py --all --min 0.95
       - run: python tests/extraction_accuracy.py --all --min 0.95
       - run: python tests/bridge_test.py   # PowerShell is preinstalled on the runner

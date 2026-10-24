@@ -324,7 +324,7 @@
       if(u.mode==='idb') html+='<div class="sg-mode">Base de données du navigateur : '+fmtMo(u.data)+' de données'+(u.quota?', '+fmtGo(u.quota)+' disponibles en tout':'')+'.</div>'+(u.quota?bar(u.usage/u.quota,'Espace du navigateur utilisé'):'');
       else html+='<div class="sg-mode">Stockage simple du navigateur : '+Math.round(lsRatio*100)+' % de sa limite (environ 5 Mo).</div>'+bar(lsRatio,'Limite du stockage simple');
       html+=rows.filter(r=>r[1]>0).map(([l,n])=>'<div class="sg-row"><span>'+l+'</span><b>'+fmtMo(n)+'</b></div>').join('');
-      html+='<div class="muted">Réglages et autres pages de tomsremy.github.io : '+Math.round(lsRatio*100)+' % du stockage simple (limite partagée entre ces pages).</div>';
+      html+='<div class="muted">Réglages et autres pages de '+escapeHtml(location.host||'cette adresse')+' : '+Math.round(lsRatio*100)+' % du stockage simple (limite partagée entre ces pages).</div>';
       box.innerHTML=html;
     }catch(e){ box.innerHTML='<span class="muted">Espace non mesurable dans ce navigateur.</span>'; }
   }
@@ -7433,6 +7433,18 @@
     await saveSyncConfig();
     setSyncStatus('Activation…');
     repoPrivate=null; syncPull(); syncPullCrm(); syncPullNotes(); syncPullParc();
+  };
+  // the token leaves this device (the app moved to another address, or a borrowed device): the data stays here and on GitHub
+  $('sync-forget-btn').onclick=async ()=>{
+    if(!syncConfig.token){ setSyncStatus('Aucun jeton enregistré sur cet appareil.'); return; }
+    if(!confirm('Retirer le jeton GitHub de cet appareil ?\n\nLa synchro s\u2019arrête ici ; tes données restent sur cet appareil et sur GitHub. Pour la reprendre, recolle un jeton.')) return;
+    flushPostit(); const pend=[];   // what was waiting to leave goes first, with the token still there
+    if(syncPushTimer){ clearTimeout(syncPushTimer); syncPushTimer=null; pend.push(syncPushNow()); }
+    if(crmSyncPushTimer){ clearTimeout(crmSyncPushTimer); crmSyncPushTimer=null; pend.push(syncPushCrmNow()); }
+    if(notesSyncPushTimer){ clearTimeout(notesSyncPushTimer); notesSyncPushTimer=null; pend.push(syncPushNotesNow()); }
+    setSyncStatus('Envoi des derniers changements…'); await Promise.all(pend);
+    syncConfig.token=''; syncConfig.enabled=false; await saveSyncConfig(); $('sync-token').value='';
+    setSyncStatus('Jeton retiré de cet appareil.'); paintSyncPill();
   };
   $('sync-token-exp').addEventListener('change', ()=>{ syncConfig.tokenExpires=$('sync-token-exp').value||''; saveSyncConfig(); paintSyncPill(); });
   $('sync-now-btn').onclick=()=>{ if(!syncConfig.enabled){ setSyncStatus('Active la synchro d\u2019abord.'); return; } setSyncStatus('Synchronisation…'); syncPushNow(); syncPushCrmNow(); syncPushNotesNow(); };

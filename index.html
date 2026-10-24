@@ -5,16 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Todo</title>
 <link rel="manifest" href="manifest.json" id="app-manifest">
-<script>
-  // Phone version: index.html?lite (or mobile.html) — same data and sync, fewer features.
-  window.TODO_LITE=/[?&]lite\b/.test(location.search);
-  if(window.TODO_LITE){ document.getElementById('app-manifest').href='manifest-lite.json'; document.documentElement.classList.add('lite'); }
-  // Widget: index.html?widget (widget.html redirects here) — a bubble and a small task panel, same code and data as the app;
-  // ?widget&pip is the same panel inside the always-on-top mini window (Chrome/Edge).
-  window.TODO_WIDGET=/[?&]widget\b/.test(location.search) && !window.TODO_LITE;
-  window.TODO_PIP=window.TODO_WIDGET && /[?&]pip\b/.test(location.search);
-  if(window.TODO_WIDGET){ document.documentElement.classList.add('widget'); if(window.TODO_PIP) document.documentElement.classList.add('pip'); }
-</script>
+<script src="js/boot.js"></script>
 <meta name="theme-color" content="#0A0D12">
 <link rel="apple-touch-icon" sizes="180x180" href="icons/apple-touch-icon.png">
 <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
@@ -466,7 +457,7 @@
           <h4>Sur le téléphone</h4>
           <ul>
             <li><b>Réseau</b> aussi sur le téléphone (barre du bas) : pincer pour zoomer, toucher un point pour ses liens, deux fois pour sa fiche.</li>
-            <li>Ouvre <b>tomsremy.github.io/ToDo/mobile.html</b> puis « Sur l'écran d'accueil ». Version allégée : Aujourd'hui, Tâches, Contacts, Portefeuille, Pipeline (lecture) et la note.</li>
+            <li>Ouvre l'adresse de l'appli suivie de <b>/mobile.html</b> (par exemple <b>todo-tom.pages.dev/mobile.html</b>) puis « Sur l'écran d'accueil ». Version allégée : Aujourd'hui, Tâches, Contacts, Portefeuille, Pipeline (lecture) et la note.</li>
             <li>Mêmes données que l'ordinateur dès que la synchro est activée sur le téléphone (une fois, dans la version complète, onglet Réf. &amp; data).</li>
             <li>Pour changer l'icône après une mise à jour : retirer l'app de l'écran d'accueil puis la rajouter.</li>
           </ul>
@@ -702,6 +693,7 @@
         <a class="sync-token-link" href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener">Créer ou renouveler un jeton sur GitHub ↗</a>
         <button class="data-btn" id="sync-save-btn" style="width:100%;">Activer la synchro sur cet appareil</button>
         <button class="data-btn" id="sync-now-btn" style="width:100%;">Synchroniser maintenant</button>
+        <button class="data-btn" id="sync-forget-btn" style="width:100%;" title="Retire le jeton GitHub de cet appareil (après un changement d'adresse, ou sur un appareil prêté). Les données restent ici et sur GitHub.">Oublier le jeton sur cet appareil</button>
         <span id="sync-status" style="font-size:11px; color:var(--tx3); font-family:var(--font-mono);"></span>
       </div>
     </div>

@@ -1,0 +1,16 @@
+# Security headers, applied by Cloudflare Pages (GitHub Pages ignores this file).
+# The app's own code only; the few outside places it really uses are named one by one.
+#   scripts   : cdnjs (ExcelJS, Tesseract), jsdelivr (PowerPoint export, Tesseract's worker)
+#   requests  : GitHub API (sync, Boîte mail), the Excel bridge on this PC, PowerKlock (Marché),
+#               Tesseract's engine and French/English data, Claude API (set aside, kept so nothing breaks)
+#   frames    : PowerKlock dashboards (Marché)
+# tests/csp_test.py loads the app under these rules and fails on any blocked request.
+/*
+  Content-Security-Policy: default-src 'self'; script-src 'self' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' blob: https://cdn.jsdelivr.net; connect-src 'self' https://api.github.com https://tomsremy.github.io http://127.0.0.1:8765 http://localhost:8765 https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://tessdata.projectnaptha.com https://api.anthropic.com data: blob:; img-src 'self' data: blob: https:; style-src 'self' 'unsafe-inline'; font-src 'self' data:; media-src 'self' data: blob:; frame-src https://tomsremy.github.io; frame-ancestors 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; manifest-src 'self'
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin
+  Permissions-Policy: geolocation=(), microphone=(), camera=(self), payment=(), usb=()
+  Cross-Origin-Opener-Policy: same-origin-allow-popups
+
+/sw.js
+  Cache-Control: no-cache

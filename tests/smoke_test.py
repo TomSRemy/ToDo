@@ -1995,6 +1995,18 @@ with sync_playwright() as p:
     check(not errors, f"load: a link still opens its target ({errors})")
     page.close()
 
+    # --- « Oublier le jeton sur cet appareil » (after the move to another address): token gone, sync off, data kept
+    fg = [{"id": "fg1", "title": "Garder cette tâche", "urgency": "moyenne", "status": "a_faire", "subtasks": [], "archived": False, "deleted": False, "createdAt": 1, "updatedAt": 1}]
+    page, errors = new_page(browser, {"todo_sync-config": json.dumps({"owner": "o", "repo": "r", "token": "tok_test", "enabled": True}), "todo_todo-widget-tasks": json.dumps(fg)}, viewport={"width": 1300, "height": 850})
+    page.route("https://api.github.com/**", lambda r: r.fulfill(status=404, body="{}"))
+    page.goto(URL); page.click('[data-tab="lists"]')
+    page.once("dialog", lambda d: d.accept()); page.click("#sync-forget-btn"); page.wait_for_timeout(400)
+    cfg = json.loads(page.evaluate("localStorage.getItem('todo_sync-config')") or "{}")
+    check(cfg.get("token") == "" and cfg.get("enabled") is False and "désactivée" in page.inner_text("#sync-pill").lower() and any(t["id"] == "fg1" for t in stored(page, "todo-widget-tasks")),
+          f"sync: « Oublier le jeton » removes the token from this device, keeps the data ({cfg})")
+    check(not errors, f"no page errors ({errors})")
+    page.close()
+
     # --- Doublons: a company written two ways, a plant entered twice; merged in one click, or marked as different
     du = [{"id": "d1", "kind": "installation", "company": "GAEC Dupont", "centrale": "Hangar Est", "title": "Hangar Est", "stage": "pricing_indicatif", "kwc": "900", "createdAt": 1, "updatedAt": 5, "deleted": False},
           {"id": "d2", "kind": "installation", "company": "Gaec Dupont SARL", "centrale": "Centrale Hangar Est", "title": "Centrale Hangar Est", "stage": "collecte", "mwh": "1100", "commune": "Cholet",

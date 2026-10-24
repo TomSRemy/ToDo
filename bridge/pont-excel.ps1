@@ -30,10 +30,12 @@
 param([int]$Port = 8765, [switch]$Reconfigurer, [switch]$Mock)
 
 $ErrorActionPreference = 'Stop'
-$Version = '1.2'
+$Version = '1.3'
 $Here = Split-Path -Parent $MyInvocation.MyCommand.Path
 $ConfigPath = Join-Path $Here 'pont-excel-config.json'
-$AllowedOrigins = @('https://tomsremy.github.io', 'null', 'http://localhost:8000', 'http://127.0.0.1:8000')
+# the app's addresses: GitHub Pages, and its own Cloudflare Pages address (an address given by hand: "origins" in pont-excel-config.json)
+$AllowedOrigins = @('https://tomsremy.github.io', 'https://todo-tom.pages.dev', 'http://localhost:8000', 'http://127.0.0.1:8000')
+if ($Mock) { $AllowedOrigins += 'null' }   # pages opened from a file, for tests only
 $Kinds = @{
   pipe = @{ label = 'Pipe agrégation'; header = 'Nom Producteur'; keys = @('Nom Producteur', 'Nom Centrale'); sheet = 'Pipe agrégation' }
   bdd  = @{ label = 'BDD Agrégation'; header = 'Nom_prod'; keys = @('Nom_prod', 'Nom_Installation_prod'); sheet = 'BDD Agrégation' }
@@ -55,7 +57,10 @@ function Pick-File($title) {
   if ($d.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) { return $d.FileName }
   return ''
 }
-function New-Token { -join ((48..57) + (65..90) + (97..122) | Get-Random -Count 24 | ForEach-Object { [char]$_ }) }
+function New-Token {   # 24 characters from the system's cryptographic generator
+  $b = New-Object byte[] 24; [Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($b)
+  -join ($b | ForEach-Object { 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789'[$_ % 57] })
+}
 function Load-Config {
   if (Test-Path $ConfigPath) { return (Get-Content $ConfigPath -Raw -Encoding UTF8 | ConvertFrom-Json) }
   return $null
@@ -73,6 +78,7 @@ if (-not $Config -or $Reconfigurer) {
   $Config = [pscustomobject]@{ pipe = $pipe; bdd = $bdd; token = $token }
   ($Config | ConvertTo-Json) | Set-Content -Path $ConfigPath -Encoding UTF8
 }
+if ($Config.origins) { $AllowedOrigins += @($Config.origins | ForEach-Object { [string]$_ }) }
 
 # ---------------- Table adapters (Excel via COM, or in-memory for -Mock) ----------------
 # An adapter exposes: Headers (string[]), FirstCol (sheet column of the table's first column), RowCount,
