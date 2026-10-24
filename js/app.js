@@ -7,7 +7,7 @@
   const clientInput=$('f-client'), projectInput=$('f-project'), clientDot=$('client-dot'), projectDot=$('project-dot');
   const clientDatalist=$('client-datalist'), projectDatalist=$('project-datalist');
   const tabs=document.querySelectorAll('.tab'), tabToday=$('tab-today'), tabTasks=$('tab-tasks'), tabInbox=$('tab-inbox'), tabArchive=$('tab-archive'), tabLists=$('tab-lists');
-  const clientChipRow=$('client-chip-row'), projectChipRow=$('project-chip-row');
+  const projectChipRow=$('project-chip-row');
   const addSection=$('add-section'), cancelTaskBtn=$('cancel-task');
   const quickAddInput=$('quick-add-input'), quickAddMore=$('quick-add-more');
   const searchInput=$('search-input'), searchClear=$('search-clear');
@@ -182,7 +182,7 @@
     undoApplying=false;
     undoBase=undoSnapshot();
     saveTasks(); saveCrm(); saveNotes(); undoBase=undoSnapshot();
-    try{ render(); renderArchive(); renderLists(); renderToday(); renderContacts(); renderPipeline(); renderNotes(); }catch(e){}
+    try{ render(); renderArchive(); renderLists(); renderToday(); renderContacts(); renderPipeline(); renderNotes(); }catch(e){ softFail('affichage après annulation', e); }
     if(!$('opp-detail-overlay').classList.contains('hidden') && viewingOppId){ const v=opportunities.find(x=>x.id===viewingOppId); if(v && !v.deleted) (v.kind==='request'?openRequestDetail:openOppDetail)(v.id); else closeOppDetail(); }
   }
   function undoLast(){
@@ -223,6 +223,8 @@
   }
 
   function touch(t){ t.updatedAt=Date.now(); }
+  // An error the app can live with still leaves a trace (audit C6): always in the console; said to the person when tell is given.
+  function softFail(where, e, tell){ try{ console.error('['+where+']', e); }catch(e2){} if(tell){ try{ setSyncStatus(tell); }catch(e3){} } }
 
   async function loadSyncConfig(){
     try{ const r=await window.storage.get(SYNC_CONFIG_KEY,false); syncConfig=r&&r.value?JSON.parse(r.value):{owner:'',repo:'',token:'',enabled:false}; }
@@ -232,8 +234,10 @@
 
   // every call to GitHub gives up after a while (audit A6): on a phone whose network drops, a request could hang for
   // minutes, the sync pill stayed on « Synchronisation… » and the next pushes piled up behind it
+  // ... and carries the token itself (audit C5): the callers only say what is theirs (method, body, a special Accept)
   function ghFetch(url, opt){
     opt=Object.assign({}, opt||{}); const ms=opt.method==='PUT'?45000:20000;
+    opt.headers=Object.assign({ 'Authorization':'Bearer '+syncConfig.token, 'Accept':'application/vnd.github+json' }, opt.headers||{});
     if(window.AbortSignal && AbortSignal.timeout) opt.signal=AbortSignal.timeout(ms);
     else { const c=new AbortController(); setTimeout(()=>c.abort(), ms); opt.signal=c.signal; }
     return fetch(url, opt);
@@ -245,15 +249,14 @@
   // Reads a JSON file of the data repo. The "object" media type works up to 100 MB (the default one stops
   // at 1 MB); above 1 MB the content comes empty and is fetched again as raw text.
   async function ghGetJson(path){
-    const auth={ 'Authorization':'Bearer '+syncConfig.token };
-    const res=await ghFetch(syncApiUrl(path), { headers:Object.assign({ 'Accept':'application/vnd.github.object+json' }, auth), cache:'no-store' }).catch(e=>{ syncNote(null); throw e; });
+    const res=await ghFetch(syncApiUrl(path), { headers:{ 'Accept':'application/vnd.github.object+json' }, cache:'no-store' }).catch(e=>{ syncNote(null); throw e; });
     syncNote(res);
     if(!res.ok) return { ok:false, status:res.status };
     const data=await res.json();
     let text;
     if(data.content && data.encoding!=='none') text=b64DecodeUtf8(data.content);
     else {
-      const raw=await ghFetch(syncApiUrl(path), { headers:Object.assign({ 'Accept':'application/vnd.github.raw+json' }, auth), cache:'no-store' });
+      const raw=await ghFetch(syncApiUrl(path), { headers:{ 'Accept':'application/vnd.github.raw+json' }, cache:'no-store' });
       if(!raw.ok) return { ok:false, status:raw.status };
       text=await raw.text();
     }
@@ -337,7 +340,7 @@
         sessionStorage.setItem('storage-warned','1');
         showStorageAlert('warn', 'Espace de stockage presque plein ('+Math.round(ratio*100)+' %). Pense à exporter ou alléger tes données.');
       }
-    }catch(e){}
+    }catch(e){ softFail('mesure de l\u2019espace', e); }
   }
   async function renderStorageGauge(){
     const box=$('storage-gauge'); if(!box || !window.storage.usage) return;
@@ -509,7 +512,7 @@
     let last=0; try{ last=+localStorage.getItem('repo-private-checked-at')||0; }catch(e){}
     if(Date.now()-last<864e5) return true;
     try{
-      const r=await ghFetch('https://api.github.com/repos/'+syncConfig.owner+'/'+syncConfig.repo, { headers:{ 'Authorization':'Bearer '+syncConfig.token, 'Accept':'application/vnd.github+json' }, cache:'no-store' });
+      const r=await ghFetch('https://api.github.com/repos/'+syncConfig.owner+'/'+syncConfig.repo, { headers:{ 'Accept':'application/vnd.github+json' }, cache:'no-store' });
       if(!r.ok) return true;   // can't tell (network, rights): the next pull asks again
       const info=await r.json();
       if(info.private===false){
@@ -518,7 +521,7 @@
         return false;
       }
       try{ localStorage.setItem('repo-private-checked-at', String(Date.now())); }catch(e){}
-    }catch(e){}
+    }catch(e){ softFail('dépôt privé ?', e); }
     return true;
   }
   async function syncPull(){
@@ -575,7 +578,7 @@
       if(sha) body.sha=sha;
       const putRes=await ghFetch(syncApiUrl(), {
         method:'PUT',
-        headers:{ 'Authorization':'Bearer '+syncConfig.token, 'Accept':'application/vnd.github+json', 'Content-Type':'application/json' },
+        headers:{ 'Accept':'application/vnd.github+json', 'Content-Type':'application/json' },
         body:JSON.stringify(body)
       });
       syncNote(putRes);
@@ -647,7 +650,7 @@
       if(sha) body.sha=sha;
       const putRes=await ghFetch(syncApiUrl(SYNC_CRM_PATH), {
         method:'PUT',
-        headers:{ 'Authorization':'Bearer '+syncConfig.token, 'Accept':'application/vnd.github+json', 'Content-Type':'application/json' },
+        headers:{ 'Accept':'application/vnd.github+json', 'Content-Type':'application/json' },
         body:JSON.stringify(body)
       });
       syncNote(putRes);
@@ -726,7 +729,7 @@
   async function syncRepoIsPrivate(){
     if(repoPrivate!==null) return repoPrivate;
     try{
-      const r=await ghFetch('https://api.github.com/repos/'+syncConfig.owner+'/'+syncConfig.repo, { headers:{ 'Authorization':'Bearer '+syncConfig.token, 'Accept':'application/vnd.github+json' }, cache:'no-store' });
+      const r=await ghFetch('https://api.github.com/repos/'+syncConfig.owner+'/'+syncConfig.repo, { headers:{ 'Accept':'application/vnd.github+json' }, cache:'no-store' });
       if(!r.ok) return false;
       const d=await r.json(); repoPrivate=d.private===true; return repoPrivate;
     }catch(e){ return false; }
@@ -755,7 +758,7 @@
       }
       const body={ message:'Sync Portefeuille', content:b64EncodeUtf8(JSON.stringify(parcData)), branch:'main' };
       if(sha) body.sha=sha;
-      const res=await ghFetch(syncApiUrl(SYNC_PARC_PATH), { method:'PUT', headers:{ 'Authorization':'Bearer '+syncConfig.token, 'Accept':'application/vnd.github+json', 'Content-Type':'application/json' }, body:JSON.stringify(body) });
+      const res=await ghFetch(syncApiUrl(SYNC_PARC_PATH), { method:'PUT', headers:{ 'Accept':'application/vnd.github+json', 'Content-Type':'application/json' }, body:JSON.stringify(body) });
       syncNote(res);
     }catch(e){ console.error('parc sync push failed', e); syncNote(null); }
   }
@@ -787,7 +790,7 @@
       if(sha) body.sha=sha;
       const putRes=await ghFetch(syncApiUrl(SYNC_NOTES_PATH), {
         method:'PUT',
-        headers:{ 'Authorization':'Bearer '+syncConfig.token, 'Accept':'application/vnd.github+json', 'Content-Type':'application/json' },
+        headers:{ 'Accept':'application/vnd.github+json', 'Content-Type':'application/json' },
         body:JSON.stringify(body)
       });
       syncNote(putRes);
@@ -1407,7 +1410,7 @@
     if(!syncConfig.enabled){ inboxItems = []; renderInbox(); return; }
     try{
       const url='https://api.github.com/repos/'+syncConfig.owner+'/'+syncConfig.repo+'/contents/'+INBOX_FILE_PATH;
-      const res = await ghFetch(url, { headers:{ 'Authorization':'Bearer '+syncConfig.token, 'Accept':'application/vnd.github+json' } });
+      const res = await ghFetch(url, { headers:{ 'Accept':'application/vnd.github+json' } });
       if(!res.ok) throw new Error('no inbox file');
       const data = await res.json();
       inboxItems = JSON.parse(b64DecodeUtf8(data.content));
@@ -1467,7 +1470,7 @@
   // an item taken from a queue the Outlook macro also writes: if both write at once (409), read again and retry (audit A13)
   async function removeFromGhList(path, itemId, message){
     if(!syncConfig.enabled) return;
-    const url='https://api.github.com/repos/'+syncConfig.owner+'/'+syncConfig.repo+'/contents/'+path, auth={ 'Authorization':'Bearer '+syncConfig.token, 'Accept':'application/vnd.github+json' };
+    const url='https://api.github.com/repos/'+syncConfig.owner+'/'+syncConfig.repo+'/contents/'+path, auth={ 'Accept':'application/vnd.github+json' };
     for(let attempt=0; attempt<3; attempt++){
       try{
         const getRes=await ghFetch(url, { headers:auth, cache:'no-store' }); if(!getRes.ok) return;
@@ -1930,11 +1933,9 @@
   }
 
   let archiveFilter='toutes';
-  let archiveDirty=false;
   function renderArchive(){
     // drawn when it is shown (the tab click draws it again): validating a task stays quick with a long archive
-    if($('tab-archive').classList.contains('hidden')){ archiveDirty=true; return; }
-    archiveDirty=false;
+    if($('tab-archive').classList.contains('hidden'))return;
     const list=$('archive-list');
     list.innerHTML='';
     const q=($('archive-search').value||'').trim().toLowerCase();
@@ -2142,7 +2143,6 @@
 
   let editingContactId=null;
   function activeContacts(){ return contacts.filter(c=>!c.deleted); }
-  function activeCompanies(){ return companies.filter(c=>!c.deleted); }
 
   function initials(first,last){ return ((first||'').charAt(0)+(last||'').charAt(0)).toUpperCase() || '?'; }
   function companyInitials(name){ const words=(name||'').trim().split(/\s+/).filter(Boolean); if(!words.length) return '?'; return (words[0].charAt(0)+(words[1]?words[1].charAt(0):'')).toUpperCase(); }
@@ -2183,11 +2183,6 @@
     }
     if(onPick) w.title='Note du client';
     return w;
-  }
-  function starsIconRow(n){
-    let html='';
-    for(let i=1;i<=5;i++){ html+='<span style="color:'+(i<=n?'var(--accent)':'var(--bd)')+';display:flex;">'+(i<=n?STAR_ICON_ON:STAR_ICON_OFF)+'</span>'; }
-    return html;
   }
   function copyFallback(text){
     try{
@@ -2259,7 +2254,7 @@
     if(!syncConfig.enabled){ contactInboxItems=[]; renderContactInbox(); return; }
     try{
       const url='https://api.github.com/repos/'+syncConfig.owner+'/'+syncConfig.repo+'/contents/'+CONTACT_INBOX_FILE_PATH;
-      const res=await ghFetch(url, { headers:{ 'Authorization':'Bearer '+syncConfig.token, 'Accept':'application/vnd.github+json' } });
+      const res=await ghFetch(url, { headers:{ 'Accept':'application/vnd.github+json' } });
       if(!res.ok) throw new Error('no contact inbox file');
       const data=await res.json();
       contactInboxItems=JSON.parse(b64DecodeUtf8(data.content)).map(enrichInboxContact);
@@ -2270,7 +2265,7 @@
   // read like a pasted signature, it fills what the sender's name and address don't give (role, phones, company)
   function enrichInboxContact(it){
     if(!it || !it.signature) return it;
-    let g=null; try{ g=parseSignatureText(String(it.signature)); }catch(e){}
+    let g=null; try{ g=parseSignatureText(String(it.signature)); }catch(e){ softFail('signature d\u2019un contact de la macro', e); }
     if(!g) return it;
     const out=Object.assign({}, it);
     ['firstName','lastName','email','company','role','phone1','phone2'].forEach(k=>{ if(g[k] && (it.forwarded || !out[k])) out[k]=g[k]; });
@@ -2982,8 +2977,6 @@
   const PQ_PHONE_RE=/(?:\+33\s?\(?0?\)?\s?|\b0)[1-9](?:[\s.\-]?\d{2}){4}\b/g;
   const pqIsCa=e=>{ const d=(e.split('@')[1]||'').toLowerCase(); return /^ca-|credit-?agricole|^ca\.|creditagricole/.test(d); };
   const PQ_CLOSINGS=/^(bien\s+)?(cordialement|à bientôt|a bientot|bien à vous|bien a vous|salutations|merci( d'avance| par avance| beaucoup)?|bonne (journée|journee|soirée|fin de journée)|best regards|regards|sincères salutations|je vous prie d.agr[ée]er|veuillez agr[ée]er|dans l.attente|--\s*$)/i;
-  const PQ_LEGAL=/\b(SAS|SASU|SARL|EURL|SA|SCEA|EARL|GAEC|SCI|SNC|SEM|SPL|SCIC|SEML|GIE|SICA|CUMA|SELARL|S\.A\.S\.?|S\.A\.R\.L\.?)\b|\b(commune|mairie|communauté|syndicat|régie|regie|département|conseil)\b/i;
-  const PQ_ROLE=/\b(directeur|directrice|gérant|gerant|gérante|président|presidente|responsable|chargé|chargée|ingénieur|ingenieure|ingénieure|associé|associée|dirigeant|dirigeante|fondateur|fondatrice|ceo|cfo|coo|cto|dg|daf|maire|adjoint|adjointe|manager|asset|chef|head|délégué|déléguée|exploitant|exploitante|agriculteur|agricultrice|technicien|technicienne|acheteur|acheteuse|secrétaire|assistant|assistante|comptable|conseiller|conseillère)\b/i;
   const PQ_HEADER=/^(de|from|à|a|to|cc|cci|envoyé|envoye|sent|date|objet|subject)\s*:/i;
   function pqFmtPhone(p){ let d=p.replace(/\D/g,''); if(d.startsWith('33')) d='0'+d.slice(2).replace(/^0/,''); return d.length===10?d.replace(/(\d{2})(?=\d)/g,'$1 ').trim():p.trim(); }
   // "9 800", "1.250 kWc" (thousands), "4,98 MWc", "2.5 MW" (decimal); "1.250 MWc" stays 1,25 MW
@@ -3060,7 +3053,6 @@
   const PQ_GENERIC_DOMAINS=/^(gmail|googlemail|hotmail|outlook|live|msn|yahoo|orange|wanadoo|free|sfr|laposte|neuf|icloud|me|aol|bbox|numericable|proton|protonmail)\./;
   // words that make a capitalised pair look like a name but are not people
   const PQ_NOT_NAME=/\b(cr[eé]dit|agricole|[eé]nergies?|solaire|syndicat|centrale|soci[eé]t[eé]|commune|mairie|parc|ville|groupe|service|transitions?|madame|monsieur|bonjour|cordialement|objet|projet|sas|sarl|earl|gaec|scea)\b/i;
-  const PQ_NAME_RE=/^(?:(?:M\.|Mme|Mlle|Monsieur|Madame)\s+)?[A-ZÉÈÀÂÎÔ][\p{L}'’-]+(?:\s+(?:de\s+|de\s+la\s+|du\s+)?[A-ZÉÈÀÂÎÔ][\p{L}'’-]+){1,2}$/u;
   const PQ_FORM='SAS|SASU|SARL|EURL|EARL|GAEC|SCEA|SCI|SEM|SEML|SCIC|SPL|SA|SNC|GIE|SICA|CUMA';
 
   function pqSplitName(raw){
@@ -3070,13 +3062,6 @@
     let fi=0; if(parts.length>1 && parts[0]===parts[0].toUpperCase() && parts[0].length>1 && parts[1]!==parts[1].toUpperCase()) fi=parts.length-1;
     return { prenom:pqTitleCase(fi===0?parts[0]:parts[parts.length-1]), nom:(fi===0?parts.slice(1).join(' '):parts.slice(0,-1).join(' ')).toUpperCase() };
   }
-  const pqLooksLikeName=s=>PQ_NAME_RE.test(s.trim()) && !PQ_NOT_NAME.test(s) && /[a-zé]/.test(s);
-  const pqLooksLikeCompany=s=>{
-    const t=s.trim(); if(!t || t.split(/\s+/).length>7) return false;
-    if(new RegExp('\\b('+PQ_FORM+')\\b').test(t) || /\b(commune|mairie|communaut[eé]|syndicat|r[eé]gie|d[eé]partement|conseil)\b/i.test(t)) return true;
-    const letters=t.replace(/[^\p{L}]/gu,'');
-    return letters.length>=4 && letters===letters.toUpperCase() && !pqLooksLikeName(t);
-  };
   // "l'EARL Bastide", "la société VENTS DU NORD SAS", "SARL SOLEIL D'OC" inside a sentence
   function pqCompanyInText(s){
     // names never run onto the next line (spaces/tabs only between words)
@@ -3679,12 +3664,17 @@
   function pqXlsxToInstallations(wb){ return pqRowsToInstallations(wb.SheetNames, n=>XLSX.utils.sheet_to_json(wb.Sheets[n],{header:1,raw:true,defval:''})); }
 
   // ----- Files: .eml / .txt / .msg (Outlook) / .xlsx; SheetJS is loaded on first use -----
-  let xlsxLoading=null;
-  function loadXlsxLib(){
-    if(window.XLSX) return Promise.resolve();
-    if(!xlsxLoading) xlsxLoading=new Promise((res,rej)=>{ const s=document.createElement('script'); s.src='vendor/xlsx-0.20.3.full.min.js'; s.onload=()=>res(); s.onerror=()=>{ xlsxLoading=null; rej(new Error('Bibliothèque Excel indisponible (hors ligne ?)')); }; document.head.appendChild(s); });
-    return xlsxLoading;
+  // One loader for every library fetched on demand (audit C5): loaded once, retried after a failure, ready() skips it
+  // when the library is already there (a test, or a second call).
+  const scriptLoads=new Map();
+  function loadScript(src, ready, failMsg){
+    if(ready && ready()) return Promise.resolve();
+    if(!scriptLoads.has(src)) scriptLoads.set(src, new Promise((res, rej)=>{ const sc=document.createElement('script'); sc.src=src;
+      sc.onload=()=>res(); sc.onerror=()=>{ scriptLoads.delete(src); sc.remove(); rej(new Error(failMsg||('Chargement impossible : '+src))); }; document.head.appendChild(sc); }));
+    return scriptLoads.get(src);
   }
+  const loadXlsxLib=()=>loadScript('vendor/xlsx-0.20.3.full.min.js', ()=>!!window.XLSX, 'Bibliothèque Excel indisponible (hors ligne ?)');
+
   function pqDecodeQP(s){ return s.replace(/=\r?\n/g,'').replace(/(=[0-9A-F]{2})+/gi, m=>{ try{ return decodeURIComponent(m.replace(/=/g,'%')); }catch(e){ return m; } }); }
   function pqHtmlToText(h){ const d=document.createElement('div'); d.innerHTML=h.replace(/<(br|\/p|\/div|\/tr|\/li)[^>]*>/gi,'\n$&'); d.querySelectorAll('style,script').forEach(n=>n.remove()); return d.textContent.replace(/\n{3,}/g,'\n\n'); }
   function pqDecodeMimeWords(s){ return s.replace(/=\?([^?]+)\?([bq])\?([^?]*)\?=/gi,(m,cs,enc,txt)=>{ try{ if(enc.toLowerCase()==='b') return decodeURIComponent(escape(atob(txt))); return pqDecodeQP(txt.replace(/_/g,' ')); }catch(e){ return txt; } }); }
@@ -3711,7 +3701,7 @@
         if(/content-type:\s*message\/rfc822/i.test(ph)){ const inner=parseEml(decodePart(ph,pb)); forwarded.push(inner); attachments.push(...inner.attachments); return; }
         if(/boundary=/i.test(ph)){ const inner=parseEml(ph+'\n\n'+pb); if(!text) text=inner.body; attachments.push(...inner.attachments); return; }   // inner.body already carries its forwarded mails
         if(isAttach && name){
-          try{ attachments.push({ name, data:/base64/i.test(ph)?pqB64Bytes(pb):new TextEncoder().encode(decodePart(ph,pb)) }); }catch(e){}
+          try{ attachments.push({ name, data:/base64/i.test(ph)?pqB64Bytes(pb):new TextEncoder().encode(decodePart(ph,pb)) }); }catch(e){ softFail('pièce jointe '+name, e); }
           return;
         }
         if(/content-type:\s*text\/plain/i.test(ph) && !text) text=decodePart(ph,pb);
@@ -3739,7 +3729,7 @@
     return { from:(str('0C1A')+' <'+(str('0C1F')||str('5D01'))+'>').trim(), subject:str('0037'), body, attachments };
   }
   async function readPipeFiles(files){
-    const texts=[], installs=[], names=[];
+    const texts=[], installs=[], names=[], unreadable=[];
     for(const f of files){
       const n=f.name.toLowerCase(); names.push(f.name);
       if(/\.(xlsx|xlsm|xls)$/.test(n)){ await loadXlsxLib(); installs.push(...pqXlsxToInstallations(XLSX.read(await f.arrayBuffer(),{type:'array',cellDates:true}))); }
@@ -3747,18 +3737,18 @@
         await loadXlsxLib();
         const m=parseMsg(await f.arrayBuffer());
         texts.push('De : '+m.from+'\nObjet : '+m.subject+'\n\n'+m.body);
-        for(const a of m.attachments){ if(/\.(xlsx|xlsm|xls)$/i.test(a.name)){ try{ installs.push(...pqXlsxToInstallations(XLSX.read(a.data,{type:'array',cellDates:true}))); names.push(a.name); }catch(e){} } }
+        for(const a of m.attachments){ if(/\.(xlsx|xlsm|xls)$/i.test(a.name)){ try{ installs.push(...pqXlsxToInstallations(XLSX.read(a.data,{type:'array',cellDates:true}))); names.push(a.name); }catch(e){ softFail('pièce jointe '+a.name, e); unreadable.push(a.name); } } }
       }
       else if(/\.eml$/.test(n)){
         const m=parseEml(await f.text());
         texts.push('De : '+m.from+'\nObjet : '+m.subject+'\n\n'+m.body);
         const xl=m.attachments.filter(a=>/\.(xlsx|xlsm|xls)$/i.test(a.name));
         if(xl.length) await loadXlsxLib();
-        for(const a of xl){ try{ installs.push(...pqXlsxToInstallations(XLSX.read(a.data,{type:'array',cellDates:true}))); names.push(a.name); }catch(e){ console.error('attachment unreadable', a.name, e); } }
+        for(const a of xl){ try{ installs.push(...pqXlsxToInstallations(XLSX.read(a.data,{type:'array',cellDates:true}))); names.push(a.name); }catch(e){ softFail('pièce jointe '+a.name, e); unreadable.push(a.name); } }
       }
       else texts.push(await f.text());
     }
-    return { text:texts.join('\n\n'), installs, names };
+    return { text:texts.join('\n\n'), installs, names, unreadable };
   }
 
   // ----- Stages -----
@@ -3813,7 +3803,7 @@
     return changed;
   }
   function renderCrm(){
-    try{ paintDupBanner(); }catch(e){}
+    try{ paintDupBanner(); }catch(e){ softFail('bandeau doublons', e); }
     if(normalizeOpps()) saveCrmLocalOnly();
     if(migrateCompanyStars()) saveCrmLocalOnly();
     if(!$('tab-pipeline').classList.contains('hidden')) renderPipeline();
@@ -4102,12 +4092,8 @@
   }
   // ---------- « Présenter » : the meeting as a consultant's deck (pyramid principle): the answer on slide 1, then one message
   // per slide that details it — an action title (a sentence with a number), one exhibit, « À retenir », source and page; the deals in appendix ----------
-  let pptxLoading=null;
-  function loadPptx(){
-    if(window.PptxGenJS) return Promise.resolve();
-    return pptxLoading||(pptxLoading=new Promise((resolve, reject)=>{ const s=document.createElement('script'); s.src='https://cdn.jsdelivr.net/npm/pptxgenjs@3.12.0/dist/pptxgen.bundle.js';
-      s.onload=()=>resolve(); s.onerror=()=>{ pptxLoading=null; s.remove(); reject(new Error('PowerPoint')); }; document.head.appendChild(s); }));
-  }
+  const loadPptx=()=>loadScript('https://cdn.jsdelivr.net/npm/pptxgenjs@3.12.0/dist/pptxgen.bundle.js', ()=>!!window.PptxGenJS, 'PowerPoint');
+
   const pxHex=c=>{ const m=/rgba?\(\s*([\d.]+)[,\s]+([\d.]+)[,\s]+([\d.]+)(?:\s*[,/]\s*([\d.]+))?/.exec(c||''); if(!m || (m[4]!=null && +m[4]<0.08)) return null; return [m[1],m[2],m[3]].map(x=>Math.round(+x).toString(16).padStart(2,'0')).join('').toUpperCase(); };
   function slideToPptx(pptx, el){
     const sl=pptx.addSlide(), R=el.getBoundingClientRect(), k=13.333/R.width, pt=px=>Math.max(6, Math.round(px*k*72*10)/10);
@@ -4413,7 +4399,7 @@
   function pipeTallyReset(){ pipeTallyN={ me:0, others:0, stuck:0, on:true }; }
   function pipeTally(g){ const o=g[0]; if(o.kind!=='installation' || isExited(o)) return; const st=oppStage(o.stage); if(!st) return;
     if(st.who==='Com') pipeTallyN.me++; else pipeTallyN.others++; const d=daysInStage(o); if(d!=null && d>15) pipeTallyN.stuck++; }
-  function paintPipeSummary(){ try{ paintDupBtn(); paintDupBanner(); }catch(e){} let el=$('pipe-summary'); const bar=document.querySelector('#tab-pipeline .quick-add-bar'); if(!bar) return;
+  function paintPipeSummary(){ try{ paintDupBtn(); paintDupBanner(); }catch(e){ softFail('bandeau doublons', e); } let el=$('pipe-summary'); const bar=document.querySelector('#tab-pipeline .quick-add-bar'); if(!bar) return;
     if(!el){ el=document.createElement('span'); el.id='pipe-summary'; el.className='pipe-summary'; const ref=$('pipe-exited-toggle'); bar.insertBefore(el, ref); }
     const show=pipeTallyN.on && !pipeDash && !pipeMeet && !pipeList && !pipeMap; el.hidden=!show; if(!show) return;
     el.innerHTML='À moi <b></b> · En attente des autres <b></b>'+(pipeTallyN.stuck?' · Bloqués &gt; 15 j <b class="late"></b>':'');
@@ -4433,7 +4419,7 @@
   }
   // how many lines wait for the Excel files (or changed there), on the « Excel ⇄ » button
   function paintXsCount(){ const b=$('pipe-xs-btn'); if(!b || ON_PHONE) return; let n=0;
-    try{ xsList().filter(o=>isExited(o) || stageIndex(o.stage)<stageIndex('onboarding')).forEach(o=>{ if(xsTodo(xsState('pipe',o)) || (xsBddApplies(o) && xsTodo(xsState('bdd',o)))) n++; }); }catch(e){}
+    try{ xsList().filter(o=>isExited(o) || stageIndex(o.stage)<stageIndex('onboarding')).forEach(o=>{ if(xsTodo(xsState('pipe',o)) || (xsBddApplies(o) && xsTodo(xsState('bdd',o)))) n++; }); }catch(e){ softFail('compteur Excel', e); }
     b.textContent='Excel ⇄'+(n?' · '+n:''); b.classList.toggle('xs-pending', n>0); }
   function renderPipelineInner(){
     if(normalizeOpps()) saveCrmLocalOnly();
@@ -5312,7 +5298,8 @@
     try{
       pqLastFiles=await readPipeFiles(files);
       const n=pqLastFiles.installs.length;
-      $('pq-files-info').textContent=pqLastFiles.names.join(', ')+(n?' — '+n+' installation'+(n>1?'s':'')+' trouvée'+(n>1?'s':'')+' dans l\u2019Excel':'');
+      $('pq-files-info').textContent=pqLastFiles.names.join(', ')+(n?' — '+n+' installation'+(n>1?'s':'')+' trouvée'+(n>1?'s':'')+' dans l\u2019Excel':'')
+        +(pqLastFiles.unreadable.length?' — pièce jointe illisible : '+pqLastFiles.unreadable.join(', '):'');
       pqReparse();
     }catch(e){ console.error(e); $('pq-files-info').textContent='Fichier illisible : '+(e.message||e); }
   }
@@ -6074,7 +6061,7 @@
   }
   // duplicates are serious (MWc counted twice, two lines in the Pipe): a banner at the top of every page while there are some (backlog decision 10)
   function paintDupBanner(){ const el=$('dup-banner'); if(!el) return; if(window.TODO_WIDGET || window.TODO_LITE){ el.hidden=true; return; }
-    let ig=0, cg=0; try{ ig=instDupGroups().length; cg=coDupGroups().length; }catch(e){}
+    let ig=0, cg=0; try{ ig=instDupGroups().length; cg=coDupGroups().length; }catch(e){ softFail('recherche des doublons', e); }
     el.hidden=!(ig+cg); if(!(ig+cg)) return;
     $('dup-banner-text').textContent='Doublons possibles : '+[ig?ig+' installation'+(ig>1?'s':'')+' saisie'+(ig>1?'s':'')+' deux fois':'', cg?cg+' société'+(cg>1?'s':'')+' écrite'+(cg>1?'s':'')+' de deux façons':''].filter(Boolean).join(', ')+'. Les totaux peuvent être faussés.'; }
   function paintDupBtn(){ const bar=document.querySelector('#tab-pipeline .quick-add-bar'); if(!bar || window.TODO_LITE) return; let b=$('pipe-dup-btn');
@@ -6372,29 +6359,6 @@
     ev.forEach(e=>{ const li=document.createElement('li'); li.innerHTML='<span></span><b></b>'; li.firstChild.textContent=new Date(e.t).toLocaleDateString('fr-FR'); li.lastChild.textContent=e.text; ul.appendChild(li); });
     d.appendChild(ul); return d;
   }
-  function stageFocus(list){
-    const live=list.filter(x=>!isExited(x)); if(!live.length) return null;
-    const lo=Math.min(...live.map(x=>stageIndex(x.stage)).filter(i=>i>=0)); const st=OPP_STAGES[lo]; if(!st) return null;
-    const first=live.find(x=>x.stage===st.key)||live[0], ago=d=>{ const t=pqDateOf(d); if(!t) return ''; const n=Math.floor((Date.now()-t)/864e5); return n<=0?'aujourd\u2019hui':n===1?'hier':'il y a '+n+' jours'; };
-    const facts=[];
-    if(lo<=stageIndex('qualif_en_cours')){ const miss=live.reduce((s,x)=>s+CARACT_ROWS.filter(l=>REQ_NEEDED.has(caractKey(l)) && caractValue(x,l)==='').length,0); if(miss) facts.push(miss+' case'+(miss>1?'s':'')+' à compléter avant la demande de prix'); }
-    if(first.goDate && lo>=stageIndex('pricing_indicatif') && lo<=stageIndex('offre_remise')) facts.push('Go le '+pqIsoToFr(first.goDate)+' ('+ago(first.goDate)+')');
-    if(first.dateOffre && lo>=stageIndex('offre_attente') && lo<stageIndex('kyc')) facts.push('Offre remise le '+pqIsoToFr(first.dateOffre)+' ('+ago(first.dateOffre)+')');
-    if(lo>=stageIndex('kyc') && lo<=stageIndex('signature') && first.dateOffre) facts.push('Offre acceptée après une remise le '+pqIsoToFr(first.dateOffre));
-    if(first.signDate && lo>=stageIndex('onboarding')) facts.push('Signé le '+pqIsoToFr(first.signDate));
-    const tk=activeTasks().filter(t=>live.some(x=>t.opportunityId===x.id || (x.requestId && t.opportunityId===x.requestId))).sort((a,b)=>(a.due||'9').localeCompare(b.due||'9'))[0];
-    const box=document.createElement('div'); box.className='stage-focus';
-    box.innerHTML='<div class="sf-k">Maintenant</div><div class="sf-main"><b></b><span class="sf-who"></span></div><div class="sf-todo"></div><ul class="sf-facts"></ul>';
-    box.querySelector('b').textContent=st.label; box.querySelector('.sf-who').textContent=st.who==='Com'?'':'porté par '+(WHO[st.who]||st.who);
-    box.querySelector('.sf-todo').textContent=tk?'Tâche : '+plainLinks(tk.title)+(tk.due?' · '+pqIsoToFr(tk.due):''):'À faire : '+stageTaskOf(st, first);
-    facts.forEach(f=>{ const li=document.createElement('li'); li.textContent=f; box.querySelector('.sf-facts').appendChild(li); });
-    if(!window.TODO_LITE && lo>=stageIndex('qualif_en_cours') && lo<=stageIndex('offre_attente')){
-      const eng=live.every(isEngageant), sw=document.createElement('div'); sw.className='sf-nature'; sw.innerHTML='<span>Offre demandée :</span>';
-      [['Non engageante','Indicative'],['Engageante','Engageante']].forEach(([v,l])=>{ const b=document.createElement('button'); b.type='button'; b.textContent=l; b.classList.toggle('on', (v==='Engageante')===eng);
-        b.onclick=()=>{ live.forEach(x=>{ if(x.nature!==v){ x.nature=v; touchCrm(x); } }); saveCrm(); renderPipeline(); if(viewingOppId) openOppDetail(viewingOppId); }; sw.appendChild(b); });
-      box.appendChild(sw); }
-    return box;
-  }
   // The pricing request mail (subject + body, one plant or all), open from the Go to the indicative pricing, folded otherwise
   function appendPricingMail(box, req, list){
     const mailBox=document.createElement('div'); mailBox.className='opp-mail';
@@ -6558,12 +6522,8 @@
   // The « Caractéristiques Centrales » file in the template's own design: Arial 11, no gridlines, the « Nom Installation » line
   // on light blue, the labels on light grey in bold navy, thin grey borders, a thick blue line after « Productible » and a
   // medium one after each « Champ », values worked out by the app on yellow (« infos en jaune extrapolées »).
-  let exceljsLoading=null;
-  function loadExcelJs(){
-    if(window.ExcelJS) return Promise.resolve();
-    if(!exceljsLoading) exceljsLoading=new Promise((res,rej)=>{ const s=document.createElement('script'); s.src='https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js'; s.onload=()=>res(); s.onerror=()=>{ exceljsLoading=null; rej(new Error('Bibliothèque Excel indisponible (hors ligne ?)')); }; document.head.appendChild(s); });
-    return exceljsLoading;
-  }
+  const loadExcelJs=()=>loadScript('https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js', ()=>!!window.ExcelJS, 'Bibliothèque Excel indisponible (hors ligne ?)');
+
   const CARACT_PLAIN=new Set(['Commune','P50 annuel (indicatif) (MWh/an)','P90 annuel (indicatif) (MWh/an)'].map(caractKey));
   function caractGuessed(o, label){   // worked out by the app rather than given by the producer
     const k=caractKey(label), num=v=>!isNaN(pqNum(String(v==null?'':v))) && String(v).trim()!=='';
@@ -6898,12 +6858,12 @@
       ov.querySelector('.xs-read').onclick=async e=>{ const b=e.currentTarget, t=b.textContent; b.disabled=true; b.textContent='Lecture…';
         try{ await xsReadFile('pipe'); await xsReadFile('bdd'); importParcFromBridge(true); }catch(err){ showBridgeMsg(err.message, false); } b.disabled=false; b.textContent=t; paintExcelSync(); };
       ov.querySelectorAll('.xs-send').forEach(b=>b.onclick=async()=>{ const kind=b.dataset.k, list=xsList().filter(xsInScope).filter(o=>(kind==='pipe'||xsBddApplies(o)) && xsTodo(xsState(kind,o)) && !((xsState(kind,o).diffs||[]).some(d=>d.byExcel))); if(!list.length) return;
-        await sendToExcel(kind, list, b); if(bridgeConfigured()){ try{ await xsReadFile(kind); }catch(e){} } paintExcelSync(); });
+        await sendToExcel(kind, list, b); if(bridgeConfigured()){ try{ await xsReadFile(kind); }catch(e){ softFail('relecture de l\u2019Excel', e); } } paintExcelSync(); });
     }
     { let sc=ov.querySelector('.xs-scope'); if(!sc){ sc=document.createElement('div'); sc.className='xs-scope xs-filter'; ov.querySelector('.xs-head').appendChild(sc);
         [['pipe','Pipeline'],['parc','Portefeuille (signés)'],['all','Tout']].forEach(([k,l])=>{ const b=document.createElement('button'); b.type='button'; b.dataset.s=k; b.textContent=l; b.onclick=()=>{ xsScope=k; paintExcelSync(); }; sc.appendChild(b); }); } }
     ov.classList.remove('hidden'); paintExcelSync();
-    if(bridgeConfigured() && !(opts&&opts.noRead) && (!xsRead.pipe || Date.now()-xsRead.pipe.at>120000)){ try{ await xsReadFile('pipe'); await xsReadFile('bdd'); }catch(e){} paintExcelSync(); }
+    if(bridgeConfigured() && !(opts&&opts.noRead) && (!xsRead.pipe || Date.now()-xsRead.pipe.at>120000)){ try{ await xsReadFile('pipe'); await xsReadFile('bdd'); }catch(e){ softFail('relecture des Excel', e); } paintExcelSync(); }
   }
   function paintExcelSync(){
     const ov=$('xs-overlay'); if(!ov || ov.classList.contains('hidden')) return;
@@ -6937,7 +6897,7 @@
         if(kind==='bdd'){ const a=xsStatutAction(o, d.excel); if(a){ const b=document.createElement('button'); b.type='button'; b.className='pq-link'; b.textContent=a.label; b.onclick=()=>{ a.run(); renderPipeline(); paintExcelSync(); }; r.appendChild(b); } }
         td.appendChild(r); });
       if(st.excel==='statut'){ const a=xsStatutAction(o, st.statut); if(a){ const b=document.createElement('button'); b.type='button'; b.className='pq-link'; b.textContent=a.label; b.onclick=()=>{ a.run(); renderPipeline(); paintExcelSync(); }; td.appendChild(b); } }
-      if(xsTodo(st) && !st.diffs.some(d=>d.byExcel) && bridgeConfigured()){ const b=document.createElement('button'); b.type='button'; b.className='pq-link xs-one'; b.textContent='Envoyer'; b.onclick=async()=>{ await sendToExcel(kind,[o],b); try{ await xsReadFile(kind); }catch(e){} paintExcelSync(); }; td.appendChild(b); }
+      if(xsTodo(st) && !st.diffs.some(d=>d.byExcel) && bridgeConfigured()){ const b=document.createElement('button'); b.type='button'; b.className='pq-link xs-one'; b.textContent='Envoyer'; b.onclick=async()=>{ await sendToExcel(kind,[o],b); try{ await xsReadFile(kind); }catch(e){ softFail('relecture de l\u2019Excel', e); } paintExcelSync(); }; td.appendChild(b); }
       return td; };
     shown.forEach(({o,p,b})=>{ const tr=document.createElement('tr');
       const n=document.createElement('td'); n.className='xs-name'; n.innerHTML='<b></b><span></span>'; n.firstChild.textContent=oppName(o); n.lastChild.textContent=[o.company, stageLabel(o.stage, o)].filter(Boolean).join(' · ');
@@ -7414,7 +7374,7 @@
     ov.addEventListener('click', e=>{ if(e.target===ov) close(); });
     ov.addEventListener('keydown', e=>{ if(e.key==='Escape'){ e.stopPropagation(); close(); } });
     if(!syncConfig.enabled || !syncConfig.token){ box.innerHTML='<p class="muted">Il faut la synchro GitHub pour retrouver les versions passées. Sans elle : Réf. & data › Importer, avec ton dernier export.</p>'; return; }
-    const auth={ 'Authorization':'Bearer '+syncConfig.token, 'Accept':'application/vnd.github+json' }, repoUrl='https://api.github.com/repos/'+syncConfig.owner+'/'+syncConfig.repo;
+    const auth={ 'Accept':'application/vnd.github+json' }, repoUrl='https://api.github.com/repos/'+syncConfig.owner+'/'+syncConfig.repo;
     const listVersions=async()=>{
       const key=ov.querySelector('input[name=rs-set]:checked').value; planBox.innerHTML=''; box.innerHTML='<p class="muted">Lecture des versions…</p>';
       try{
@@ -7561,7 +7521,7 @@
     if(!syncConfig.owner || !syncConfig.repo || !syncConfig.token){ setSyncStatus('Pseudo, repo et token requis.'); return; }
     setSyncStatus('Vérification du repo…');
     try{
-      const infoRes=await ghFetch('https://api.github.com/repos/'+syncConfig.owner+'/'+syncConfig.repo, { headers:{ 'Authorization':'Bearer '+syncConfig.token, 'Accept':'application/vnd.github+json' } });
+      const infoRes=await ghFetch('https://api.github.com/repos/'+syncConfig.owner+'/'+syncConfig.repo, { headers:{ 'Accept':'application/vnd.github+json' } });
       if(!infoRes.ok){ setSyncStatus('Repo introuvable ou token invalide (vérifie pseudo/repo/token).'); return; }
       const info=await infoRes.json();
       if(info.private===false){
@@ -7591,18 +7551,9 @@
   $('sync-now-btn').onclick=()=>{ if(!syncConfig.enabled){ setSyncStatus('Active la synchro d\u2019abord.'); return; } setSyncStatus('Synchronisation…'); syncPushNow(); syncPushCrmNow(); syncPushNotesNow(); };
   $('contact-add-btn').onclick=()=>openContactForm(null);
   let sigImageFile=null;
-  let tesseractLoaded=false;
 
-  function loadTesseract(){
-    if(tesseractLoaded) return Promise.resolve();
-    return new Promise((resolve, reject)=>{
-      const s=document.createElement('script');
-      s.src='https://cdnjs.cloudflare.com/ajax/libs/tesseract.js/5.0.4/tesseract.min.js';
-      s.onload=()=>{ tesseractLoaded=true; resolve(); };
-      s.onerror=()=>reject(new Error('Tesseract failed to load'));
-      document.head.appendChild(s);
-    });
-  }
+  const loadTesseract=()=>loadScript('https://cdnjs.cloudflare.com/ajax/libs/tesseract.js/5.0.4/tesseract.min.js', ()=>!!window.Tesseract, 'Tesseract failed to load');
+
 
   const loadXlsx=()=>loadXlsxLib();   // one loader for the Excel reader (audit A15)
 
@@ -8380,18 +8331,12 @@
   // Départements: IGN ADMIN EXPRESS (Licence Ouverte Etalab) via github.com/gregoiredavid/france-geojson, simplified to
   // whole pixels at 560 px wide; drawn in the page (no map service, works offline). Overseas plants are listed under the map.
   // the map (≈180 KB) lives in fr-map.js, loaded the first time the Portefeuille is opened
-  let FR_MAP=window.FR_MAP||null, frMapLoading=null, frMapHdLoading=null;
+  let FR_MAP=window.FR_MAP||null;
   // finer outlines (≈1 MB, fr-map-hd.js) swapped in when zoomed past ×2.5, so borders stay sharp
-  function loadFrMapHd(){
-    if(window.FR_MAP_HD) return Promise.resolve();
-    if(!frMapHdLoading) frMapHdLoading=new Promise((res,rej)=>{ const s=document.createElement('script'); s.src='fr-map-hd.js'; s.onload=res; s.onerror=()=>{ frMapHdLoading=null; rej(); }; document.head.appendChild(s); });
-    return frMapHdLoading;
-  }
-  function loadFrMap(){
-    if(FR_MAP) return Promise.resolve();
-    if(!frMapLoading) frMapLoading=new Promise((res,rej)=>{ const s=document.createElement('script'); s.src='fr-map.js'; s.onload=()=>{ FR_MAP=window.FR_MAP; res(); }; s.onerror=()=>{ frMapLoading=null; rej(new Error('Carte indisponible')); }; document.head.appendChild(s); });
-    return frMapLoading;
-  }
+  const loadFrMapHd=()=>loadScript('fr-map-hd.js', ()=>!!window.FR_MAP_HD, 'Carte détaillée indisponible');
+
+  const loadFrMap=()=>loadScript('fr-map.js', ()=>!!FR_MAP, 'Carte indisponible').then(()=>{ FR_MAP=FR_MAP||window.FR_MAP; });
+
   let parcMapLayer='won', parcMapSel=null, parcMapAll=false, parcMapView=null;
   // a clicked key figure filters the map and the table: null | 'vol' | 'active' | 'soon' | 'pending'
   let parcKpi=null, parcKpiSet=null, parcKpiLabel='';   // view = zoomed box in map units, null = all France
@@ -8993,7 +8938,7 @@
   }
   // offline: the last figures read, drawn by the app
   function mkCards(root){
-    const m=marketData, e=escapeHtml, err=true;
+    const m=marketData, e=escapeHtml;
     if(!m){ root.insertAdjacentHTML('beforeend', '<div class="mk-load">Hors ligne, et aucun chiffre gardé pour l’instant.</div>'); return; }
     const s=m.spot, src=t=>'<p class="mk-src">Source : '+e(t)+'. Jours de livraison, heure de Paris.</p>';
     const card=(k,v,sub,cls)=>'<div class="mk-kpi'+(cls?' '+cls:'')+'"><span class="mk-k">'+e(k)+'</span><b>'+v+'</b><span class="mk-sub">'+sub+'</span></div>';
@@ -9026,7 +8971,7 @@
   window.todoExtraCommands=(window.todoExtraCommands||[]).concat([{ t:'Marché : prix spot, M0, captures', k:'marche prix spot m0 cre capture powerklock electricite', go:()=>gsTab('market') }]);
 
   // Test hooks (tests/smoke_test.py and the mail corpus set window.TODO_TEST_HOOKS before loading)
-  if(window.TODO_TEST_HOOKS) window.__todo={ parsePipeMail, parsePipeMailInstallations:parseMailInstallations, parseSignatureBlock, parseSignatureText, xlsxToInstallations:(rowsBySheet)=>pqRowsToInstallations(Object.keys(rowsBySheet), n=>rowsBySheet[n]), codeAffaire, pricingMail };
+  if(window.TODO_TEST_HOOKS) window.__todo={ threeWayMerge, mergeNoteLines, nextRecurDate, parseVcf, parsePipeMail, parsePipeMailInstallations:parseMailInstallations, parseSignatureBlock, parseSignatureText, xlsxToInstallations:(rowsBySheet)=>pqRowsToInstallations(Object.keys(rowsBySheet), n=>rowsBySheet[n]), codeAffaire, pricingMail };
 
   // Phone version: bottom bar drives the sidebar tabs (which stay the single source of truth).
   if(window.TODO_LITE){
@@ -9625,7 +9570,7 @@
       +(syncConfig.enabled?' Tes données sont aussi sur GitHub.':''));
   })();
   $('storage-alert-see').onclick=()=>{ $('storage-alert').hidden=true; openStorageSection(); };
-  loadAll().then(()=>{ try{ paintDupBanner(); }catch(e){} try{ reportCorrupt(); }catch(e){}
+  loadAll().then(()=>{ try{ paintDupBanner(); }catch(e){ softFail('bandeau doublons', e); } try{ reportCorrupt(); }catch(e){ softFail('données illisibles', e); }
     paintSyncPill(); checkStorageFull(); setInterval(checkStorageFull, 10*60*1000);
     $('sync-token-exp').value=syncConfig.tokenExpires||'';
     if(location.hash==='#sync' && !window.TODO_LITE) openSyncSettings();

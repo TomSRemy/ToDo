@@ -13,8 +13,13 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - run: pip install playwright==1.63.0 openpyxl
+      - run: pip install playwright==1.63.0 openpyxl==3.1.5
       - run: python -m playwright install --with-deps chromium
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      # code checks (eslint.config.mjs): the number of warnings may only go down
+      - run: npm install --no-save --no-package-lock eslint@9 globals@15 && npx eslint js sw.js --max-warnings 74
       - run: python tests/smoke_test.py
       - run: python tests/csp_test.py   # the app under the security headers of _headers (Cloudflare Pages)
       - run: python tests/mail_accuracy.py --all --min 0.95

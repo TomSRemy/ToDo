@@ -2096,6 +2096,94 @@ with sync_playwright() as p:
     check(not errors, f"no page errors ({errors})")
     page.close()
 
+    # --- Safety net before refactoring (code audit, section 7): pure functions checked on their own, and the paths no test went through
+    page, errors = new_page(browser); page.add_init_script("window.TODO_TEST_HOOKS=true;"); page.goto(URL); page.wait_for_timeout(300)
+    mg = page.evaluate("""()=>{ const H=window.__todo, now=1e12;
+      const base=[{id:'a',title:'T',due:'2026-11-01',updatedAt:1},{id:'b',title:'B',updatedAt:1},{id:'c',title:'C',updatedAt:1,notesLog:[{at:1,text:'x'}],checks:{s1:{k1:true}}}];
+      const local=[{id:'a',title:'T local',due:'2026-11-01',updatedAt:5},{id:'b',title:'B',updatedAt:1,deleted:true,},{id:'c',title:'C',updatedAt:3,notesLog:[{at:1,text:'x'},{at:3,text:'ici'}],checks:{s1:{k1:true,k2:true}}},{id:'n',title:'Nouvelle ici',updatedAt:4}];
+      const remote=[{id:'a',title:'T',due:'2026-12-01',updatedAt:6},{id:'b',title:'B',updatedAt:1},{id:'c',title:'C',updatedAt:4,notesLog:[{at:1,text:'x'},{at:4,text:'là-bas'}],checks:{s1:{k1:true,k3:true}}},{id:'r',title:'Nouvelle là-bas',updatedAt:2}];
+      const m=H.threeWayMerge('task', local, remote, base), by=Object.fromEntries(m.map(x=>[x.id,x]));
+      const both=H.threeWayMerge('task', [{id:'d',title:'ici',updatedAt:9}], [{id:'d',title:'là-bas',updatedAt:8}], [{id:'d',title:'avant',updatedAt:1}]);
+      return { a:[by.a.title, by.a.due], bDeleted:!!by.b.deleted, cLog:by.c.notesLog.map(x=>x.text), cChecks:Object.keys(by.c.checks.s1).sort(), ids:m.map(x=>x.id).sort(), both:both[0].title,
+        note:H.mergeNoteLines('l1\\nl2\\nl3', 'l1\\nl2\\nl3\\nici', 'l1\\nl3\\nlà-bas') }; }""")
+    check(mg["a"] == ["T local", "2026-12-01"] and mg["bDeleted"] and mg["cLog"] == ["x", "ici", "là-bas"] and mg["cChecks"] == ["k1", "k2", "k3"]
+          and mg["ids"] == ["a", "b", "c", "n", "r"] and mg["both"] == "ici" and mg["note"] == "l1\nl3\nlà-bas\nici",
+          f"sync merge on its own: one-side edits taken, deletions kept, logs and ticks united, newer wins a real clash, note lines merged ({mg})")
+    rc = page.evaluate("""()=>{ const f=window.__todo.nextRecurDate; return [f('2026-01-31','mensuel',31), f('2028-01-31','mensuel',31), f('2026-12-28','hebdo'), f('2026-12-31','quotidien'), f('2026-02-28','mensuel',31), f('2026-10-24','mensuel')]; }""")
+    check(rc == ["2026-02-28", "2028-02-29", "2027-01-04", "2027-01-01", "2026-03-31", "2026-11-24"], f"recurrences: month end, leap year, year change, the day kept ({rc})")
+    vc = page.evaluate("""()=>window.__todo.parseVcf('BEGIN:VCARD\\r\\nVERSION:3.0\\r\\nN:Lefèvre;Élodie;;;\\r\\nFN:Élodie Lefèvre\\r\\nORG:Hélio Ouest;\\r\\nTITLE:Directrice des achats et de l\\r\\n a logistique\\r\\nTEL;TYPE=CELL:+33 6 12 34 56 78\\r\\nTEL;TYPE=WORK:02 40 00 00 00\\r\\nEMAIL:E.Lefevre@Helio.fr\\r\\nEND:VCARD\\r\\nBEGIN:VCARD\\r\\nVERSION:3.0\\r\\nTEL:06 00 00 00 01\\r\\nEND:VCARD\\r\\n')""")
+    check(len(vc) >= 1 and vc[0]["firstName"] == "Élodie" and vc[0]["lastName"] == "Lefèvre" and vc[0]["company"] == "Hélio Ouest" and vc[0]["role"] == "Directrice des achats et de la logistique"
+          and vc[0]["phone1"] == "06 12 34 56 78" and vc[0]["phone2"] == "02 40 00 00 00" and vc[0]["email"] == "e.lefevre@helio.fr",
+          f"vCard: accents, folded line, two phones, mail in lower case ({vc[:1]})")
+    check(not errors, f"no page errors ({errors})")
+    page.close()
+
+    # a conflict chosen by hand: the value kept is written, the conflict goes, the sync sends it
+    puts_c = []
+    def gh_c(route):
+        if route.request.method == "PUT": puts_c.append(json.loads(base64.b64decode(json.loads(route.request.post_data)["content"]).decode())); route.fulfill(status=200, content_type="application/json", body=json.dumps({"content": {"sha": "s"}}))
+        else: route.fulfill(status=404, body="{}")
+    cf_ct = [{"id": "cc1", "firstName": "Anne", "lastName": "Roux", "company": "Solaris", "phone1": "06 11 11 11 11", "createdAt": 1, "updatedAt": 5, "deleted": False}]
+    cf = [{"id": "cf1", "entityType": "contact", "entityId": "cc1", "entityName": "Anne Roux", "fieldLabel": "Téléphone 1", "field": "phone1", "localValue": "06 11 11 11 11", "remoteValue": "06 22 22 22 22",
+           "resolvedValue": "06 11 11 11 11", "srcA": "Sur cet appareil", "srcB": "Venu de ton autre appareil", "at": 1}]
+    page, errors = new_page(browser, {"todo_sync-config": json.dumps({"owner": "o", "repo": "r", "token": "t", "enabled": True}), "todo_todo-widget-contacts": json.dumps(cf_ct), "todo_sync-conflicts": json.dumps(cf)}, viewport={"width": 1300, "height": 850})
+    page.route("https://api.github.com/**", gh_c)
+    page.goto(URL); page.click('[data-tab="lists"]'); page.wait_for_selector("#conflicts-list .conflict-row")
+    page.locator("#conflicts-list .conflict-row button", has_text="Venu de ton autre appareil").click(); page.wait_for_timeout(3600)
+    c1 = next(c for c in stored(page, "todo-widget-contacts") if c["id"] == "cc1")
+    check(c1["phone1"] == "06 22 22 22 22" and page.locator("#conflicts-list .conflict-row").count() == 0 and any(isinstance(p_, dict) and any(c.get("phone1") == "06 22 22 22 22" for c in p_.get("contacts", [])) for p_ in puts_c),
+          f"conflict chosen by hand: the other device's value is kept, the conflict goes, the sync sends it ({c1['phone1']}, {len(puts_c)} writes)")
+    check(not errors, f"no page errors ({errors})")
+    page.close()
+
+    # Boîte mail: a task sent by the Outlook macro is imported (link kept) and taken off the queue on GitHub; another one is dismissed
+    b64q = lambda o: base64.b64encode(json.dumps(o).encode()).decode()
+    queue = [{"id": "ib1", "title": "Relancer SCEA Martin", "description": "Mail du 20/10", "client": "SCEA Martin", "urgency": "haute", "due": "2026-11-03", "link": "https://example.org/mail/1"},
+             {"id": "ib2", "title": "Newsletter", "link": "https://example.org/mail/2"}]
+    written = []
+    def gh_q(route):
+        u, m_ = route.request.url, route.request.method
+        if "tasks-inbox.json" in u and m_ == "GET": route.fulfill(status=200, content_type="application/json", body=json.dumps({"sha": "q%d" % len(written), "content": b64q(queue if not written else written[-1])}))
+        elif "tasks-inbox.json" in u and m_ == "PUT": written.append(json.loads(base64.b64decode(json.loads(route.request.post_data)["content"]).decode())); route.fulfill(status=200, content_type="application/json", body="{}")
+        else: route.fulfill(status=404, body="{}")
+    page, errors = new_page(browser, {"todo_sync-config": json.dumps({"owner": "o", "repo": "r", "token": "t", "enabled": True})}, viewport={"width": 1300, "height": 850})
+    page.route("https://api.github.com/**", gh_q)
+    page.goto(URL); page.click('[data-tab="inbox"]'); page.wait_for_selector(".inbox-item")
+    page.locator(".inbox-item", has_text="Relancer SCEA Martin").locator(".inbox-import-btn").click(); page.wait_for_timeout(800)
+    t_ib = [t for t in stored(page, "todo-widget-tasks") if t["title"] == "Relancer SCEA Martin"]
+    check(len(t_ib) == 1 and t_ib[0]["link"] == "https://example.org/mail/1" and t_ib[0]["urgency"] == "haute" and t_ib[0]["due"] == "2026-11-03" and written and all(x["id"] != "ib1" for x in written[-1]),
+          f"Boîte mail: the macro's task becomes a task (link, urgency, date) and leaves the queue on GitHub ({[x['id'] for x in (written[-1] if written else [])]})")
+    page.locator(".inbox-item", has_text="Newsletter").locator(".inbox-ignore-btn").click(); page.wait_for_timeout(800)
+    check(page.locator(".inbox-item").count() == 0 and written and written[-1] == [] and not any(t["title"] == "Newsletter" for t in stored(page, "todo-widget-tasks")),
+          "Boîte mail: a dismissed item creates nothing and leaves the queue")
+    check(not errors, f"no page errors ({errors})")
+    page.close()
+
+    # a company's details edited; a task started from a contact
+    ce = [{"id": "ce1", "firstName": "Paul", "lastName": "Durand", "company": "Solaris", "createdAt": 1, "updatedAt": 1, "deleted": False}]
+    page, errors = new_page(browser, {"todo_todo-widget-contacts": json.dumps(ce)}, viewport={"width": 1300, "height": 850})
+    page.goto(URL); page.click('[data-tab="contacts"]')
+    page.locator("span[title='Cliquer pour éditer les infos de la société']", has_text="Solaris").first.click()
+    page.fill("#co-whatdo", "Producteur solaire FR"); page.fill("#co-website", "https://solaris.example"); page.click("#co-edit-save"); page.wait_for_timeout(200)
+    co = [c for c in stored(page, "todo-widget-companies") if c.get("name") == "Solaris"]
+    check(co and co[0].get("whatTheyDo") == "Producteur solaire FR" and co[0].get("website") == "https://solaris.example", f"company sheet: what they do and the site are saved ({co})")
+    page.locator(".contact-row", has_text="Durand").locator(".contact-main").first.click(); page.wait_for_timeout(200)
+    page.click(".contact-detail-links >> text=+ Nouvelle tâche"); page.wait_for_timeout(200)
+    check(page.input_value("#f-title") == "Contacter Paul Durand" and page.input_value("#f-client") == "Solaris", f"contact: « + Nouvelle tâche » opens the task form, filled ({page.input_value('#f-title')!r})")
+    check(not errors, f"no page errors ({errors})")
+    page.close()
+
+    # an Excel attachment that can't be read is said, not silently dropped
+    eml = ("From: Paul <paul@example.fr>\r\nSubject: Caracteristiques\r\nMIME-Version: 1.0\r\nContent-Type: multipart/mixed; boundary=XX\r\n\r\n--XX\r\nContent-Type: text/plain; charset=utf-8\r\n\r\n"
+           "Bonjour, ci-joint le fichier.\r\n--XX\r\nContent-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet; name=\"centrales.xlsx\"\r\nContent-Disposition: attachment; filename=\"centrales.xlsx\"\r\n"
+           "Content-Transfer-Encoding: base64\r\n\r\n" + base64.b64encode(b"PK\x03\x04" + bytes(range(200))).decode() + "\r\n--XX--\r\n")
+    ef = pathlib.Path(tempfile.mkdtemp()) / "mail.eml"; ef.write_text(eml, encoding="utf-8")
+    page, errors = new_page(browser, None, viewport={"width": 1300, "height": 850})
+    page.goto(URL); page.click('[data-tab="pipeline"]'); page.click("#opp-add-btn"); page.fill("#pq1-company", "SCEA X"); page.click("#pq-next-btn")
+    page.set_input_files("#pq-file", str(ef)); page.wait_for_function("!document.getElementById('pq-files-info').textContent.includes('Lecture')", timeout=20000)
+    check("pièce jointe illisible : centrales.xlsx" in page.inner_text("#pq-files-info"), f"mail: an unreadable Excel attachment is said ({page.inner_text('#pq-files-info')!r})")
+    page.close()
+
     # --- Doublons: a company written two ways, a plant entered twice; merged in one click, or marked as different
     du = [{"id": "d1", "kind": "installation", "company": "GAEC Dupont", "centrale": "Hangar Est", "title": "Hangar Est", "stage": "pricing_indicatif", "kwc": "900", "createdAt": 1, "updatedAt": 5, "deleted": False},
           {"id": "d2", "kind": "installation", "company": "Gaec Dupont SARL", "centrale": "Centrale Hangar Est", "title": "Centrale Hangar Est", "stage": "collecte", "mwh": "1100", "commune": "Cholet",
