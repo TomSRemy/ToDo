@@ -1,8 +1,7 @@
-const CACHE = 'todo-pwa-v17';
+const CACHE = 'todo-pwa-v18';
 // Excel / Outlook reader, loaded on demand by the app: kept for offline use
-const XLSX_URL = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
 const EXCELJS_URL = 'https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js';   // the « Caractéristiques Centrales » file in its design
-const LIBS = [XLSX_URL, EXCELJS_URL];
+const LIBS = [EXCELJS_URL];
 const ASSETS = [
   './',
   './index.html',
@@ -18,6 +17,7 @@ const ASSETS = [
   './manifest.json',
   './share-target.html',
   './fr-map.js',
+  './vendor/xlsx-0.20.3.full.min.js',   // Excel reader (SheetJS 0.20.3), kept with the app
   './icons/apple-touch-icon.png',
   './icons/icon-192.png',
   './icons/icon-512.png',
@@ -27,8 +27,6 @@ const ASSETS = [
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(CACHE).then(async c => {
     await c.addAll(ASSETS);
-    // best effort: the app works without it, only .msg / .xlsx reading needs it
-    try { const r = await fetch(new Request(XLSX_URL, { mode: 'no-cors' })); await c.put(XLSX_URL, r); } catch (err) {}
   }));
   self.skipWaiting();
 });

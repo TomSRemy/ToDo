@@ -3630,7 +3630,7 @@
   let xlsxLoading=null;
   function loadXlsxLib(){
     if(window.XLSX) return Promise.resolve();
-    if(!xlsxLoading) xlsxLoading=new Promise((res,rej)=>{ const s=document.createElement('script'); s.src='https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js'; s.onload=()=>res(); s.onerror=()=>{ xlsxLoading=null; rej(new Error('Bibliothèque Excel indisponible (hors ligne ?)')); }; document.head.appendChild(s); });
+    if(!xlsxLoading) xlsxLoading=new Promise((res,rej)=>{ const s=document.createElement('script'); s.src='vendor/xlsx-0.20.3.full.min.js'; s.onload=()=>res(); s.onerror=()=>{ xlsxLoading=null; rej(new Error('Bibliothèque Excel indisponible (hors ligne ?)')); }; document.head.appendChild(s); });
     return xlsxLoading;
   }
   function pqDecodeQP(s){ return s.replace(/=\r?\n/g,'').replace(/(=[0-9A-F]{2})+/gi, m=>{ try{ return decodeURIComponent(m.replace(/=/g,'%')); }catch(e){ return m; } }); }
@@ -7451,17 +7451,7 @@
     });
   }
 
-  let xlsxLoaded=false;
-  function loadXlsx(){
-    if(xlsxLoaded) return Promise.resolve();
-    return new Promise((resolve, reject)=>{
-      const s=document.createElement('script');
-      s.src='https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
-      s.onload=()=>{ xlsxLoaded=true; resolve(); };
-      s.onerror=()=>reject(new Error('XLSX failed to load'));
-      document.head.appendChild(s);
-    });
-  }
+  const loadXlsx=()=>loadXlsxLib();   // one loader for the Excel reader (audit A15)
 
   function pickHeader(row, candidates){
     const keys=Object.keys(row);
@@ -8957,14 +8947,23 @@
   // all the company names the app knows, from every module
   function openCompany(name){ openCompanySheet(name); }
   // ---------- [[links]]: « [[Paul Durand]] » in a task, the note or a comment points to a contact, a company or an installation ----------
+  // the list is built once and kept until a contact, company, client or installation changes (audit A1: it used to be
+  // rebuilt for every text holding a link, and each link kept its own copy — memory grew with tasks × contacts)
+  let linkCache=null;
+  const maxUpd=l=>{ let m=0; for(const x of l) if(x && x.updatedAt>m) m=x.updatedAt; return m; };
   function linkTargets(){
+    const st=[contacts.length, companies.length, opportunities.length, clientsList.length, maxUpd(contacts), maxUpd(companies), maxUpd(opportunities)].join('|');
+    if(linkCache && linkCache.st===st && linkCache.c===contacts && linkCache.co===companies && linkCache.o===opportunities) return linkCache.list;
     const list=[];
-    activeContacts().forEach(c=>{ const n=[c.firstName,c.lastName].filter(Boolean).join(' '); if(n) list.push({ id:'ct:'+c.id, type:'Contact', name:n, sub:c.company||'', open:()=>openContactEverywhere(c.id) }); });
-    allCompanyNames().forEach(n=>list.push({ id:'co:'+pqFold(n).replace(/[^a-z0-9]/g,''), type:'Société', name:n, sub:'', open:()=>openCompany(n) }));
-    opportunities.filter(o=>!o.deleted && o.kind==='installation').forEach(o=>list.push({ id:'op:'+o.id, type:'Installation', name:oppName(o), sub:o.company||'', open:()=>{ gsTab('pipeline'); setTimeout(()=>openOppDetail(o.id),30); } }));
+    activeContacts().forEach(c=>{ const n=[c.firstName,c.lastName].filter(Boolean).join(' '); if(n) list.push({ id:'ct:'+c.id, type:'Contact', name:n, sub:c.company||'', ref:c.id }); });
+    allCompanyNames().forEach(n=>list.push({ id:'co:'+pqFold(n).replace(/[^a-z0-9]/g,''), type:'Société', name:n, sub:'', ref:n }));
+    opportunities.filter(o=>!o.deleted && o.kind==='installation').forEach(o=>list.push({ id:'op:'+o.id, type:'Installation', name:oppName(o), sub:o.company||'', ref:o.id }));
+    const byName=new Map(); list.forEach(x=>{ const k=pqFold(x.name); if(!byName.has(k)) byName.set(k, x); });
+    linkCache={ st, c:contacts, co:companies, o:opportunities, list, byName };
     return list;
   }
-  function resolveLink(name, T){ const f=pqFold(String(name).trim()); return (T||linkTargets()).find(x=>pqFold(x.name)===f)||null; }
+  function openLinkTarget(r){ if(r.type==='Contact') openContactEverywhere(r.ref); else if(r.type==='Société') openCompany(r.ref); else { gsTab('pipeline'); setTimeout(()=>openOppDetail(r.ref),30); } }
+  function resolveLink(name, T){ const f=pqFold(String(name).trim()); if(!T || T===(linkCache && linkCache.list)){ linkTargets(); return linkCache.byName.get(f)||null; } return T.find(x=>pqFold(x.name)===f)||null; }
   function linksIn(text, T){ const out=[]; String(text||'').replace(LINK_RE,(m,n)=>{ const r=resolveLink(n,T); if(r && !out.includes(r.id)) out.push(r.id); return m; }); return out; }
   window.todoLinksOf=text=>linksIn(text);
   // a contact or a company renamed: its [[links]] follow (tasks, the note and its past days, comments)
@@ -8984,7 +8983,7 @@
     el.textContent=''; const str=String(text||''); let last=0, T=null;
     str.replace(LINK_RE,(m,n,at)=>{ if(at>last) el.appendChild(document.createTextNode(str.slice(last,at)));
       T=T||linkTargets(); const r=resolveLink(n,T), a=document.createElement('span'); a.className='wl'+(r?'':' none'); a.textContent=n; a.title=r?r.type+' : ouvrir la fiche':'Rien trouvé à ce nom'; if(r) a.dataset.peek=r.type==='Société'?'co:'+r.name:r.id;
-      if(r) a.onclick=e=>{ e.stopPropagation(); r.open(); }; el.appendChild(a); last=at+m.length; return m; });
+      if(r){ const target=r; a.onclick=e=>{ e.stopPropagation(); openLinkTarget(target); }; } el.appendChild(a); last=at+m.length; return m; });
     if(last<str.length) el.appendChild(document.createTextNode(str.slice(last)));
   }
   // where an entity is mentioned: tasks (archived too), the note and its archive, contact comments, pipeline comments

@@ -1982,6 +1982,19 @@ with sync_playwright() as p:
     check(not errors, f"no page errors ({errors})")
     page.close()
 
+    # --- Load: [[links]] in 2 000 tasks with 3 000 contacts — the list of targets is shared, memory stays small (audit A1)
+    big_c = [{"id": f"lc{i}", "firstName": f"P{i}", "lastName": f"N{i}", "company": f"SOC {i % 400}", "createdAt": 1, "updatedAt": 1, "deleted": False} for i in range(3000)]
+    big_t = [{"id": f"lt{i}", "title": f"Tâche {i} [[SOC {i % 400}]]", "urgency": "moyenne", "status": "a_faire", "subtasks": [], "archived": False, "deleted": False, "createdAt": 1, "updatedAt": 1} for i in range(2000)]
+    page = browser.new_page(viewport={"width": 1300, "height": 850}); errors = []; page.on("pageerror", lambda e: errors.append(str(e)))
+    page.route("**/fonts.g*/**", lambda r: r.abort())
+    page.add_init_script("if(!sessionStorage.getItem('seeded')){ localStorage.setItem('todo_todo-widget-contacts', " + json.dumps(json.dumps(big_c)) + "); localStorage.setItem('todo_todo-widget-tasks', " + json.dumps(json.dumps(big_t)) + "); sessionStorage.setItem('seeded','1'); }")
+    t0 = time.time(); page.goto(URL); page.click('[data-tab="tasks"]'); page.wait_for_timeout(500)
+    heap = page.evaluate("Math.round(performance.memory.usedJSHeapSize/1e6)"); took = time.time() - t0
+    check(heap < 200 and page.locator(".wl").count() > 100, f"load: 2 000 tasks with links and 3 000 contacts stay light ({heap} MB, {took:.1f} s)")
+    page.locator(".wl", has_text="SOC 7").first.click(); page.wait_for_timeout(200)
+    check(not errors, f"load: a link still opens its target ({errors})")
+    page.close()
+
     # --- Doublons: a company written two ways, a plant entered twice; merged in one click, or marked as different
     du = [{"id": "d1", "kind": "installation", "company": "GAEC Dupont", "centrale": "Hangar Est", "title": "Hangar Est", "stage": "pricing_indicatif", "kwc": "900", "createdAt": 1, "updatedAt": 5, "deleted": False},
           {"id": "d2", "kind": "installation", "company": "Gaec Dupont SARL", "centrale": "Centrale Hangar Est", "title": "Centrale Hangar Est", "stage": "collecte", "mwh": "1100", "commune": "Cholet",
