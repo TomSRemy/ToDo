@@ -17,6 +17,7 @@ export default [
       'no-dupe-keys': 'warn',
       'no-unreachable': 'warn',
       'no-self-assign': 'warn',
+      'no-const-assign': 'error',   // a value given to a module by js/app.js, then written to: always a bug
       eqeqeq: ['warn', 'smart'],
       complexity: ['warn', 15],
       'max-depth': ['warn', 4]

@@ -36,6 +36,9 @@ flowchart LR
     market["market.js<br/>onglet Marché (PowerKlock)"]
     present["present.js<br/>vue réunion + « Présenter » + PowerPoint"]
     phone["phone.js<br/>contacts ⇄ téléphone (vCard)"]
+    call["call.js<br/>notes express + mode appel"]
+    excel["excel-sync.js<br/>envoi aux Excel partagés + Excel ⇄ appli"]
+    parc["parc.js<br/>Portefeuille : renouvellements, tableau, carte"]
     ai["ai.js<br/>« Compléter avec l'IA » (mis de côté)"]
   end
   app["app.js<br/>tâches, CRM, pipeline, Portefeuille,<br/>synchro GitHub, pont Excel, note"]
@@ -46,10 +49,13 @@ flowchart LR
   app -->|init| present
   app -->|init| phone
   app -->|init| ai
+  app -->|init| call
+  app -->|init| excel
+  app -->|init| parc
   app --> network
   app --> celebrate
   app <-->|synchro, jeton| gh[("Dépôt GitHub privé<br/>data/*.json")]
-  app <-->|127.0.0.1:8765| bridge[["Pont Excel (PC)"]]
+  excel <-->|127.0.0.1:8765| bridge[["Pont Excel (PC)"]]
   market -.->|lecture publique| pk[("API PowerKlock")]
 ```
 
@@ -62,12 +68,15 @@ flowchart LR
 | `js/market.js` | ~185 | Onglet Marché : tableau PowerKlock, chiffres pour les mails et le mode appel |
 | `js/present.js` | ~240 | Vue réunion du pipeline, présentation façon cabinet, export PowerPoint |
 | `js/phone.js` | ~135 | Import des contacts du téléphone, carte de visite, export vCard sans doublons |
+| `js/call.js` | ~160 | Notes express pendant un appel (les chiffres repérés et proposés pour la fiche), écran « Mode appel » |
+| `js/excel-sync.js` | ~255 | Envoi vers le Pipe et le Suivi par le pont, sans écraser la cellule d'un collègue ; panneau « Excel ⇄ appli » |
+| `js/parc.js` | ~440 | Portefeuille : tâches de renouvellement, chiffres clés, tableau, carte de France (aussi dans le pipeline) |
 | `js/ai.js` | ~85 | « Compléter avec l'IA », caché tant que `feat-ai` ≠ 1 |
 | `js/network.js`, `js/celebrate.js` | ~250 chacun | Graphe Réseau ; animations |
-| `js/app.js` | ~7 950 | Le reste : écrans, état partagé (tâches, contacts, pipeline), synchro (`makeSyncFile` : un seul code pour tâches, CRM et note), pont Excel |
+| `js/app.js` | ~7 130 | Le reste : écrans, état partagé (tâches, contacts, pipeline), synchro (`makeSyncFile` : un seul code pour tâches, CRM et note), pont Excel |
 
 **Règles du code**
-- Un module reçoit ce qu'il utilise de `app.js` une seule fois, à la fin du chargement (`init`). Il ne lit jamais une variable de `app.js` directement, sauf par un accesseur (`get contacts()`) quand `app.js` peut la remplacer.
+- Un module reçoit ce qu'il utilise de `app.js` par `init`, appelé là où son code se trouvait dans `app.js` (tout s'exécute donc dans le même ordre qu'avant) ; les premiers modules sortis sont branchés en fin de fichier. Une valeur que `app.js` peut remplacer, ou qu'il définit plus bas, se lit au moment voulu par `app.<nom>` (accesseur).
 - Ce que d'autres fichiers, les tests ou la console appellent dans `app.js` est rassemblé en un seul `Object.assign(window, {…})`, en fin de fichier.
 - Pas de fenêtre du navigateur (`confirm`, `alert`, `prompt`) : la fenêtre de l'appli (`askConfirm`, `askText`, `tell`).
 - Réglages de l'appareil via `lsGet` / `lsSet` : jamais d'erreur si le navigateur refuse son stockage.
