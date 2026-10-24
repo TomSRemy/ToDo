@@ -55,6 +55,7 @@ def new_page(browser, seed=None, **ctx):
     page.on("pageerror", lambda e: errors.append(str(e)))
     page.route("**/fonts.googleapis.com/**", lambda r: r.abort())
     page.route("**/fonts.gstatic.com/**", lambda r: r.abort())
+    page.route("https://tomsremy.github.io/PowerKlock/**", lambda r: r.abort())   # market data: never the real network in tests (a test fakes it when needed)
     # older checks were written for the grouped contacts view; the default (list) is checked on its own
     page.add_init_script("try{ if(!sessionStorage.getItem('cvs')){ sessionStorage.setItem('cvs','1'); if(localStorage.getItem('contacts-view')===null) localStorage.setItem('contacts-view','groupe'); } }catch(e){}")
     if seed:
@@ -1921,6 +1922,54 @@ with sync_playwright() as p:
     page.click(".call-end"); page.wait_for_timeout(200)
     c2 = next(x for x in stored(page, "todo-widget-contacts") if x["id"] == "cc2")
     check("P50 1200" in (c2.get("comment") or "") and not page.is_visible("#call-overlay"), "contacts: the call is kept on the contact alone")
+    check(not errors, f"no page errors ({errors})")
+    page.close()
+
+    # --- « Marché » : a ready-made PowerKlock dashboard (solo link), figures for a mail and for the call screen, the last ones kept offline
+    import datetime as _dt
+    today = _dt.date.today(); d1 = (today - _dt.timedelta(days=1)).isoformat(); d2 = (today - _dt.timedelta(days=2)).isoformat()
+    cm = today.strftime("%Y-%m"); pm = (today.replace(day=1) - _dt.timedelta(days=1)).strftime("%Y-%m")
+    fx = {"prices.json": {"updated": "x", "zones": [{"code": "FR", "name": "France", "today": 61.5, "vsYday": -4.5, "min": -3.2, "minHour": "13:15", "max": 120.0, "maxHour": "19:00", "negHours": 1.5, "hourly": [50 + (i % 10) - (12 if 50 <= i <= 55 else 0) for i in range(96)]},
+                                                  {"code": "DE_LU", "name": "Germany", "today": 70.0, "vsYday": 1.0, "negHours": 0}]},
+          f"history/monthly/{cm}.json": {"month": cm, "zones": {"FR": [{"d": d2, "avg": 66.0, "min": 10, "max": 90, "negH": 0, "peakAvg": 70, "offAvg": 62},
+                                                                      {"d": d1, "avg": 61.5, "min": -3.2, "max": 120, "negH": 1.5, "peakAvg": 64.2, "offAvg": 58.8, "renPct": 41}]}},
+          f"history/monthly/{pm}.json": {"month": pm, "zones": {"FR": []}},
+          "cre_m0.json": {"official": {"annual": {"2024": 60.0, "2025": 65.0}, "monthly": {"2026-07": 100.0, "2026-08": 110.0}, "wind": {"2026-07": 95.0, "2026-08": 104.0}, "solar": {"2026-07": 55.0, "2026-08": 77.7}},
+                          "estimate": {"2026-09": {"base": 120.0, "wind": 115.0, "solar": 80.0, "days": 30}}, "forecast": [{"month": "2026-10", "base": 130.0, "wind": 120.0, "solar": 90.0}], "currentMonth": "2026-09"},
+          "history/fr_capture.json": {"fields": ["pSum", "pN", "pSumPos", "pNPos", "sE", "sR", "sEPos", "sRPos", "wE", "wR", "wEPos", "wRPos"],
+                                      "days": [[d2, 6000, 96, 6000, 96, 1000, 40000, 1000, 40000, 2000, 110000, 2000, 110000], [d1, 6000, 96, 6000, 96, 1000, 40000, 1000, 40000, 2000, 110000, 2000, 110000]]}}
+    def mk_route(r):
+        path = r.request.url.split("/PowerKlock/data/")[-1]
+        if "/PowerKlock/data/" in r.request.url and path in fx: r.fulfill(status=200, content_type="application/json", headers={"access-control-allow-origin": "*"}, body=json.dumps(fx[path]))
+        elif "/PowerKlock/index.html" in r.request.url: r.fulfill(status=200, content_type="text/html", body="<!doctype html><title>PK</title><p>dashboard</p>")
+        else: r.fulfill(status=404, body="")
+    mq = [{"id": "mq1", "kind": "installation", "company": "MKT", "centrale": "Toit Marché", "title": "Toit Marché", "stage": "collecte", "kwc": "500", "tel": "06 00 00 00 01", "createdAt": 1, "updatedAt": 1, "deleted": False}]
+    page, errors = new_page(browser, {"todo_todo-widget-opportunities": json.dumps(mq)}, viewport={"width": 1400, "height": 900})
+    page.route("https://tomsremy.github.io/PowerKlock/**", mk_route)
+    page.context.grant_permissions(["clipboard-read", "clipboard-write"])
+    page.goto(URL); page.click('[data-tab="market"]'); page.wait_for_selector(".mk-frame")
+    src = page.get_attribute(".mk-frame", "src")
+    check(src.startswith("https://tomsremy.github.io/PowerKlock/index.html#solo=z") and page.input_value(".mk-board") == "orig", f"market: the ready-made « Origination · France » dashboard, as a solo link ({src[:70]})")
+    board = page.evaluate("""async u=>{ const b=Uint8Array.from(atob(u.split('#solo=z')[1].replace(/-/g,'+').replace(/_/g,'/')), c=>c.charCodeAt(0));
+      return JSON.parse(await new Response(new Blob([b]).stream().pipeThrough(new DecompressionStream('deflate-raw'))).text()); }""", src)
+    check(board["n"] == "Origination · France" and any(i.get("wid") == "fr-m0" for i in board["items"]) and all(i["t"] in ("s", "w") for i in board["items"]), "market: the link holds the dashboard in the site's own format")
+    page.select_option(".mk-board", "mu"); page.wait_for_timeout(200)
+    check(page.get_attribute(".mk-frame", "src") != src and page.evaluate("localStorage.getItem('market-board')") == "mu", "market: another template of the site can be picked, and is remembered")
+    own = "https://tomsremy.github.io/PowerKlock/index.html#board=zAbC_d-1"
+    page.once("dialog", lambda d: d.accept(own)); page.select_option(".mk-board", "own"); page.wait_for_timeout(200)
+    check(page.get_attribute(".mk-frame", "src") == own.replace("#board=", "#solo=") and page.input_value(".mk-board") == "own", "market: my own dashboard, from a link copied on the site")
+    check(page.is_visible("#postit") and page.evaluate("parseFloat(getComputedStyle(document.getElementById('market-root')).paddingRight)") > 250, "market: the dashboard leaves the note its room")
+    page.click(".mk-copy"); page.wait_for_timeout(300); txt = page.evaluate("navigator.clipboard.readText()")
+    check("Spot France (day-ahead) : 61,5 €/MWh" in txt and "1,5 h à prix négatif" in txt and "août 2026 : 110,0 / 104,0 / 77,7 (CRE)" in txt and "estimation PowerKlock" in txt
+          and "solaire 40,0 (64 %)" in txt and "Sources :" in txt, f"market: « Copier pour un mail » sums up spot, M0 and capture prices with their sources ({txt[:400]!r})")
+    page.click('[data-tab="pipeline"]'); page.locator(".pipe-card", has_text="Toit Marché").first.click(); page.click("#opp-detail-body .sp-call")
+    check("Spot France du" in page.inner_text(".call-market") and "61,5 €/MWh" in page.inner_text(".call-market") and "M0 solaire août 2026 : 77,7" in page.inner_text(".call-market"),
+          f"market: the call screen opens with the market figures ({page.inner_text('.call-market')!r})")
+    page.click(".call-foot .ghost-btn"); page.click("#opp-detail-actions >> text=Fermer")
+    page.context.set_offline(True); page.click('[data-tab="today"]'); page.click('[data-tab="market"]'); page.wait_for_timeout(300)
+    check(page.locator(".mk-frame").count() == 0 and "Hors ligne" in page.inner_text("#market-root") and "61,5" in page.inner_text(".mk-kpis") and page.locator(".mk-svg").count() == 2,
+          "market: offline, the last figures read are drawn by the app")
+    page.context.set_offline(False)
     check(not errors, f"no page errors ({errors})")
     page.close()
 
