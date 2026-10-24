@@ -1975,6 +1975,7 @@ with sync_playwright() as p:
     page.context.grant_permissions(["clipboard-read", "clipboard-write"])
     page.goto(URL); page.click('[data-tab="market"]'); page.wait_for_selector(".mk-frame")
     src = page.get_attribute(".mk-frame", "src")
+    check(page.get_attribute(".mk-site", "href") == "https://tomsremy.github.io/PowerKlock/" and page.get_attribute(".mk-site", "target") == "_blank", "market: link to the PowerKlock site, in a new tab")
     check(src.startswith("https://tomsremy.github.io/PowerKlock/index.html#solo=z") and page.input_value(".mk-board") == "mu", f"market: the ready-made « Market update » dashboard, as a solo link ({src[:70]})")
     board = page.evaluate("""async u=>{ const b=Uint8Array.from(atob(u.split('#solo=z')[1].replace(/-/g,'+').replace(/_/g,'/')), c=>c.charCodeAt(0));
       return JSON.parse(await new Response(new Blob([b]).stream().pipeThrough(new DecompressionStream('deflate-raw'))).text()); }""", src)

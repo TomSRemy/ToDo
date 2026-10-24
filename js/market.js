@@ -131,7 +131,7 @@ window.TodoMarket=(function(){
     loadMarket(force).catch(()=>{});   // the figures behind « Copier pour un mail » and the call screen
     const head='<div class="mk-head"><div><h2>Marché de l’électricité</h2><span class="mk-upd">Tableau de bord PowerKlock, toujours à jour · sources citées sous chaque graphique</span></div>'
       +'<div class="mk-acts"><select class="mk-board" aria-label="Tableau de bord">'+MK_BOARDS.map(b=>'<option value="'+b.id+'"'+(bd && bd.id===b.id?' selected':'')+'>'+e(b.label)+'</option>').join('')+'<option value="own"'+(own?' selected':'')+'>Mon tableau (lien copié sur PowerKlock)…</option></select>'
-      +'<button type="button" class="pipe-bar-btn mk-copy" title="Spot, M0 et prix capturés, prêts à coller dans un mail ou dans Teams">Copier pour un mail</button><a class="pipe-bar-btn mk-open" target="_blank" rel="noopener">Ouvrir en grand ↗</a></div></div>';
+      +'<button type="button" class="pipe-bar-btn mk-copy" title="Spot, M0 et prix capturés, prêts à coller dans un mail ou dans Teams">Copier pour un mail</button><a class="pipe-bar-btn mk-open" target="_blank" rel="noopener">Ouvrir en grand ↗</a><a class="pipe-bar-btn mk-site" href="'+MK_SITE.replace('index.html','')+'" target="_blank" rel="noopener" title="Le site PowerKlock, dans un nouvel onglet">Site PowerKlock ↗</a></div></div>';
     if(!navigator.onLine){ root.innerHTML=head; root.querySelector('.mk-open').remove(); mkCards(root); mkWire(root); return; }
     const url=own||await mkBoardUrl(bd);
     root.innerHTML=head+'<iframe class="mk-frame" title="Tableau de bord PowerKlock" loading="lazy" referrerpolicy="no-referrer"></iframe>';
