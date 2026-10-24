@@ -2033,7 +2033,8 @@ with sync_playwright() as p:
     page, errors = new_page(browser, {"todo_sync-config": json.dumps({"owner": "o", "repo": "r", "token": "tok_test", "enabled": True}), "todo_todo-widget-tasks": json.dumps(fg)}, viewport={"width": 1300, "height": 850})
     page.route("https://api.github.com/**", lambda r: r.fulfill(status=404, body="{}"))
     page.goto(URL); page.click('[data-tab="lists"]')
-    dialog_once(page); page.click("#sync-forget-btn"); page.wait_for_timeout(400)
+    dialog_once(page); page.click("#sync-forget-btn")
+    eventually(lambda: json.loads(page.evaluate("localStorage.getItem('todo_sync-config')") or "{}").get("token") == "")
     cfg = json.loads(page.evaluate("localStorage.getItem('todo_sync-config')") or "{}")
     check(cfg.get("token") == "" and cfg.get("enabled") is False and "désactivée" in page.inner_text("#sync-pill").lower() and any(t["id"] == "fg1" for t in stored(page, "todo-widget-tasks")),
           f"sync: « Oublier le jeton » removes the token from this device, keeps the data ({cfg})")
@@ -2062,7 +2063,8 @@ with sync_playwright() as p:
     # a raw crm.json downloaded from the data repo, given to « Importer »
     crm_file = pathlib.Path(tempfile.mkdtemp()) / "crm.json"
     crm_file.write_text(json.dumps({"companies": [], "contacts": [{"id": "rc1", "firstName": "Revenu", "lastName": "Contact", "createdAt": 1, "updatedAt": 1, "deleted": False}], "meetings": [], "opportunities": []}), encoding="utf-8")
-    dialog_once(page); page.set_input_files("#import-file", str(crm_file)); page.wait_for_timeout(400)
+    dialog_once(page); page.set_input_files("#import-file", str(crm_file))
+    eventually(lambda: any(c["id"] == "rc1" and not c["deleted"] for c in stored(page, "todo-widget-contacts")))
     check(any(c["id"] == "rc1" and not c["deleted"] for c in stored(page, "todo-widget-contacts")) and any(t["id"] == "r3" for t in stored(page, "todo-widget-tasks")),
           "restore: a raw crm.json of the data repo can be imported; tasks untouched")
     check(not errors, f"no page errors ({errors})")
@@ -2669,7 +2671,8 @@ Responsable technique
     page.click(".parc-due .pq-link:has-text('Remettre dans le pipeline')")
     check(eventually(lambda: page.is_visible("#opp-detail-overlay") and "CS DU MOULIN" in page.inner_text("#opp-detail-title"), 3000), "parc: contract put back into the pipeline")
     page.click("#opp-detail-actions >> text=Fermer")
-    page.click('[data-tab="parc"]'); dialog_once(page); page.click(".parc-due .parc-due-nogo"); page.wait_for_timeout(400)
+    page.click('[data-tab="parc"]'); dialog_once(page); page.click(".parc-due .parc-due-nogo")
+    eventually(lambda: any(o.get("renewalOf") and o["stage"] == "perdu" for o in stored(page, "todo-widget-opportunities")) and "Non renouvelé" in page.inner_text(".parc-due"))
     lost = [o for o in stored(page, "todo-widget-opportunities") if o.get("renewalOf")]
     renew = [t for t in stored(page, "todo-widget-tasks") if t["id"].startswith("renew_")]
     check(lost and lost[0]["stage"] == "perdu" and renew[0].get("archived") and "Non renouvelé" in page.inner_text(".parc-due"),
@@ -2878,6 +2881,7 @@ Responsable technique
     page.fill("#client-list-search", "")
     dialog_once(page, text="Beta Énergie")
     page.locator("#client-list-rows .client-list-row", has_text="Beta").locator("button[title=Renommer]").click()
+    eventually(lambda: next(o for o in stored(page, "todo-widget-opportunities") if o["id"] == "ob1")["company"] == "Beta Énergie")   # the answer arrives a moment later
     opp = next(o for o in stored(page, "todo-widget-opportunities") if o["id"] == "ob1")
     check(opp["company"] == "Beta Énergie" and opp["producteur"] == "Beta Énergie", f"renaming a client renames its opportunities too ({opp['company']})")
     check(not errors, f"no page errors ({errors})")
