@@ -36,12 +36,12 @@ flowchart LR
     market["market.js<br/>onglet Marché (PowerKlock)"]
     present["present.js<br/>vue réunion + « Présenter » + PowerPoint"]
     phone["phone.js<br/>contacts ⇄ téléphone (vCard)"]
-    call["call.js<br/>notes express + mode appel"]
+    appel["call.js<br/>notes express + mode appel"]
     excel["excel-sync.js<br/>envoi aux Excel partagés + Excel ⇄ appli"]
     parc["parc.js<br/>Portefeuille : renouvellements, tableau, carte"]
     ai["ai.js<br/>« Compléter avec l'IA » (mis de côté)"]
   end
-  app["app.js<br/>tâches, CRM, pipeline, Portefeuille,<br/>synchro GitHub, pont Excel, note"]
+  app["app.js<br/>tâches, CRM, pipeline, fiches,<br/>synchro GitHub, note, réglages"]
   parse --> app
   merge --> app
   storage --> app
@@ -49,7 +49,7 @@ flowchart LR
   app -->|init| present
   app -->|init| phone
   app -->|init| ai
-  app -->|init| call
+  app -->|init| appel
   app -->|init| excel
   app -->|init| parc
   app --> network
