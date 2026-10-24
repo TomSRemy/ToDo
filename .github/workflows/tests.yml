@@ -19,7 +19,7 @@ jobs:
         with:
           node-version: '22'
       # code checks (eslint.config.mjs): the number of warnings may only go down
-      - run: npm install --no-save --no-package-lock eslint@9 globals@15 && npx eslint js sw.js --max-warnings 74
+      - run: npm install --no-save --no-package-lock eslint@9 globals@15 && npx eslint js sw.js --max-warnings 72
       - run: python tests/smoke_test.py
       - run: python tests/csp_test.py   # the app under the security headers of _headers (Cloudflare Pages)
       - run: python tests/mail_accuracy.py --all --min 0.95

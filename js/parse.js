@@ -369,146 +369,182 @@ window.TodoParse=(function(){
     });
     return [...people.values()].sort((a,b)=>(b.sender?1:0)-(a.sender?1:0));
   }
+  // A pricing-request mail read into the request form's fields. Split in steps (code audit C2: it was one function of
+  // complexity 146); each step reads and fills the same reading `c` (c.out holds the fields), in the original order.
   function parsePipeMail(raw){
-    const out={};
-    // clean-up: "<mailto:…>" / "<tel:…>" copies left by Outlook, "> " quote marks of plain-text replies
-    let text=String(raw||'').replace(/\r/g,'').replace(/\u00a0/g,' ').replace(/<(mailto|tel):[^>]*>/gi,'').replace(/^[ \t]*(>[ \t]?)+/gm,'');
+    const c=mailSplit(raw);
+    if(!c) return {};
+    mailOrigin(c); mailContact(c); mailProducer(c); mailLocation(c); mailTech(c); mailFigures(c); mailPlantName(c); mailNotes(c);
+    return c.out;
+  }
+  // clean-up, the thread cut into messages, the prospect's message, the subject
+  function mailSplit(raw){
+    // "<mailto:…>" / "<tel:…>" copies left by Outlook, "> " quote marks of plain-text replies
+    let text=String(raw||'').replace(/\r/g,'').replace(/ /g,' ').replace(/<(mailto|tel):[^>]*>/gi,'').replace(/^[ \t]*(>[ \t]?)+/gm,'');
     // English mail: "12,400 MWh" is twelve thousand four hundred
     const english=(text.match(/\b(the|our|and|is|with|we|hi|best regards|please|plant)\b/gi)||[]).length>=4;
     if(english) text=text.replace(/(\d),(\d{3})(?![\d,])/g,'$1$2');
     const lines=text.split('\n').map(l=>l.trim());
-    if(!text.trim()) return out;
+    if(!text.trim()) return null;
     const all=[...new Set((text.match(PQ_EMAIL_RE)||[]).map(e=>e.toLowerCase()))];
-    const caEmails=all.filter(pqIsCa);
-    // Split a forward chain at each "De :"/"From:" header; the prospect is the latest block whose sender is not a relay.
+    const blocks=mailThread(lines), prospect=mailProspect(blocks);
+    const body=prospect?prospect.lines.filter(l=>!PQ_HEADER.test(l)):lines.filter(l=>!PQ_HEADER.test(l));
+    const subj=lines.map(l=>/^(objet|subject)\s*:\s*(.*)$/i.exec(l)).filter(Boolean).map(m=>m[2].replace(/^((tr|fw|fwd|re)\s*:\s*)+/i,'').trim()).filter(Boolean);
+    return { out:{}, text, lines, all, caEmails:all.filter(pqIsCa), blocks, prospect, body, bodyText:body.join('\n'), subject:subj[subj.length-1]||subj[0]||'',
+      caPerson:null, inlineLine:null, company:null, city:null, scope:'', ft:'' };
+  }
+  // a forward chain cut at each "De :"/"From:" header, or "Le jeu. 9 oct. 2026 à 11:02, X <x@y> a écrit :"
+  function mailThread(lines){
     const blocks=[]; let cur={ from:null, lines:[] };
-    // a new quoted message starts at "De : …" / "From: …" or at "Le jeu. 9 oct. 2026 à 11:02, X <x@y> a écrit :"
     lines.forEach(l=>{
       const m=/^(de|from)\s*:\s*(.*)$/i.exec(l)||/^(le|on)\s.{6,120}?(<?[\w.+-]+@[\w.-]+>?).{0,40}(a [ée]crit|wrote)\s*:?\s*$/i.exec(l);
       if(m){ if(cur.lines.length||cur.from) blocks.push(cur); cur={ from:/^(de|from)$/i.test(m[1])?m[2]:l, lines:[] }; } else cur.lines.push(l);
     });
     blocks.push(cur);
     blocks.forEach(b=>{ b.email=((b.from||'').match(PQ_EMAIL_RE)||[])[0]||null; b.relay=b.email?pqIsRelay(b.email):false; });
+    return blocks;
+  }
+  // the prospect's message: the latest one whose sender is not a relay (us, the bank)
+  function mailProspect(blocks){
     let prospect=blocks.slice().reverse().find(b=>b.from && b.email && !b.relay)||null;
     // a reply to us (or to the bank) pasted without its own header: the top message is the prospect's
     if(!prospect && blocks.length>1 && !blocks[0].from && blocks.slice(1).every(b=>b.relay)) prospect=blocks[0];
     if(!prospect){ const b=blocks[blocks.length-1]; prospect=(b.relay||(!b.from && blocks.some(x=>x.relay)))?null:b; }
-    const body=prospect?prospect.lines.filter(l=>!PQ_HEADER.test(l)):lines.filter(l=>!PQ_HEADER.test(l));
-    const bodyText=body.join('\n');
-    const subj=lines.map(l=>/^(objet|subject)\s*:\s*(.*)$/i.exec(l)).filter(Boolean).map(m=>m[2].replace(/^((tr|fw|fwd|re)\s*:\s*)+/i,'').trim()).filter(Boolean);
-    const subject=subj[subj.length-1]||subj[0]||'';
-
-    // Origin & Crédit Agricole caisse (a caisse name alone, e.g. "Morbihan", is not enough)
+    return prospect;
+  }
+  // the Crédit Agricole caisse: from the bank's address, or named in the text (CAT&E wins)
+  function mailCaisse(text, caEmails, mentionsCa){
     let caisse=null;
     caEmails.forEach(e=>{ caisse=caisse||pqCaisseFromDomain(e); });
-    const mentionsCa=/cr[eé]dit\s+agricole|\bca\s+(transitions|t&e)|cat\s*&\s*e/i.test(text);
     const caText=(caEmails.length||mentionsCa)?pqCaisseFromText(text):null;
-    if(caText==='CAT&E' || (!caisse && caText)) caisse=caText;
+    return caText==='CAT&E' || (!caisse && caText)?caText:caisse;
+  }
+  // origin & Crédit Agricole caisse (a caisse name alone, e.g. "Morbihan", is not enough), and who at the bank sent it
+  function mailOrigin(c){
+    const { out, text, lines, caEmails, blocks, prospect }=c;
+    const mentionsCa=/cr[eé]dit\s+agricole|\bca\s+(transitions|t&e)|cat\s*&\s*e/i.test(text);
+    const caisse=mailCaisse(text, caEmails, mentionsCa);
     if(caEmails.length || caisse || (mentionsCa && !prospect)){ out.origine='Crédit Agricole'; out.ca=caisse||'N/A'; }
     else if(/boamp/i.test(text)){ out.origine='BOAMP'; out.ca='N/A'; }
     else { out.origine='Contact direct'; out.ca='N/A'; }
-
-    let caPerson=null;
-    if(caEmails.length){
-      const idx=lines.findIndex(l=>l.toLowerCase().includes(caEmails[0]));
-      for(let i=idx-1;i>=Math.max(0,idx-5);i--){ const l=lines[i]; if(/^[A-ZÉÈ][a-zéèëêïîôç-]+(\s+[A-ZÉÈ][\wéèëêïîôç'-]+){1,2}$/.test(l)){ caPerson=l; break; } }
-      if(!caPerson){ const hb=blocks.find(b=>b.relay && pqIsCa(b.email||'')); if(hb) caPerson=(hb.from||'').replace(/<.*?>/,'').replace(/["']/g,'').trim()||null; }
-    }
-
-    // The prospect's own address: sender of its block, else an address quoted in the body by the relay
+    if(caEmails.length) c.caPerson=mailBankPerson(lines, blocks, caEmails[0]);
+  }
+  // the bank adviser: a « Prénom Nom » line just above their address, else the name of the bank's message sender
+  function mailBankPerson(lines, blocks, caEmail){
+    const idx=lines.findIndex(l=>l.toLowerCase().includes(caEmail));
+    for(let i=idx-1;i>=Math.max(0,idx-5);i--){ const l=lines[i]; if(/^[A-ZÉÈ][a-zéèëêïîôç-]+(\s+[A-ZÉÈ][\wéèëêïîôç'-]+){1,2}$/.test(l)) return l; }
+    const hb=blocks.find(b=>b.relay && pqIsCa(b.email||''));
+    return hb?((hb.from||'').replace(/<.*?>/,'').replace(/["']/g,'').trim()||null):null;
+  }
+  // the prospect: address, phones, then name, role and company from the signature (or, in a relay mail, the line quoting them)
+  function mailContact(c){
+    const { out, lines, all, prospect, bodyText }=c;
+    // the prospect's own address: sender of its block, else an address quoted in the body by the relay
     const nonRelay=all.filter(e=>!pqIsRelay(e));
-    let inlineLine=null;
     if(prospect && prospect.email && !pqIsRelay(prospect.email)) out.mail=prospect.email.toLowerCase();
-    else if(nonRelay.length){
-      out.mail=nonRelay[0];
-      inlineLine=lines.find(l=>l.toLowerCase().includes(nonRelay[0]))||null;
-    }
+    else if(nonRelay.length){ out.mail=nonRelay[0]; c.inlineLine=lines.find(l=>l.toLowerCase().includes(nonRelay[0]))||null; }
     if(!out.mail) delete out.mail;
-
-    // Phones: on the line that quotes the prospect first, then in the prospect's part
+    const inlineLine=c.inlineLine;
+    // phones: on the line that quotes the prospect first, then in the prospect's part
     const phoneSrc=(inlineLine&&new RegExp(PQ_PHONE_RE.source).test(inlineLine)?inlineLine+'\n':'')+bodyText;
     const phones=[...new Set((phoneSrc.match(PQ_PHONE_RE)||[]).map(pqFmtPhone))];
     if(phones.length) out.tel=phones.slice(0,2).join(' / ');
-
-    let name=null, role=null, company=null;
-    if(prospect){
-      // Signature: lines after the last closing formula; each line may hold "Name – Role, COMPANY, phone"
-      let sigStart=-1;
-      body.forEach((l,i)=>{ if(PQ_CLOSINGS.test(l)) sigStart=i; });
-      const sigLines=(sigStart>=0?body.slice(sigStart+1):body.slice(-8)).filter(l=>l && !/message d.origine|original message|forwarded message/i.test(l)).slice(0,10);
-      const sig=parseSignatureBlock(sigLines.join('\n'), { mail:out.mail });
-      if(sig.prenom||sig.nom) name=[sig.prenom, sig.nom].filter(Boolean).join(' ');
-      if(sig.qualite) role=sig.qualite;
-      if(sig.societe) company=sig.societe;
-      // the signature's phones, mobile first, win over numbers quoted elsewhere in the mail
-      if(sig.tel) out.tel=[sig.tel, sig.tel2].filter(Boolean).join(' / ');
-      if(!name && prospect.from){ const dn=prospect.from.replace(/<.*?>/,'').replace(PQ_EMAIL_RE,'').replace(/["'\[\]]/g,'').trim(); if(dn && dn.split(/\s+/).length>=2 && dn.split(/\s+/).length<=4 && !PQ_NOT_NAME.test(dn)) name=dn; }
-    } else if(inlineLine){
-      // relay mail: "M. Hugo Lefebvre, hugo@…, 06…" — the name closest before the address
-      const at=inlineLine.toLowerCase().indexOf(out.mail);
-      const before=inlineLine.slice(0,at);
-      const re=/(?:(?:M\.|Mme|Monsieur|Madame)\s+)?([A-ZÉÈÀÂÎÔ][\p{L}'’-]+)\s+([A-ZÉÈÀÂÎÔ][\p{L}'’-]+)/gu;
-      let m, best=null;
-      while((m=re.exec(before))){ if(!PQ_NOT_NAME.test(m[0]) && /[a-zé]/.test(m[0])) best=m[1]+' '+m[2]; }
-      if(!best){
-        // or a few lines above, introduced by a civility ("M. Olivier Mercier, gérant de …")
-        const li=lines.indexOf(inlineLine);
-        for(let i=li-1;i>=Math.max(0,li-3) && !best;i--){ const c=/(?:M\.|Mme|Monsieur|Madame)\s+([A-ZÉÈÀÂÎÔ][\p{L}'’-]+)\s+([A-ZÉÈÀÂÎÔ][\p{L}'’-]+)/u.exec(lines[i]); if(c) best=c[1]+' '+c[2]; }
-      }
-      if(best) name=best;
+    const who=prospect?mailSignature(c):{ name:inlineLine?mailRelayName(lines, inlineLine, out.mail):null, role:null };
+    if(who.name){ const n=pqSplitName(who.name); out.prenom=n.prenom; out.nom=n.nom; }
+    if(who.role) out.qualite=who.role.replace(/\s*[-–|,]\s*$/,'');
+  }
+  // the prospect's signature: lines after the last closing formula; each line may hold "Name – Role, COMPANY, phone"
+  function mailSignature(c){
+    const { out, prospect, body }=c;
+    let sigStart=-1;
+    body.forEach((l,i)=>{ if(PQ_CLOSINGS.test(l)) sigStart=i; });
+    const sigLines=(sigStart>=0?body.slice(sigStart+1):body.slice(-8)).filter(l=>l && !/message d.origine|original message|forwarded message/i.test(l)).slice(0,10);
+    const sig=parseSignatureBlock(sigLines.join('\n'), { mail:out.mail });
+    let name=(sig.prenom||sig.nom)?[sig.prenom, sig.nom].filter(Boolean).join(' '):null;
+    if(sig.societe) c.company=sig.societe;
+    // the signature's phones, mobile first, win over numbers quoted elsewhere in the mail
+    if(sig.tel) out.tel=[sig.tel, sig.tel2].filter(Boolean).join(' / ');
+    if(!name && prospect.from){ const dn=prospect.from.replace(/<.*?>/,'').replace(PQ_EMAIL_RE,'').replace(/["'\[\]]/g,'').trim(), w=dn.split(/\s+/).length; if(dn && w>=2 && w<=4 && !PQ_NOT_NAME.test(dn)) name=dn; }
+    return { name, role:sig.qualite||null };
+  }
+  // relay mail: "M. Hugo Lefebvre, hugo@…, 06…" — the name closest before the address, or a few lines above after a civility
+  function mailRelayName(lines, inlineLine, mail){
+    const before=inlineLine.slice(0, inlineLine.toLowerCase().indexOf(mail));
+    const re=/(?:(?:M\.|Mme|Monsieur|Madame)\s+)?([A-ZÉÈÀÂÎÔ][\p{L}'’-]+)\s+([A-ZÉÈÀÂÎÔ][\p{L}'’-]+)/gu;
+    let m, best=null;
+    while((m=re.exec(before))){ if(!PQ_NOT_NAME.test(m[0]) && /[a-zé]/.test(m[0])) best=m[1]+' '+m[2]; }
+    if(!best){
+      // "M. Olivier Mercier, gérant de …"
+      const li=lines.indexOf(inlineLine);
+      for(let i=li-1;i>=Math.max(0,li-3) && !best;i--){ const cv=/(?:M\.|Mme|Monsieur|Madame)\s+([A-ZÉÈÀÂÎÔ][\p{L}'’-]+)\s+([A-ZÉÈÀÂÎÔ][\p{L}'’-]+)/u.exec(lines[i]); if(cv) best=cv[1]+' '+cv[2]; }
     }
-    if(name){ const n=pqSplitName(name); out.prenom=n.prenom; out.nom=n.nom; }
-    if(role) out.qualite=role.replace(/\s*[-–|,]\s*$/,'');
-    // figures: the prospect's message first, then the other messages of the producer's side in the thread (a later reply
-    // often brings the power or the volume)
+    return best;
+  }
+  // the text the figures are read in (the prospect's message, then the producer side's other messages), and the producer
+  function mailProducer(c){
+    const { out, text, lines, blocks, prospect, bodyText, caPerson }=c;
+    // a later reply often brings the power or the volume
     const sideText=prospect?blocks.filter(b=>b!==prospect && b.email && !b.relay).map(b=>b.lines.filter(l=>!PQ_HEADER.test(l)).join('\n')):[];
-    const scope=prospect?[bodyText].concat(sideText).join('\n'):text;
+    const scope=c.scope=prospect?[bodyText].concat(sideText).join('\n'):text;
+    let company=c.company;
     if(!company) company=pqCompanyInText(prospect?bodyText:lines.filter(l=>!(caPerson && l.includes(caPerson))).join('\n'));
     if(!company){ const m=/\b(?:société|societe|entreprise|ferme|exploitation|commune de|ville de)\s+([A-Z][\p{L}'&.\- ]{2,40})/u.exec(scope); if(m) company=(/^(commune|ville)/i.test(m[0])?m[0]:m[1]).trim(); }
     if(!company && out.mail && !PQ_GENERIC_DOMAINS.test(out.mail.split('@')[1]||'')){
       company=(out.mail.split('@')[1]||'').replace(/\.[a-z]{2,4}$/,'').replace(/[-_.]+/g,' ');
     }
     if(company) out.producteur=company.replace(/\s+/g,' ').trim().toUpperCase();
-
-    // Location: postal code (5 digits, overseas 97x xx), "(46)", "département … 64", then département names
-    let dept=null, city=null;
+    c.company=company;
+  }
+  // location: postal code (5 digits, overseas 97x xx), "(46)", "département … 64", then département names
+  function mailLocation(c){
+    const { out, scope }=c;
+    let dept=null;
     const noContact=scope.replace(PQ_EMAIL_RE,' ').replace(PQ_PHONE_RE,' ');
     const cpm=/\b(?:[àa]|sur|de|commune de)?\s*([A-ZÉÈ][\p{L}'-]+(?:[ -][A-ZÉÈ]?[\p{L}'-]+){0,3})?\s*,?\s*\(?\b((?:0[1-9]|[1-8]\d|9[0-5])\d{3}|97[1-6]\d{2})\b\)?/u.exec(noContact);
-    if(cpm){ dept=pqDeptFromPostal(cpm[2]); if(cpm[1] && !/^(Le|La|Les|De|Du|Des)$/.test(cpm[1])) city=cpm[1].trim(); }
+    if(cpm){ dept=pqDeptFromPostal(cpm[2]); if(cpm[1] && !/^(Le|La|Les|De|Du|Des)$/.test(cpm[1])) c.city=cpm[1].trim(); }
     if(!dept){ const m=/\((\d{2}|2A|2B|97\d)\)/.exec(noContact); if(m) dept=PQ_DEPTS.find(d=>d[0]===m[1].padStart(2,'0'))||null; }
     if(!dept){ const m=/d[ée]partement[^\n\d]{0,30}?\b(\d{2,3}|2A|2B)\b/i.exec(noContact); if(m) dept=PQ_DEPTS.find(d=>d[0]===m[1].padStart(2,'0'))||null; }
-    if(!dept){ const ft=pqFold(noContact); dept=PQ_DEPTS.slice().sort((a,b)=>b[1].length-a[1].length).find(d=>new RegExp('(^|[^a-z])'+pqFold(d[1]).replace(/[-' ]/g,'[ \'-]')+'([^a-z]|$)').test(ft))||null; }
+    if(!dept){ const fold=pqFold(noContact); dept=PQ_DEPTS.slice().sort((a,b)=>b[1].length-a[1].length).find(d=>new RegExp('(^|[^a-z])'+pqFold(d[1]).replace(/[-' ]/g,'[ \'-]')+'([^a-z]|$)').test(fold))||null; }
     if(dept){ out.dept=pqDeptLabel(dept); out.region=PQ_REGIONS[dept[2]]; }
-
-    // Installation & contract
-    const ft=pqFold(scope);
+  }
+  // the contract, first rule that matches the folded text
+  const MAIL_CONTRACTS=[
+    [ft=>/\bs21\b/.test(ft), ()=>'AO S21 CR'],
+    [ft=>/\baos\b|appel d.offres? simplifie/.test(ft), ()=>'AOS CRE'],
+    [ft=>/autoconsommation collective|\bacc\b/.test(ft), ()=>'Surplus ACC'],
+    [ft=>/obligation d.achat|sortie d.oa|\boa\b/.test(ft) && !/jusqu.(en|au) 20(2[8-9]|[3-9]\d)/.test(ft), ()=>"Sortie d'OA / CR"],
+    [ft=>/\bppa\b/.test(ft), ()=>'PPA Spot'],
+    [ft=>/appel d.offres?|\bao\b|\bcre\b|laureat|ppe2/.test(ft), ft=>/complement de remuneration|\bcr\b/.test(ft)?'AO CRE CR':'AO CRE']
+  ];
+  // installation type and contract
+  function mailTech(c){
+    const out=c.out, ft=c.ft=pqFold(c.scope);
     const eol=/eolien|eolienne/.test(ft);
     const pv=/photovolta|voltai|\bpv\b|solaire|ombriere|panneaux|toiture|hangar/.test(ft) || (!eol && /\b\d[\d\s.,]*\s*(kwc|mwc)\b|crete/.test(ft));
-    if(pv&&eol) out.install='PV et Eolien'; else if(eol) out.install='Eolien'; else if(/biogaz|methanis|cogeneration/.test(ft)) out.install='BIOGAZ'; else if(/hydro/.test(ft)) out.install='Hydro'; else if(pv) out.install='PV';
-    if(/\bs21\b/.test(ft)) out.contrat='AO S21 CR';
-    else if(/\baos\b|appel d.offres? simplifie/.test(ft)) out.contrat='AOS CRE';
-    else if(/autoconsommation collective|\bacc\b/.test(ft)) out.contrat='Surplus ACC';
-    else if(/obligation d.achat|sortie d.oa|\boa\b/.test(ft) && !/jusqu.(en|au) 20(2[8-9]|[3-9]\d)/.test(ft)) out.contrat="Sortie d'OA / CR";
-    else if(/\bppa\b/.test(ft)) out.contrat='PPA Spot';
-    else if(/appel d.offres?|\bao\b|\bcre\b|laureat|ppe2/.test(ft)) out.contrat=/complement de remuneration|\bcr\b/.test(ft)?'AO CRE CR':'AO CRE';
-
-    // Power & volume
+    const install=pv&&eol?'PV et Eolien':eol?'Eolien':/biogaz|methanis|cogeneration/.test(ft)?'BIOGAZ':/hydro/.test(ft)?'Hydro':pv?'PV':null;
+    if(install) out.install=install;
+    const rule=MAIL_CONTRACTS.find(([test])=>test(ft));
+    if(rule) out.contrat=rule[1](ft);
+  }
+  // power, volume, commissioning date (not "en service depuis …"), contract length and start
+  function mailFigures(c){
+    const { out, scope }=c;
     // a stated total ("soit 16,8 MW", "total 5 MWc") wins over the first figure
     const powRe=PQ_QTY+'\\s*(mwc|mwp|mw|kwc|kwp|kw)\\b(?!h)';
     const pm=new RegExp('(?:soit|au total|total(?:e)?(?:\\s+de)?)\\s*:?\\s*'+powRe,'iu').exec(scope)||new RegExp(powRe,'iu').exec(scope);
     if(pm){ let v=pqQty(pm[1],pm[2]); if(/^m/i.test(pm[2])) v*=1000; out.kwc=String(Math.round(v*100)/100); }
     const vm=new RegExp(PQ_QTY+'\\s*(gwh|mwh|kwh)(?!\\s*\\/\\s*kwc)','iu').exec(scope);
     if(vm){ let v=pqQty(vm[1],vm[2]); const u=vm[2].toLowerCase(); if(u==='gwh') v*=1000; if(u==='kwh') v/=1000; out.mwh=String(Math.round(v)); }
-
-    // Commissioning date (not "en service depuis …"), contract length / start
     const mesSent=scope.split(/(?<=[.!?\n])/).find(s=>/mise en service|\bmis\p{L}* en service|\bm[eé]t\p{L}* en service|\ben service (?:en|au|à|a|le|pour|pr[ée]vue?)\b|\bmes\b|\bmsi\b|\bcod\b|raccordement/iu.test(s) && !/depuis/i.test(s));
     if(mesSent){ const d=pqParseDateLoose(mesSent.replace(/\d+[.,]?\d*\s*(mwc|mw|kwc|kw)\b/ig,'')); if(d) out.mesPrev=d; }
     const dm=/(?:contrat|dur[ée]e|pendant|sur|pour|offre)[^.\n]{0,40}?\b(\d{1,2})\s*(?:ans|années|annees)\b/i.exec(scope);
     if(dm) out.duree=dm[1];
     const deb=/(?:à partir du|a partir du|dès le|des le|à compter du|a compter du|début(?:\s+du contrat)?\s*(?:le|au|:)?)\s+([\d\/.\-]+|\d{1,2}(?:er)?\s+\p{L}+\s+\d{4})/iu.exec(scope);
     if(deb){ const d=pqParseDateLoose(deb[1]); if(d) out.debut=d; }
-
-    // Plant name: CRE file number, "Parc éolien de …", else "Centrale de <ville>"; a list of plants gives the first one
+  }
+  // plant name: CRE file number, "Parc éolien de …", else "Centrale de <ville>"; a list of plants gives the first one
+  function mailPlantName(c){
+    const { out, text, scope, city }=c;
     const multi=parseMailInstallations(scope);
     const cre=/\bPR\/\d{4}\/\d{4,6}\b/.exec(text);
     const named=/\b(parc|centrale|ferme)\s+(?:éolien(?:ne)?|solaire|photovoltaïque|PV|hydro\p{L}*)?\s*(de la|de l'|de l’|du|des|de)\s+([A-ZÉÈ][\p{L}'’-]+(?:[ -][A-ZÉÈ][\p{L}'’-]+)*)/u.exec(scope);
@@ -517,22 +553,19 @@ window.TodoParse=(function(){
     else if(named) out.centrale=(named[0].charAt(0).toUpperCase()+named[0].slice(1)).trim();
     else if(city) out.centrale='Centrale de '+city;
     if(!out.centrale) delete out.centrale;
-
-    const notes=[];
-    if(/au sol/.test(ft)) notes.push('Centrale au sol');
-    if(/toiture|en toit|hangar/.test(ft)) notes.push('Toiture');
-    if(/ombriere/.test(ft)) notes.push('Ombrière');
-    if(/agrivolta/.test(ft)) notes.push('Agrivoltaïsme');
-    if(/laureat/.test(ft)) notes.push('Lauréat AO');
-    if(/bride/.test(ft)) notes.push('Production bridée');
-    if(/stockage|batterie|bess/.test(ft)) notes.push('Stockage');
-    if(/pilotage/.test(ft)) notes.push('Demande de pilotage');
+  }
+  const MAIL_NOTES=[[/au sol/,'Centrale au sol'],[/toiture|en toit|hangar/,'Toiture'],[/ombriere/,'Ombrière'],[/agrivolta/,'Agrivoltaïsme'],[/laureat/,'Lauréat AO'],
+    [/bride/,'Production bridée'],[/stockage|batterie|bess/,'Stockage'],[/pilotage/,'Demande de pilotage']];
+  // what is particular about the plant, and the first line of the comments (who sent the lead, the subject)
+  function mailNotes(c){
+    const { out, ft, prospect, blocks, caPerson, subject }=c;
+    const notes=MAIL_NOTES.filter(([re])=>re.test(ft)).map(([,label])=>label);
     if(notes.length) out.particularites=notes.join(' · ');
+    const bank=out.ca!=='N/A'?out.ca:null;
     let first='Mail reçu';
-    if(out.origine==='Crédit Agricole') first='Lead transmis par '+(caPerson?caPerson+' ('+(out.ca!=='N/A'?out.ca:'Crédit Agricole')+')':(out.ca!=='N/A'?out.ca:'le Crédit Agricole'));
+    if(out.origine==='Crédit Agricole') first='Lead transmis par '+(caPerson?caPerson+' ('+(bank||'Crédit Agricole')+')':(bank||'le Crédit Agricole'));
     else if(!prospect && blocks.some(b=>b.relay)) first='Lead transmis en interne';
     out.commentaires=pqIsoToFr(toISO(new Date()))+' : '+first+(subject?' — '+subject:'')+'.';
-    return out;
   }
 
   // A list of plants in the mail ("- Centrale de Cholet (49) : 1,2 MWc, MES 03/2027"): one installation per line
@@ -859,5 +892,6 @@ window.TodoParse=(function(){
       tels.sort((a,b)=>b.cell-a.cell); c.phone1=tels[0]?pqFmtPhone(tels[0].v):''; c.phone2=tels[1]?pqFmtPhone(tels[1].v):'';
       if(c.firstName||c.lastName||c.email||c.phone1) out.push(c); });
     return out;
-  }  return { parseVcf, toISO, PQ_CHARGES, PQ_ORIGINES, PQ_ACTIONS, PQ_INSTALLS, PQ_CONTRATS, PQ_MARCHES, PQ_NATURES, PQ_CAISSES, PQ_CA_OPTIONS, PQ_REGIONS, PQ_DEPTS, pqDeptLabel, PQ_DEPT_OPTIONS, PQ_YIELD, PQ_FIELDS, PQ_SHARED_KEYS, PQ_EXTRA_FIELDS, PQ_INST_GROUPS, PQ_CENTRALE_KEYS, pqPad, pqFold, pqTitleCase, pqIsoToFr, pqAddDays, PQ_MONTHS, PQ_MONTH_LABEL, PQ_MONTH_NAMES, PQ_EMAIL_RE, PQ_PHONE_RE, pqIsCa, PQ_CLOSINGS, PQ_HEADER, pqFmtPhone, PQ_QTY, pqQty, pqNum, pqCaisseFromText, pqCaisseFromDomain, pqDeptFromPostal, pqDeptFromText, pqParseDateLoose, xlDay, pqCellDate, PQ_INTERNAL_DOMAINS, pqIsInternal, pqIsRelay, PQ_GENERIC_DOMAINS, PQ_NOT_NAME, PQ_FORM, pqSplitName, pqCompanyInText, SIG_JUNK, SIG_DISCLAIMER, SIG_PHONE_LABEL, SIG_MAIL_LABEL, SIG_ROLE, SIG_PUBLIC, SIG_ADDRESS, SIG_WEB, SIG_PARTICLES, sigNameWords, sigLocalTokens, sigDomainStem, sigNameScore, sigSplitName, sigPhones, parseSignatureBlock, pqSplitDisplayName, PQ_ROBOT, pqDetectPeople, parsePipeMail, parseMailTable, pqSubjectNames, parseMailInstallations, parseMailSentencePlants, PQ_NUMBERS, pqPlantHints, XL_DEFS, xlLabel, xlDef, xlUnit, xlQty, xlRound, xlInstallType, xlContrat, xlSet, xlFinish, xlFilled, xlRaw, xlVertical, xlHorizontal, pqRowsToInstallations, pqXlsxToInstallations, pqDecodeQP, pqHtmlToText, pqDecodeMimeWords, pqEmlFileName, pqB64Bytes, parseEml, pqUtf16, parseMsg, PQ_CIVILITY, pqFullDate, pqMonthYear };
+  }
+  return { parseVcf, toISO, PQ_CHARGES, PQ_ORIGINES, PQ_ACTIONS, PQ_INSTALLS, PQ_CONTRATS, PQ_MARCHES, PQ_NATURES, PQ_CAISSES, PQ_CA_OPTIONS, PQ_REGIONS, PQ_DEPTS, pqDeptLabel, PQ_DEPT_OPTIONS, PQ_YIELD, PQ_FIELDS, PQ_SHARED_KEYS, PQ_EXTRA_FIELDS, PQ_INST_GROUPS, PQ_CENTRALE_KEYS, pqPad, pqFold, pqTitleCase, pqIsoToFr, pqAddDays, PQ_MONTHS, PQ_MONTH_LABEL, PQ_MONTH_NAMES, PQ_EMAIL_RE, PQ_PHONE_RE, pqIsCa, PQ_CLOSINGS, PQ_HEADER, pqFmtPhone, PQ_QTY, pqQty, pqNum, pqCaisseFromText, pqCaisseFromDomain, pqDeptFromPostal, pqDeptFromText, pqParseDateLoose, xlDay, pqCellDate, PQ_INTERNAL_DOMAINS, pqIsInternal, pqIsRelay, PQ_GENERIC_DOMAINS, PQ_NOT_NAME, PQ_FORM, pqSplitName, pqCompanyInText, SIG_JUNK, SIG_DISCLAIMER, SIG_PHONE_LABEL, SIG_MAIL_LABEL, SIG_ROLE, SIG_PUBLIC, SIG_ADDRESS, SIG_WEB, SIG_PARTICLES, sigNameWords, sigLocalTokens, sigDomainStem, sigNameScore, sigSplitName, sigPhones, parseSignatureBlock, pqSplitDisplayName, PQ_ROBOT, pqDetectPeople, parsePipeMail, parseMailTable, pqSubjectNames, parseMailInstallations, parseMailSentencePlants, PQ_NUMBERS, pqPlantHints, XL_DEFS, xlLabel, xlDef, xlUnit, xlQty, xlRound, xlInstallType, xlContrat, xlSet, xlFinish, xlFilled, xlRaw, xlVertical, xlHorizontal, pqRowsToInstallations, pqXlsxToInstallations, pqDecodeQP, pqHtmlToText, pqDecodeMimeWords, pqEmlFileName, pqB64Bytes, parseEml, pqUtf16, parseMsg, PQ_CIVILITY, pqFullDate, pqMonthYear };
 })();

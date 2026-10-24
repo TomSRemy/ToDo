@@ -40,6 +40,19 @@ def check(cond, msg):
         if os.environ.get("GITHUB_ACTIONS"): print("::error title=smoke::" + msg.replace("\n", " ")[:400])   # readable in the run's annotations
 
 
+# The app asks with its own window (askConfirm / askText / tell: no title) instead of the browser's confirm / prompt / alert.
+# Same handling as Playwright gives browser dialogs: refused unless the test said otherwise (dialogs(page) = accept all from now on,
+# dialog_once(page, …) = the next one only; window.__dlg.off = left to the test); the text shown is kept in window.__dlg.said.
+DLG_JS = """window.__dlg={ auto:!!window.__dlgAuto, once:null, said:[] };
+document.addEventListener('DOMContentLoaded', ()=>{ const ov=document.getElementById('choice-overlay'); if(!ov) return;
+  new MutationObserver(()=>{ if(ov.classList.contains('hidden') || document.getElementById('choice-title').textContent || ov.__busy || window.__dlg.off) return;
+    const d=window.__dlg, a=d.once||{ accept:d.auto||!!window.__dlgAuto }; d.once=null; d.said.push(document.getElementById('choice-text').textContent); ov.__busy=true;
+    setTimeout(()=>{ ov.__busy=false; if(a.text!=null) document.getElementById('choice-input').value=a.text; const b=document.querySelectorAll('#choice-btns button'); (a.accept?b[0]:b[b.length-1]).click(); }, 0);
+  }).observe(ov, { attributes:true, attributeFilter:['class'] }); });"""
+def dialogs(page): page.add_init_script("window.__dlgAuto=true;"); page.evaluate("window.__dlg && (window.__dlg.auto=true)")
+def dialog_once(page, accept=True, text=None): page.evaluate("a=>{ window.__dlg.once=a; }", {"accept": accept, "text": text})
+
+
 def task(tid, title, archived=False, updated=1000, **kw):
     t = {"id": tid, "title": title, "description": "", "client": "", "project": "", "urgency": "moyenne",
          "status": "a_faire", "due": "", "reminder": "", "link": "", "recur": None,
@@ -122,6 +135,10 @@ SYNC_ON = {"todo_sync-config": json.dumps({"owner": "o", "repo": "r", "token": "
 
 with sync_playwright() as p:
     browser = p.chromium.launch()
+    _np, _nc = browser.new_page, browser.new_context
+    def _page(**k): pg = _np(**k); pg.add_init_script(DLG_JS); return pg
+    def _ctx(**k): c = _nc(**k); c.add_init_script(DLG_JS); return c
+    browser.new_page, browser.new_context = _page, _ctx
 
     # --- Tasks: create, validate (archive), delete -> Corbeille -> restore
     page, errors = new_page(browser)
@@ -143,7 +160,7 @@ with sync_playwright() as p:
     page.locator("#task-list .task-line", has_text="Tâche A").locator(".task-check").click()
     check([t["archived"] for t in stored(page, "todo-widget-tasks") if t["title"] == "Tâche A"] == [True], "validated task is archived")
     check(page.locator("#task-list .task-line", has_text="Tâche A").count() == 0, "validated task leaves the open list")
-    page.on("dialog", lambda d: d.accept())
+    dialogs(page)
     page.click('[data-tab="archive"]')
     row = page.locator("#archive-list .task-line", has_text="Tâche A")
     row.hover(); row.locator(".del-btn").click()
@@ -344,8 +361,8 @@ with sync_playwright() as p:
           f"views: « Sans date » filters the tasks and shows as a chip ({nodate})")
     page.click("#tasks-view-chip button")
     check(not page.is_visible("#tasks-view-chip") and page.locator("#task-list .task-line").count() >= 1, "views: the chip's × goes back to the normal list")
-    page.once("dialog", lambda d: d.accept("Mes urgences"))
-    page.click("#tasks-views-btn"); page.click(".views-menu .views-item.save")
+    dialog_once(page, text="Mes urgences")
+    page.click("#tasks-views-btn"); page.click(".views-menu .views-item.save"); page.wait_for_timeout(200)
     check([v["name"] for v in page.evaluate("JSON.parse(localStorage.getItem('saved-views-tasks')||'[]')")] == ["Mes urgences"], "views: the current view can be saved under a name")
     page.click('[data-tab="pipeline"]'); page.click("#pipe-views-btn"); page.click(".views-menu .views-item >> text=Dossiers sans tâche")
     check("Dossiers sans tâche" in page.inner_text("#pipe-view-chip") and page.locator("#pipeline-board .pipe-card").count() >= 1, "views: pipeline « dossiers sans tâche »")
@@ -1123,7 +1140,7 @@ with sync_playwright() as p:
     imp = pathlib.Path(tempfile.mkdtemp()) / "contacts.xlsx"; wb.save(imp)
     page, errors = new_page(browser, {"todo_todo-widget-contacts": json.dumps(imp_ct)}, viewport={"width": 1300, "height": 900})
     page.goto(URL); page.click('[data-tab="contacts"]')
-    page.on("dialog", lambda d: d.accept())
+    dialogs(page)
     page.set_input_files("#contact-import-input", str(imp)); page.wait_for_timeout(1500)
     page.click('[data-tab="lists"]')
     conf = page.inner_text("#conflicts-list") if page.locator("#conflicts-list").count() else ""
@@ -1793,7 +1810,7 @@ with sync_playwright() as p:
     page.locator('[data-phase="contrat"] .pipe-card').first.click()   # the animation never blocks a click
     page.click("#opp-detail-actions >> text=Fermer")
     page.wait_for_selector(".celebrate", state="detached", timeout=5000)
-    page.once("dialog", lambda d: d.accept())
+    dialog_once(page)
     page.locator(".pipe-card", has_text="SOLO").first.click(); page.click("#opp-detail-body .sp-alt:has-text('Offre refusée')")
     page.wait_for_selector(".celebrate-lost", timeout=2000)
     check("Offre perdue" in page.inner_text(".celebrate-lost") and next(o for o in stored(page, "todo-widget-opportunities") if o["id"] == "solo")["stage"] == "perdu",
@@ -1965,7 +1982,7 @@ with sync_playwright() as p:
     page.select_option(".mk-board", "orig"); page.wait_for_timeout(200)
     check(page.get_attribute(".mk-frame", "src") != src and page.evaluate("localStorage.getItem('market-board')") == "orig", "market: another template of the site can be picked, and is remembered")
     own = "https://tomsremy.github.io/PowerKlock/index.html#board=zAbC_d-1"
-    page.once("dialog", lambda d: d.accept(own)); page.select_option(".mk-board", "own"); page.wait_for_timeout(200)
+    dialog_once(page, text=own); page.select_option(".mk-board", "own"); page.wait_for_timeout(200)
     check(page.get_attribute(".mk-frame", "src") == own.replace("#board=", "#solo=") and page.input_value(".mk-board") == "own", "market: my own dashboard, from a link copied on the site")
     check(page.is_visible("#postit") and page.evaluate("parseFloat(getComputedStyle(document.getElementById('market-root')).paddingRight)") < 40, "market: the note floats over the dashboard, nothing moves for it")
     page.click(".mk-copy"); page.wait_for_timeout(300); txt = page.evaluate("navigator.clipboard.readText()")
@@ -2000,7 +2017,7 @@ with sync_playwright() as p:
     page, errors = new_page(browser, {"todo_sync-config": json.dumps({"owner": "o", "repo": "r", "token": "tok_test", "enabled": True}), "todo_todo-widget-tasks": json.dumps(fg)}, viewport={"width": 1300, "height": 850})
     page.route("https://api.github.com/**", lambda r: r.fulfill(status=404, body="{}"))
     page.goto(URL); page.click('[data-tab="lists"]')
-    page.once("dialog", lambda d: d.accept()); page.click("#sync-forget-btn"); page.wait_for_timeout(400)
+    dialog_once(page); page.click("#sync-forget-btn"); page.wait_for_timeout(400)
     cfg = json.loads(page.evaluate("localStorage.getItem('todo_sync-config')") or "{}")
     check(cfg.get("token") == "" and cfg.get("enabled") is False and "désactivée" in page.inner_text("#sync-pill").lower() and any(t["id"] == "fg1" for t in stored(page, "todo-widget-tasks")),
           f"sync: « Oublier le jeton » removes the token from this device, keeps the data ({cfg})")
@@ -2029,7 +2046,7 @@ with sync_playwright() as p:
     # a raw crm.json downloaded from the data repo, given to « Importer »
     crm_file = pathlib.Path(tempfile.mkdtemp()) / "crm.json"
     crm_file.write_text(json.dumps({"companies": [], "contacts": [{"id": "rc1", "firstName": "Revenu", "lastName": "Contact", "createdAt": 1, "updatedAt": 1, "deleted": False}], "meetings": [], "opportunities": []}), encoding="utf-8")
-    page.once("dialog", lambda d: d.accept()); page.set_input_files("#import-file", str(crm_file)); page.wait_for_timeout(400)
+    dialog_once(page); page.set_input_files("#import-file", str(crm_file)); page.wait_for_timeout(400)
     check(any(c["id"] == "rc1" and not c["deleted"] for c in stored(page, "todo-widget-contacts")) and any(t["id"] == "r3" for t in stored(page, "todo-widget-tasks")),
           "restore: a raw crm.json of the data repo can be imported; tasks untouched")
     check(not errors, f"no page errors ({errors})")
@@ -2370,8 +2387,8 @@ with sync_playwright() as p:
     page.click("#phone-import-overlay .pi-close")
     # on an iPhone the address book can't be read: the app first says how to export it as a file
     page.evaluate("Object.defineProperty(navigator, 'userAgent', { get:()=>'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X)' })")
-    said = []; page.once("dialog", lambda d: (said.append(d.message), d.dismiss()))
-    page.click("#vcf-import-btn"); page.wait_for_timeout(150)
+    page.evaluate("window.__dlg.said=[]"); dialog_once(page, accept=False)
+    page.click("#vcf-import-btn"); page.wait_for_timeout(150); said = page.evaluate("window.__dlg.said")
     check(said and "Exporter" in said[0] and ".vcf" in said[0], f"phone import on iPhone: how to export the contacts first ({said})")
     page.set_input_files("#card-scan-input", files=[{"name": "carte.jpg", "mimeType": "image/jpeg", "buffer": b"fake"}]); page.wait_for_timeout(500)
     check(page.input_value("#ct-first") == "Claire" and page.input_value("#ct-email") == "claire.dubois@helio-ouest.fr" and "Directrice" in page.input_value("#ct-role"),
@@ -2637,7 +2654,7 @@ Responsable technique
     page.click(".parc-due .pq-link:has-text('Remettre dans le pipeline')"); page.wait_for_timeout(300)
     check(page.is_visible("#opp-detail-overlay") and "CS DU MOULIN" in page.inner_text("#opp-detail-title"), "parc: contract put back into the pipeline")
     page.click("#opp-detail-actions >> text=Fermer")
-    page.click('[data-tab="parc"]'); page.once("dialog", lambda d: d.accept()); page.click(".parc-due .parc-due-nogo"); page.wait_for_timeout(400)
+    page.click('[data-tab="parc"]'); dialog_once(page); page.click(".parc-due .parc-due-nogo"); page.wait_for_timeout(400)
     lost = [o for o in stored(page, "todo-widget-opportunities") if o.get("renewalOf")]
     renew = [t for t in stored(page, "todo-widget-tasks") if t["id"].startswith("renew_")]
     check(lost and lost[0]["stage"] == "perdu" and renew[0].get("archived") and "Non renouvelé" in page.inner_text(".parc-due"),
@@ -2845,7 +2862,7 @@ Responsable technique
     page.fill("#client-list-search", "alp")
     check(page.locator("#client-list-rows .client-list-row:visible").count() == 1, "search opens matching sections")
     page.fill("#client-list-search", "")
-    page.once("dialog", lambda d: d.accept("Beta Énergie"))
+    dialog_once(page, text="Beta Énergie")
     page.locator("#client-list-rows .client-list-row", has_text="Beta").locator("button[title=Renommer]").click()
     opp = next(o for o in stored(page, "todo-widget-opportunities") if o["id"] == "ob1")
     check(opp["company"] == "Beta Énergie" and opp["producteur"] == "Beta Énergie", f"renaming a client renames its opportunities too ({opp['company']})")
@@ -2907,6 +2924,24 @@ Responsable technique
     page.wait_for_selector("#second-version-marker", state="attached", timeout=15000)
     check(page.locator("#second-version-marker").count() == 1, "an open page switches to a newly published version by itself")
     ctx.close(); srv.shutdown()
+
+    # --- The app's own question window (in place of the browser's confirm / prompt, code audit C11): Annuler keeps, the button acts,
+    # Enter answers a text question
+    page, errors = new_page(browser, seed={"todo_todo-widget-tasks": json.dumps([task("q1", "Garder ou pas", archived=True)])}); page.goto(URL); page.evaluate("window.__dlg.off=true")   # answered by hand here
+    page.click('[data-tab="archive"]'); row = page.locator("#archive-list .task-line", has_text="Garder ou pas")
+    row.hover(); row.locator(".del-btn").click(); page.wait_for_selector("#choice-overlay:not(.hidden)")
+    check(page.is_hidden("#choice-title") and "Corbeille" in page.inner_text("#choice-text") and page.is_hidden("#choice-input"), "question window: the question shown, no title, no text field")
+    page.click("#choice-btns button:text-is('Annuler')"); page.wait_for_timeout(150)
+    check(page.locator("#archive-list .task-line", has_text="Garder ou pas").count() == 1 and page.is_hidden("#choice-overlay"), "question window: Annuler keeps the task")
+    row.hover(); row.locator(".del-btn").click(); page.keyboard.press("Escape"); page.wait_for_timeout(150)
+    check(page.locator("#archive-list .task-line", has_text="Garder ou pas").count() == 1, "question window: Escape keeps it too")
+    row.hover(); row.locator(".del-btn").click(); page.click("#choice-btns button >> nth=0"); page.wait_for_timeout(150)
+    check(page.locator("#archive-list .task-line", has_text="Garder ou pas").count() == 0, "question window: « Supprimer » deletes")
+    page.click('[data-tab="tasks"]'); page.click("#tasks-views-btn"); page.click(".views-menu .views-item.save"); page.wait_for_selector("#choice-input:visible")
+    page.fill("#choice-input", "Vue du test"); page.press("#choice-input", "Enter"); page.wait_for_timeout(150)
+    check([v["name"] for v in page.evaluate("JSON.parse(localStorage.getItem('saved-views-tasks')||'[]')")] == ["Vue du test"], "question window: a text answered with Enter")
+    check(not errors, f"question window: no page errors ({errors})")
+    page.close()
 
     browser.close()
 

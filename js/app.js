@@ -1,9 +1,23 @@
 // Todo — the app (loaded at the end of index.html, after js/storage.js): tasks, CRM, pipeline, Portefeuille, sync.
 (function(){
   const $ = id => document.getElementById(id);
+  // settings on this device: never an error when the browser refuses its storage (private window, full disk) (code audit C10)
+  const lsGet=k=>{ try{ return localStorage.getItem(k); }catch(e){ return null; } }, lsSet=(k,v)=>{ try{ localStorage.setItem(k,v); }catch(e){} };
   const { parseVcf, toISO, PQ_INSTALLS, PQ_CONTRATS, PQ_REGIONS, PQ_DEPTS, pqDeptLabel, PQ_YIELD, PQ_FIELDS, PQ_SHARED_KEYS, PQ_EXTRA_FIELDS, PQ_INST_GROUPS, PQ_CENTRALE_KEYS, pqPad, pqFold, pqTitleCase, pqIsoToFr, pqAddDays, PQ_MONTH_NAMES, pqFmtPhone, pqQty, pqNum, pqDeptFromPostal, pqDeptFromText, pqParseDateLoose, xlDay, PQ_GENERIC_DOMAINS, parseSignatureBlock, pqDetectPeople, parsePipeMail, parseMailInstallations, pqPlantHints, xlRound, pqRowsToInstallations, pqXlsxToInstallations, parseEml, parseMsg, PQ_CIVILITY, pqFullDate, pqMonthYear } = window.TodoParse;   // the readers with no screen, in js/parse.js
   const { recs, mergeNoteLines, SILENT_MERGE, stableStringify, sameRecords } = window.TodoMerge;   // the sync merge, in js/merge.js
   const threeWayMerge=(type, local, remote, base)=>window.TodoMerge.threeWayMerge(type, local, remote, base, logConflict);
+  // « Compléter avec l'IA » is set aside (js/ai.js): hidden unless turned on for this device (localStorage feat-ai = 1)
+  const aiOn=()=>{ try{ return localStorage.getItem('feat-ai')==='1'; }catch(e){ return false; } };
+  const aiKey=()=>{ try{ return localStorage.getItem('ai-key')||''; }catch(e){ return ''; } };
+  const openAiFill=(...a)=>window.TodoAI.openAiFill(...a);   // js/ai.js
+  const openPhoneImport=(...a)=>window.TodoPhone.openPhoneImport(...a);   // js/phone.js
+  const phoneImportStart=(...a)=>window.TodoPhone.phoneImportStart(...a);   // js/phone.js
+  const scanCard=(...a)=>window.TodoPhone.scanCard(...a);   // js/phone.js
+  const openVcfExport=(...a)=>window.TodoPhone.openVcfExport(...a);   // js/phone.js
+  const doVcfExport=(...a)=>window.TodoPhone.doVcfExport(...a);   // js/phone.js
+  const renderPipeMeet=(...a)=>window.TodoPresent.renderPipeMeet(...a);   // js/present.js
+  const { renderMarket, loadMarket, marketLine } = window.TodoMarket;   // js/market.js
+  window.TodoMarket.init({ askText:(...a)=>askText(...a), tell:(...a)=>tell(...a), escapeHtml:(...a)=>escapeHtml(...a), prefsToNote:(...a)=>prefsToNote(...a), gsTab:(...a)=>gsTab(...a) });
   const taskList=$('task-list'), badge=$('todo-badge'), headStats=$('head-stats'), tableHeader=$('table-header');
   const filters=$('filters'), viewSwitch=$('view-switch'), snoozePopover=$('snooze-popover');
   const reminderToggle=$('reminder-toggle'), reminderRow=$('reminder-row'), recurToggle=$('recur-toggle'), recurRow=$('recur-row');
@@ -47,7 +61,6 @@
   let companies=[], contacts=[], meetings=[], opportunities=[];
   let companyTypesList=['Client','Consultant','Fournisseur','Partenaire'];
   let syncConfig={owner:'',repo:'',token:'',enabled:false};
-  let lastKnownSha=null, syncPushTimer=null;
   let conflicts=[];
   let tasksBaseSnapshot=null, crmBaseSnapshot=null;
   let currentFilter='ouvertes', currentView='liste', searchQuery='';
@@ -60,7 +73,7 @@
   const SYNC_TASKS_PATH='data/tasks.json';
   const SYNC_CRM_PATH='data/crm.json';
   const NOTES_KEY='todo-widget-notes', SYNC_NOTES_PATH='data/notes.json';
-  let notes=[], notesBaseSnapshot=null, lastKnownNotesSha=null, notesSyncPushTimer=null;
+  let notes=[], notesBaseSnapshot=null;
 
   // only real records (an object with an id): a damaged file or an old bug never breaks the app
   const asText=v=>v==null?'':Array.isArray(v)||typeof v==='object'?'':String(v);
@@ -426,31 +439,94 @@
         showStorageAlert('crit', 'Synchro suspendue : le dépôt GitHub « '+syncConfig.repo+' » est devenu PUBLIC. Rien n\u2019y est plus envoyé. Repasse-le en privé (Settings › Danger Zone sur GitHub), puis réactive la synchro dans Réf. & data.');
         return false;
       }
-      try{ localStorage.setItem('repo-private-checked-at', String(Date.now())); }catch(e){}
+      lsSet('repo-private-checked-at', String(Date.now()));
     }catch(e){ softFail('dépôt privé ?', e); }
     return true;
   }
-  async function syncPull(){
-    if(!syncConfig.enabled) return;
-    if(!(await checkRepoStillPrivate())) return;
-    try{
-      const data=await ghGetJson(SYNC_TASKS_PATH);
-      if(data.status===404){ scheduleSyncPush(); return; }
-      if(!data.ok){ setSyncStatus('Erreur de synchro (lecture)'); return; }
-      const remoteTasks=data.json;
-      undoCommit(); tasks=threeWayMerge('task', tasks, remoteTasks, tasksBaseSnapshot); undoRebase();
-      // The base is what is actually on the server — not the merged result,
-      // which may still hold local edits that were never pushed (e.g. app
-      // closed within the 3s push debounce). Those get pushed now instead of
-      // being silently reverted by the next pull.
-      tasksBaseSnapshot=remoteTasks.map(t=>({...t}));
-      lastKnownSha=data.sha;
-      await saveTasksLocalOnly(); await saveSnapshots(); await saveConflicts(); updateConflictBadge();
-      refreshAllViews();
-      if(!sameRecords(tasks, remoteTasks)) scheduleSyncPush();
-      setSyncStatus('Synchronisé '+new Date().toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'}));
-    }catch(e){ console.error('sync pull failed', e); setSyncStatus('Erreur de synchro'); }
+  // ---------- One data file of the repo kept in step with this device (tasks, CRM, post-it) — audit C5 ----------
+  // Read → merge (three-way, with the reference copy) → write back. The reference copy is what the server holds: after a
+  // read it is the file as read, after a write it is exactly what was sent. A write refused because the file changed
+  // meanwhile (409/422) is retried after a fresh read. The public names (syncPull, syncPushNow…) stay the way in: they are
+  // wrapped further down (one call at a time per file, the sync pill), so the timers and retries go through them too.
+  function makeSyncFile(d){
+    const st={ sha:null, timer:null }, hhmm=()=>new Date().toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'});
+    const mergeIn=remote=>{ undoCommit(); d.write(d.merge(d.read(), remote, d.getBase())); undoRebase(); if(d.after) d.after(); };
+    async function pull(){
+      if(!syncConfig.enabled) return;
+      if(d.checkPrivate && !(await checkRepoStillPrivate())) return;
+      if(d.before) d.before();
+      try{
+        const data=await ghGetJson(d.path);
+        if(data.status===404){ schedule(); return; }
+        if(!data.ok){ if(d.status) setSyncStatus('Erreur de synchro (lecture)'); return; }
+        const remote=data.json;
+        mergeIn(remote);
+        // the reference is what is on the server, not the merged result: local edits not pushed yet are pushed now
+        d.setBase(JSON.parse(JSON.stringify(remote))); st.sha=data.sha;
+        await d.saveLocal(); await d.saveBase(); await saveConflicts(); updateConflictBadge();
+        d.render();
+        if(!d.same(d.read(), remote)) schedule();
+        if(d.status) setSyncStatus('Synchronisé '+hhmm());
+      }catch(e){ console.error(d.key+' sync pull failed', e); if(d.status) setSyncStatus('Erreur de synchro'); }
+    }
+    function schedule(){
+      if(!syncConfig.enabled) return;
+      clearTimeout(st.timer); st.timer=setTimeout(()=>{ st.timer=null; d.push(); }, 3000);
+    }
+    async function push(){
+      if(!syncConfig.enabled) return;
+      if(d.before) d.before();
+      try{
+        let sha=st.sha;
+        const got=await ghGetJson(d.path);
+        if(got.ok){ sha=got.sha; mergeIn(got.json); await d.saveLocal(); d.render(); }
+        await saveConflicts(); updateConflictBadge();
+        const sent=JSON.stringify(d.read());   // the reference copy becomes what is sent (audit A9)
+        const body={ message:d.message, content:b64EncodeUtf8(sent), branch:'main' };
+        if(sha) body.sha=sha;
+        const putRes=await ghFetch(syncApiUrl(d.path), { method:'PUT', headers:{ 'Content-Type':'application/json' }, body:JSON.stringify(body) });
+        syncNote(putRes);
+        if(putRes.ok){
+          st.sha=(await putRes.json()).content.sha;
+          // only now does the reference advance: after a failed write a stale reference would silently undo real local edits
+          d.setBase(JSON.parse(sent)); await d.saveBase(); syncRetryDone(d.key);
+          if(JSON.stringify(d.read())!==sent) schedule();   // changed while it was being sent: goes in the next write
+          if(d.status) setSyncStatus('Synchronisé '+hhmm());
+        } else if(!syncRetryLater(d.key, putRes.status, ()=>d.push()) && d.status) setSyncStatus('Erreur de synchro (écriture)');
+      }catch(e){ console.error(d.key+' sync push failed', e); syncNote(null); if(d.status) setSyncStatus('Erreur de synchro'); }
+    }
+    // a write waiting for its 3 s: sent now (leaving the app, forgetting the token); the promise of that write, or null
+    function flush(){ if(!st.timer) return null; clearTimeout(st.timer); st.timer=null; return d.push(); }
+    return { pull, push, schedule, flush };
   }
+  const crmData=()=>({ companies, contacts, meetings, opportunities });
+  const SYNC_FILES={
+    tasks:makeSyncFile({ key:'tasks', path:SYNC_TASKS_PATH, message:'Sync tasks', status:true, checkPrivate:true,
+      read:()=>tasks, write:v=>{ tasks=v; }, merge:(l,r,b)=>threeWayMerge('task', l, r, b),
+      getBase:()=>tasksBaseSnapshot, setBase:v=>{ tasksBaseSnapshot=v; }, saveLocal:()=>saveTasksLocalOnly(), saveBase:()=>saveSnapshots(),
+      render:()=>refreshAllViews(), same:(l,r)=>sameRecords(l,r), push:()=>syncPushNow() }),
+    crm:makeSyncFile({ key:'crm', path:SYNC_CRM_PATH, message:'Sync CRM data',
+      read:crmData, write:v=>{ companies=v.companies; contacts=v.contacts; meetings=v.meetings; opportunities=v.opportunities; },
+      merge:(l,r,base)=>{ base=base||{}; return { companies:threeWayMerge('company', l.companies||[], r.companies||[], base.companies), contacts:threeWayMerge('contact', l.contacts||[], r.contacts||[], base.contacts),
+        meetings:threeWayMerge('meeting', l.meetings||[], r.meetings||[], base.meetings), opportunities:threeWayMerge('opportunity', l.opportunities||[], r.opportunities||[], base.opportunities) }; },
+      getBase:()=>crmBaseSnapshot, setBase:v=>{ crmBaseSnapshot=v; }, saveLocal:()=>saveCrmLocalOnly(), saveBase:()=>saveSnapshots(),
+      render:()=>{ if(typeof renderCrm==='function') renderCrm(); },
+      same:(l,r)=>['companies','contacts','meetings','opportunities'].every(k=>sameRecords(l[k], r[k]||[])), push:()=>syncPushCrmNow() }),
+    notes:makeSyncFile({ key:'notes', path:SYNC_NOTES_PATH, message:'Sync notes',
+      read:()=>notes, write:v=>{ notes=v; }, merge:(l,r,b)=>threeWayMerge('note', l, r, b), before:()=>flushPostit(), after:()=>consolidateNotes(),
+      getBase:()=>notesBaseSnapshot, setBase:v=>{ notesBaseSnapshot=v; }, saveLocal:()=>saveNotesLocalOnly(), saveBase:()=>saveNotesBase(),
+      render:()=>renderNotes(), same:(l,r)=>sameRecords(l,r), push:()=>syncPushNotesNow() })
+  };
+  // the public names (wrapped further down, one call at a time per file)
+  function syncPull(){ return SYNC_FILES.tasks.pull(); }
+  function syncPushNow(){ return SYNC_FILES.tasks.push(); }
+  function scheduleSyncPush(){ SYNC_FILES.tasks.schedule(); }
+  function syncPullCrm(){ return SYNC_FILES.crm.pull(); }
+  function syncPushCrmNow(){ return SYNC_FILES.crm.push(); }
+  function scheduleCrmSyncPush(){ SYNC_FILES.crm.schedule(); }
+  function syncPullNotes(){ return SYNC_FILES.notes.pull(); }
+  function syncPushNotesNow(){ return SYNC_FILES.notes.push(); }
+  function scheduleNotesSyncPush(){ SYNC_FILES.notes.schedule(); }
 
   // a write refused because the file changed meanwhile (409/422: the other device wrote first): read, merge and write again
   const syncRetries={};
@@ -460,149 +536,15 @@
     syncRetries[key]=n; setTimeout(again, 1200*n); return true;
   }
   function syncRetryDone(key){ syncRetries[key]=0; }
-  function scheduleSyncPush(){
-    if(!syncConfig.enabled) return;
-    clearTimeout(syncPushTimer);
-    syncPushTimer=setTimeout(()=>{ syncPushTimer=null; syncPushNow(); }, 3000);
-  }
 
-  async function syncPushNow(){
-    if(!syncConfig.enabled) return;
-    try{
-      let sha=lastKnownSha;
-      const getData=await ghGetJson(SYNC_TASKS_PATH);
-      if(getData.ok){
-        sha=getData.sha;
-        const remoteTasks=getData.json;
-        undoCommit(); tasks=threeWayMerge('task', tasks, remoteTasks, tasksBaseSnapshot); undoRebase();
-        await saveTasksLocalOnly();
-        refreshAllViews();
-      }
-      await saveConflicts(); updateConflictBadge();
-      const sentTasks=JSON.stringify(tasks);   // the reference copy becomes what is sent (audit A9): an edit made during the write is not taken as synced
-      const body={ message:'Sync tasks', content:b64EncodeUtf8(sentTasks), branch:'main' };
-      if(sha) body.sha=sha;
-      const putRes=await ghFetch(syncApiUrl(), {
-        method:'PUT',
-        headers:{ 'Accept':'application/vnd.github+json', 'Content-Type':'application/json' },
-        body:JSON.stringify(body)
-      });
-      syncNote(putRes);
-      if(putRes.ok){
-        const putData=await putRes.json();
-        lastKnownSha=putData.content.sha;
-        // Only now does the base snapshot advance to "local == remote" — if the
-        // PUT above had failed, a stale base would make the next merge think a
-        // just-completed field (e.g. archived) was never really changed locally
-        // and silently revert it to the old remote value (tasks "reappearing").
-        tasksBaseSnapshot=JSON.parse(sentTasks);
-        await saveSnapshots(); syncRetryDone('tasks');
-        if(JSON.stringify(tasks)!==sentTasks) scheduleSyncPush();   // changed while it was being sent: goes in the next write
-        setSyncStatus('Synchronisé '+new Date().toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'}));
-      }else{
-        if(!syncRetryLater('tasks', putRes.status, ()=>syncPushNow())) setSyncStatus('Erreur de synchro (écriture)');
-      }
-    }catch(e){ console.error('sync push failed', e); syncNote(null); setSyncStatus('Erreur de synchro'); }
-  }
 
-  let lastKnownCrmSha=null, crmSyncPushTimer=null;
-  function mergeCrmBundle(local, remote){
-    const base=crmBaseSnapshot||{};
-    return {
-      companies: threeWayMerge('company', local.companies||[], remote.companies||[], base.companies),
-      contacts: threeWayMerge('contact', local.contacts||[], remote.contacts||[], base.contacts),
-      meetings: threeWayMerge('meeting', local.meetings||[], remote.meetings||[], base.meetings),
-      opportunities: threeWayMerge('opportunity', local.opportunities||[], remote.opportunities||[], base.opportunities)
-    };
-  }
-  async function syncPullCrm(){
-    if(!syncConfig.enabled) return;
-    try{
-      const data=await ghGetJson(SYNC_CRM_PATH);
-      if(data.status===404){ scheduleCrmSyncPush(); return; }
-      if(!data.ok) return;
-      const remote=data.json;
-      const merged=mergeCrmBundle({companies,contacts,meetings,opportunities}, remote);
-      undoCommit(); companies=merged.companies; contacts=merged.contacts; meetings=merged.meetings; opportunities=merged.opportunities; undoRebase();
-      lastKnownCrmSha=data.sha;
-      // Base = server state, not merged state (see syncPull).
-      crmBaseSnapshot={ companies:(remote.companies||[]).map(c=>({...c})), contacts:(remote.contacts||[]).map(c=>({...c})), meetings:(remote.meetings||[]).map(m=>({...m})), opportunities:(remote.opportunities||[]).map(o=>({...o})) };
-      await saveCrmLocalOnly(); await saveSnapshots(); await saveConflicts(); updateConflictBadge();
-      if(typeof renderCrm==='function') renderCrm();
-      if(!sameRecords(companies, remote.companies||[]) || !sameRecords(contacts, remote.contacts||[]) || !sameRecords(meetings, remote.meetings||[]) || !sameRecords(opportunities, remote.opportunities||[])) scheduleCrmSyncPush();
-    }catch(e){ console.error('crm sync pull failed', e); }
-  }
-  function scheduleCrmSyncPush(){
-    if(!syncConfig.enabled) return;
-    clearTimeout(crmSyncPushTimer);
-    crmSyncPushTimer=setTimeout(()=>{ crmSyncPushTimer=null; syncPushCrmNow(); }, 3000);
-  }
-  async function syncPushCrmNow(){
-    if(!syncConfig.enabled) return;
-    try{
-      let sha=lastKnownCrmSha;
-      const getData=await ghGetJson(SYNC_CRM_PATH);
-      if(getData.ok){
-        sha=getData.sha;
-        const remote=getData.json;
-        const merged=mergeCrmBundle({companies,contacts,meetings,opportunities}, remote);
-        undoCommit(); companies=merged.companies; contacts=merged.contacts; meetings=merged.meetings; opportunities=merged.opportunities; undoRebase();
-        await saveCrmLocalOnly();
-        if(typeof renderCrm==='function') renderCrm();
-      }
-      await saveConflicts(); updateConflictBadge();
-      const bundle=JSON.stringify({companies,contacts,meetings,opportunities});   // the reference copy becomes what is sent (audit A9)
-      const body={ message:'Sync CRM data', content:b64EncodeUtf8(bundle), branch:'main' };
-      if(sha) body.sha=sha;
-      const putRes=await ghFetch(syncApiUrl(SYNC_CRM_PATH), {
-        method:'PUT',
-        headers:{ 'Accept':'application/vnd.github+json', 'Content-Type':'application/json' },
-        body:JSON.stringify(body)
-      });
-      syncNote(putRes);
-      if(putRes.ok){
-        const putData=await putRes.json();
-        lastKnownCrmSha=putData.content.sha;
-        // See syncPushNow: only advance the base once the write is confirmed,
-        // or a failed PUT leaves a stale base that reverts real local changes
-        // on the next merge.
-        crmBaseSnapshot=JSON.parse(bundle);
-        await saveSnapshots(); syncRetryDone('crm');
-        if(JSON.stringify({companies,contacts,meetings,opportunities})!==bundle) scheduleCrmSyncPush();
-      } else syncRetryLater('crm', putRes.status, ()=>syncPushCrmNow());
-    }catch(e){ console.error('crm sync push failed', e); syncNote(null); }
-  }
   async function saveNotesLocalOnly(){ try{ await window.storage.set(NOTES_KEY,JSON.stringify(notes),false); }catch(e){ console.error(e); } }
   async function saveNotes(){ undoSchedule(); await saveNotesLocalOnly(); scheduleNotesSyncPush(); }
   async function saveNotesBase(){ try{ await window.storage.set('sync-notes-base', JSON.stringify(notesBaseSnapshot), false); }catch(e){} }
-  async function syncPullNotes(){
-    if(!syncConfig.enabled) return;
-    flushPostit();
-    try{
-      const data=await ghGetJson(SYNC_NOTES_PATH);
-      if(data.status===404){ scheduleNotesSyncPush(); return; }
-      if(!data.ok) return;
-      const remote=data.json;
-      undoCommit(); notes=threeWayMerge('note', notes, remote, notesBaseSnapshot); undoRebase();
-      consolidateNotes();
-      notesBaseSnapshot=remote.map(n=>({...n}));
-      lastKnownNotesSha=data.sha;
-      await saveNotesLocalOnly(); await saveNotesBase(); await saveConflicts(); updateConflictBadge();
-      renderNotes();
-      if(!sameRecords(notes, remote)) scheduleNotesSyncPush();
-    }catch(e){ console.error('notes sync pull failed', e); }
-  }
-  function scheduleNotesSyncPush(){
-    if(!syncConfig.enabled) return;
-    clearTimeout(notesSyncPushTimer);
-    notesSyncPushTimer=setTimeout(()=>{ notesSyncPushTimer=null; syncPushNotesNow(); }, 3000);
-  }
   // Leaving the app (phone: switch app, lock screen) must not wait for the 3s debounce.
   function flushPendingSync(){
     flushPostit();
-    if(syncPushTimer){ clearTimeout(syncPushTimer); syncPushTimer=null; syncPushNow(); }
-    if(crmSyncPushTimer){ clearTimeout(crmSyncPushTimer); crmSyncPushTimer=null; syncPushCrmNow(); }
-    if(notesSyncPushTimer){ clearTimeout(notesSyncPushTimer); notesSyncPushTimer=null; syncPushNotesNow(); }
+    Object.values(SYNC_FILES).forEach(f=>f.flush());
   }
   document.addEventListener('visibilitychange', ()=>{ if(document.visibilityState==='hidden') flushPendingSync(); });
   // Another tab of the app (or widget.html) saved: take its version, so this tab never writes an older copy back.
@@ -676,39 +618,6 @@
     if(isNew) syncPushParc();
   }
 
-  async function syncPushNotesNow(){
-    if(!syncConfig.enabled) return;
-    flushPostit();
-    try{
-      let sha=lastKnownNotesSha;
-      const getData=await ghGetJson(SYNC_NOTES_PATH);
-      if(getData.ok){
-        sha=getData.sha;
-        const remote=getData.json;
-        undoCommit(); notes=threeWayMerge('note', notes, remote, notesBaseSnapshot); undoRebase();
-        consolidateNotes();
-        await saveNotesLocalOnly();
-        renderNotes();
-      }
-      await saveConflicts(); updateConflictBadge();
-      const sentNotes=JSON.stringify(notes);   // the reference copy becomes what is sent (audit A9)
-      const body={ message:'Sync notes', content:b64EncodeUtf8(sentNotes), branch:'main' };
-      if(sha) body.sha=sha;
-      const putRes=await ghFetch(syncApiUrl(SYNC_NOTES_PATH), {
-        method:'PUT',
-        headers:{ 'Accept':'application/vnd.github+json', 'Content-Type':'application/json' },
-        body:JSON.stringify(body)
-      });
-      syncNote(putRes);
-      if(putRes.ok){
-        const putData=await putRes.json();
-        lastKnownNotesSha=putData.content.sha;
-        notesBaseSnapshot=JSON.parse(sentNotes);
-        await saveNotesBase(); syncRetryDone('notes');
-        if(JSON.stringify(notes)!==sentNotes) scheduleNotesSyncPush();
-      } else syncRetryLater('notes', putRes.status, ()=>syncPushNotesNow());
-    }catch(e){ console.error('notes sync push failed', e); syncNote(null); }
-  }
 
   async function saveClients(){ try{ await window.storage.set(CLIENTS_KEY,JSON.stringify(clientsList),false); }catch(e){ console.error(e); } }
   async function saveProjects(){ try{ await window.storage.set(PROJECTS_KEY,JSON.stringify(projectsList),false); }catch(e){ console.error(e); } }
@@ -1418,7 +1327,7 @@
   function backupDueDays(){
     if(syncConfig.enabled || window.TODO_LITE || window.TODO_WIDGET) return 0;
     const get=k=>{ try{ return +localStorage.getItem(k)||0; }catch(e){ return 0; } };
-    let first=get('first-seen-at'); if(!first){ first=Date.now(); try{ localStorage.setItem('first-seen-at', String(first)); }catch(e){} }
+    let first=get('first-seen-at'); if(!first){ first=Date.now(); lsSet('first-seen-at', String(first)); }
     if(Date.now()<get('backup-snooze-until') || !(tasks.length+contacts.length+opportunities.length)) return 0;
     const days=Math.floor((Date.now()-(get('last-export-at')||first))/864e5);
     return days>=BACKUP_DAYS?days:0;
@@ -1430,7 +1339,7 @@
     b.innerHTML='<span></span><button type="button" class="bk-go">Exporter maintenant</button><button type="button" class="bk-later">Plus tard</button>';
     b.firstChild.textContent=('Aucune copie de sécurité depuis '+days+' jours, et la synchro GitHub n\u2019est pas activée : un export garde tes données à l\u2019abri (fichier .json).');
     b.querySelector('.bk-go').onclick=()=>{ exportData(); renderBackupBanner(); };
-    b.querySelector('.bk-later').onclick=()=>{ try{ localStorage.setItem('backup-snooze-until', String(Date.now()+7*864e5)); }catch(e){} renderBackupBanner(); };
+    b.querySelector('.bk-later').onclick=()=>{ lsSet('backup-snooze-until', String(Date.now()+7*864e5)); renderBackupBanner(); };
   }
   function renderToday(){
     const statsRow=$('today-stats-row'), list=$('today-list');
@@ -1567,7 +1476,6 @@
   // ---------- settings shared between devices: saved views, network layout, goals… ride along in the note as « pref_<key> » fields ----------
   // (merged field by field by the sync; the note's date is left alone so the morning roll is not disturbed)
   const PREF_PREFIX='pref_', SYNCED_PREFS=['saved-views-tasks','saved-views-pipeline','network-pins','network-hidden','pipe-goals','pipe-meet-phases','pipe-meet-cols','map-color','goal-milestones','market-board'];
-  const lsGet=k=>{ try{ return localStorage.getItem(k); }catch(e){ return null; } }, lsSet=(k,v)=>{ try{ localStorage.setItem(k,v); }catch(e){} };
   function prefsToNote(){
     if(window.TODO_WIDGET) return;
     const n=scratchNote(); let ch=false;
@@ -1599,7 +1507,6 @@
     if(networkView && $('tab-network') && !$('tab-network').classList.contains('hidden')) networkView.refresh();
     if($('tab-pipeline') && !$('tab-pipeline').classList.contains('hidden')) renderPipeline();
   }
-  window.todoSettingsChanged=prefsToNote;
   document.addEventListener('visibilitychange', ()=>{ if(!document.hidden && rollDailyNote()) renderNotes(); });
   setInterval(()=>{ if(!document.hidden && document.activeElement!==postitTextEl && rollDailyNote()) renderNotes(); }, 5*60*1000);   // the app left open over midnight
   function openDayNotes(focusDay){
@@ -1620,7 +1527,6 @@
       if(focusDay){ const el=list.querySelector('[data-day="'+focusDay+'"]'); if(el) el.scrollIntoView({ block:'start' }); focusDay=null; } };
     search.value=''; paint(); ov.classList.remove('hidden'); setTimeout(()=>search.focus(), 30);
   }
-  window.todoOpenDayNote=openDayNotes;
 
   // ----- « Ma semaine » : what moved this week (or last week), ready to paste in a mail -----
   function weekBounds(which){
@@ -1700,8 +1606,6 @@
       try{ await navigator.clipboard.write([new ClipboardItem({ 'text/html':new Blob([html],{ type:'text/html' }), 'text/plain':new Blob([text],{ type:'text/plain' }) })]); flashBtn(btn,'✓ Copié'); } catch(err){ copyToClipboard(text, btn); } };
     ov.classList.remove('hidden');
   }
-  window.todoOpenWeek=openWeek;
-  window.todoWeekText=w=>weekText(weekData(w||'this'));
   window.todoExtraCommands=(window.todoExtraCommands||[]).concat([{ t:'Chercher les doublons (installations, sociétés)', k:'doublons double fusion fusionner meme installation societe', go:()=>{ openDupes(); } }]);
   window.todoExtraCommands=(window.todoExtraCommands||[]).concat([{ t:'Ma semaine : résumé à copier', k:'semaine resume hebdo bilan rapport manager mail', go:()=>openWeek('this') }]);
   function updatePostitTab(){
@@ -1727,7 +1631,7 @@
     postitEl.classList.toggle('hidden', !open);
     document.body.classList.toggle('postit-open', !!open);   // the lists get room at the bottom: their last lines scroll above the note
     postitTabEl.classList.toggle('hidden', open);
-    try{ localStorage.setItem('postit-open', open?'1':'0'); }catch(e){}
+    lsSet('postit-open', open?'1':'0');
     if(open){ clampPostit(); if(focus) setTimeout(()=>{ postitShowEditor(); postitTextEl.focus(); const l=postitTextEl.value.length; postitTextEl.setSelectionRange(l,l); },0); }
   }
   // ---------- Post-it as a list: each line is a bullet to tick (✓ in front of the line, struck through);
@@ -1831,7 +1735,7 @@
       let t=null;
       new ResizeObserver(()=>{
         if(postitEl.classList.contains('hidden') || window.innerWidth<=760) return;
-        clearTimeout(t); t=setTimeout(()=>{ try{ localStorage.setItem('postit-size', JSON.stringify({ w:postitEl.offsetWidth, h:postitEl.offsetHeight })); }catch(e){} },300);
+        clearTimeout(t); t=setTimeout(()=>{ lsSet('postit-size', JSON.stringify({ w:postitEl.offsetWidth, h:postitEl.offsetHeight })); },300);
       }).observe(postitEl);
     }
     window.addEventListener('resize', clampPostit);
@@ -2100,17 +2004,25 @@
     }catch(e){ return false; }
   }
   // A question with a few answers (no browser pop-up): resolves with the chosen value, or null (Annuler, ✕, Échap)
-  function askChoice(title, text, choices){
+  // The app's own question window, in place of the browser's confirm / alert / prompt (code audit C11): same look as the rest,
+  // works in the phone version and the widget, never blocks the page. opts.input = a text field (its value is the answer),
+  // opts.cancel=false = no « Annuler » (a plain message).
+  function askChoice(title, text, choices, opts={}){
     return new Promise(res=>{
-      const ov=$('choice-overlay'), box=$('choice-btns');
-      $('choice-title').textContent=title; $('choice-text').textContent=text; box.innerHTML='';
-      const done=v=>{ ov.classList.add('hidden'); document.removeEventListener('keydown', esc, true); res(v); };
+      const ov=$('choice-overlay'), box=$('choice-btns'), inp=$('choice-input');
+      $('choice-title').textContent=title||''; $('choice-title').hidden=!title; $('choice-text').textContent=text||''; box.innerHTML='';
+      inp.hidden=opts.input==null; inp.value=opts.input==null?'':opts.input;
+      const done=v=>{ ov.classList.add('hidden'); document.removeEventListener('keydown', esc, true); inp.onkeydown=null; res(v); };
       const esc=e=>{ if(e.key==='Escape'){ e.stopPropagation(); done(null); } };
-      choices.concat([{ label:'Annuler', value:null, ghost:true }]).forEach(c=>{ const b=document.createElement('button'); b.type='button'; b.textContent=c.label; if(c.ghost) b.className='ghost-btn'; b.onclick=e=>{ if(c.run) c.run(e); done(c.value); }; box.appendChild(b); });
+      choices.concat(opts.cancel===false?[]:[{ label:'Annuler', value:null, ghost:true }]).forEach(c=>{ const b=document.createElement('button'); b.type='button'; b.textContent=c.label; if(c.ghost) b.className='ghost-btn'; b.onclick=e=>{ if(c.run) c.run(e); done(opts.input!=null && c.value!=null?inp.value:c.value); }; box.appendChild(b); });
+      if(opts.input!=null) inp.onkeydown=e=>{ if(e.key==='Enter'){ e.preventDefault(); done(inp.value); } };
       document.addEventListener('keydown', esc, true);
-      ov.classList.remove('hidden'); setTimeout(()=>{ const f=box.querySelector('button'); if(f) f.focus(); }, 0);
+      ov.classList.remove('hidden'); setTimeout(()=>{ const f=opts.input!=null?inp:box.querySelector('button'); if(f) f.focus(); if(opts.input!=null) inp.select(); }, 0);
     });
   }
+  const askConfirm=(text, ok='OK')=>askChoice('', text, [{ label:ok, value:'y' }]).then(v=>v==='y');   // was confirm()
+  const askText=(text, value='')=>askChoice('', text, [{ label:'OK', value:'y' }], { input:value });       // was prompt(): the text, or null
+  const tell=text=>askChoice('', text, [{ label:'OK', value:'y' }], { cancel:false });                    // was alert()
   // Pipe lines of several installations: one line each, or a single line for all (powers and volumes added up)
   function pipeRowsFor(list, mode){
     if(mode!=='one' || list.length<2) return list.map(pipeRow).join('\n');
@@ -2584,7 +2496,7 @@
     row.ondblclick=()=>openContactForm(c);
     const del=document.createElement('button'); del.className='del-btn'; del.title='Supprimer';
     del.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="width:14px;height:14px;"><path d="M18 6L6 18M6 6l12 12"/></svg>';
-    del.onclick=()=>{ if(confirm('Supprimer ce contact ?')){ c.deleted=true; touchCrm(c); saveCrm(); renderContacts(); } };
+    del.onclick=async ()=>{ if(await askConfirm('Supprimer ce contact ?', 'Supprimer')){ c.deleted=true; touchCrm(c); saveCrm(); renderContacts(); } };
     actions.appendChild(del);
     row.appendChild(actions);
 
@@ -2697,7 +2609,7 @@
     links.appendChild(netBtn);
     const delLink=document.createElement('button'); delLink.type='button'; delLink.textContent='Supprimer';
     delLink.className='contact-detail-edit-link danger-btn';
-    delLink.onclick=()=>{ if(confirm('Supprimer ce contact ?')){ c.deleted=true; touchCrm(c); saveCrm(); renderContacts(); } };
+    delLink.onclick=async ()=>{ if(await askConfirm('Supprimer ce contact ?', 'Supprimer')){ c.deleted=true; touchCrm(c); saveCrm(); renderContacts(); } };
     links.appendChild(delLink);
     card.appendChild(links);
 
@@ -2922,7 +2834,7 @@
 
 
   // ----- Board -----
-  let pipeShowExited=false, pipeDash=false, pipeMeet=false, pipeList=false, pipeMap=false, meetColsOpen=false; try{ pipeList=localStorage.getItem('pipe-list')==='1'; }catch(e){}
+  let pipeShowExited=false, pipeDash=false, pipeMeet=false, pipeList=false, pipeMap=false; try{ pipeList=localStorage.getItem('pipe-list')==='1'; }catch(e){}
   // ---------- Pipeline dashboard: MWc by phase, time spent at each step, deals that drag ----------
   const kwcNum=o=>parseFloat(String(o.kwc||'').replace(/\s/g,'').replace(',','.'))||0;
   function stageDurations(){
@@ -2983,7 +2895,7 @@
         : f1(sMw)+' MWc signés en '+year+(cMw?' · '+f1(cMw)+' MWc en contrat':'')+'. Fixe un objectif pour suivre ta progression.';
       inp.addEventListener('keydown', e=>{ if(e.key==='Enter') inp.blur(); });
       inp.addEventListener('change', ()=>{ const v=parseFloat(inp.value.replace(/\s/g,'').replace(',','.')); if(v>0) goals[year]=v; else delete goals[year];
-        try{ localStorage.setItem('pipe-goals', JSON.stringify(goals)); }catch(e){} if(window.todoSettingsChanged) window.todoSettingsChanged(); renderPipeline(); });
+        lsSet('pipe-goals', JSON.stringify(goals)); if(window.todoSettingsChanged) window.todoSettingsChanged(); renderPipeline(); });
       board.appendChild(g); }
     { const wb=document.createElement('button'); wb.type='button'; wb.className='pipe-bar-btn pd-week'; wb.textContent='Résumé de la semaine à copier'; wb.title='Signés, offres, avancées, nouveaux dossiers, appels, bloqués : prêt à coller dans un mail ou Teams'; wb.onclick=()=>openWeek('this'); board.appendChild(wb); }
     const grid=document.createElement('div'); grid.className='pd-grid'; board.appendChild(grid);
@@ -3046,7 +2958,7 @@
     const t=document.createElement('table'); t.className='pl-table';
     const th=document.createElement('tr');
     PL_COLS.forEach(([k,label])=>{ const c=document.createElement('th'); c.scope='col'; const b=document.createElement('button'); b.type='button'; b.textContent=label+(sort.k===k?(sort.dir>0?' ▲':' ▼'):''); b.dataset.k=k;
-      b.onclick=()=>{ const n=sort.k===k?{ k, dir:-sort.dir }:{ k, dir:(k==='stage'||k==='kwc'||k==='mwh'||k==='upd')?-1:1 }; try{ localStorage.setItem('pipe-list-sort', JSON.stringify(n)); }catch(e){} renderPipeline(); };
+      b.onclick=()=>{ const n=sort.k===k?{ k, dir:-sort.dir }:{ k, dir:(k==='stage'||k==='kwc'||k==='mwh'||k==='upd')?-1:1 }; lsSet('pipe-list-sort', JSON.stringify(n)); renderPipeline(); };
       c.appendChild(b); th.appendChild(c); });
     const thead=document.createElement('thead'); thead.appendChild(th); t.appendChild(thead);
     const tb=document.createElement('tbody');
@@ -3129,7 +3041,7 @@
     }catch(e){ flashBtn(btn,'Échec : '+(e.message||e)); }
   }
   function meetPrint(groups){
-    const w=window.open('', '_blank'); if(!w){ alert('Autorise les fenêtres pour imprimer.'); return; }
+    const w=window.open('', '_blank'); if(!w){ tell('Autorise les fenêtres pour imprimer.'); return; }
     w.document.write('<!doctype html><html lang="fr"><head><meta charset="utf-8"><title>'+escapeHtml(meetTitle())+'</title><style>@page{ size:A4 landscape; margin:12mm } body{ margin:0 } tr{ page-break-inside:avoid }</style></head><body>'+meetHtml(groups)+'</body></html>');
     w.document.close(); w.focus(); setTimeout(()=>w.print(), 200);
   }
@@ -3170,232 +3082,6 @@
         r.querySelector('.m').textContent=(avg!=null?avg+' j en moyenne':'')+(late?' · '+late+' > 15 j':''); if(late) r.classList.add('late'); c.appendChild(r); }); }
     return box;
   }
-  // ---------- « Présenter » : the meeting as a consultant's deck (pyramid principle): the answer on slide 1, then one message
-  // per slide that details it — an action title (a sentence with a number), one exhibit, « À retenir », source and page; the deals in appendix ----------
-  const loadPptx=()=>loadScript('https://cdn.jsdelivr.net/npm/pptxgenjs@3.12.0/dist/pptxgen.bundle.js', ()=>!!window.PptxGenJS, 'PowerPoint');
-
-  const pxHex=c=>{ const m=/rgba?\(\s*([\d.]+)[,\s]+([\d.]+)[,\s]+([\d.]+)(?:\s*[,/]\s*([\d.]+))?/.exec(c||''); if(!m || (m[4]!=null && +m[4]<0.08)) return null; return [m[1],m[2],m[3]].map(x=>Math.round(+x).toString(16).padStart(2,'0')).join('').toUpperCase(); };
-  function slideToPptx(pptx, el){
-    const sl=pptx.addSlide(), R=el.getBoundingClientRect(), k=13.333/R.width, pt=px=>Math.max(6, Math.round(px*k*72*10)/10);
-    const at=r=>({ x:(r.left-R.left)*k, y:(r.top-R.top)*k, w:Math.max(.02, r.width*k), h:Math.max(.02, r.height*k) });
-    const cs0=getComputedStyle(el), grad=/rgba?\([^)]*\)/.exec(cs0.backgroundImage||'');
-    sl.background={ color:(cs0.backgroundImage!=='none' && grad && pxHex(grad[0]))||pxHex(cs0.backgroundColor)||'FFFFFF' };
-    const runOf=(txt, cs)=>({ text:cs.textTransform==='uppercase'?txt.toUpperCase():txt, options:{ bold:+cs.fontWeight>=600, italic:cs.fontStyle==='italic', color:pxHex(cs.color)||'0F1B2D', fontSize:pt(parseFloat(cs.fontSize)) } });
-    const runsOf=node=>{ const out=[]; node.childNodes.forEach(c=>{
-        if(c.nodeType===3){ const t=c.textContent.replace(/\s+/g,' '); if(t.trim()) out.push(runOf(t, getComputedStyle(node))); }
-        else if(c.nodeType===1){ const cs=getComputedStyle(c); if(cs.display==='none') return; if(cs.display==='inline'){ const t=c.innerText.replace(/\s+/g,' '); if(t.trim()) out.push(runOf(t, cs)); } } });
-      if(out.length){ out[0].text=out[0].text.replace(/^\s+/,''); out[out.length-1].text=out[out.length-1].text.replace(/\s+$/,''); }
-      return out.filter(r=>r.text); };
-    const isBlockText=n=>{ const cs=getComputedStyle(n); return cs.display!=='inline' && cs.display!=='none' && [...n.childNodes].some(c=>(c.nodeType===3 && c.textContent.trim()) || (c.nodeType===1 && getComputedStyle(c).display==='inline' && c.innerText.trim())); };
-    el.querySelectorAll('*').forEach(n=>{
-      if(n.closest('table') && n.tagName!=='TABLE') return;
-      const cs=getComputedStyle(n), r=n.getBoundingClientRect(); if(cs.display==='none' || cs.visibility==='hidden' || r.width<1 || r.height<1) return;
-      if(n.tagName==='TABLE'){
-        const rows=[...n.rows].map(tr=>[...tr.cells].map(td=>{ const c=getComputedStyle(td), runs=runsOf(td), bg=pxHex(c.backgroundColor)||pxHex(getComputedStyle(tr).backgroundColor);
-          const bb=parseFloat(c.borderBottomWidth)>0?{ type:'solid', pt:Math.max(.5, parseFloat(c.borderBottomWidth)*k*72), color:pxHex(c.borderBottomColor)||'DDE3EA' }:{ type:'none' };
-          return { text:runs.length?runs:'', options:Object.assign({ align:c.textAlign==='right'?'right':'left', valign:'middle', margin:[0,4,0,4], border:[{ type:'none' },{ type:'none' },bb,{ type:'none' }] }, bg?{ fill:{ color:bg } }:{}, td.colSpan>1?{ colspan:td.colSpan }:{}) }; }));
-        const full=[...n.rows].find(tr=>tr.cells.length===Math.max(...[...n.rows].map(x=>x.cells.length)));
-        sl.addTable(rows, Object.assign(at(r), { colW:[...full.cells].map(td=>td.getBoundingClientRect().width*k), rowH:[...n.rows].map(tr=>tr.getBoundingClientRect().height*k), fontFace:'Arial', autoPage:false }));
-        return; }
-      const bg=pxHex(cs.backgroundColor), rad=parseFloat(cs.borderTopLeftRadius)||0;
-      if(bg) sl.addShape(rad>=Math.min(r.width,r.height)/2-1 && Math.abs(r.width-r.height)<2?'ellipse':'rect', Object.assign(at(r), { fill:{ color:bg }, line:{ type:'none' } }));
-      [['Top',0],['Bottom',0],['Left',1],['Right',1]].forEach(([sd,vert])=>{ const w=parseFloat(cs['border'+sd+'Width']), col=pxHex(cs['border'+sd+'Color']); if(!(w>=.5) || !col || cs['border'+sd+'Style']==='none') return;
-        const b={ left:r.left, top:r.top, width:vert?w:r.width, height:vert?r.height:w }; if(sd==='Bottom') b.top=r.bottom-w; if(sd==='Right') b.left=r.right-w;
-        sl.addShape('rect', Object.assign(at(b), { fill:{ color:col }, line:{ type:'none' } })); });
-      if(n.matches('.ps-exec-r li')){ const d=r.height>0?Math.min(r.height*.6, R.width*.028):0, cb=getComputedStyle(n,'::before');   // the numbered circles are drawn by CSS
-        const box={ left:r.left, top:r.top+(r.height-d)/2, width:d, height:d }; sl.addShape('ellipse', Object.assign(at(box), { fill:{ color:pxHex(cb.backgroundColor)||'0F1B2D' }, line:{ type:'none' } }));
-        sl.addText(String([...n.parentNode.children].indexOf(n)+1), Object.assign(at(box), { align:'center', valign:'middle', margin:0, bold:true, color:'FFFFFF', fontSize:pt(parseFloat(cb.fontSize)||14), fontFace:'Arial' })); }
-      if(isBlockText(n)){ const runs=runsOf(n); if(!runs.length) return;
-        // where the text itself sits (a label above it, drawn by a block child, keeps its own place)
-        const own=[...n.childNodes].filter(c=>(c.nodeType===3 && c.textContent.trim()) || (c.nodeType===1 && getComputedStyle(c).display==='inline' && c.innerText.trim()));
-        const rg=document.createRange(); rg.setStartBefore(own[0]); rg.setEndAfter(own[own.length-1]); const tr=rg.getBoundingClientRect();
-        const pl=parseFloat(cs.paddingLeft)+parseFloat(cs.borderLeftWidth||0), pr=parseFloat(cs.paddingRight)+parseFloat(cs.borderRightWidth||0);
-        const one=tr.height<parseFloat(cs.fontSize)*1.9, align=cs.textAlign==='right' || cs.textAlign==='end'?'right':cs.textAlign==='center'?'center':'left';
-        let left=r.left+pl, width=Math.max(4, r.width-pl-pr);
-        if(/grid|flex/.test(cs.display)){ left=tr.left; width=Math.max(4, Math.min(tr.width, r.right-pr-tr.left)); }   // a loose text inside a grid or flex row has its own cell
-        if(cs.textOverflow==='ellipsis' && n.scrollWidth>n.clientWidth+1 && runs.length===1){ const keep=Math.max(1, Math.floor(runs[0].text.length*n.clientWidth/n.scrollWidth)-1); runs[0].text=runs[0].text.slice(0,keep).trimEnd()+'…'; }
-        if(one){ const extra=width*.06+6; width+=extra; if(align==='right') left-=extra; else if(align==='center') left-=extra/2; }   // PowerPoint's fonts run a little wider: one line stays one line
-        sl.addText(runs, Object.assign(at({ left, top:tr.top, width, height:Math.max(4, tr.height) }), { margin:0, valign:'top', align, fontFace:'Arial', wrap:!one, lineSpacingMultiple:.95 })); }
-    });
-  }
-  function meetPresent(groups){
-    const list=groups.flatMap(g=>g.list); if(!list.length) return;
-    const e=escapeHtml, date=new Date().toLocaleDateString('fr-FR',{ day:'numeric', month:'long', year:'numeric' });
-    const mw=k=>fmtMwc(k), kwOf=l=>l.reduce((x,o)=>x+kwcNum(o),0), daysOf=o=>daysInStage(o), pct=(a,b)=>Math.round(a/Math.max(1,b)*100);
-    const plural=(n,w)=>n+' '+w+(n>1?'s':'');
-    const kw=kwOf(list), likely=list.reduce((x,o)=>x+kwcNum(o)*(MES_WEIGHTS[o.stage]||0),0), mwh=list.reduce((x,o)=>x+(pqNum(String(o.mwh||''))||0),0);
-    const stuck=list.filter(o=>{ const d=daysOf(o); return d!=null && d>15; }).sort((a,b)=>daysOf(b)-daysOf(a));
-    // the blocks (a lot, a request at one step, a plant alone), the unit people talk about in the meeting
-    const blocks=[]; { const m=new Map(); groups.forEach(g=>g.list.forEach(o=>{ const k=meetBlockKey(o); if(!m.has(k)){ m.set(k,{ g, list:[] }); blocks.push(m.get(k)); } m.get(k).list.push(o); })); }
-    const bInfo=bk=>{ const o=bk.list[0], st=oppStage(o.stage), d=daysOf(o), name=meetBlockName(o);
-      const ids=new Set(bk.list.map(x=>x.id).concat(o.requestId?[o.requestId]:[])), tk=activeTasks().filter(t=>t.opportunityId && ids.has(t.opportunityId)).sort((a,b)=>(a.due||'9').localeCompare(b.due||'9'))[0];
-      return { o, st, d, kw:kwOf(bk.list), n:bk.list.length, label:(o.company||'')+(bk.list.length>1 && name?' — '+name:bk.list.length===1?' — '+oppName(o):''),
-        who:st?(st.who==='Com'?'Commercial':WHO[st.who]||st.who):'', next:(tk && plainLinks(tk.title||'').replace(/\s+—\s+.*$/,'').trim())||(st?stageTaskOf(st, o):'') }; };
-    // the facts every slide is built from
-    const steps=OPP_STAGES.map(st=>{ const l=list.filter(o=>o.stage===st.key); return { st, n:l.length, kw:kwOf(l) }; }).filter(x=>x.n);
-    const bySize=steps.slice().sort((a,b)=>b.kw-a.kw), big=bySize[0], big2=bySize[1];
-    const phases=groups.filter(g=>g.list.length).map(g=>({ g, kw:kwOf(g.list), color:(MAP_PHASES.find(p=>p[0]===g.phase.key)||[0,0,'#7DA2CF'])[2], short:g.phase.label.split(' · ')[0] }));
-    const who={}; list.forEach(o=>{ const st=oppStage(o.stage); if(!st) return; const w=st.who==='SC'?'Ops':st.who; (who[w]=who[w]||[]).push(o); });
-    const whoOrder=['Com','Ops','Jur','Client','Dir'].filter(w=>who[w]), whoLead=whoOrder.slice().sort((a,b)=>who[b].length-who[a].length)[0];
-    const whoName=w=>w==='Com'?'Le commercial':w==='Ops'?'Ops':w==='Jur'?'Le Juridique':w==='Client'?'Les producteurs':'La Direction';
-    const lateOf=l=>l.filter(o=>{ const d=daysOf(o); return d!=null && d>15; }).length, avgOf=l=>{ const ds=l.map(daysOf).filter(d=>d!=null); return ds.length?Math.round(ds.reduce((x,y)=>x+y,0)/ds.length):null; };
-    const fc=mesForecast(list), fcPeak=(()=>{ const cols=[...fc.chart.querySelectorAll('.pd-mes-col')].map(c=>({ q:c.querySelector('.q').textContent, v:c.querySelector('.v').textContent })).filter(c=>c.v); return cols.sort((a,b)=>pqNum(b.v)-pqNum(a.v))[0]; })();
-    // the deck's sections (the tracker at the top of each slide) and the slides
-    const SECTIONS=['Synthèse','Étapes','Dossiers','Mises en service','Qui a la main','Attention'];
-    const slides=[]; const add=o=>{ slides.push(o); return slides.length; };
-    const takeaway=t=>'<aside class="ps-take"><span class="ps-k">À retenir</span>'+e(t)+'</aside>';
-    // 1. the answer: every key figure and the four messages, each pointing to the slide that details it
-    const S1=add({ sec:'Synthèse' });
-    const pStep=add({ sec:'Étapes', title:'« '+big.st.label+' » concentre '+mw(big.kw)+', soit '+pct(big.kw,kw)+' % du volume en jeu',
-      body:'<div class="ps-bars ps-fill">'+steps.map(x=>'<div class="ps-bar"><span class="l">'+e(x.st.label)+'</span><span class="b"><i style="width:'+Math.max(2,x.kw/bySize[0].kw*100)+'%;background:'+(MAP_PHASES.find(p=>p[0]===x.st.phase)||[0,0,'#7DA2CF'])[2]+'"></i></span><span class="v">'+e(mw(x.kw))+'</span><span class="n">'+plural(x.n,'install.').replace('install.s','install.')+'</span></div>').join('')+'</div>'
-        +takeaway(big2?'Après « '+big.st.label+' », c’est « '+big2.st.label+' » qui pèse le plus ('+mw(big2.kw)+').':'Tout le volume est à cette étape.') });
-    // dossiers: one table for every phase (a line per phase inside), cut into balanced pages so none is half empty
-    let pDeals=null;
-    { const rowsAll=[]; phases.forEach(ph=>blocks.filter(b=>b.g===ph.g).map(bInfo).sort((a,b)=>b.kw-a.kw).forEach(r=>rowsAll.push(Object.assign(r, { ph }))));
-      const pages=Math.max(1, Math.ceil((rowsAll.length+phases.length)/11)), per=Math.ceil(rowsAll.length/pages), lead=phases.slice().sort((a,b)=>b.kw-a.kw)[0];
-      for(let pg=0; pg<pages; pg++){ const part=rowsAll.slice(pg*per, (pg+1)*per); if(!part.length) break; const late=part.filter(r=>r.d!=null && r.d>15);
-        let body='', last=null;
-        part.forEach(r=>{ if(r.ph!==last){ const nPh=rowsAll.filter(x=>x.ph===r.ph).length; body+='<tr class="ps-ph"><td colspan="6"><i style="background:'+r.ph.color+'"></i>'+e(r.ph.short)+'<span>'+plural(nPh,'dossier')+' · '+e(mw(r.ph.kw))+(last===null && pg && rowsAll[pg*per-1].ph===r.ph?' · suite':'')+'</span></td></tr>'; last=r.ph; }
-          body+='<tr><td><b>'+e(r.label)+'</b>'+(r.n>1?'<small> · '+r.n+' install.</small>':'')+'</td><td class="n">'+e(r.kw?mw(r.kw):'—')+'</td><td>'+e(r.st?stageLabel(r.o.stage, r.o):'')+'</td><td>'+e(r.who)+'</td><td class="n'+(r.d!=null && r.d>15?' warn':'')+'">'+(r.d!=null?r.d+' j':'—')+'</td><td>'+e(r.next)+'</td></tr>'; });
-        const n=add({ sec:'Dossiers', title:plural(blocks.length,'dossier')+' en cours, '+mw(kw)+' : '+lead.short+' en porte '+pct(lead.kw,kw)+' %'+(pages>1?' ('+(pg+1)+'/'+pages+')':''),
-          body:'<div class="ps-fill"><table class="ps-table ps-table-fill"><thead><tr><th>Dossier</th><th class="n">Puissance</th><th>Étape</th><th>Chez</th><th class="n">Depuis</th><th>Prochaine action</th></tr></thead><tbody>'+body+'</tbody></table></div>'
-            +takeaway(late.length?plural(late.length,'dossier')+(pages>1?' de cette page':'')+' attend'+(late.length>1?'ent':'')+' depuis plus de 15 jours : '+[...new Set(late.map(r=>r.label.split(' — ')[0]))].slice(0,3).join(', ')+'.':'Aucun de ces dossiers n’attend depuis plus de 15 jours.') });
-        if(!pDeals) pDeals=n; } }
-    const pMes=fc.tot?add({ sec:'Mises en service', title:mw(fc.tot)+' probables à mettre en service d’ici deux ans'+(fcPeak?', surtout au '+fcPeak.q.replace(/(\d\d)$/,'20$1'):''),
-      body:'<div class="ps-chart ps-fill">'+fc.chart.outerHTML+'</div><p class="ps-note">Barre claire : en jeu · foncée : probable, pondéré par l’étape (pricing 25 %, offre en attente 40 %, KYC 60 %, signature 90 %, signé 100 %). Chiffre : MWc probables.</p>'
-        +takeaway('Sur '+mw(fc.all)+' en jeu, '+mw(fc.tot)+' sont probables : c’est le volume sur lequel on peut compter.') }):null;
-    const pWho=add({ sec:'Qui a la main', title:whoName(whoLead)+' a la main sur '+plural(who[whoLead].length,'dossier')+' ('+mw(kwOf(who[whoLead]))+')',
-      body:'<div class="ps-who ps-fill">'+whoOrder.map(w=>{ const l=who[w], avg=avgOf(l), late=lateOf(l);
-        const top=[...new Map(l.slice().sort((a,b)=>(daysOf(b)||0)-(daysOf(a)||0)).map(o=>[meetBlockKey(o), o])).values()], max=5;
-        return '<div class="ps-who-c"><span class="ps-chip" style="--c:'+WHO_COLORS[w]+'">'+e(w==='Com'?'Commercial':WHO[w])+'</span><b>'+l.length+'</b><span>'+e(mw(kwOf(l)))+'</span><em'+(late?' class="warn"':'')+'>'+(avg!=null?avg+' j en moyenne':'')+(late?' · '+late+' > 15 j':'')+'</em>'
-          +'<ul class="ps-who-l">'+top.slice(0,max).map(o=>{ const d=daysOf(o); return '<li><span>'+e(o.company||oppName(o))+'</span><i'+(d!=null && d>15?' class="warn"':'')+'>'+(d!=null?d+' j':'')+'</i></li>'; }).join('')+(top.length>max?'<li class="more">+ '+(top.length-max)+' autres</li>':'')+'</ul></div>'; }).join('')+'</div>'
-        +takeaway(who.Ops?'Ops porte '+plural(who.Ops.length,'dossier')+(lateOf(who.Ops)?', dont '+lateOf(who.Ops)+' depuis plus de 15 jours : à relancer.':' ; rien de bloqué de son côté.'):'Aucun dossier n’attend Ops.') });
-    const pAtt=add({ sec:'Attention', title:stuck.length?plural(stuck.length,'dossier')+' à débloquer, le plus ancien depuis '+daysOf(stuck[0])+' jours':'Aucun dossier bloqué depuis plus de 15 jours',
-      body:stuck.length?'<div class="ps-cards ps-fill" style="--cols:'+Math.min(4, stuck.slice(0,8).length)+'">'+stuck.slice(0,8).map(o=>{ const st=oppStage(o.stage), r=bInfo({ list:[o] }), nt=(o.notesLog||[]).filter(x=>x && x.text).sort((x,y)=>y.at-x.at)[0];
-          return '<div class="ps-card"><span class="ps-k">'+e(stageLabel(o.stage, o))+' · '+e(st?(st.who==='Com'?'Commercial':WHO[st.who]||st.who):'')+'</span><b class="ps-card-t">'+e(o.company||'')+'</b><span class="ps-card-s">'+e(oppName(o))+(kwcNum(o)?' · '+e(mw(kwcNum(o))):'')+'</span>'
-            +'<strong class="warn">'+daysOf(o)+' j</strong><span class="ps-card-s">sans bouger</span><p><span class="ps-k">Prochaine action</span>'+e(r.next||'—')+'</p>'+(nt?'<p class="ps-card-n"><span class="ps-k">Dernier échange · '+e(new Date(nt.at).toLocaleDateString('fr-FR'))+'</span>'+e(nt.text.length>110?nt.text.slice(0,110)+'…':nt.text)+'</p>':'')+'</div>'; }).join('')+'</div>'
-        +takeaway('Décider en séance qui relance qui, et pour quand.'):takeaway('Rien n’est à la même étape depuis plus de 15 jours.') });
-    // the answer, written now that every page number is known
-    const msgs=[
-      { b:'« '+big.st.label+' » concentre '+mw(big.kw)+' ('+pct(big.kw,kw)+' %)', s:plural(big.n,'installation')+(big2?' ; ensuite « '+big2.st.label+' » ('+mw(big2.kw)+')':''), p:pStep },
-      { b:whoName(whoLead)+' a la main sur '+plural(who[whoLead].length,'dossier'), s:whoOrder.filter(w=>w!==whoLead).map(w=>(w==='Com'?'commercial':WHO[w])+' '+who[w].length).join(' · '), p:pWho },
-      fc.tot?{ b:mw(fc.tot)+' probables à mettre en service d’ici deux ans', s:fcPeak?'Le plus au '+fcPeak.q.replace(/(\d\d)$/,'20$1')+' ('+fcPeak.v+' MWc)':'', p:pMes }:null,
-      { b:stuck.length?plural(stuck.length,'dossier')+' bloqué'+(stuck.length>1?'s':'')+' depuis plus de 15 jours':'Aucun dossier bloqué', s:[...new Map(stuck.map(o=>[o.company||'', daysOf(o)])).entries()].slice(0,3).map(([c,d])=>c+' ('+d+' j)').join(' · '), p:pAtt, warn:!!stuck.length }
-    ].filter(Boolean);
-    slides[S1-1]={ sec:'Synthèse', exec:true, title:mw(likely)+' probables sur '+mw(kw)+' en jeu'+(stuck.length?' ; '+plural(stuck.length,'dossier')+' à débloquer':''),
-      body:'<div class="ps-exec"><div class="ps-exec-l">'
-        +[[mw(kw),'en jeu'],[mw(likely),'probables'],[String(list.length),'installations · '+plural(blocks.length,'dossier')],[mwh?(mwh>=1000?(Math.round(mwh/100)/10).toLocaleString('fr-FR')+' GWh':Math.round(mwh).toLocaleString('fr-FR')+' MWh'):'—','par an (P50)']].map(([v,l])=>'<div class="ps-ex-k"><b>'+e(v)+'</b><span>'+e(l)+'</span></div>').join('')
-        +'<div class="ps-split"><div class="ps-split-bar">'+phases.map(p=>'<i style="flex:'+Math.max(p.kw,1)+';background:'+p.color+'"></i>').join('')+'</div><div class="ps-split-l">'+phases.map(p=>'<span><i style="background:'+p.color+'"></i>'+e(p.short)+' '+e(mw(p.kw))+'</span>').join('')+'</div></div>'
-        +'</div><ol class="ps-exec-r">'+msgs.map(m=>'<li'+(m.warn?' class="warn"':'')+'><b>'+e(m.b)+'</b>'+(m.s?'<span>'+e(m.s)+'</span>':'')+'<em>p. '+m.p+'</em></li>').join('')+'</ol></div>' };
-    // appendix: one page per deal; under the figures, the plants (or the plant's sheet) and what happened lately
-    const dealMore=l=>{
-      let left;
-      if(l.length>1) left='<div><span class="ps-k">Centrales</span><table class="ps-table ps-mini"><tbody>'+l.slice(0,6).map(x=>'<tr><td><b>'+e(oppName(x))+'</b></td><td class="n">'+e(x.kwc?fmtKwc(x.kwc):'—')+'</td><td class="n">'+e(x.mwh?Math.round(pqNum(String(x.mwh))||0).toLocaleString('fr-FR')+' MWh':'—')+'</td><td>'+e(x.commune||'')+'</td><td>'+e(x.mesEff||x.mesPrev||'')+'</td></tr>').join('')+(l.length>6?'<tr><td colspan="5">+ '+(l.length-6)+' autres</td></tr>':'')+'</tbody></table></div>';
-      else { const o=l[0], keys=['Commune','Département','Nature Projet',"Type d'injection",'Puissance raccordement (kVA)','Stockage','P90 annuel (indicatif) (MWh/an)','Productible (P50) (kWh/kWc/an)','Nom SPV','Système de gestion des heures négatives','Première injection'];
-        const kv=keys.map(k=>[k.replace(/ \(.*$/,''), caractValue(o,k)]).filter(x=>x[1]!=='' && x[1]!=null).slice(0,10);
-        left='<div><span class="ps-k">Caractéristiques</span>'+(kv.length?'<dl class="ps-kv">'+kv.map(([k,v])=>'<dt>'+e(k)+'</dt><dd>'+e(String(v))+'</dd>').join('')+'</dl>':'<p class="ps-empty">Fiche Caractéristiques pas encore remplie.</p>')+'</div>'; }
-      const h=buildHistory(l), ev=h?[...h.querySelectorAll('li')].slice(0,6).map(li=>[li.firstChild.textContent, li.lastChild.textContent]):[];
-      const right='<div><span class="ps-k">Historique récent</span>'+(ev.length?'<ul class="ps-hist">'+ev.map(([d,t])=>'<li><span>'+e(d)+'</span>'+e(t.length>90?t.slice(0,90)+'…':t)+'</li>').join('')+'</ul>':'<p class="ps-empty">Rien de noté pour l’instant.</p>')+'</div>';
-      return '<div class="ps-deal-more">'+left+right+'</div>'; };
-    add({ divider:true, title:'Annexe', sub:'Une fiche par dossier, dans l’ordre des tableaux' });
-    blocks.slice().sort((a,b)=>MEET_PHASES.findIndex(p=>p.key===b.g.phase.key)-MEET_PHASES.findIndex(p=>p.key===a.g.phase.key) || kwOf(b.list)-kwOf(a.list)).forEach(bk=>{
-      const r=bInfo(bk), o=r.o, mwhB=bk.list.reduce((x,y)=>x+(pqNum(String(y.mwh||''))||0),0), mes=o.mesEff||o.mesPrev||'';
-      const lastNote=bk.list.flatMap(x=>x.notesLog||[]).filter(n=>n && n.text).sort((a,b)=>b.at-a.at)[0];
-      const ph=PIPE_PHASES.filter(p=>p.key!=='prequal'), cur=ph.findIndex(p=>p.key===(r.st&&r.st.phase));
-      add({ sec:'Annexe', title:r.label+' · '+(r.st?stageLabel(o.stage, o):'')+(r.d!=null?' depuis '+r.d+' jour'+(r.d>1?'s':''):''),
-        body:'<div class="ps-deal"><div class="ps-deal-figs"><div><b>'+e(r.kw?mw(r.kw):'—')+'</b><span>'+plural(r.n,'installation')+'</span></div><div><b>'+e(mwhB?Math.round(mwhB).toLocaleString('fr-FR')+' MWh':'—')+'</b><span>par an (P50)</span></div><div><b>'+e(mes||'—')+'</b><span>mise en service</span></div></div>'
-          +'<div class="ps-track">'+ph.map((p,i)=>'<div class="'+(i<cur?'done':i===cur?'on':'')+'"><i></i><span>'+e(p.label)+'</span></div>').join('')+'</div>'
-          +'<div class="ps-deal-next"><div><span class="ps-k">Prochaine action</span><b>'+e(r.next||'—')+'</b></div><div><span class="ps-k">Chez</span><b'+(r.d!=null && r.d>15?' class="warn"':'')+'>'+e(r.who)+(r.d!=null?' · '+r.d+' j':'')+'</b></div>'+(o.contrat?'<div><span class="ps-k">Contrat</span><b>'+e(o.contrat+(o.duree?' · '+o.duree+' ans':''))+'</b></div>':'')+'</div>'
-          +(lastNote?'<p class="ps-context"><span class="ps-k">Dernier échange · '+e(new Date(lastNote.at).toLocaleDateString('fr-FR'))+'</span>'+e(lastNote.text.length>180?lastNote.text.slice(0,180)+'…':lastNote.text)+'</p>':'')
-          +dealMore(bk.list)+'</div>' });
-    });
-    // the deck
-    let ov=$('present-overlay'); if(ov) ov.remove();
-    ov=document.createElement('div'); ov.id='present-overlay'; ov.className='ps-overlay'; ov.tabIndex=-1; ov.setAttribute('role','dialog'); ov.setAttribute('aria-label','Présentation de la réunion');
-    ov.innerHTML='<div class="ps-stage"><div class="ps-slide"></div></div><div class="ps-bar-ui"><button type="button" class="ps-prev" aria-label="Slide précédente">‹</button><span class="ps-count"></span><button type="button" class="ps-next" aria-label="Slide suivante">›</button><button type="button" class="ps-full" title="Plein écran (F)">Plein écran</button><button type="button" class="ps-pptx" title="Télécharger en PowerPoint (.pptx) pour retoucher les slides à la main">PowerPoint</button><button type="button" class="ps-close" title="Fermer (Échap)">Fermer</button></div>';
-    document.body.appendChild(ov);
-    let i=0; const box=ov.querySelector('.ps-slide');
-    const tracker=sec=>'<nav class="ps-tracker">'+SECTIONS.map(x=>'<span'+(x===sec?' class="on"':'')+'>'+e(x)+'</span>').join('')+'</nav>';
-    const paint=(box, n)=>{ const sl=slides[n];
-      box.className='ps-slide'+(sl.divider?' ps-divider':'')+(sl.exec?' ps-execs':'');
-      box.innerHTML=sl.divider?'<div class="ps-div-in"><div class="ps-cover-k">Réunion pricing · '+e(date)+'</div><h1>'+e(sl.title)+'</h1><p>'+e(sl.sub)+'</p></div>'
-        :'<header>'+(sl.sec!=='Annexe'?tracker(sl.sec):'<nav class="ps-tracker"><span class="on">Annexe · fiche dossier</span></nav>')+(sl.exec?'<div class="ps-kicker">Réunion pricing · '+e(date)+'</div>':'')+'<h2>'+e(sl.title)+'</h2></header><div class="ps-body">'+sl.body+'</div>'
-          +'<footer><span>Source : Pipe agrégation (appli ToDo), au '+e(date)+'</span><span>'+(n+1)+'</span></footer>';
-      box.querySelectorAll('.ps-fill > .ps-table-fill').forEach(t=>{ t.style.height='auto'; t.style.fontSize=''; const room=t.parentNode.clientHeight;
-        for(let f=1.45; t.offsetHeight>room && f>1.2; f-=0.06){ t.style.fontSize=f.toFixed(2)+'cqw'; t.querySelectorAll('td').forEach(td=>{ td.style.paddingTop=td.style.paddingBottom=(f*0.32).toFixed(2)+'cqw'; }); }   // too many lines: smaller, never cut
-        const nat=t.offsetHeight; if(room>nat) t.style.height=Math.min(room, nat*2.2)+'px'; }); };
-    const show=n=>{ i=Math.max(0, Math.min(slides.length-1, n)); paint(box, i); ov.querySelector('.ps-count').textContent=(i+1)+' / '+slides.length; };
-    // « PowerPoint » : the same slides as a .pptx, every text and table editable
-    ov.querySelector('.ps-pptx').onclick=async ev=>{ ev.stopPropagation(); const b=ev.currentTarget, was=b.textContent; b.disabled=true; b.textContent='Préparation…';
-      try{ await loadPptx(); const host=document.createElement('div'); host.className='ps-export-host'; const sb=document.createElement('div'); host.appendChild(sb); document.body.appendChild(host);
-        const pptx=new window.PptxGenJS(); pptx.layout='LAYOUT_WIDE'; pptx.title='Réunion pricing · '+date;
-        try{ slides.forEach((x,n)=>{ paint(sb, n); slideToPptx(pptx, sb); }); } finally { host.remove(); }
-        await pptx.writeFile({ fileName:'Reunion pricing '+toISO(new Date())+'.pptx' }); b.textContent='Téléchargé ✓'; }
-      catch(err){ console.error(err); b.textContent='Échec (hors ligne ?)'; }
-      ov.focus();   // the button is disabled a moment: the arrows and Échap keep working
-      setTimeout(()=>{ b.textContent=was; b.disabled=false; }, 2500); };
-    const onResize=()=>{ if(document.body.contains(ov)) show(i); }; window.addEventListener('resize', onResize);   // full screen: the tables are spread again
-    const close=()=>{ if(document.fullscreenElement) try{ document.exitFullscreen(); }catch(e2){} window.removeEventListener('resize', onResize); ov.remove(); };
-    ov.querySelector('.ps-prev').onclick=()=>show(i-1); ov.querySelector('.ps-next').onclick=()=>show(i+1); ov.querySelector('.ps-close').onclick=close;
-    ov.querySelector('.ps-full').onclick=()=>{ try{ document.fullscreenElement?document.exitFullscreen():ov.requestFullscreen(); }catch(e2){} };
-    ov.querySelector('.ps-stage').addEventListener('click', ev=>{ const pg=ev.target.closest('.ps-exec-r li'); if(pg){ const m=/p\. (\d+)/.exec(pg.textContent); if(m){ show(+m[1]-1); return; } }
-      const r=ov.getBoundingClientRect(); show(ev.clientX>r.left+r.width/3?i+1:i-1); });
-    ov.addEventListener('keydown', ev=>{ const k=ev.key; ev.stopPropagation();   // the app's own shortcuts (n, p, Ctrl K…) stay quiet while presenting
-      if(['ArrowRight','ArrowDown','PageDown',' ','Enter'].includes(k)){ ev.preventDefault(); show(i+1); }
-      else if(['ArrowLeft','ArrowUp','PageUp','Backspace'].includes(k)){ ev.preventDefault(); show(i-1); }
-      else if(k==='Home'){ ev.preventDefault(); show(0); } else if(k==='End'){ ev.preventDefault(); show(slides.length-1); }
-      else if(k==='f' || k==='F'){ ev.preventDefault(); ov.querySelector('.ps-full').click(); }
-      else if(k==='Escape'){ ev.preventDefault(); if(!document.fullscreenElement) close(); } });
-    show(0); ov.focus();
-  }
-  function renderPipeMeet(board, q){
-    board.classList.add('pipe-meet');
-    const groups=meetData(q), n=groups.reduce((t,g)=>t+g.rows.length,0);
-    const head=document.createElement('div'); head.className='meet-head';
-    head.innerHTML='<div class="meet-title"><b></b><span></span></div><div class="meet-actions"></div>';
-    head.querySelector('b').textContent='Ce qui arrive'; head.querySelector('span').textContent=meetTotal(groups.reduce((t,g)=>t+g.kwc,0), groups.reduce((t,g)=>t+g.mwh,0), n);
-    const acts=head.querySelector('.meet-actions');
-    const mk=(label, fn, title)=>{ const b=document.createElement('button'); b.type='button'; b.className='pipe-bar-btn'; b.textContent=label; if(title) b.title=title; b.onclick=()=>fn(b); acts.appendChild(b); return b; };
-    mk('Copier pour mail / Teams', b=>meetCopy(groups,b), 'Le tableau, prêt à coller dans un mail Outlook ou dans Teams');
-    mk('Excel', b=>meetXlsx(groups,b), 'Télécharger le tableau en .xlsx');
-    mk('Imprimer / PDF', ()=>meetPrint(groups), 'Imprimer, ou enregistrer en PDF (paysage)');
-    const pres=mk('Présenter', ()=>meetPresent(groups), 'La réunion en slides, plein écran ; flèches du clavier pour avancer');
-    pres.classList.add('meet-present-btn');
-    const colBtn=mk('Colonnes ▾', ()=>{ meetColsOpen=!meetColsOpen; renderPipeline(); }, 'Choisir les colonnes du tableau (aussi pour la copie, l\u2019Excel et l\u2019impression)');
-    colBtn.classList.add('meet-cols-btn'); colBtn.setAttribute('aria-expanded', String(meetColsOpen));
-    board.appendChild(head);
-    if(meetColsOpen){ const cc=document.createElement('div'); cc.className='meet-chips meet-cols'; const hid=meetHiddenCols();
-      cc.innerHTML='<span class="meet-cols-l">Colonnes :</span>';
-      MEET_COLS.slice(2).forEach(c=>{ const b=document.createElement('button'); b.type='button'; b.className='meet-chip'+(hid.includes(c)?'':' on'); b.textContent=c; b.dataset.col=c; b.setAttribute('aria-pressed', String(!hid.includes(c)));
-        b.onclick=()=>{ let v=meetHiddenCols(); v=v.includes(c)?v.filter(x=>x!==c):v.concat(c); try{ localStorage.setItem('pipe-meet-cols', JSON.stringify(v)); }catch(e){} prefsToNote(); renderPipeline(); }; cc.appendChild(b); });
-      board.appendChild(cc); }
-    // which phases to show (remembered on this device)
-    const chips=document.createElement('div'); chips.className='meet-chips'; const on=meetPhasesOn();
-    MEET_PHASES.forEach(p=>{ const c=document.createElement('button'); c.type='button'; c.className='meet-chip'+(on.includes(p.key)?' on':''); c.textContent=p.label; c.dataset.phase=p.key; c.setAttribute('aria-pressed', String(on.includes(p.key)));
-      c.onclick=()=>{ let v=meetPhasesOn(); v=v.includes(p.key)?v.filter(k=>k!==p.key):v.concat(p.key); if(!v.length) return; try{ localStorage.setItem('pipe-meet-phases', JSON.stringify(MEET_PHASES.map(x=>x.key).filter(k=>v.includes(k)))); }catch(e){} prefsToNote(); renderPipeline(); };
-      chips.appendChild(c); });
-    board.appendChild(chips);
-    if(!n){ const e=document.createElement('div'); e.className='today-empty'; e.textContent='Aucune installation dans ces phases.'; board.appendChild(e); return; }
-    board.appendChild(meetVisuals(groups));
-    const wrap=document.createElement('div'); wrap.className='meet-scroll';
-    const vis=meetVis(), ncol=vis.filter(Boolean).length;
-    let t='<table class="meet-table"><thead><tr>'+meetPick(MEET_COLS, vis).map(c=>'<th>'+escapeHtml(c)+'</th>').join('')+'</tr></thead><tbody>';
-    groups.forEach(g=>{ if(!g.rows.length) return;
-      t+='<tr class="meet-sec" data-phase="'+g.phase.key+'"><th colspan="'+ncol+'"><i style="background:'+(MAP_PHASES.find(x=>x[0]===g.phase.key)||[0,0,'#888'])[2]+'"></i>'+escapeHtml(g.phase.label)+'<span>'+escapeHtml(meetTotal(g.kwc,g.mwh,g.rows.length))+'</span></th></tr>';
-      let lastKey=null;
-      g.rows.forEach((r,i)=>{ const o=g.list[i], k=meetBlockKey(o), mates=g.list.filter(x=>meetBlockKey(x)===k);
-        if(mates.length>1 && k!==lastKey){   // a lot, or a request at one step: one title line, the installations under it
-          const st=oppStage(o.stage), d=daysInStage(o), kw=mates.reduce((x,y)=>x+kwcNum(y),0);
-          t+='<tr class="meet-blk" data-blk="'+escapeHtml(k)+'" data-req="'+escapeHtml(o.requestId)+'" data-ids="'+escapeHtml(mates.map(x=>x.id).join(','))+'"><td colspan="'+ncol+'"><b>'+escapeHtml(o.company||'')+'</b>'
-            +(meetBlockName(o)?' <span class="meet-blk-name">'+escapeHtml(meetBlockName(o))+'</span>':'')
-            +' <span class="meet-blk-sum">'+escapeHtml([mates.length+' installations', kw?fmtKwc(kw):'', stageLabel(o.stage, o), st?WHO[st.who]||st.who:'', d!=null?'depuis '+d+' j':''].filter(Boolean).join(' · '))+'</span></td></tr>'; }
-        lastKey=k;
-        t+='<tr data-id="'+escapeHtml(o.id)+'"'+(mates.length>1?' class="meet-inblk"':'')+'>'+meetPick(r, vis).map((v,j)=>'<td'+(j===1?' class="meet-name"':'')+'>'+escapeHtml(v)+'</td>').join('')+'</tr>'; }); });
-    wrap.innerHTML=t+'</tbody></table>';
-    wrap.querySelectorAll('tr[data-id]').forEach(tr=>{ tr.onclick=()=>openOppDetail(tr.dataset.id); });
-    wrap.querySelectorAll('tr.meet-blk').forEach(tr=>{ tr.onclick=()=>openRequestDetail(tr.dataset.req, tr.dataset.ids.split(',')); });
-    board.appendChild(wrap);
-  }
   // ---------- saved views (tasks and pipeline): ready-made ones, and the user's own (filters + view + search) ----------
   // Kept on this device. A view only filters what is shown; nothing is changed in the data.
   const savedViewState={ tasks:null, pipeline:null };
@@ -3418,7 +3104,7 @@
     ]
   };
   function userViews(scope){ try{ return JSON.parse(localStorage.getItem('saved-views-'+scope)||'[]'); }catch(e){ return []; } }
-  function storeUserViews(scope, list){ try{ localStorage.setItem('saved-views-'+scope, JSON.stringify(list)); }catch(e){} prefsToNote(); }
+  function storeUserViews(scope, list){ lsSet('saved-views-'+scope, JSON.stringify(list)); prefsToNote(); }
   function currentViewSnapshot(scope){
     const st=savedViewState[scope];
     if(scope==='tasks') return { filter:currentFilter, view:currentView, q:searchQuery||'', preset:st&&st.preset||null };
@@ -3458,7 +3144,7 @@
     const mine=userViews(scope);
     if(mine.length){ head('Mes vues'); mine.forEach((v,i)=>{ const b=item(v.name, ()=>applySavedView(scope, v)); const del=document.createElement('span'); del.className='views-del'; del.textContent='×'; del.title='Supprimer cette vue';
       del.onclick=e=>{ e.stopPropagation(); const l=userViews(scope); l.splice(i,1); storeUserViews(scope,l); m.remove(); openViewsMenu(scope, btn); }; b.appendChild(del); }); }
-    item('+ Enregistrer la vue actuelle…', ()=>{ const name=prompt('Nom de la vue (filtres, affichage et recherche actuels) :', savedViewState[scope]?savedViewState[scope].name:''); if(!name||!name.trim()) return;
+    item('+ Enregistrer la vue actuelle…', async ()=>{ const name=await askText('Nom de la vue (filtres, affichage et recherche actuels) :', savedViewState[scope]?savedViewState[scope].name:''); if(!name||!name.trim()) return;
       const l=userViews(scope).filter(v=>v.name!==name.trim()); l.push(Object.assign({ name:name.trim() }, currentViewSnapshot(scope))); storeUserViews(scope,l); savedViewState[scope]=Object.assign({}, savedViewState[scope]||{}, { name:name.trim() }); paintViewChip(scope); }, 'save');
     document.body.appendChild(m);
     const r=btn.getBoundingClientRect(); m.style.left=Math.min(r.left, innerWidth-m.offsetWidth-8)+'px'; m.style.top=(r.bottom+4)+'px';
@@ -4581,7 +4267,7 @@
     }
     actions.appendChild(oppActionBtn('Voir dans le réseau', ()=>{ closeOppDetail(); openInNetwork('op:'+o.id); }, 'ghost-btn opp-net-btn lite-keep'));
     { const mb=mentionsBlock('op:'+o.id); if(mb) $('opp-detail-body').appendChild(mb); }
-    actions.appendChild(oppActionBtn('Supprimer', ()=>{ if(!confirm('Supprimer cette fiche du pipeline ?')) return; o.deleted=true; touchCrm(o); saveCrm(); closeOppDetail(); renderPipeline(); }, 'ghost-btn danger-btn'));
+    actions.appendChild(oppActionBtn('Supprimer', async ()=>{ if(!await askConfirm('Supprimer cette fiche du pipeline ?', 'Supprimer')) return; o.deleted=true; touchCrm(o); saveCrm(); closeOppDetail(); renderPipeline(); }, 'ghost-btn danger-btn'));
     actions.appendChild(oppActionBtn('Fermer', closeOppDetail, 'ghost-btn lite-keep'));
     foldActions($('opp-detail-actions')); $('opp-detail-overlay').classList.remove('hidden'); if(toTop) sheetToTop();
   }
@@ -4655,7 +4341,7 @@
     const lo=Math.min(...list.filter(x=>!isExited(x)).map(x=>stageIndex(x.stage)).filter(i=>i>=0)), early=!(lo>stageIndex('pricing_indicatif')), key='req-compare-open'+(early?'':'-late');
     let open=early; try{ const v=localStorage.getItem(key); if(v!=null) open=v!=='0'; }catch(e){}
     wrap.open=open;
-    wrap.addEventListener('toggle', ()=>{ if(wrap.dataset.noRemember){ delete wrap.dataset.noRemember; return; } try{ localStorage.setItem(key, wrap.open?'1':'0'); }catch(e){} });
+    wrap.addEventListener('toggle', ()=>{ if(wrap.dataset.noRemember){ delete wrap.dataset.noRemember; return; } lsSet(key, wrap.open?'1':'0'); });
     const missing=list.reduce((s,x)=>s+CARACT_ROWS.filter(l=>REQ_NEEDED.has(caractKey(l)) && caractValue(x,l)==='').length,0);
     wrap.innerHTML='<summary class="opp-phase-h req-compare-h">'+(list.length>1?'Les '+list.length+' installations côte à côte':'Caractéristiques centrales')+(missing?' <span class="req-miss">'+missing+' case'+(missing>1?'s':'')+' à compléter</span>':'')+'<span class="req-hint">cliquer dans une case pour la modifier · tirer le petit carré pour recopier</span></summary>';
     const sc=document.createElement('div'); sc.className='req-compare-scroll';
@@ -4689,14 +4375,14 @@
     let only=false; try{ only=localStorage.getItem('req-rows')==='needed'; }catch(e){}
     tools.innerHTML='<span>Lignes :</span><button type="button" data-rows="needed">Obligatoires</button><button type="button" data-rows="all">Tout le fichier</button>';
     const paintRows=()=>{ sc.querySelector('.req-table').classList.toggle('only-needed', only); tools.querySelectorAll('button').forEach(b=>b.classList.toggle('on', (b.dataset.rows==='needed')===only)); };
-    tools.querySelectorAll('button').forEach(b=>b.onclick=()=>{ only=b.dataset.rows==='needed'; try{ localStorage.setItem('req-rows', only?'needed':'all'); }catch(e){} paintRows(); });
+    tools.querySelectorAll('button').forEach(b=>b.onclick=()=>{ only=b.dataset.rows==='needed'; lsSet('req-rows', only?'needed':'all'); paintRows(); });
     if(!window.TODO_LITE && aiOn()){ const ai=document.createElement('button'); ai.type='button'; ai.className='req-ai'; ai.textContent='Compléter avec l\u2019IA'; ai.title='Claude propose ce qui se déduit des infos de la fiche (coordonnées, altitude, région, productible…) ; tu choisis ce qui est rempli';
       ai.onclick=()=>openAiFill(list.filter(x=>!x.deleted), ()=>{ if(viewingOppId) openOppDetail(viewingOppId); }); tools.appendChild(ai); }
     wrap.appendChild(tools); wrap.appendChild(sc); paintRows();
     if(!window.TODO_LITE) reqFillHandle(sc);
     if(window.TODO_LITE) sc.querySelectorAll('.req-in').forEach(i=>{ if(i.tagName==='SELECT') i.disabled=true; else i.readOnly=true; });   // phone: read only, like the sheets
     sc.querySelectorAll('.req-col').forEach(b=>{ b.onclick=()=>openOppDetail(b.dataset.id); });
-    sc.querySelectorAll('.req-sec-h').forEach(b=>{ b.onclick=()=>{ const tb=b.closest('tbody'), f=!tb.classList.contains('folded'); tb.classList.toggle('folded', f); b.setAttribute('aria-expanded', String(!f)); try{ localStorage.setItem('req-sec-'+tb.dataset.sec, f?'0':'1'); }catch(e){} }; });
+    sc.querySelectorAll('.req-sec-h').forEach(b=>{ b.onclick=()=>{ const tb=b.closest('tbody'), f=!tb.classList.contains('folded'); tb.classList.toggle('folded', f); b.setAttribute('aria-expanded', String(!f)); lsSet('req-sec-'+tb.dataset.sec, f?'0':'1'); }; });
     // edits: saved on Enter or when leaving the cell; Escape puts the value back
     sc.querySelectorAll('.req-in').forEach(inp=>{
       const start=inp.value;
@@ -4787,13 +4473,13 @@
       ['Commentaires',o.commentaires,{wide:true,optional:true}]], 'os-suivi');
     return wrap;
   }
-  function exitList(list, kind){
+  async function exitList(list, kind){
     if(list.length===1) return exitOpp(list[0], kind);
-    if(!confirm(list.length+' installations ('+(list[0].company||'')+') : '+OPP_EXITS[kind]+' ?')) return;
+    if(!await askConfirm(list.length+' installations ('+(list[0].company||'')+') : '+OPP_EXITS[kind]+' ?', 'Confirmer')) return;
     list.forEach(o=>{ relanceOnMove(o, null); o.stageBeforeExit=o.stage; o.stage=kind; o.lostAt=Date.now(); touchCrm(o); }); saveCrm(); closeOppDetail(); renderPipeline();
   }
-  function exitOpp(o, kind){
-    if(!confirm('« '+oppName(o)+' » : '+OPP_EXITS[kind]+' ?')) return;
+  async function exitOpp(o, kind){
+    if(!await askConfirm('« '+oppName(o)+' » : '+OPP_EXITS[kind]+' ?', 'Confirmer')) return;
     relanceOnMove(o, null); o.stageBeforeExit=o.stage; o.stage=kind; o.lostAt=Date.now(); touchCrm(o); saveCrm();
     closeOppDetail(); renderPipeline();
   }
@@ -4804,10 +4490,10 @@
     const p=parcData.items.find(x=>parcKey(x)===o.renewalOf); if(!p) return;
     const t=tasks.find(x=>x.id===renewGroupId(p) && !x.archived && !x.deleted); if(t){ t.archived=true; t.archivedAt=Date.now(); touch(t); saveTasks(); render(); }
   }
-  function loseOpps(list){
+  async function loseOpps(list){
     if(!list.length) return;
     const what=list.length>1?list.length+' installations ('+list[0].company+')':'« '+oppName(list[0])+' »';
-    if(!confirm(what+' : offre perdue ?')) return;
+    if(!await askConfirm(what+' : offre perdue ?', 'Offre perdue')) return;
     list.forEach(o=>{ relanceOnMove(o, null); o.stageBeforeExit=o.stage; o.stage='perdu'; o.lostAt=Date.now(); touchCrm(o); closeRenewalTask(o); });
     saveCrm(); closeOppDetail(); renderPipeline();
     celebrate('lost', list);
@@ -5112,7 +4798,7 @@
     const full=pqFold(oppName(o)).replace(/[^a-z0-9]/g,'');   // « Toit A » / « Toit B » : too short once the usual words are gone, the whole name decides
     const k=n.length>=3?n:full.length>=3?full:''; return k?coDupKey(o.company||'')+'|'+k:null; };
   function dupIgnored(){ try{ return JSON.parse(localStorage.getItem('dup-ignore')||'[]'); }catch(e){ return []; } }
-  function dupIgnore(sig){ const l=dupIgnored(); if(!l.includes(sig)){ l.push(sig); try{ localStorage.setItem('dup-ignore', JSON.stringify(l)); }catch(e){} } }
+  function dupIgnore(sig){ const l=dupIgnored(); if(!l.includes(sig)){ l.push(sig); lsSet('dup-ignore', JSON.stringify(l)); } }
   function instDupGroups(){
     const by=new Map(); opportunities.filter(o=>!o.deleted && o.kind==='installation').forEach(o=>{ const k=instDupKey(o); if(!k) return; (by.get(k)||by.set(k,[]).get(k)).push(o); });
     return [...by.values()].filter(g=>g.length>1 && !g.every(x=>(x.notDupOf||[]).length && g.every(y=>y===x || (x.notDupOf||[]).includes(y.id))))
@@ -5181,82 +4867,6 @@
       if(ctg.length){ const p=document.createElement('p'); p.className='modal-hint dup-ct'; p.innerHTML='<span></span> <button type="button" class="pq-link">Vérifier les contacts</button>'; p.firstChild.textContent=ctg.length+' contact'+(ctg.length>1?'s':'')+' en double possible'+(ctg.length>1?'s':'')+'.'; p.querySelector('button').onclick=()=>{ close(); openContactMerge(); }; body.appendChild(p); }
     };
     paint();
-  }
-  // ---------- « Compléter avec l'IA » : Claude proposes the empty lines of the characteristics file that follow from what the sheet knows ----------
-  // Its key stays on this device (like the GitHub token); without one, the request is copied for claude.ai and the answer pasted back.
-  const AI_MODEL='claude-sonnet-5-5';
-  // set aside for now (2026-10-23): hidden unless turned on for this device (localStorage feat-ai = 1)
-  const aiOn=()=>{ try{ return localStorage.getItem('feat-ai')==='1'; }catch(e){ return false; } };
-  const aiKey=()=>{ try{ return localStorage.getItem('ai-key')||''; }catch(e){ return ''; } };
-  try{ if(localStorage.getItem('feat-ai')!=='1') localStorage.removeItem('ai-key'); }catch(e){}   // AI set aside: no Claude key kept on the device meanwhile (audit A16)
-  function aiPrompt(list){
-    const plants=list.map(o=>{ const known={}, empty=[];
-      CARACT_ROWS.forEach(l=>{ const v=caractValue(o,l); if(v!=='' && v!=null) known[l]=String(v); else empty.push(l); });
-      ['commune','cp','dept','region','particularites','install','contrat'].forEach(k=>{ if(o[k] && !Object.values(known).includes(String(o[k]))) known[k]=String(o[k]); });
-      known['Producteur']=o.producteur||o.company||'';
-      return { id:o.id, connu:known, a_completer:empty }; });
-    return ['Tu aides à remplir le fichier « Caractéristiques Centrales » de centrales électriques (photovoltaïque, éolien…) en France, pour une demande de prix d’agrégation.',
-      'Pour chaque centrale ci-dessous, propose une valeur UNIQUEMENT pour les lignes de « a_completer » qui se déduisent de façon fiable de ce qui est « connu » ou d’une connaissance publique générale :',
-      'coordonnées (latitude, longitude en degrés décimaux) et altitude (m) de la commune, département et région, productible typique (kWh/kWc/an) selon le lieu et la techno, P90 ≈ 93 % du P50 si le P50 est connu, nature du projet d’après les particularités, etc.',
-      'N’invente JAMAIS un identifiant ou un fait propre au projet (SIRET, nom de SPV, numéro de raccordement, puissance de raccordement, nombre d’onduleurs, dates) : laisse-les de côté.',
-      'Réponds UNIQUEMENT par un objet JSON, sans texte autour, de la forme :',
-      '{"<id>": {"<libellé exact de la ligne>": {"v": "<valeur>", "c": "sûr" ou "probable", "s": "<d’où vient la valeur, en quelques mots>"}}}',
-      'Garde les libellés exactement comme dans « a_completer ». Nombres au format français (virgule décimale) sans unité.',
-      '', JSON.stringify(plants, null, 1)].join('\n');
-  }
-  function aiParse(text, list){
-    let t=String(text||'').replace(/```(?:json)?/gi,''); const a=t.indexOf('{'), b=t.lastIndexOf('}'); if(a<0 || b<=a) throw new Error('Pas de JSON dans la réponse.');
-    const data=JSON.parse(t.slice(a, b+1)), rows=[];
-    list.forEach(o=>{ const d=data[o.id]; if(!d || typeof d!=='object') return;
-      Object.entries(d).forEach(([label, x])=>{ const l=CARACT_ROWS.find(r=>caractKey(r)===caractKey(label)); if(!l) return;
-        const v=x && typeof x==='object'?x.v:x; if(v==null || String(v).trim()==='' || caractValue(o,l)!=='') return;   // only empty lines, never over what is there
-        rows.push({ o, l, v:String(v).trim(), c:x && x.c||'', s:x && x.s||'' }); }); });
-    return rows;
-  }
-  async function aiAsk(prompt){
-    const r=await fetch('https://api.anthropic.com/v1/messages', { method:'POST', headers:{ 'content-type':'application/json', 'x-api-key':aiKey(), 'anthropic-version':'2023-06-01', 'anthropic-dangerous-direct-browser-access':'true' },
-      body:JSON.stringify({ model:AI_MODEL, max_tokens:4000, messages:[{ role:'user', content:prompt }] }) });
-    const j=await r.json().catch(()=>({}));
-    if(!r.ok) throw new Error(r.status===401?'Clé Claude refusée (Réf. & data).':(j.error && j.error.message)||('Erreur '+r.status));
-    return (j.content||[]).filter(c=>c.type==='text').map(c=>c.text).join('\n');
-  }
-  function openAiFill(list, done){
-    if(!list.length) return;
-    let ov=$('ai-overlay'); if(ov) ov.remove();
-    ov=document.createElement('div'); ov.id='ai-overlay'; ov.className='modal-overlay';
-    ov.innerHTML='<div class="modal-box wide ai-box" role="dialog" aria-labelledby="ai-title"><div class="opp-detail-head"><h3 id="ai-title">Compléter avec l’IA</h3></div><p class="modal-hint ai-hint"></p><div class="ai-ask"></div><div class="ai-rows"></div><div class="crm-form-actions"><button type="button" class="ai-fill" hidden></button><button type="button" class="ghost-btn ai-close">Fermer</button></div></div>';
-    document.body.appendChild(ov);
-    const close=()=>ov.remove();
-    ov.querySelector('.ai-close').onclick=close; ov.addEventListener('click', e=>{ if(e.target===ov) close(); }); ov.addEventListener('keydown', e=>{ if(e.key==='Escape'){ e.stopPropagation(); close(); } });
-    const prompt=aiPrompt(list), empties=list.reduce((n,o)=>n+CARACT_ROWS.filter(l=>caractValue(o,l)==='').length,0);
-    ov.querySelector('.ai-hint').textContent=empties+' case'+(empties>1?'s':'')+' vide'+(empties>1?'s':'')+' sur '+list.length+' installation'+(list.length>1?'s':'')+'. Claude ne propose que ce qui se déduit de la fiche (lieu, techno, production) et n’invente aucun identifiant ; rien n’est rempli sans ton accord.';
-    const ask=ov.querySelector('.ai-ask'), rowsBox=ov.querySelector('.ai-rows'), fill=ov.querySelector('.ai-fill');
-    let rows=[];
-    const show=r=>{ rows=r; rowsBox.innerHTML='';
-      if(!rows.length){ rowsBox.innerHTML='<p class="modal-hint">Rien à proposer de fiable pour les cases vides.</p>'; fill.hidden=true; return; }
-      rows.forEach(x=>{ const l=document.createElement('label'); l.className='qn-row ai-row'; const cb=document.createElement('input'); cb.type='checkbox'; cb.checked=x.c!=='probable'; x.cb=cb;
-        const sp=document.createElement('span'); sp.innerHTML='<b></b> <span class="qn-v"></span> <em></em> <small></small>';
-        sp.querySelector('b').textContent=(list.length>1?oppName(x.o)+' · ':'')+x.l+' :'; sp.querySelector('.qn-v').textContent=x.v; sp.querySelector('em').textContent=x.c==='probable'?'probable':''; sp.querySelector('small').textContent=x.s?'('+x.s+')':'';
-        cb.onchange=paint; l.append(cb, sp); rowsBox.appendChild(l); });
-      paint(); };
-    function paint(){ const n=rows.filter(x=>x.cb.checked).length; fill.hidden=!rows.length; fill.disabled=!n; fill.textContent=n?'Remplir '+n+' case'+(n>1?'s':''):'Rien de coché'; }
-    fill.onclick=()=>{ const ok=rows.filter(x=>x.cb.checked); const touched=new Set(); ok.forEach(x=>{ caractSet(x.o, x.l, x.v); touched.add(x.o); }); touched.forEach(o=>touchCrm(o)); saveCrm(); renderPipeline(); close(); if(done) done(); };
-    // everything in the app: Claude answers here, through the key kept on this device (asked here the first time)
-    const go=document.createElement('button'); go.type='button'; go.className='ai-go'; go.textContent='Demander à Claude';
-    go.onclick=async()=>{ go.disabled=true; go.textContent='Claude réfléchit…';
-      try{ show(aiParse(await aiAsk(prompt), list)); go.textContent='Redemander'; }
-      catch(err){ rowsBox.innerHTML=''; const p2=document.createElement('p'); p2.className='modal-hint ai-err'; p2.textContent=err.message||String(err); rowsBox.appendChild(p2); go.textContent='Réessayer'; if(/refusée|401/.test(p2.textContent)) askKey(); }
-      go.disabled=false; };
-    const askKey=()=>{ ask.innerHTML='';
-      const p2=document.createElement('p'); p2.className='modal-hint'; p2.textContent='Une fois pour cet appareil : colle ta clé de l’API Claude. Elle reste ici (jamais synchronisée ni exportée).';
-      const inp=document.createElement('input'); inp.type='password'; inp.id='ai-key-here'; inp.className='ai-key-in'; inp.placeholder='sk-ant-…'; inp.autocomplete='off';
-      const save=document.createElement('button'); save.type='button'; save.className='ai-go'; save.textContent='Enregistrer et demander';
-      const link=document.createElement('a'); link.href='https://console.anthropic.com/settings/keys'; link.target='_blank'; link.rel='noopener'; link.className='sync-token-link'; link.textContent='Créer une clé sur la console Anthropic ↗';
-      save.onclick=()=>{ const v=inp.value.trim(); if(!v){ inp.focus(); return; } try{ localStorage.setItem('ai-key', v); }catch(e){} ask.innerHTML=''; ask.appendChild(go); go.click(); };
-      inp.addEventListener('keydown', e=>{ if(e.key==='Enter') save.click(); });
-      const row=document.createElement('div'); row.className='ai-key-row'; row.append(inp, save);
-      ask.append(p2, row, link); setTimeout(()=>inp.focus(), 30); };
-    if(aiKey()){ ask.appendChild(go); setTimeout(()=>go.click(), 0); } else askKey();
   }
   // ---------- Notes express / mode appel: notes typed in bulk, the app spots the figures and offers to fill the sheet ----------
   const QN_LABELS={ kwc:'Puissance', mwh:'P50', p90:'P90', mesPrev:'MES prévisionnelle', mesEff:'MES effective', dept:'Département', commune:'Commune', cp:'Code postal',
@@ -5627,7 +5237,6 @@
     });
     return new Blob([await wb.xlsx.writeBuffer()], { type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
   }
-  window.todoCaractBlob=list=>caractWorkbookBlob(list);
   async function downloadCaract(list, btn){
     try{
       const blob=await caractWorkbookBlob(list), url=URL.createObjectURL(blob);
@@ -5777,7 +5386,7 @@
   // The page calls http://127.0.0.1:<port>; the bridge writes into the synced Excel files through Excel itself.
   let bridgeCfg={ port:8765, token:'' }, bridgeState={ ok:false, authorized:false, checkedAt:0, info:null };
   try{ const r=localStorage.getItem('todo_bridge-config'); if(r) bridgeCfg=Object.assign(bridgeCfg, JSON.parse(r)); }catch(e){}
-  function saveBridgeCfg(){ try{ localStorage.setItem('todo_bridge-config', JSON.stringify(bridgeCfg)); }catch(e){} }
+  function saveBridgeCfg(){ lsSet('todo_bridge-config', JSON.stringify(bridgeCfg)); }
   // Writing into the Excel files is for the computer only: on a phone or tablet (phone version, or the full
   // version opened there) the bridge is off whatever is stored — no button, no call, no automatic refresh.
   const ON_PHONE=!!window.TODO_LITE || /Android|iPhone|iPad|iPod|Mobile|Silk|Kindle/i.test(navigator.userAgent) || (/Macintosh/.test(navigator.userAgent) && navigator.maxTouchPoints>1);
@@ -5975,7 +5584,6 @@
       tr.append(n, cell('pipe', o, p), cell('bdd', o, b)); tb.appendChild(tr); });
     t.appendChild(tb); body.appendChild(t);
   }
-  window.todoExcelSync=openExcelSync;
   async function sendToExcel(kind, list, btn){
     if(ON_PHONE) return;
     const label=btn?btn.textContent:'';
@@ -6104,7 +5712,7 @@
         if(q) return;
         let o=[]; try{ o=JSON.parse(localStorage.getItem('reflists-open-types')||'[]'); }catch(e){}
         o=o.filter(x=>x!==t); if(nowOpen) o.push(t);
-        try{ localStorage.setItem('reflists-open-types', JSON.stringify(o)); }catch(e){}
+        lsSet('reflists-open-types', JSON.stringify(o));
       };
       container.appendChild(head); container.appendChild(body);
     });
@@ -6154,12 +5762,12 @@
 
   function addClientToList(n){ n=n.trim(); if(!n||findExistingCI(clientsList,n))return; clientsList.push(n); saveClients(); render(); renderLists(); }
   function addProjectToList(n){ n=n.trim(); if(!n||findExistingCI(projectsList,n))return; projectsList.push(n); saveProjects(); render(); renderLists(); }
-  function removeClient(n){
+  async function removeClient(n){
     const affected=tasks.filter(t=>t.client===n);
     const affectedContacts=contacts.filter(c=>c.company===n && !c.deleted);
     const total=affected.length+affectedContacts.length;
     if(total>0){
-      if(!confirm('Retirer "'+n+'" de '+affected.length+' tâche(s) et '+affectedContacts.length+' contact(s) qui l\'utilisent ?')) return;
+      if(!await askConfirm('Retirer "'+n+'" de '+affected.length+' tâche(s) et '+affectedContacts.length+' contact(s) qui l\'utilisent ?', 'Retirer')) return;
       affected.forEach(t=>{ t.client=''; touch(t); });
       if(affected.length) saveTasks();
       affectedContacts.forEach(c=>{ c.company=''; touchCrm(c); });
@@ -6169,10 +5777,10 @@
     if(affectedContacts.length || co) saveCrm();
     clientsList=clientsList.filter(c=>c!==n); saveClients(); render(); renderLists();
   }
-  function removeProject(n){
+  async function removeProject(n){
     const affected=tasks.filter(t=>t.project===n);
     if(affected.length>0){
-      if(!confirm('Retirer "'+n+'" de '+affected.length+' tâche(s) qui l\'utilisent ?')) return;
+      if(!await askConfirm('Retirer "'+n+'" de '+affected.length+' tâche(s) qui l\'utilisent ?', 'Retirer')) return;
       affected.forEach(t=>{ t.project=''; touch(t); });
       saveTasks();
     }
@@ -6198,8 +5806,8 @@
     rewriteLinks(oldName, existing);
     saveClients(); saveTasks(); saveCrm(); render(); renderLists();
   }
-  function renameClient(oldName){
-    const newName=prompt('Renommer "'+oldName+'" en :', oldName);
+  async function renameClient(oldName){
+    const newName=await askText('Renommer "'+oldName+'" en :', oldName);
     if(newName===null) return;
     const trimmed=newName.trim();
     if(!trimmed||trimmed===oldName) return;
@@ -6208,7 +5816,7 @@
       const affected=tasks.filter(t=>t.client===oldName).length;
       const affectedContacts=contacts.filter(c=>c.company===oldName && !c.deleted).length;
       const affectedOpps=opportunities.filter(o=>!o.deleted && (o.company===oldName || o.producteur===oldName)).length;
-      if(!confirm('"'+existing+'" existe déjà. Fusionner "'+oldName+'" dedans ? ('+affected+' tâche(s), '+affectedContacts+' contact(s) et '+affectedOpps+' opportunité(s) transférés, le doublon disparaît)')) return;
+      if(!await askConfirm('"'+existing+'" existe déjà. Fusionner "'+oldName+'" dedans ? ('+affected+' tâche(s), '+affectedContacts+' contact(s) et '+affectedOpps+' opportunité(s) transférés, le doublon disparaît)', 'Fusionner')) return;
       mergeCompanyInto(oldName, existing);
       return;
     }
@@ -6221,15 +5829,15 @@
     rewriteLinks(oldName, trimmed);
     saveClients(); saveTasks(); saveCrm(); render(); renderLists();
   }
-  function renameProject(oldName){
-    const newName=prompt('Renommer "'+oldName+'" en :', oldName);
+  async function renameProject(oldName){
+    const newName=await askText('Renommer "'+oldName+'" en :', oldName);
     if(newName===null) return;
     const trimmed=newName.trim();
     if(!trimmed||trimmed===oldName) return;
     const existing=findExistingCI(projectsList, trimmed);
     if(existing && existing!==oldName){
       const affected=tasks.filter(t=>t.project===oldName).length;
-      if(!confirm('"'+existing+'" existe déjà. Fusionner "'+oldName+'" dedans ? ('+affected+' tâche(s) transférées, le doublon disparaît)')) return;
+      if(!await askConfirm('"'+existing+'" existe déjà. Fusionner "'+oldName+'" dedans ? ('+affected+' tâche(s) transférées, le doublon disparaît)', 'Fusionner')) return;
       tasks.forEach(t=>{ if(t.project===oldName){ t.project=existing; touch(t); } });
       projectsList=projectsList.filter(p=>p!==oldName);
       saveProjects(); saveTasks(); render(); renderLists();
@@ -6273,10 +5881,10 @@
   function restoreTask(id){ const t=tasks.find(x=>x.id===id); if(t){ t.archived=false; t.archivedAt=null; t.status='a_faire'; touch(t); saveTasks(); render(); renderArchive(); } }
   function cycleStatus(id){ const t=tasks.find(x=>x.id===id); if(t){ const i=STATUS_CYCLE.indexOf(t.status); t.status=STATUS_CYCLE[(i+1)%STATUS_CYCLE.length]; touch(t); saveTasks(); render(); } }
   function toggleSubtasksExpanded(id){ if(expandedSubtaskIds.has(id)) expandedSubtaskIds.delete(id); else expandedSubtaskIds.add(id); render(); }
-  function deleteTask(id){
+  async function deleteTask(id){
     const t=tasks.find(x=>x.id===id);
     if(!t) return;
-    if(!confirm('Supprimer "'+plainLinks(t.title)+'" ? (récupérable ensuite dans Archive → Corbeille)')) return;
+    if(!await askConfirm('Supprimer "'+plainLinks(t.title)+'" ? (récupérable ensuite dans Archive → Corbeille)', 'Supprimer')) return;
     t.deleted=true; touch(t);
     if(selectedTaskId===id)selectedTaskId=null; if(editingId===id)editingId=null;
     saveTasks(); render(); renderArchive();
@@ -6349,7 +5957,7 @@
       if(now-at>86400000) return;
       if('Notification'in window&&Notification.permission==='granted'){ new Notification('Rappel : '+plainLinks(t.title),{body:[t.client,t.project].filter(Boolean).join(' · ')||'Échéance à venir'}); }
     });
-    if(changed){ try{ localStorage.setItem('todo_reminders-notified', JSON.stringify([...notifiedIds].slice(-500))); }catch(e){} }
+    if(changed){ lsSet('todo_reminders-notified', JSON.stringify([...notifiedIds].slice(-500))); }
   }
 
   function openSnoozePopover(e,id){
@@ -6486,22 +6094,22 @@
     const blob=new Blob([JSON.stringify(payload,null,2)],{type:'application/json'});
     const url=URL.createObjectURL(blob);
     const a=document.createElement('a'); a.href=url; a.download='todo-backup-'+toISO(new Date())+'.json'; a.click();
-    try{ localStorage.setItem('last-export-at', String(Date.now())); }catch(e){}
+    lsSet('last-export-at', String(Date.now()));
     setTimeout(()=>URL.revokeObjectURL(url),1000);
   }
   function importData(file){
     const reader=new FileReader();
-    reader.onload=e=>{
+    reader.onload=async e=>{
       try{
         const data=JSON.parse(e.target.result);
         const raw=(!data || !Array.isArray(data.tasks))?restoreKindOf(data):null;
         if(raw){   // a file taken from the data repo: shown and restored like a version
           const plan=restorePlan(raw, data);
-          if(!confirm('Fichier « '+RESTORE_SETS[raw].label+' » du dépôt GitHub :\n'+plan.back.length+' élément(s) qui reviennent, '+plan.changed.length+' remis comme dans le fichier, '+plan.since.length+' créé(s) depuis (gardés).\n\nRestaurer ?')) return;
+          if(!await askConfirm('Fichier « '+RESTORE_SETS[raw].label+' » du dépôt GitHub :\n'+plan.back.length+' élément(s) qui reviennent, '+plan.changed.length+' remis comme dans le fichier, '+plan.since.length+' créé(s) depuis (gardés).\n\nRestaurer ?', 'Restaurer')) return;
           applyRestore(raw, plan, false); return; }
         if(!data||!Array.isArray(data.tasks)) throw new Error('format');
         const extra=[data.crm?'les contacts/CRM':null, Array.isArray(data.notes)?'le calepin':null].filter(Boolean);
-        if(!confirm('Remplacer les '+tasks.length+' tâche(s) actuelles par les '+data.tasks.length+' du fichier'+(extra.length?(' (ainsi que '+extra.join(' et ')+')'):'')+' ?')) return;
+        if(!await askConfirm('Remplacer les '+tasks.length+' tâche(s) actuelles par les '+data.tasks.length+' du fichier'+(extra.length?(' (ainsi que '+extra.join(' et ')+')'):'')+' ?', 'Remplacer')) return;
         tasks=recs(data.tasks); clientsList=data.clients||[]; projectsList=data.projects||[];
         tasks.forEach(t=>{ if(t.subtasks===undefined)t.subtasks=[]; if(t.recur===undefined)t.recur=null; if(t.archived===undefined)t.archived=false; });
         saveTasks(); saveClients(); saveProjects(); render(); renderArchive(); renderLists();
@@ -6512,7 +6120,7 @@
           if(Array.isArray(data.crm.companyTypes)&&data.crm.companyTypes.length) companyTypesList=data.crm.companyTypes;
           saveCrm(); if(typeof renderContacts==='function') renderContacts(); if(typeof renderPipeline==='function') renderPipeline();
         }
-      }catch(err){ alert('Fichier invalide.'); }
+      }catch(err){ tell('Fichier invalide.'); }
     };
     reader.readAsText(file);
   }
@@ -6595,7 +6203,7 @@
       if(!infoRes.ok){ setSyncStatus('Repo introuvable ou token invalide (vérifie pseudo/repo/token).'); return; }
       const info=await infoRes.json();
       if(info.private===false){
-        const proceed=confirm('⚠️ Ce repo GitHub est PUBLIC.\n\nActiver la synchro va y publier tes tâches et tes données CRM (contacts, emails, téléphones, opportunités) en clair — lisibles par n’importe qui sur Internet, même après suppression (historique git).\n\nPasse le repo en privé sur GitHub avant de continuer si ces données sont sensibles.\n\nActiver quand même la synchro sur ce repo public ?');
+        const proceed=await askConfirm('⚠️ Ce repo GitHub est PUBLIC.\n\nActiver la synchro va y publier tes tâches et tes données CRM (contacts, emails, téléphones, opportunités) en clair — lisibles par n’importe qui sur Internet, même après suppression (historique git).\n\nPasse le repo en privé sur GitHub avant de continuer si ces données sont sensibles.\n\nActiver quand même la synchro sur ce repo public ?', 'Activer quand même');
         if(!proceed){ setSyncStatus('Synchro non activée (repo public).'); return; }
       }
     }catch(e){ setSyncStatus('Impossible de vérifier le repo (réseau). Réessaie.'); return; }
@@ -6608,11 +6216,9 @@
   $('sync-restore-btn').onclick=()=>openRestore();
   $('sync-forget-btn').onclick=async ()=>{
     if(!syncConfig.token){ setSyncStatus('Aucun jeton enregistré sur cet appareil.'); return; }
-    if(!confirm('Retirer le jeton GitHub de cet appareil ?\n\nLa synchro s\u2019arrête ici ; tes données restent sur cet appareil et sur GitHub. Pour la reprendre, recolle un jeton.')) return;
-    flushPostit(); const pend=[];   // what was waiting to leave goes first, with the token still there
-    if(syncPushTimer){ clearTimeout(syncPushTimer); syncPushTimer=null; pend.push(syncPushNow()); }
-    if(crmSyncPushTimer){ clearTimeout(crmSyncPushTimer); crmSyncPushTimer=null; pend.push(syncPushCrmNow()); }
-    if(notesSyncPushTimer){ clearTimeout(notesSyncPushTimer); notesSyncPushTimer=null; pend.push(syncPushNotesNow()); }
+    if(!await askConfirm('Retirer le jeton GitHub de cet appareil ?\n\nLa synchro s\u2019arrête ici ; tes données restent sur cet appareil et sur GitHub. Pour la reprendre, recolle un jeton.', 'Retirer le jeton')) return;
+    flushPostit();   // what was waiting to leave goes first, with the token still there
+    const pend=Object.values(SYNC_FILES).map(f=>f.flush()).filter(Boolean);
     setSyncStatus('Envoi des derniers changements…'); await Promise.all(pend);
     syncConfig.token=''; syncConfig.enabled=false; await saveSyncConfig(); $('sync-token').value='';
     setSyncStatus('Jeton retiré de cet appareil.'); paintSyncPill();
@@ -6724,7 +6330,7 @@
     }
     let msg=added+' contact(s) créé(s), '+updated+' complété(s) ou fusionné(s).';
     if(conflictCount>0) msg+=' '+conflictCount+' conflit(s) à trancher dans Réf. & data → Conflits de synchro.';
-    alert(msg);
+    tell(msg);
   }
 
   function exportContactsExcel(){
@@ -6751,7 +6357,7 @@
       const wb=XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, ws, 'Contacts');
       XLSX.writeFile(wb, 'contacts-'+toISO(new Date())+'.xlsx');
-    }).catch(()=>alert('Le chargement de la librairie Excel a échoué. Vérifie ta connexion.'));
+    }).catch(()=>tell('Le chargement de la librairie Excel a échoué. Vérifie ta connexion.'));
   }
 
   function setSigImage(file){
@@ -6780,7 +6386,7 @@
   $('card-scan-input').addEventListener('change', e=>{ const f=e.target.files[0]; e.target.value=''; scanCard(f); });
   $('dup-banner-btn').onclick=()=>openDupes();
   $('vcf-import-btn').onclick=phoneImportStart;
-  $('vcf-import-input').addEventListener('change', async e=>{ const f=e.target.files[0]; e.target.value=''; if(!f) return; const list=parseVcf(await f.text()); if(!list.length){ alert('Aucun contact lu dans ce fichier (.vcf attendu).'); return; } openPhoneImport(list); });
+  $('vcf-import-input').addEventListener('change', async e=>{ const f=e.target.files[0]; e.target.value=''; if(!f) return; const list=parseVcf(await f.text()); if(!list.length){ tell('Aucun contact lu dans ce fichier (.vcf attendu).'); return; } openPhoneImport(list); });
   $('sig-paste-btn').onclick=()=>{
     $('sig-paste-text').value='';
     clearSigImage();
@@ -6827,7 +6433,7 @@
         text=(text+'\n'+data.text).trim();
       }catch(e){
         console.error('OCR failed', e);
-        alert('La lecture de l\u2019image a échoué. Analyse du texte seul.');
+        await tell('La lecture de l\u2019image a échoué. Analyse du texte seul.');
       }
       $('sig-ocr-status').classList.add('hidden');
       $('sig-paste-analyze').disabled=false;
@@ -6849,7 +6455,7 @@
     btn.onclick=()=>{
       document.querySelectorAll('#contacts-view-switch .view-icon-btn').forEach(b=>b.classList.remove('active'));
       btn.classList.add('active');
-      contactsView=btn.dataset.view; try{ localStorage.setItem('contacts-view', contactsView); }catch(e){}
+      contactsView=btn.dataset.view; lsSet('contacts-view', contactsView);
       renderContacts();
     };
   });
@@ -6863,7 +6469,7 @@
   document.querySelectorAll('.contacts-header-row .sort').forEach(el=>el.addEventListener('click', ()=>{
     const k=el.dataset.sort;
     contactsSort = contactsSort.key===k ? { key:k, dir:-contactsSort.dir } : { key:k, dir:1 };
-    try{ localStorage.setItem('contacts-sort', JSON.stringify(contactsSort)); }catch(e){}
+    lsSet('contacts-sort', JSON.stringify(contactsSort));
     renderContacts();
   }));
   $('contact-form').addEventListener('keydown', e=>{ if(e.key==='Escape'){ e.stopPropagation(); closeContactForm(); } });
@@ -6901,7 +6507,7 @@
     if($('ai-key-save')){ $('ai-key-save').onclick=()=>{ const v=$('ai-key-input').value.trim(); try{ if(v) localStorage.setItem('ai-key', v); else localStorage.removeItem('ai-key'); }catch(e){} $('ai-key-input').value=''; st(); }; st(); } }
   if($('parc-xs-btn')){ $('parc-xs-btn').onclick=()=>openExcelSync({ scope:'parc' }); if(ON_PHONE) $('parc-xs-btn').hidden=true; }
   $('pipe-map-toggle').onclick=()=>{ pipeMap=!pipeMap; pipeDash=false; pipeMeet=false; parcMapSel=null; parcMapView=null; renderPipeline(); };
-  $('pipe-list-toggle').onclick=()=>{ pipeMap=false; pipeList=!(pipeList && !pipeDash && !pipeMeet); pipeDash=false; pipeMeet=false; try{ localStorage.setItem('pipe-list', pipeList?'1':'0'); }catch(e){} renderPipeline(); };
+  $('pipe-list-toggle').onclick=()=>{ pipeMap=false; pipeList=!(pipeList && !pipeDash && !pipeMeet); pipeDash=false; pipeMeet=false; lsSet('pipe-list', pipeList?'1':'0'); renderPipeline(); };
   $('pq-save-btn').onclick=saveOpp;
   $('pq-next-btn').onclick=pqNext;
   $('pq-back-btn').onclick=()=>{ pqShowStep(1); pqStep1Render(); };
@@ -7077,7 +6683,7 @@
   // Console-only recovery: F12 → Console → recoverDeletedTasks()
   // Un-deletes every soft-deleted task in this browser's local data and
   // re-renders. Deliberately not exposed anywhere in the UI.
-  window.recoverDeletedTasks = function(){
+  function recoverDeletedTasks(){
     const found = tasks.filter(t => t.deleted);
     if(!found.length){ console.log('Aucune tâche supprimée trouvée dans ce navigateur.'); return; }
     found.forEach(t => { t.deleted = false; touch(t); });
@@ -7229,7 +6835,7 @@
     const cy=new Date().getFullYear(), obj=parcData.objectives[cy]; if(!obj) return;
     const active=won.filter(p=>(p.vols[cy]||0)>0), vol=active.reduce((x,p)=>x+(p.vols[cy]||0),0)/1000, pct=vol/obj*100, reached=[100,90,75].find(l=>pct>=l)||0;
     let m={}; try{ m=JSON.parse(localStorage.getItem('goal-milestones')||'{}')||{}; }catch(e){}
-    const key=String(cy), save=()=>{ try{ localStorage.setItem('goal-milestones', JSON.stringify(m)); }catch(e){} prefsToNote(); };
+    const key=String(cy), save=()=>{ lsSet('goal-milestones', JSON.stringify(m)); prefsToNote(); };
     if(m[key]==null){ m[key]=reached; save(); return; }   // the first look: no fanfare for old news
     if(reached<=m[key]) return;
     m[key]=reached; save();
@@ -7338,8 +6944,8 @@
         // a renewal that will not happen: recorded as lost (pipeline « Sorties », stats), its renewal task closed
         if(opp && isExited(opp)){ act.innerHTML=''; const t=document.createElement('span'); t.className='parc-due-lost'; t.textContent='Non renouvelé'+(opp.lostAt?' le '+new Date(opp.lostAt).toLocaleDateString('fr-FR'):''); act.appendChild(t); r.classList.add('lost'); }
         else if(!window.TODO_LITE){ const nb=document.createElement('button'); nb.type='button'; nb.className='pq-link parc-due-nogo'; nb.textContent='Non renouvelé';
-          nb.onclick=()=>{ if(opp){ loseOpps([opp]); renderParc(); return; }
-            if(!confirm('« '+(p.inst||p.prod)+' » (fin le '+pqIsoToFr(p.fin)+') : non renouvelé ?')) return;
+          nb.onclick=async ()=>{ if(opp){ await loseOpps([opp]); renderParc(); return; }
+            if(!await askConfirm('« '+(p.inst||p.prod)+' » (fin le '+pqIsoToFr(p.fin)+') : non renouvelé ?', 'Non renouvelé')) return;
             const o=renewalToPipeline(p); relanceOnMove(o, null); o.stageBeforeExit=o.stage; o.stage='perdu'; o.lostAt=Date.now(); touchCrm(o); closeRenewalTask(o); saveCrm(); renderPipeline(); renderParc(); celebrate('lost', [o]); };
           act.appendChild(nb); }
         r.appendChild(act);
@@ -7475,7 +7081,7 @@
     [['won','Portefeuille'],['pending','Offres'],['pipe','Pipeline']].forEach(([k,l])=>{ const b=document.createElement('button'); b.type='button'; b.textContent=l; b.className=k===parcMapLayer?'on':''; b.onclick=()=>{ parcMapLayer=k; parcMapSel=null; parcMapView=null; mapRerender(); }; seg.appendChild(b); });
     if(!parcKpiSet && !mapInPipe) head.appendChild(seg);
     if(!parcKpiSet && (mapInPipe || parcMapLayer==='pipe')){ const cb=document.createElement('div'); cb.className='map-seg map-color';
-      [['phase','Par phase'],['techno','Par techno']].forEach(([k,l])=>{ const b=document.createElement('button'); b.type='button'; b.textContent=l; b.dataset.c=k; b.className=mapColorBy()===k?'on':''; b.onclick=()=>{ try{ localStorage.setItem('map-color', k); }catch(e){} prefsToNote(); mapRerender(); }; cb.appendChild(b); });
+      [['phase','Par phase'],['techno','Par techno']].forEach(([k,l])=>{ const b=document.createElement('button'); b.type='button'; b.textContent=l; b.dataset.c=k; b.className=mapColorBy()===k?'on':''; b.onclick=()=>{ lsSet('map-color', k); prefsToNote(); mapRerender(); }; cb.appendChild(b); });
       head.appendChild(cb); }
     wrap.appendChild(head);
 
@@ -7628,7 +7234,7 @@
   // synced copy on the computer instead. The link is kept to open the file in one click.
   const PARC_SRC_KEY='todo_parc-source';
   const parcSource=()=>{ try{ return Object.assign({ link:'', auto:true }, JSON.parse(localStorage.getItem(PARC_SRC_KEY)||'{}')); }catch(e){ return { link:'', auto:true }; } };
-  const saveParcSource=s=>{ try{ localStorage.setItem(PARC_SRC_KEY, JSON.stringify(s)); }catch(e){} };
+  const saveParcSource=s=>{ lsSet(PARC_SRC_KEY, JSON.stringify(s)); };
   function renderParcSource(){
     const s=parcSource();
     $('parc-link').value=s.link||''; $('parc-auto').checked=!!s.auto;
@@ -7681,133 +7287,6 @@
     return b;
   }
 
-  // ---------- Phone → contacts: a .vcf file (what a phone exports), or the phone's own picker (Android) ----------
-
-  // which of these are already known (same mail, phone, or name in the same company): those only get their empty boxes filled
-  function phoneImportPlan(list){
-    const live=contacts.filter(c=>!c.deleted), byKey=new Map(); live.forEach(c=>contactDupKeys(c).forEach(k=>byKey.set(k,c)));
-    return list.map(c=>{ const known=contactDupKeys(c).map(k=>byKey.get(k)).find(Boolean)||null;
-      const adds=known?['firstName','lastName','company','role','email','phone1','phone2'].filter(k=>c[k] && !known[k]):[];
-      return { c, known, adds }; });
-  }
-  function openPhoneImport(list){
-    const plan=phoneImportPlan(list); let ov=$('phone-import-overlay'); if(ov) ov.remove();
-    ov=document.createElement('div'); ov.id='phone-import-overlay'; ov.className='modal-overlay';
-    const fresh=plan.filter(x=>!x.known), upd=plan.filter(x=>x.known && x.adds.length), same=plan.filter(x=>x.known && !x.adds.length);
-    ov.innerHTML='<div class="modal-box wide" role="dialog" aria-labelledby="pi-title"><h3 id="pi-title">Contacts du téléphone</h3><p class="modal-hint pi-sum"></p><div class="pi-list"></div><div class="crm-form-actions"><button type="button" class="pi-go"></button><button type="button" class="ghost-btn pi-close">Fermer</button></div></div>';
-    document.body.appendChild(ov);
-    ov.querySelector('.pi-sum').textContent=plan.length+' contact'+(plan.length>1?'s':'')+' lu'+(plan.length>1?'s':'')+' : '+fresh.length+' nouveau'+(fresh.length>1?'x':'')+', '+upd.length+' déjà connu'+(upd.length>1?'s':'')+' à compléter, '+same.length+' déjà à jour. Rien n’est effacé ni remplacé : un contact connu ne reçoit que ses cases vides.';
-    const box=ov.querySelector('.pi-list'), name=c=>[c.firstName,c.lastName].filter(Boolean).join(' ')||c.email||c.phone1;
-    const row=(x, label)=>{ const l=document.createElement('label'); l.className='qn-row pi-row'; const cb=document.createElement('input'); cb.type='checkbox'; cb.checked=true; x.cb=cb;
-      const sp=document.createElement('span'); sp.innerHTML='<b></b> <small></small>'; sp.querySelector('b').textContent=name(x.c)+(x.c.company?' · '+x.c.company:''); sp.querySelector('small').textContent=label; cb.onchange=paint; l.append(cb, sp); box.appendChild(l); };
-    if(fresh.length){ const h=document.createElement('h4'); h.className='dup-h'; h.textContent='Nouveaux · '+fresh.length; box.appendChild(h); fresh.forEach(x=>row(x, [x.c.email, x.c.phone1].filter(Boolean).join(' · '))); }
-    if(upd.length){ const h=document.createElement('h4'); h.className='dup-h'; h.textContent='Déjà connus, cases vides à compléter · '+upd.length; box.appendChild(h);
-      const L={ firstName:'prénom', lastName:'nom', company:'société', role:'fonction', email:'mail', phone1:'téléphone', phone2:'2e téléphone' }; upd.forEach(x=>row(x, '+ '+x.adds.map(k=>L[k]).join(', '))); }
-    const go=ov.querySelector('.pi-go');
-    function paint(){ const n=plan.filter(x=>x.cb && x.cb.checked).length; go.disabled=!n; go.textContent=n?'Importer '+n+' contact'+(n>1?'s':''):'Rien de coché'; }
-    paint();
-    go.onclick=()=>{ let made=0, filled=0;
-      plan.filter(x=>x.cb && x.cb.checked).forEach(x=>{
-        if(x.known){ x.adds.forEach(k=>{ x.known[k]=k==='company'?ensureCompany(x.c[k]):x.c[k]; }); touchCrm(x.known); filled++; }
-        else { const c=Object.assign({ id:'ct_'+Date.now()+'_'+Math.random().toString(36).slice(2,7), createdAt:Date.now(), deleted:false, relevance:0 }, x.c);
-          if(c.company) c.company=ensureCompany(c.company); c.vcfAt=Date.now(); contacts.push(c); touchCrm(c); made++; } });
-      saveCrm(); if(typeof renderContacts==='function') renderContacts();
-      ov.querySelector('.pi-sum').textContent='✓ '+made+' contact'+(made>1?'s':'')+' ajouté'+(made>1?'s':'')+(filled?', '+filled+' complété'+(filled>1?'s':''):'')+'.'; box.innerHTML=''; go.hidden=true; };
-    const close=()=>ov.remove(); ov.querySelector('.pi-close').onclick=close; ov.addEventListener('click', e=>{ if(e.target===ov) close(); }); ov.addEventListener('keydown', e=>{ if(e.key==='Escape'){ e.stopPropagation(); close(); } });
-  }
-  async function phoneImportStart(){
-    // Android (Chrome): the phone's own contact picker; elsewhere: a .vcf file exported from the phone
-    if('contacts' in navigator && 'ContactsManager' in window){
-      try{ const sel=await navigator.contacts.select(['name','email','tel'], { multiple:true });
-        if(sel && sel.length) openPhoneImport(sel.map(x=>{ const w=String((x.name||[])[0]||'').trim().split(/\s+/); const t=(x.tel||[]).map(pqFmtPhone);
-          return { firstName:w.shift()||'', lastName:w.join(' '), company:'', role:'', email:String((x.email||[])[0]||'').toLowerCase(), phone1:t[0]||'', phone2:t[1]||'', comment:'' }; }));
-        return; }catch(e){ /* picker refused: the file way */ } }
-    // iPhone (backlog decision 26, the user has both): Safari can't read the address book, it takes the contacts exported as a file
-    if(/iPhone|iPad|iPod/.test(navigator.userAgent) && !confirm('Sur iPhone : ouvre l’app Contacts, touche « Listes », reste appuyé sur une liste (ou « Tous les contacts ») puis « Exporter » et enregistre le fichier .vcf dans Fichiers. Choisis ensuite ce fichier ici.\n\nContinuer ?')) return;
-    $('vcf-import-input').click();
-  }
-  // a business card, photographed: the text is read on the device, then the contact form opens filled in
-  async function scanCard(file){
-    if(!file) return; const st=$('card-scan-status'); if(st){ st.hidden=false; st.textContent='Lecture de la carte…'; }
-    try{ await loadTesseract(); const { data }=await Tesseract.recognize(file, 'fra+eng'); const g=parseSignatureText(data.text||'');
-      if(st) st.hidden=true;
-      if(!g.firstName && !g.lastName && !g.email && !g.phone1){ alert('Je n’ai pas réussi à lire la carte. Essaie avec plus de lumière, la carte bien à plat.'); return; }
-      openContactForm(null, Object.assign({}, g, { comment:[g.comment, 'Carte de visite scannée le '+new Date().toLocaleDateString('fr-FR')].filter(Boolean).join('\n') }));
-    }catch(e){ if(st) st.hidden=true; alert('La lecture de la carte a échoué (connexion nécessaire la première fois).'); }
-  }
-  // ---------- Contacts → phone (vCard), without duplicates ----------
-  // Each contact remembers when it was last exported (vcfAt, synced), so a second export only sends new ones.
-  // Contacts sharing an email or a phone number inside the app are exported once.
-  function vcfEscape(s){ return String(s||'').replace(/\\/g,'\\\\').replace(/\n/g,'\\n').replace(/([,;])/g,'\\$1'); }
-  function contactToVcf(c){
-    const lines=['BEGIN:VCARD','VERSION:3.0','UID:todo-'+c.id,
-      'N:'+vcfEscape(c.lastName)+';'+vcfEscape(c.firstName)+';;;',
-      'FN:'+vcfEscape([c.firstName,c.lastName].filter(Boolean).join(' ')||c.email||c.company)];
-    if(c.company) lines.push('ORG:'+vcfEscape(c.company));
-    if(c.role) lines.push('TITLE:'+vcfEscape(c.role));
-    [c.phone1,c.phone2].filter(Boolean).forEach((p,i)=>lines.push('TEL;TYPE='+(i===0?'CELL':'WORK')+':'+p.replace(/[^\d+]/g,'')));
-    if(c.email) lines.push('EMAIL;TYPE=INTERNET:'+c.email.trim().toLowerCase());
-    if(c.comment) lines.push('NOTE:'+vcfEscape(c.comment));
-    lines.push('CATEGORIES:Todo','END:VCARD');
-    return lines.join('\r\n');
-  }
-  function vcfKey(c){
-    const keys=[];
-    if(c.email) keys.push('m:'+c.email.trim().toLowerCase());
-    [c.phone1,c.phone2].filter(Boolean).forEach(p=>{ const d=p.replace(/\D/g,'').replace(/^33/,'0'); if(d.length>=9) keys.push('t:'+d.slice(-9)); });
-    if(!keys.length) keys.push('n:'+pqFold((c.firstName||'')+' '+(c.lastName||'')+' '+(c.company||'')).trim());
-    return keys;
-  }
-  function vcfCandidates(mode){
-    const live=contacts.filter(c=>!c.deleted && (c.firstName||c.lastName) && (c.phone1||c.phone2||c.email));
-    // inside the app: contacts sharing an email or a phone become one card (most recent first, gaps filled from the others)
-    const groups=[], byKey=new Map(); let dupes=0;
-    live.slice().sort((a,b)=>(b.updatedAt||0)-(a.updatedAt||0)).forEach(c=>{
-      const ks=vcfKey(c), g=ks.map(k=>byKey.get(k)).find(Boolean);
-      if(g){ g.members.push(c); dupes++; } else { const ng={ members:[c] }; groups.push(ng); ks.forEach(k=>byKey.set(k,ng)); return; }
-      ks.forEach(k=>byKey.set(k,g));
-    });
-    const unique=groups.map(g=>{
-      const m=Object.assign({}, g.members[0]); m.members=g.members;
-      g.members.slice(1).forEach(o=>['firstName','lastName','role','company','email','phone1','phone2','comment'].forEach(k=>{ if(!m[k] && o[k]) m[k]=o[k]; }));
-      if(m.phone2 && m.phone1 && m.phone2.replace(/\D/g,'').slice(-9)===m.phone1.replace(/\D/g,'').slice(-9)) m.phone2='';
-      m.vcfAt=Math.min(...g.members.map(x=>x.vcfAt||0))||0;
-      m.updatedAt=Math.max(...g.members.map(x=>x.updatedAt||0));
-      if(g.members.some(x=>x.vcfAt)) m.vcfAt=Math.max(...g.members.map(x=>x.vcfAt||0));
-      return m;
-    });
-    const fresh=unique.filter(c=>!c.vcfAt), changed=unique.filter(c=>c.vcfAt && (c.updatedAt||0)>c.vcfAt);
-    const list=mode==='all'?unique:mode==='changed'?fresh.concat(changed):fresh;
-    return { list, fresh, changed, dupes, total:unique.length };
-  }
-  function openVcfExport(){
-    const r=vcfCandidates('new');
-    $('vcf-new').textContent=r.fresh.length;
-    $('vcf-changed').textContent=r.changed.length;
-    $('vcf-dupes').textContent=r.dupes?r.dupes+' contact'+(r.dupes>1?'s':'')+' en double dans l\u2019app (même mail ou téléphone) ne seront exportés qu\u2019une fois.':'';
-    $('vcf-mode-changed').checked=false; $('vcf-mode-all').checked=false;
-    $('vcf-status').textContent='';
-    $('vcf-overlay').classList.remove('hidden');
-  }
-  async function doVcfExport(){
-    const mode=$('vcf-mode-all').checked?'all':$('vcf-mode-changed').checked?'changed':'new';
-    const { list }=vcfCandidates(mode);
-    if(!list.length){ $('vcf-status').textContent='Rien de nouveau à exporter.'; return; }
-    const text=list.map(contactToVcf).join('\r\n')+'\r\n';
-    const name='contacts-todo-'+toISO(new Date())+'.vcf';
-    const file=new File([text], name, { type:'text/vcard' });
-    let sent=false;
-    try{
-      if(navigator.canShare && navigator.canShare({ files:[file] })){ await navigator.share({ files:[file], title:'Contacts Todo' }); sent=true; }
-    }catch(e){ if(e && e.name==='AbortError'){ $('vcf-status').textContent='Partage annulé : rien n\u2019a été marqué comme exporté.'; return; } }
-    if(!sent){ const a=document.createElement('a'); a.href=URL.createObjectURL(file); a.download=name; document.body.appendChild(a); a.click(); setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); },1000); }
-    const now=Date.now();
-    list.forEach(m=>(m.members||[m]).forEach(c=>{ c.vcfAt=now; c.updatedAt=now; }));
-    saveCrm();
-    $('vcf-status').textContent=list.length+' contact'+(list.length>1?'s':'')+' exporté'+(list.length>1?'s':'')+'. Ouvre le fichier sur le téléphone pour les ajouter.';
-    $('vcf-new').textContent='0';
-  }
-
   $('bridge-token').value=bridgeCfg.token||'';
   $('bridge-save-btn').onclick=()=>{ bridgeCfg.token=$('bridge-token').value.trim(); saveBridgeCfg(); $('bridge-status').textContent='Test…'; bridgeCheck(); };
   $('parc-bridge-btn').onclick=()=>importParcFromBridge(false);
@@ -7848,178 +7327,6 @@
   $('vcf-mode-all').onchange=()=>{ if($('vcf-mode-all').checked) $('vcf-mode-changed').checked=false; };
   $('vcf-mode-changed').onchange=()=>{ if($('vcf-mode-changed').checked) $('vcf-mode-all').checked=false; };
   $('vcf-overlay').addEventListener('click', e=>{ if(e.target.id==='vcf-overlay') $('vcf-overlay').classList.add('hidden'); });
-
-  // ---------- « Marché » : the market figures a producer talks about, read from the public PowerKlock API ----------
-  // Plain GET, no key (https://tomsremy.github.io/PowerKlock/data/api.json). Every block names its source (the API's rule).
-  // Only the few numbers shown are kept on this device, so the page and the call screen still show the last ones offline.
-  const MK_BASE='https://tomsremy.github.io/PowerKlock/data/';
-  const MK_SRC={ spot:'ENTSO-E Transparency Platform, via PowerKlock', m0:'CRE open data (Licence Ouverte) ; estimation et prévision PowerKlock', cap:'PowerKlock, à partir de RTE éCO2mix et ENTSO-E' };
-  const MK_ZONES=[['FR','France'],['DE_LU','Allemagne'],['BE','Belgique'],['NL','Pays-Bas'],['ES','Espagne'],['CH','Suisse'],['IT_NORD','Italie Nord']];
-  let marketData=null, marketLoading=null;
-  try{ marketData=JSON.parse(localStorage.getItem('market-cache')||'null'); }catch(e){}
-  const mkNum=(v,d)=>v==null || isNaN(v)?'—':Number(v).toLocaleString('fr-FR',{ minimumFractionDigits:d==null?1:d, maximumFractionDigits:d==null?1:d });
-  const mkMonth=k=>{ const [y,m]=k.split('-'); return new Date(+y, +m-1, 1).toLocaleDateString('fr-FR',{ month:'short', year:'numeric' }).replace('.',''); };
-  const mkDay=iso=>iso?new Date(iso+'T12:00:00').toLocaleDateString('fr-FR',{ weekday:'long', day:'numeric', month:'long' }):'';
-  async function loadMarket(force){
-    if(marketLoading) return marketLoading;
-    if(!force && marketData && Date.now()-marketData.at<30*60000) return marketData;
-    const get=async f=>{ const r=await fetch(MK_BASE+f, { cache:'no-cache' }); if(!r.ok) throw new Error(f+' '+r.status); return r.json(); };
-    const now=new Date(), ym=d=>d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0'), prevM=new Date(now.getFullYear(), now.getMonth()-1, 1);
-    marketLoading=(async()=>{
-      const [prices, cur, prev, m0, cap]=await Promise.all([get('prices.json'), get('history/monthly/'+ym(now)+'.json').catch(()=>null), get('history/monthly/'+ym(prevM)+'.json').catch(()=>null), get('cre_m0.json').catch(()=>null), get('history/fr_capture.json').catch(()=>null)]);
-      const fr=(prices.zones||[]).find(z=>z.code==='FR'); if(!fr) throw new Error('FR');
-      const days=[].concat(prev && prev.zones && prev.zones.FR || [], cur && cur.zones && cur.zones.FR || []).filter(x=>x && x.d).sort((a,b)=>a.d.localeCompare(b.d));
-      const lastDay=days.filter(x=>Math.abs((x.avg||0)-fr.today)<0.06).pop()||days[days.length-1]||null;
-      const out={ at:Date.now(), updated:prices.updated,
-        spot:{ day:lastDay?lastDay.d:'', avg:fr.today, vs:fr.vsYday, min:fr.min, minH:fr.minHour, max:fr.max, maxH:fr.maxHour, neg:fr.negHours||0, peak:lastDay?lastDay.peakAvg:null, off:lastDay?lastDay.offAvg:null, ren:lastDay?lastDay.renPct:null, q:(fr.hourly||[]).slice(0,96) },
-        days:days.slice(-30).map(x=>({ d:x.d, avg:x.avg, neg:x.negH||0 })),
-        zones:MK_ZONES.map(([c,n])=>{ const z=(prices.zones||[]).find(x=>x.code===c); return z?{ c, n, avg:z.today, vs:z.vsYday, neg:z.negHours||0 }:null; }).filter(Boolean) };
-      if(m0 && m0.official){ const o=m0.official, rows=[];
-        const offM=Object.keys(o.monthly||{}).sort().slice(-3);
-        offM.forEach(k=>rows.push({ m:k, base:o.monthly[k], wind:(o.wind||{})[k], solar:(o.solar||{})[k], how:'CRE' }));
-        const lastOff=offM[offM.length-1]||'';
-        Object.keys(m0.estimate||{}).sort().filter(k=>k>lastOff).forEach(k=>{ const e=m0.estimate[k]; rows.push({ m:k, base:e.base, wind:e.wind, solar:e.solar, how:'estimation', days:e.days }); });
-        // a month the CRE published for the base only: its wind / solar come from the estimate
-        rows.forEach(r=>{ const e=(m0.estimate||{})[r.m]; if(r.how==='CRE' && e){ if(r.wind==null){ r.wind=e.wind; r.est=true; } if(r.solar==null){ r.solar=e.solar; r.est=true; } } });
-        (m0.forecast||[]).slice(0,3).forEach(f=>rows.push({ m:f.month, base:f.base, wind:f.wind, solar:f.solar, how:'prévision' }));
-        const ann=Object.keys(o.annual||{}).sort().slice(-2).map(y=>({ y, v:o.annual[y] }));
-        out.m0={ rows, ann, cur:m0.currentMonth }; }
-      if(cap && cap.days && cap.days.length){ const F=cap.fields||[], ix=k=>F.indexOf(k)+1, last=cap.days[cap.days.length-1][0];
-        const win=(label, from, to)=>{ const ds=cap.days.filter(x=>x[0]>=from && x[0]<=to); if(!ds.length) return null; const s=k=>ds.reduce((t,x)=>t+(x[ix(k)]||0),0);
-          const base=s('pSum')/Math.max(1,s('pN')), sol=s('sE')?s('sR')/s('sE'):null, wnd=s('wE')?s('wR')/s('wE'):null;
-          return { label, base, sol, wnd, solR:sol!=null?sol/base:null, wndR:wnd!=null?wnd/base:null, n:ds.length }; };
-        const d30=toISO(new Date(new Date(last+'T12:00:00').getTime()-29*864e5)), y=last.slice(0,4);
-        out.cap={ last, rows:[win('30 derniers jours', d30, last), win('Mois en cours', last.slice(0,7)+'-01', last), win('Depuis janvier', y+'-01-01', last), win('Année '+(y-1), (y-1)+'-01-01', (y-1)+'-12-31')].filter(Boolean) }; }
-      marketData=out; try{ localStorage.setItem('market-cache', JSON.stringify(out)); }catch(e){}
-      return out; })();
-    try{ return await marketLoading; } finally { marketLoading=null; }
-  }
-  // the few words to open a call or a mail with
-  function marketLine(){
-    const m=marketData; if(!m || !m.spot) return '';
-    const s=m.spot, sol=m.m0 && m.m0.rows.filter(r=>r.how==='CRE' && r.solar!=null && !r.est).pop(), c=m.cap && m.cap.rows[0];
-    return ['Spot France du '+(s.day?pqIsoToFr(s.day):'dernier jour')+' : '+mkNum(s.avg)+' €/MWh'+(s.neg?' ('+mkNum(s.neg,1)+' h négatives)':''),
-      sol?'M0 solaire '+mkMonth(sol.m)+' : '+mkNum(sol.solar)+' €/MWh':'', c && c.sol!=null?'capture solaire 30 j : '+mkNum(c.sol)+' €/MWh ('+Math.round(c.solR*100)+' % du prix moyen)':''].filter(Boolean).join(' · ');
-  }
-  function marketText(){
-    const m=marketData; if(!m) return '';
-    const s=m.spot, L=['Marché de l’électricité · '+(s.day?mkDay(s.day):''), '',
-      'Spot France (day-ahead) : '+mkNum(s.avg)+' €/MWh'+(s.vs!=null?' ('+(s.vs>0?'+':'')+mkNum(s.vs)+' vs la veille)':'')+' · pointe '+mkNum(s.peak)+' · hors pointe '+mkNum(s.off)+' · min '+mkNum(s.min)+' à '+(s.minH||'')+' · max '+mkNum(s.max)+' à '+(s.maxH||'')+' · '+mkNum(s.neg,1)+' h à prix négatif'];
-    if(m.m0){ L.push('', 'M0 (€/MWh) — base / éolien / solaire :'); m.m0.rows.forEach(r=>L.push('  '+mkMonth(r.m)+' : '+mkNum(r.base)+' / '+mkNum(r.wind)+' / '+mkNum(r.solar)+(r.how!=='CRE'?' ('+r.how+' PowerKlock)':r.est?' (éolien / solaire estimés)':' (CRE)'))); }
-    if(m.cap){ L.push('', 'Prix capturés (€/MWh, en % du prix moyen) :'); m.cap.rows.forEach(r=>L.push('  '+r.label+' : solaire '+mkNum(r.sol)+' ('+Math.round(r.solR*100)+' %) · éolien '+mkNum(r.wnd)+' ('+Math.round(r.wndR*100)+' %) · moyenne '+mkNum(r.base))); }
-    L.push('', 'Sources : '+MK_SRC.spot+' ; '+MK_SRC.m0+' ; '+MK_SRC.cap+'. Jours de livraison, heure de Paris.');
-    return L.join('\n');
-  }
-  // charts drawn to scale: the day's 96 quarter-hours, then the last 30 days
-  function mkDayChart(q){
-    if(!q || !q.length) return '<p class="mk-empty">Pas de courbe pour ce jour.</p>';
-    const W=640, H=200, pl=40, pr=8, pt=10, pb=24, lo=Math.min(0, ...q), hi=Math.max(...q, 1), y=v=>pt+(hi-v)/(hi-lo)*(H-pt-pb), x=i=>pl+i*(W-pl-pr)/(q.length-1);
-    const step=hi-lo>300?100:hi-lo>120?50:hi-lo>60?20:10, ticks=[]; for(let t=Math.ceil(lo/step)*step; t<=hi; t+=step) ticks.push(t);
-    const line=q.map((v,i)=>(i?'L':'M')+x(i).toFixed(1)+' '+y(v).toFixed(1)).join(' ');
-    return '<svg class="mk-svg" viewBox="0 0 '+W+' '+H+'" role="img" aria-label="Prix au quart d’heure">'
-      +ticks.map(t=>'<line x1="'+pl+'" x2="'+(W-pr)+'" y1="'+y(t)+'" y2="'+y(t)+'" class="mk-grid'+(t===0?' zero':'')+'"/><text x="'+(pl-6)+'" y="'+(y(t)+3.5)+'" class="mk-ax" text-anchor="end">'+t+'</text>').join('')
-      +[0,6,12,18,24].map(h=>'<text x="'+x(Math.min(q.length-1,h*4))+'" y="'+(H-6)+'" class="mk-ax" text-anchor="middle">'+h+' h</text>').join('')
-      +'<path d="'+line+' L'+x(q.length-1)+' '+y(lo)+' L'+x(0)+' '+y(lo)+' Z" class="mk-area"/><path d="'+line+'" class="mk-line"/>'
-      +q.map((v,i)=>v<0?'<circle cx="'+x(i)+'" cy="'+y(v)+'" r="2.2" class="mk-neg"/>':'').join('')+'</svg>';
-  }
-  function mk30Chart(days){
-    if(!days || !days.length) return '<p class="mk-empty">Pas d’historique.</p>';
-    const W=640, H=200, pl=40, pr=8, pt=10, pb=24, hi=Math.max(...days.map(d=>d.avg), 1), lo=Math.min(0, ...days.map(d=>d.avg)), y=v=>pt+(hi-v)/(hi-lo)*(H-pt-pb), bw=(W-pl-pr)/days.length;
-    const step=hi>300?100:hi>120?50:20, ticks=[]; for(let t=Math.ceil(lo/step)*step; t<=hi; t+=step) ticks.push(t);
-    return '<svg class="mk-svg" viewBox="0 0 '+W+' '+H+'" role="img" aria-label="Prix moyen des 30 derniers jours">'
-      +ticks.map(t=>'<line x1="'+pl+'" x2="'+(W-pr)+'" y1="'+y(t)+'" y2="'+y(t)+'" class="mk-grid'+(t===0?' zero':'')+'"/><text x="'+(pl-6)+'" y="'+(y(t)+3.5)+'" class="mk-ax" text-anchor="end">'+t+'</text>').join('')
-      +days.map((d,i)=>{ const top=y(Math.max(0,d.avg)), bot=y(Math.min(0,d.avg)); return '<rect x="'+(pl+i*bw+bw*.15).toFixed(1)+'" width="'+(bw*.7).toFixed(1)+'" y="'+top.toFixed(1)+'" height="'+Math.max(1,bot-top).toFixed(1)+'" class="mk-bar'+(d.neg?' has-neg':'')+'"><title>'+pqIsoToFr(d.d)+' : '+mkNum(d.avg)+' €/MWh'+(d.neg?' · '+mkNum(d.neg,1)+' h négatives':'')+'</title></rect>'; }).join('')
-      +[0, Math.floor(days.length/2), days.length-1].map(i=>'<text x="'+(pl+i*bw+bw/2)+'" y="'+(H-6)+'" class="mk-ax" text-anchor="middle">'+escapeHtml(days[i].d.slice(8)+'/'+days[i].d.slice(5,7))+'</text>').join('')+'</svg>';
-  }
-  // The page shows a ready-made PowerKlock dashboard (its « solo » link: read-only, always up to date, PowerPoint export).
-  // The templates are the site's own (General › My dashboard › templates); « Mon tableau » takes a link copied from the site.
-  const MK_S=t=>({ t:'s', title:t, w:12, h:1 }), MK_W=(wid,w,h,p)=>Object.assign({ t:'w', wid, w, h }, p?{ p }:{});
-  const MK_BOARDS=[
-    { id:'orig', name:'Origination · France', label:'Origination France : forwards, prix capturés, M0, garanties d’origine', items:[
-      MK_S('Prices & forwards'), MK_W('kpi-da',3,2,{ zone:'FR' }), MK_W('kpi-fuel',3,2,{ c:'eua' }), MK_W('kpi-go',3,2), MK_W('kpi-fr-nuclear',3,2),
-      MK_W('pf-curve',6,5,{ country:'FR' }), MK_W('pf-history',6,5,{ country:'FR', tenor:'Y+1', win:'3Y' }),
-      MK_S('Value of renewables'), MK_W('ren-cr',6,5,{ zone:'FR', window:'1Y' }), MK_W('ren-daily',6,5,{ zone:'FR', window:'1Y' }),
-      MK_W('fr-m0',12,5,{ tech:'solar', view:'price', win:'2Y' }), MK_W('fr-m0-forecast',12,6),
-      MK_S('Regions & capacity'), MK_W('fr-reg-lf',6,5), MK_W('cap-history',6,5,{ country:'FR' }),
-      MK_S('Guarantees of origin'), MK_W('go-cal1',6,5), MK_W('go-cal',6,5)] },
-    { id:'mu', name:'Market update', label:'Point marché : dans l’ordre de la présentation interne', items:[
-      MK_S('1 · Supply'), MK_W('wx-outlook',6,5,{ series:'precip' }), MK_W('wx-outlook',6,5,{ series:'solar' }), MK_W('wx-outlook',6,5,{ series:'wind' }), MK_W('nuc-monthly-years',6,5),
-      MK_W('gas-storage-years',6,5), MK_W('hydro-reservoirs',6,5,{ country:'FR' }),
-      MK_S('2 · Demand'), MK_W('wx-outlook',6,5,{ series:'temp' }), MK_W('fr-load-normal',6,5),
-      MK_S('3 · News and geopolitics'), MK_W('fuel-coal-oil',6,5), MK_W('news-latest',6,5),
-      MK_S('4 · Prices'), MK_W('fr-cal-history',6,5,{ win:'3M' }), MK_W('fr-cal-drivers',6,5,{ win:'6M' }), MK_W('ttf-cal-history',6,5,{ win:'6M' }), MK_W('ttf-fwd-table',6,5),
-      MK_W('fr-spot-monthly',6,5), MK_W('fr-spot-30d',6,5), MK_W('fr-spot-day',6,7,{ day:'latest' }), MK_W('fr-spot-day',6,7,{ day:'previous' })] },
-    { id:'spot', name:'Spot trader · France', label:'Spot France : prix du jour, consommation, échanges', items:[
-      MK_S('Today'), MK_W('kpi-da',2,2,{ zone:'FR' }), MK_W('kpi-da',2,2,{ zone:'DE_LU' }), MK_W('kpi-fr-load',2,2), MK_W('kpi-fr-net',2,2), MK_W('kpi-fr-nuclear',2,2), MK_W('kpi-hdd',2,2),
-      MK_W('da-intraday',8,5), MK_W('cb-fr-avg',4,5), MK_S('France fundamentals'), MK_W('load-day',6,5,{ zone:'FR' }), MK_W('ren-intraday',6,5), MK_W('cb-intraday',12,5)] },
-    { id:'fund', name:'Fundamentals', label:'Fondamentaux : combustibles, carbone, nucléaire, météo', items:[
-      MK_S('Fuels & carbon'), MK_W('kpi-fuel',3,2,{ c:'eua' }), MK_W('kpi-fuel',3,2,{ c:'ttf' }), MK_W('kpi-fuel',3,2,{ c:'coal' }), MK_W('kpi-fuel',3,2,{ c:'brent' }),
-      MK_W('fuel-eua-ttf',6,5), MK_W('fuel-switch',6,5), MK_W('fuel-storage',6,5), MK_W('spark-daily',6,5),
-      MK_S('Supply & weather'), MK_W('nuc-hist',6,5), MK_W('hdd',6,5), MK_S('Forwards'), MK_W('fwd-power',6,5), MK_W('fwdc-ttf',6,5)] }
-  ];
-  const MK_SITE='https://tomsremy.github.io/PowerKlock/index.html';
-  const mkB64u=bytes=>{ let b=''; bytes.forEach(x=>{ b+=String.fromCharCode(x); }); return btoa(b).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,''); };
-  async function mkBoardUrl(bd){   // « z » + base64url of the raw-deflated JSON, as the site expects (« j » + plain JSON if the browser can't compress)
-    const raw=new TextEncoder().encode(JSON.stringify({ n:bd.name, items:bd.items }));
-    if(window.CompressionStream){ try{ const buf=await new Response(new Blob([raw]).stream().pipeThrough(new CompressionStream('deflate-raw'))).arrayBuffer(); return MK_SITE+'#solo=z'+mkB64u(new Uint8Array(buf)); }catch(e){} }
-    return MK_SITE+'#solo=j'+mkB64u(raw);
-  }
-  const mkPick=()=>{ try{ return localStorage.getItem('market-board')||'mu'; }catch(e){ return 'mu'; } };
-  const mkOwn=v=>{ const m=/^https:\/\/tomsremy\.github\.io\/PowerKlock\/(?:index\.html)?#(?:solo|board)=([zj][A-Za-z0-9_-]+)$/.exec(String(v||'').trim()); return m?MK_SITE+'#solo='+m[1]:null; };
-  async function renderMarket(force){
-    const root=$('market-root'); if(!root) return; const e=escapeHtml, pick=mkPick(), own=mkOwn(pick), bd=MK_BOARDS.find(b=>b.id===pick)||(own?null:MK_BOARDS[0]);
-    loadMarket(force).catch(()=>{});   // the figures behind « Copier pour un mail » and the call screen
-    const head='<div class="mk-head"><div><h2>Marché de l’électricité</h2><span class="mk-upd">Tableau de bord PowerKlock, toujours à jour · sources citées sous chaque graphique</span></div>'
-      +'<div class="mk-acts"><select class="mk-board" aria-label="Tableau de bord">'+MK_BOARDS.map(b=>'<option value="'+b.id+'"'+(bd && bd.id===b.id?' selected':'')+'>'+e(b.label)+'</option>').join('')+'<option value="own"'+(own?' selected':'')+'>Mon tableau (lien copié sur PowerKlock)…</option></select>'
-      +'<button type="button" class="pipe-bar-btn mk-copy" title="Spot, M0 et prix capturés, prêts à coller dans un mail ou dans Teams">Copier pour un mail</button><a class="pipe-bar-btn mk-open" target="_blank" rel="noopener">Ouvrir en grand ↗</a></div></div>';
-    if(!navigator.onLine){ root.innerHTML=head; root.querySelector('.mk-open').remove(); mkCards(root); mkWire(root); return; }
-    const url=own||await mkBoardUrl(bd);
-    root.innerHTML=head+'<iframe class="mk-frame" title="Tableau de bord PowerKlock" loading="lazy" referrerpolicy="no-referrer"></iframe>';
-    root.querySelector('.mk-frame').src=url; root.querySelector('.mk-open').href=url;
-    mkWire(root);
-  }
-  function mkWire(root){
-    const sel=root.querySelector('.mk-board');
-    sel.onchange=()=>{ let v=sel.value;
-      if(v==='own'){ const u=prompt('Colle le lien de ton tableau de bord PowerKlock (General › API › « A whole dashboard ») :', mkOwn(mkPick())||''); if(u==null){ renderMarket(); return; } if(!mkOwn(u)){ alert('Ce n’est pas un lien de tableau PowerKlock (il contient « #solo= »).'); renderMarket(); return; } v=u.trim(); }
-      try{ localStorage.setItem('market-board', v); }catch(e2){} prefsToNote(); renderMarket(); };
-    root.querySelector('.mk-copy').onclick=async ev=>{ const b=ev.currentTarget; try{ await loadMarket(); }catch(e2){}
-      if(!marketData){ b.textContent='Pas de données (hors ligne ?)'; return; }
-      navigator.clipboard.writeText(marketText()).then(()=>{ b.textContent='Copié ✓'; setTimeout(()=>{ b.textContent='Copier pour un mail'; }, 1800); }, ()=>{ b.textContent='Copie impossible'; }); };
-  }
-  // offline: the last figures read, drawn by the app
-  function mkCards(root){
-    const m=marketData, e=escapeHtml;
-    if(!m){ root.insertAdjacentHTML('beforeend', '<div class="mk-load">Hors ligne, et aucun chiffre gardé pour l’instant.</div>'); return; }
-    const s=m.spot, src=t=>'<p class="mk-src">Source : '+e(t)+'. Jours de livraison, heure de Paris.</p>';
-    const card=(k,v,sub,cls)=>'<div class="mk-kpi'+(cls?' '+cls:'')+'"><span class="mk-k">'+e(k)+'</span><b>'+v+'</b><span class="mk-sub">'+sub+'</span></div>';
-    const last30=m.days||[], avg30=last30.length?last30.reduce((t,d)=>t+d.avg,0)/last30.length:null, neg30=last30.reduce((t,d)=>t+d.neg,0);
-    let h='<p class="mk-off">Hors ligne : derniers chiffres lus le '+e(new Date(m.at).toLocaleString('fr-FR',{ day:'numeric', month:'short', hour:'2-digit', minute:'2-digit' }))+(s.day?' (spot du '+e(mkDay(s.day))+')':'')+'.</p>';
-    h+='<div class="mk-kpis">'
-      +card('Spot France', mkNum(s.avg)+'<small> €/MWh</small>', s.vs!=null?'<i class="'+(s.vs>0?'up':'down')+'">'+(s.vs>0?'▲ +':'▼ ')+mkNum(s.vs)+'</i> vs la veille':'moyenne du jour')
-      +card('Pointe / hors pointe', mkNum(s.peak,0)+' <small>/</small> '+mkNum(s.off,0), 'pointe 8 h – 20 h, jours ouvrés')
-      +card('Min · max', mkNum(s.min,0)+' <small>→</small> '+mkNum(s.max,0), 'à '+e(s.minH||'—')+' et à '+e(s.maxH||'—'))
-      +card('Heures à prix négatif', mkNum(s.neg,1)+'<small> h</small>', mkNum(neg30,1)+' h sur 30 jours', s.neg?'warn':'')
-      +card('Moyenne 30 jours', mkNum(avg30)+'<small> €/MWh</small>', s.ren!=null?'renouvelables '+mkNum(s.ren,0)+' % du mix le '+e(pqIsoToFr(s.day)):'')
-      +'</div>';
-    h+='<div class="mk-grid2"><section class="mk-card"><h3>Prix au quart d’heure · '+e(s.day?pqIsoToFr(s.day):'')+'</h3>'+mkDayChart(s.q)+src(MK_SRC.spot)+'</section>'
-      +'<section class="mk-card"><h3>Prix moyen par jour · 30 derniers jours</h3>'+mk30Chart(last30)+'<p class="mk-leg"><i class="b"></i>prix moyen du jour <i class="n"></i>jour avec des heures négatives</p>'+src(MK_SRC.spot)+'</section></div>';
-    h+='<div class="mk-grid2">';
-    if(m.m0){ h+='<section class="mk-card"><h3>M0 : prix de marché de référence (€/MWh)</h3><p class="mk-why">Le prix de référence de la CRE pour le complément de rémunération : le producteur touche la différence entre son tarif et le M0 de sa filière.</p>'
-      +'<table class="mk-table"><thead><tr><th>Mois</th><th class="n">Base</th><th class="n">Éolien</th><th class="n">Solaire</th><th></th></tr></thead><tbody>'
-      +m.m0.rows.map(r=>'<tr class="'+(r.how==='CRE'?'':'mk-est')+'"><td>'+e(mkMonth(r.m))+'</td><td class="n">'+mkNum(r.base)+'</td><td class="n">'+mkNum(r.wind)+'</td><td class="n">'+mkNum(r.solar)+'</td><td><span class="mk-tag '+(r.how==='CRE'?'off':r.how==='estimation'?'est':'fc')+'">'+(r.how==='CRE'?(r.est?'CRE · éol./sol. estimés':'CRE officiel'):r.how==='estimation'?'estimation'+(r.days?' · '+r.days+' j':''):'prévision')+'</span></td></tr>').join('')
-      +'</tbody></table>'+(m.m0.ann.length?'<p class="mk-why">M0 annuel officiel : '+m.m0.ann.map(a=>e(a.y)+' : '+mkNum(a.v)+' €/MWh').join(' · ')+'</p>':'')+src(MK_SRC.m0)+'</section>'; }
-    if(m.cap){ const best=m.cap.rows[2]||m.cap.rows[0], prevY=m.cap.rows[3];
-      h+='<section class="mk-card"><h3>Prix capturés : ce que valent le solaire et l’éolien</h3><p class="mk-why">Le prix moyen touché par la production, comparé au prix moyen du marché. En dessous de 100 %, la filière produit surtout quand les prix sont bas.</p>'
-      +'<table class="mk-table"><thead><tr><th>Période</th><th class="n">Prix moyen</th><th class="n">Solaire</th><th class="n">Éolien</th></tr></thead><tbody>'
-      +m.cap.rows.map(r=>'<tr><td>'+e(r.label)+'</td><td class="n">'+mkNum(r.base)+'</td><td class="n">'+mkNum(r.sol)+' <span class="mk-rate'+(r.solR<.8?' low':'')+'">'+Math.round(r.solR*100)+' %</span></td><td class="n">'+mkNum(r.wnd)+' <span class="mk-rate'+(r.wndR<.8?' low':'')+'">'+Math.round(r.wndR*100)+' %</span></td></tr>').join('')
-      +'</tbody></table>'+(best && prevY?'<aside class="mk-take"><b>À retenir</b> Le solaire capte '+Math.round(best.solR*100)+' % du prix moyen depuis janvier, contre '+Math.round(prevY.solR*100)+' % sur '+e(prevY.label.replace('Année ',''))+'.</aside>':'')+src(MK_SRC.cap)+'</section>'; }
-    h+='</div>';
-    if(m.zones && m.zones.length){ const mx=Math.max(...m.zones.map(z=>Math.abs(z.avg)),1);
-      h+='<section class="mk-card"><h3>Spot chez les voisins · même jour (€/MWh)</h3><div class="mk-zones">'+m.zones.map(z=>'<div class="mk-zone'+(z.c==='FR'?' fr':'')+'"><span>'+e(z.n)+'</span><i style="width:'+Math.max(2,Math.abs(z.avg)/mx*100)+'%"></i><b>'+mkNum(z.avg)+'</b>'+(z.neg?'<em>'+mkNum(z.neg,1)+' h nég.</em>':'<em></em>')+'</div>').join('')+'</div>'+src(MK_SRC.spot)+'</section>'; }
-    root.insertAdjacentHTML('beforeend', '<div class="mk-cards">'+h+'</div>');
-  }
-  window.todoExtraCommands=(window.todoExtraCommands||[]).concat([{ t:'Marché : prix spot, M0, captures', k:'marche prix spot m0 cre capture powerklock electricite', go:()=>gsTab('market') }]);
 
   // Test hooks (tests/smoke_test.py and the mail corpus set window.TODO_TEST_HOOKS before loading)
   if(window.TODO_TEST_HOOKS) window.__todo={ threeWayMerge, mergeNoteLines, nextRecurDate, parseVcf, parsePipeMail, parsePipeMailInstallations:parseMailInstallations, parseSignatureBlock, parseSignatureText, xlsxToInstallations:(rowsBySheet)=>pqRowsToInstallations(Object.keys(rowsBySheet), n=>rowsBySheet[n]), codeAffaire, pricingMail };
@@ -8114,7 +7421,6 @@
   function openLinkTarget(r){ if(r.type==='Contact') openContactEverywhere(r.ref); else if(r.type==='Société') openCompany(r.ref); else { gsTab('pipeline'); setTimeout(()=>openOppDetail(r.ref),30); } }
   function resolveLink(name, T){ const f=pqFold(String(name).trim()); if(!T || T===(linkCache && linkCache.list)){ linkTargets(); return linkCache.byName.get(f)||null; } return T.find(x=>pqFold(x.name)===f)||null; }
   function linksIn(text, T){ const out=[]; String(text||'').replace(LINK_RE,(m,n)=>{ const r=resolveLink(n,T); if(r && !out.includes(r.id)) out.push(r.id); return m; }); return out; }
-  window.todoLinksOf=text=>linksIn(text);
   // a contact or a company renamed: its [[links]] follow (tasks, the note and its past days, comments)
   function rewriteLinks(oldName, newName){
     oldName=String(oldName||'').trim(); newName=String(newName||'').trim(); if(!oldName || !newName || oldName===newName) return 0;
@@ -8154,7 +7460,7 @@
     return box;
   }
   // the note's lines with links become « note » nodes in the network
-  window.todoNoteLinks=()=>{ const T=linkTargets(), out=[];
+  const noteLinksForNetwork=()=>{ const T=linkTargets(), out=[];
     const sp=notes.find(n=>n.id===POSTIT_ID && !n.deleted);
     if(sp && sp.text) String(sp.text).split('\n').forEach(line=>{ const tg=linksIn(line,T); if(tg.length) out.push([line.replace(PI_DONE,'').replace(LINK_RE,'$1'), 'Note', tg, ()=>openPostit()]); });
     dayNotes().forEach(d=>d.text.split('\n').forEach(line=>{ const tg=linksIn(line,T); if(tg.length) out.push([line.replace(PI_DONE,'').replace(LINK_RE,'$1'), 'Note du '+pqIsoToFr(d.day), tg, ()=>openDayNotes(d.day)]); }));
@@ -8241,9 +7547,6 @@
   }
   // « Voir dans le réseau » from a sheet
   function openInNetwork(id){ networkFocusNext=id; gsTab('network'); }
-  window.todoOpenInNetwork=openInNetwork;
-  window.todoNetworkState=()=>networkView?networkView._state():null;
-  window.todoNetworkPos=id=>networkView?networkView._pos(id):null;
   window.todoExtraCommands=(window.todoExtraCommands||[]).concat([{ t:'Ouvrir le réseau', k:'graphe reseau connexions liens neuronal', go:()=>gsTab('network') }]);
 
   // ---------- Company sheet: everything about one client on one screen, with its history ----------
@@ -8383,7 +7686,7 @@
     window.addEventListener('blur', hidePeek);
   }
   // the network's tooltip and panel: a few lines of the sheet for every kind of point
-  window.todoNetworkInfo=(id, label)=>{
+  const networkInfo=(id, label)=>{
     const k=id.slice(0,3), v=id.slice(3);
     if(k==='co:'){ const d=peekLines('co:'+label); return d?d.L:[]; }
     if(k==='ct:'||k==='op:'){ const d=peekLines(id); return d?d.L.filter(x=>!(k==='op:' && !x[0] && x===d.L[0])):[]; }
@@ -8398,7 +7701,6 @@
       return [['Producteur', p.prod], ['Statut', p.statut], ['Puissance', p.kwc?fmtKwc(p.kwc):''], ['P50', p.p50?Math.round(p.p50).toLocaleString('fr-FR')+' MWh/an':''], ['Techno', p.enr||p.typeInst], ['MES', p.mes?pqIsoToFr(p.mes):''], ['Fin', p.fin?pqIsoToFr(p.fin):'']].filter(x=>x[1]); }
     return [];
   };
-  window.todoPeek=key=>{ const d=peekLines(key); return d?[d.eyebrow, d.title].concat(d.L.map(x=>x.filter(Boolean).join(' : '))).join('\n'):null; };
 
   function allCompanyNames(){
     const m=new Map(); const add=n=>{ n=String(n||'').trim(); if(n && !m.has(pqFold(n))) m.set(pqFold(n), n); };
@@ -8445,7 +7747,7 @@
       { t:'Nouveau contact', k:'ajouter contact personne', go:clickEl('contact-add-btn','contacts') },
       { t:'Coller une signature de mail', k:'contact signature', go:clickEl('sig-paste-btn','contacts') },
       { t:'Excel ⇄ appli : ce qui est envoyé ou pas', k:'excel pipe bdd suivi envoye pousse synchro', go:()=>openExcelSync() },
-      { t:'Pipeline en liste', k:'liste tableau installations toutes', go:()=>{ gsTab('pipeline'); setTimeout(()=>{ pipeList=true; pipeDash=false; pipeMeet=false; try{ localStorage.setItem('pipe-list','1'); }catch(e){} renderPipeline(); },40); } },
+      { t:'Pipeline en liste', k:'liste tableau installations toutes', go:()=>{ gsTab('pipeline'); setTimeout(()=>{ pipeList=true; pipeDash=false; pipeMeet=false; lsSet('pipe-list','1'); renderPipeline(); },40); } },
       { t:'Vue réunion du pipeline', k:'reunion pricing partager', go:()=>{ gsTab('pipeline'); setTimeout(()=>{ if(!pipeMeet){ pipeMeet=true; pipeDash=false; renderPipeline(); } },40); } },
       { t:'Tableau de bord du pipeline', k:'dashboard stats', go:()=>{ gsTab('pipeline'); setTimeout(()=>{ if(!pipeDash){ pipeDash=true; pipeMeet=false; renderPipeline(); } },40); } },
       { t:'Ouvrir la note (post-it)', k:'postit calepin note', go:()=>openPostit(true) },
@@ -8499,7 +7801,6 @@
   function gsPaint(){ document.querySelectorAll('#gs-results .gs-item').forEach((b,i)=>b.classList.toggle('on', i===gsActive)); $('gs-input').setAttribute('aria-activedescendant','gs-opt-'+gsActive); const on=$('gs-opt-'+gsActive); if(on) on.scrollIntoView({ block:'nearest' }); }
   function gsGo(i){ const it=gsList[i]; if(!it) return; gsClose(); it.go(); }
   function gsOpen(prefix){ $('gs-overlay').hidden=false; const inp=$('gs-input'); inp.value=prefix||''; gsRender(); inp.focus(); }
-  window.todoCommandPalette=()=>gsOpen('>');
   function gsClose(){ $('gs-overlay').hidden=true; }
   $('gs-input').addEventListener('input', gsRender);
   $('gs-input').addEventListener('keydown', e=>{
@@ -8552,7 +7853,6 @@
     }
     const w=window.open(url, 'todo-mini', 'popup,width=400,height=620'); return !!w;
   }
-  window.todoOpenMini=openMiniWindow;
   { const wl=document.querySelector('.app-sidebar-widget'); if(wl && !window.TODO_WIDGET) wl.addEventListener('click', e=>{ e.preventDefault(); openMiniWindow(); }); }
   function widgetOpenFull(url){
     url=url||'index.html';
@@ -8581,7 +7881,7 @@
     let drag=null;
     bubble.addEventListener('pointerdown', e=>{ const r=bubble.getBoundingClientRect(); drag={ dx:e.clientX-r.left, dy:e.clientY-r.top, x:e.clientX, y:e.clientY, moved:false, id:e.pointerId }; });
     document.addEventListener('pointermove', e=>{ if(!drag) return; if(!drag.moved && Math.abs(e.clientX-drag.x)+Math.abs(e.clientY-drag.y)<5) return; if(!drag.moved){ drag.moved=true; try{ bubble.setPointerCapture(drag.id); }catch(_){} } place(e.clientX-drag.dx, e.clientY-drag.dy); placePanel(); });
-    document.addEventListener('pointerup', ()=>{ if(drag && drag.moved){ const r=bubble.getBoundingClientRect(); try{ localStorage.setItem(POS, JSON.stringify({ x:r.left, y:r.top })); }catch(e){} } });
+    document.addEventListener('pointerup', ()=>{ if(drag && drag.moved){ const r=bubble.getBoundingClientRect(); lsSet(POS, JSON.stringify({ x:r.left, y:r.top })); } });
     bubble.addEventListener('click', e=>{ if(drag && drag.moved){ drag=null; e.preventDefault(); return; } drag=null; placePanel(); window.__widgetToggle(); });
     addEventListener('resize', ()=>{ const r=bubble.getBoundingClientRect(); place(r.left, r.top); placePanel(); });
     document.addEventListener('keydown', e=>{ if(e.key==='Escape' && root.classList.contains('widget-open') && !document.querySelector('.modal:not(.hidden), #add-section.open')) setOpen(false); });
@@ -8610,7 +7910,7 @@
   ['sync-pill','sync-pill-lite','sync-pill-w'].forEach(id=>{ const el=$(id); if(el) el.onclick=onSyncPillClick; });
   window.addEventListener('online', ()=>{ if(syncConfig.enabled) syncEverythingNow(); else paintSyncPill(); });
   window.addEventListener('offline', paintSyncPill);
-  $('storage-alert-close').onclick=()=>{ const el=$('storage-alert'); if(el.dataset.kind==='ios'){ try{ localStorage.setItem('ios-hint-at', String(Date.now())); }catch(e){} } el.hidden=true; };
+  $('storage-alert-close').onclick=()=>{ const el=$('storage-alert'); if(el.dataset.kind==='ios'){ lsSet('ios-hint-at', String(Date.now())); } el.hidden=true; };
   // iPhone / iPad in Safari, app not on the home screen: Safari may wipe a site's data after 7 days without a visit (audit A17)
   (function(){
     const ios=/iPhone|iPad|iPod/.test(navigator.userAgent) || (/Macintosh/.test(navigator.userAgent) && navigator.maxTouchPoints>1);
@@ -8626,6 +7926,28 @@
     $('sync-token-exp').value=syncConfig.tokenExpires||'';
     if(location.hash==='#sync' && !window.TODO_LITE) openSyncSettings();
   });
+  // ---------- What other files (js/network.js, the note), the tests and the console call in this one, in one place (code audit C12) ----------
+  Object.assign(window, {
+    todoSettingsChanged: prefsToNote,
+    todoOpenDayNote: openDayNotes,
+    todoOpenWeek: openWeek,
+    todoWeekText: w=>weekText(weekData(w||'this')),
+    todoCaractBlob: list=>caractWorkbookBlob(list),
+    todoExcelSync: openExcelSync,
+    todoLinksOf: text=>linksIn(text),
+    todoOpenInNetwork: openInNetwork,
+    todoNetworkState: ()=>networkView?networkView._state():null,
+    todoNetworkPos: id=>networkView?networkView._pos(id):null,
+    todoPeek: key=>{ const d=peekLines(key); return d?[d.eyebrow, d.title].concat(d.L.map(x=>x.filter(Boolean).join(' : '))).join('\n'):null; },
+    todoCommandPalette: ()=>gsOpen('>'),
+    todoOpenMini: openMiniWindow,
+    recoverDeletedTasks,
+    todoNoteLinks: noteLinksForNetwork,
+    todoNetworkInfo: networkInfo,
+  });
+  window.TodoPresent.init({ $, MAP_PHASES, MEET_COLS, MEET_PHASES, MES_WEIGHTS, OPP_STAGES, PIPE_PHASES, WHO, WHO_COLORS, activeTasks, buildHistory, caractValue, daysInStage, escapeHtml, fmtKwc, fmtMwc, kwcNum, loadScript, meetBlockKey, meetBlockName, meetCopy, meetData, meetHiddenCols, meetPhasesOn, meetPick, meetPrint, meetTotal, meetVis, meetVisuals, meetXlsx, mesForecast, openOppDetail, openRequestDetail, oppName, oppStage, plainLinks, pqNum, prefsToNote, renderPipeline, stageLabel, stageTaskOf, toISO });   // js/present.js
+  window.TodoPhone.init({ $, askConfirm, tell, contactDupKeys, ensureCompany, loadTesseract, openContactForm, parseSignatureText, pqFmtPhone, pqFold, renderContacts, saveCrm, toISO, touchCrm, get contacts(){ return contacts; } });   // js/phone.js
+  window.TodoAI.init({ aiKey, $, CARACT_ROWS, caractKey, caractSet, caractValue, oppName, renderPipeline, saveCrm, touchCrm });   // js/ai.js
 })();
 
 if('serviceWorker' in navigator){
