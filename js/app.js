@@ -311,7 +311,8 @@
   const fmtGo=n=>n>=1073741824?(n/1073741824).toLocaleString('fr-FR',{ maximumFractionDigits:1 })+' Go':fmtMo(n);
   function showStorageAlert(kind, text){
     const el=$('storage-alert'); if(!el) return;
-    el.classList.toggle('warn', kind==='warn'); $('storage-alert-text').textContent=text; el.hidden=false;
+    el.classList.toggle('warn', kind==='warn' || kind==='ios'); $('storage-alert-text').textContent=text; el.hidden=false;
+    el.dataset.kind=kind; const see=$('storage-alert-see'); if(see) see.hidden=(kind==='ios');
   }
   function openStorageSection(){
     const tab=document.querySelector('.tab[data-tab="lists"]'); if(tab) tab.click();
@@ -503,8 +504,26 @@
     if(typeof renderLists==='function') renderLists();
   }
 
+  // once a day: is the data repo still private? If it became public, the sync stops at once and a red banner says why (audit A10)
+  async function checkRepoStillPrivate(){
+    let last=0; try{ last=+localStorage.getItem('repo-private-checked-at')||0; }catch(e){}
+    if(Date.now()-last<864e5) return true;
+    try{
+      const r=await ghFetch('https://api.github.com/repos/'+syncConfig.owner+'/'+syncConfig.repo, { headers:{ 'Authorization':'Bearer '+syncConfig.token, 'Accept':'application/vnd.github+json' }, cache:'no-store' });
+      if(!r.ok) return true;   // can't tell (network, rights): the next pull asks again
+      const info=await r.json();
+      if(info.private===false){
+        syncConfig.enabled=false; await saveSyncConfig(); paintSyncPill();
+        showStorageAlert('crit', 'Synchro suspendue : le dépôt GitHub « '+syncConfig.repo+' » est devenu PUBLIC. Rien n\u2019y est plus envoyé. Repasse-le en privé (Settings › Danger Zone sur GitHub), puis réactive la synchro dans Réf. & data.');
+        return false;
+      }
+      try{ localStorage.setItem('repo-private-checked-at', String(Date.now())); }catch(e){}
+    }catch(e){}
+    return true;
+  }
   async function syncPull(){
     if(!syncConfig.enabled) return;
+    if(!(await checkRepoStillPrivate())) return;
     try{
       const data=await ghGetJson(SYNC_TASKS_PATH);
       if(data.status===404){ scheduleSyncPush(); return; }
@@ -551,7 +570,8 @@
         refreshAllViews();
       }
       await saveConflicts(); updateConflictBadge();
-      const body={ message:'Sync tasks', content:b64EncodeUtf8(JSON.stringify(tasks)), branch:'main' };
+      const sentTasks=JSON.stringify(tasks);   // the reference copy becomes what is sent (audit A9): an edit made during the write is not taken as synced
+      const body={ message:'Sync tasks', content:b64EncodeUtf8(sentTasks), branch:'main' };
       if(sha) body.sha=sha;
       const putRes=await ghFetch(syncApiUrl(), {
         method:'PUT',
@@ -566,8 +586,9 @@
         // PUT above had failed, a stale base would make the next merge think a
         // just-completed field (e.g. archived) was never really changed locally
         // and silently revert it to the old remote value (tasks "reappearing").
-        tasksBaseSnapshot=tasks.map(t=>({...t}));
+        tasksBaseSnapshot=JSON.parse(sentTasks);
         await saveSnapshots(); syncRetryDone('tasks');
+        if(JSON.stringify(tasks)!==sentTasks) scheduleSyncPush();   // changed while it was being sent: goes in the next write
         setSyncStatus('Synchronisé '+new Date().toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'}));
       }else{
         if(!syncRetryLater('tasks', putRes.status, ()=>syncPushNow())) setSyncStatus('Erreur de synchro (écriture)');
@@ -621,7 +642,7 @@
         if(typeof renderCrm==='function') renderCrm();
       }
       await saveConflicts(); updateConflictBadge();
-      const bundle=JSON.stringify({companies,contacts,meetings,opportunities});
+      const bundle=JSON.stringify({companies,contacts,meetings,opportunities});   // the reference copy becomes what is sent (audit A9)
       const body={ message:'Sync CRM data', content:b64EncodeUtf8(bundle), branch:'main' };
       if(sha) body.sha=sha;
       const putRes=await ghFetch(syncApiUrl(SYNC_CRM_PATH), {
@@ -636,8 +657,9 @@
         // See syncPushNow: only advance the base once the write is confirmed,
         // or a failed PUT leaves a stale base that reverts real local changes
         // on the next merge.
-        crmBaseSnapshot={ companies:companies.map(c=>({...c})), contacts:contacts.map(c=>({...c})), meetings:meetings.map(m=>({...m})), opportunities:opportunities.map(o=>({...o})) };
+        crmBaseSnapshot=JSON.parse(bundle);
         await saveSnapshots(); syncRetryDone('crm');
+        if(JSON.stringify({companies,contacts,meetings,opportunities})!==bundle) scheduleCrmSyncPush();
       } else syncRetryLater('crm', putRes.status, ()=>syncPushCrmNow());
     }catch(e){ console.error('crm sync push failed', e); syncNote(null); }
   }
@@ -760,7 +782,8 @@
         renderNotes();
       }
       await saveConflicts(); updateConflictBadge();
-      const body={ message:'Sync notes', content:b64EncodeUtf8(JSON.stringify(notes)), branch:'main' };
+      const sentNotes=JSON.stringify(notes);   // the reference copy becomes what is sent (audit A9)
+      const body={ message:'Sync notes', content:b64EncodeUtf8(sentNotes), branch:'main' };
       if(sha) body.sha=sha;
       const putRes=await ghFetch(syncApiUrl(SYNC_NOTES_PATH), {
         method:'PUT',
@@ -771,8 +794,9 @@
       if(putRes.ok){
         const putData=await putRes.json();
         lastKnownNotesSha=putData.content.sha;
-        notesBaseSnapshot=notes.map(n=>({...n}));
+        notesBaseSnapshot=JSON.parse(sentNotes);
         await saveNotesBase(); syncRetryDone('notes');
+        if(JSON.stringify(notes)!==sentNotes) scheduleNotesSyncPush();
       } else syncRetryLater('notes', putRes.status, ()=>syncPushNotesNow());
     }catch(e){ console.error('notes sync push failed', e); syncNote(null); }
   }
@@ -2238,9 +2262,19 @@
       const res=await ghFetch(url, { headers:{ 'Authorization':'Bearer '+syncConfig.token, 'Accept':'application/vnd.github+json' } });
       if(!res.ok) throw new Error('no contact inbox file');
       const data=await res.json();
-      contactInboxItems=JSON.parse(b64DecodeUtf8(data.content));
+      contactInboxItems=JSON.parse(b64DecodeUtf8(data.content)).map(enrichInboxContact);
     }catch(e){ contactInboxItems=[]; }
     renderContactInbox();
+  }
+  // the Outlook macro may send the mail's signature (or, for a forwarded introduction, the whole forwarded mail):
+  // read like a pasted signature, it fills what the sender's name and address don't give (role, phones, company)
+  function enrichInboxContact(it){
+    if(!it || !it.signature) return it;
+    let g=null; try{ g=parseSignatureText(String(it.signature)); }catch(e){}
+    if(!g) return it;
+    const out=Object.assign({}, it);
+    ['firstName','lastName','email','company','role','phone1','phone2'].forEach(k=>{ if(g[k] && (it.forwarded || !out[k])) out[k]=g[k]; });
+    return out;
   }
   function pendingContactInboxItems(){ return contactInboxItems.filter(it=>!contactInboxSeenIds.has(it.id)); }
 
@@ -2278,7 +2312,7 @@
       if(!existing){ clientsList.push(it.company); saveClients(); }
       if(!companies.find(co=>co.name===it.company)){ companies.push({ id:'co_'+Date.now()+'_'+Math.random().toString(36).slice(2,7), name:it.company, whatTheyDo:'', marketScope:[], website:'', createdAt:Date.now(), updatedAt:Date.now(), deleted:false }); }
     }
-    c={ id:'ct_'+Date.now()+'_'+Math.random().toString(36).slice(2,7), firstName:it.firstName||'', lastName:it.lastName||'', role:it.role||'', company:it.company||'', email:it.email||'', phone1:it.phone1||'', relevance:0, createdAt:Date.now(), updatedAt:Date.now(), deleted:false };
+    c={ id:'ct_'+Date.now()+'_'+Math.random().toString(36).slice(2,7), firstName:it.firstName||'', lastName:it.lastName||'', role:it.role||'', company:it.company||'', email:it.email||'', phone1:it.phone1||'', phone2:it.phone2||'', relevance:0, createdAt:Date.now(), updatedAt:Date.now(), deleted:false };
     contacts.push(c);
     saveCrm();
     contactInboxSeenIds.add(it.id); saveContactSeenIds();
@@ -6088,6 +6122,7 @@
   // set aside for now (2026-10-23): hidden unless turned on for this device (localStorage feat-ai = 1)
   const aiOn=()=>{ try{ return localStorage.getItem('feat-ai')==='1'; }catch(e){ return false; } };
   const aiKey=()=>{ try{ return localStorage.getItem('ai-key')||''; }catch(e){ return ''; } };
+  try{ if(localStorage.getItem('feat-ai')!=='1') localStorage.removeItem('ai-key'); }catch(e){}   // AI set aside: no Claude key kept on the device meanwhile (audit A16)
   function aiPrompt(list){
     const plants=list.map(o=>{ const known={}, empty=[];
       CARACT_ROWS.forEach(l=>{ const v=caractValue(o,l); if(v!=='' && v!=null) known[l]=String(v); else empty.push(l); });
@@ -6571,7 +6606,7 @@
       if(btn){ const t=btn.textContent; btn.textContent='✓ Fichier créé'; setTimeout(()=>{ btn.textContent=t; },2000); }
     }catch(e){ console.error(e); showBridgeMsg('Fichier non créé : '+(e.message||e), false); }
   }
-  // Pricing request mail, on the model of the last one sent (Q ENERGY, 3 PV + 1 éolien CR): the figures stay in the
+  // Pricing request mail, on the model of the last one sent (a producer, 3 PV + 1 éolien CR): the figures stay in the
   // attached file; the mail gives the codes, the dates (first injection → MSI), the options and the conditions asked.
   function pricingMail(req, list){
     const company=req.company||(list[0]&&list[0].company)||'';
@@ -9579,7 +9614,16 @@
   ['sync-pill','sync-pill-lite','sync-pill-w'].forEach(id=>{ const el=$(id); if(el) el.onclick=onSyncPillClick; });
   window.addEventListener('online', ()=>{ if(syncConfig.enabled) syncEverythingNow(); else paintSyncPill(); });
   window.addEventListener('offline', paintSyncPill);
-  $('storage-alert-close').onclick=()=>{ $('storage-alert').hidden=true; };
+  $('storage-alert-close').onclick=()=>{ const el=$('storage-alert'); if(el.dataset.kind==='ios'){ try{ localStorage.setItem('ios-hint-at', String(Date.now())); }catch(e){} } el.hidden=true; };
+  // iPhone / iPad in Safari, app not on the home screen: Safari may wipe a site's data after 7 days without a visit (audit A17)
+  (function(){
+    const ios=/iPhone|iPad|iPod/.test(navigator.userAgent) || (/Macintosh/.test(navigator.userAgent) && navigator.maxTouchPoints>1);
+    const installed=navigator.standalone===true || (window.matchMedia && matchMedia('(display-mode: standalone)').matches);
+    let last=0; try{ last=+localStorage.getItem('ios-hint-at')||0; }catch(e){}
+    if(!ios || installed || window.TODO_WIDGET || Date.now()-last<14*864e5) return;
+    showStorageAlert('ios', 'Sur iPhone, ajoute l\u2019appli à l\u2019écran d\u2019accueil (bouton Partager › « Sur l\u2019écran d\u2019accueil ») : sinon Safari peut effacer ses données après 7 jours sans visite.'
+      +(syncConfig.enabled?' Tes données sont aussi sur GitHub.':''));
+  })();
   $('storage-alert-see').onclick=()=>{ $('storage-alert').hidden=true; openStorageSection(); };
   loadAll().then(()=>{ try{ paintDupBanner(); }catch(e){} try{ reportCorrupt(); }catch(e){}
     paintSyncPill(); checkStorageFull(); setInterval(checkStorageFull, 10*60*1000);

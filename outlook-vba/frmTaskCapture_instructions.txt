@@ -1,0 +1,115 @@
+﻿====================================================================
+ La fenetre « Nouvelle tache » (frmTaskCapture)
+====================================================================
+
+Le fichier visuel d'une fenetre VBA ne peut etre cree que par l'editeur :
+il faut la dessiner (3 minutes).
+
+1. Editeur VBA (Alt+F11) : Insertion > UserForm
+2. Proprietes (F4) : (Name) = frmTaskCapture ; Caption = Nouvelle tache
+3. Ajouter ces controles (Boite a outils), avec exactement ces noms :
+
+   Label      lblTitleCap      [Caption : "Titre"]
+   TextBox    txtTitle
+
+   Label      lblDescCap       [Caption : "Description"]
+   TextBox    txtDescription   [MultiLine : True, EnterKeyBehavior : True,
+                                 environ 4 lignes de haut]
+
+   Label      lblClientCap     [Caption : "Client"]
+   TextBox    txtClient
+
+   Label      lblProjectCap    [Caption : "Projet"]
+   TextBox    txtProject
+
+   Label      lblUrgencyCap    [Caption : "Urgence"]
+   ComboBox   cboUrgency       [Style : 2 - fmStyleDropDownList]
+
+   Label      lblDeadline      [Caption : "" (rempli par le code)]
+
+   CommandButton  btnOK        [Caption : "Creer la tache"]
+   CommandButton  btnCancel    [Caption : "Annuler"]
+
+   Empiler de haut en bas, les etiquettes au-dessus des champs, les
+   boutons en bas. Environ 260 x 360.
+
+4. Clic droit sur la fenetre > Code, et coller tout ce qui suit.
+
+====================================================================
+ Code de la fenetre
+====================================================================
+
+Option Explicit
+
+Public Confirmed As Boolean
+
+Public Property Get TitleValue() As String
+    TitleValue = Trim(Me.txtTitle.Text)
+End Property
+
+Public Property Get DescriptionValue() As String
+    DescriptionValue = Trim(Me.txtDescription.Text)
+End Property
+
+Public Property Get ClientValue() As String
+    ClientValue = Trim(Me.txtClient.Text)
+End Property
+
+Public Property Get ProjectValue() As String
+    ProjectValue = Trim(Me.txtProject.Text)
+End Property
+
+Public Property Get UrgencyValue() As String
+    Select Case Me.cboUrgency.Text
+        Case "Critique": UrgencyValue = "critique"
+        Case "Haute": UrgencyValue = "haute"
+        Case "Moyenne": UrgencyValue = "moyenne"
+        Case "Basse": UrgencyValue = "basse"
+        Case Else: UrgencyValue = "moyenne"
+    End Select
+End Property
+
+' Recoit l'objet, l'echeance, l'urgence, le resume du mail et le client devine.
+Public Sub InitFromMail(ByVal subjectText As String, ByVal dueStr As String, ByVal defaultUrgency As String, _
+                        Optional ByVal previewText As String = "", Optional ByVal clientGuess As String = "")
+    Me.txtTitle.Text = subjectText
+    Me.txtDescription.Text = previewText
+    Me.txtClient.Text = clientGuess
+
+    If Len(dueStr) > 0 Then
+        Me.lblDeadline.Caption = "Echeance (drapeau) : " & dueStr
+    Else
+        Me.lblDeadline.Caption = "Pas d'echeance sur ce drapeau"
+    End If
+
+    Me.cboUrgency.Clear
+    Me.cboUrgency.AddItem "Basse"
+    Me.cboUrgency.AddItem "Moyenne"
+    Me.cboUrgency.AddItem "Haute"
+    Me.cboUrgency.AddItem "Critique"
+
+    Select Case defaultUrgency
+        Case "critique": Me.cboUrgency.Text = "Critique"
+        Case "haute": Me.cboUrgency.Text = "Haute"
+        Case "basse": Me.cboUrgency.Text = "Basse"
+        Case Else: Me.cboUrgency.Text = "Moyenne"
+    End Select
+
+    Confirmed = False
+    Me.txtTitle.SetFocus
+End Sub
+
+Private Sub btnOK_Click()
+    If Len(Trim(Me.txtTitle.Text)) = 0 Then
+        MsgBox "Le titre ne peut pas etre vide.", vbExclamation
+        Me.txtTitle.SetFocus
+        Exit Sub
+    End If
+    Confirmed = True
+    Me.Hide
+End Sub
+
+Private Sub btnCancel_Click()
+    Confirmed = False
+    Me.Hide
+End Sub

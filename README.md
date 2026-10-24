@@ -15,6 +15,7 @@ Application web (PWA) sans serveur : HTML, CSS et JavaScript, sans étape de bui
 | `sw.js` | Hors ligne : le code d'abord par le réseau, le cache en secours ; les données GitHub ne sont jamais mises en cache |
 | `_headers` | Règles de sécurité de la page (Cloudflare Pages) |
 | `bridge/` | Pont Excel local (PowerShell) : lit et écrit le Pipe et le Suivi sur le PC |
+| `outlook-vba/` | Copie de secours de la macro Outlook (sans jeton) |
 | `tests/` | Tests de bout en bout (Playwright), lancés à chaque push par GitHub Actions |
 
 ## Réinstaller de zéro (≈ 30 min)
@@ -25,7 +26,7 @@ Application web (PWA) sans serveur : HTML, CSS et JavaScript, sans étape de bui
 4. **Écran de connexion (option)** : Cloudflare Zero Trust › Access › Applications › Self-hosted › `todo-tom.pages.dev`. Règle : ton adresse mail (code à usage unique).
 5. **Dans l'appli** : Réf. & data › Synchro. Renseigner le propriétaire, le dépôt de données et le jeton, avec sa date d'expiration. Les données reviennent depuis GitHub.
 6. **Pont Excel** (PC Windows, Excel installé) : lancer `bridge/Lancer-pont-excel.bat`, choisir le Pipe et le Suivi, puis recopier la clé affichée dans Réf. & data › Pont Excel. Pour une autre adresse de l'appli, l'ajouter dans `pont-excel-config.json` : `"origins": ["https://…"]`.
-7. **Macro Outlook** (option) : drapeau → tâche dans « Boîte mail », catégorie « CRM Contact » → contact. Les modules sont à garder hors de ce dépôt public : ils contiennent le jeton.
+7. **Macro Outlook** (option) : drapeau → tâche dans « Boîte mail », catégorie « CRM Contact » → contact. Copie de secours dans `outlook-vba/` (sans jeton ; installation dans son README). Le jeton se colle seulement dans la copie installée sur le PC, jamais ici.
 8. **Téléphone** : ouvrir `…/mobile.html`, puis « Sur l'écran d'accueil ».
 
 ## Restaurer des données

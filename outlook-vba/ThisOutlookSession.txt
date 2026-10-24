@@ -1,0 +1,53 @@
+﻿' ============================================================
+' A COLLER dans ThisOutlookSession (ne pas l'importer) : dans
+' l'editeur VBA (Alt+F11), ThisOutlookSession existe deja sous
+' "Microsoft Outlook Objects". Double-clic, puis coller.
+' ============================================================
+
+Option Explicit
+
+Private WithEvents InboxItems As Outlook.Items
+Private processingEntryID As String
+
+Private Sub Application_Startup()
+    Dim ns As Outlook.NameSpace
+    Set ns = Application.GetNamespace("MAPI")
+    Set InboxItems = ns.GetDefaultFolder(olFolderInbox).Items
+End Sub
+
+Private Sub InboxItems_ItemChange(ByVal Item As Object)
+    On Error Resume Next
+    If TypeOf Item Is Outlook.MailItem Then
+        Dim mail As Outlook.MailItem
+        Set mail = Item
+
+        If mail.FlagStatus = olFlagMarked Then
+            If InStr(1, mail.Categories, PROCESSED_CATEGORY) = 0 Then
+                If mail.EntryID <> processingEntryID Then
+                    processingEntryID = mail.EntryID
+                    modFlagHandler.ProcessFlaggedMail mail
+                    processingEntryID = ""
+                End If
+            End If
+        End If
+
+        If InStr(1, mail.Categories, CONTACT_CATEGORY) > 0 Then
+            If InStr(1, mail.Categories, CONTACT_PROCESSED_CATEGORY) = 0 Then
+                If mail.EntryID <> processingEntryID Then
+                    processingEntryID = mail.EntryID
+                    modContactCapture.ProcessContactCapture mail
+                    processingEntryID = ""
+                End If
+            End If
+        End If
+    End If
+End Sub
+
+' ------------------------------------------------------------
+' IMPORTANT : Application_Startup ne tourne qu'au demarrage
+' d'Outlook. Pour activer tout de suite, sans redemarrer :
+'   1. curseur dans Application_Startup
+'   2. F5 (Executer)
+' Ensuite c'est actif jusqu'a la fermeture d'Outlook, puis
+' automatiquement a chaque demarrage.
+' ------------------------------------------------------------

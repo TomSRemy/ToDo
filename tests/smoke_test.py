@@ -2044,6 +2044,58 @@ with sync_playwright() as p:
     check(not errors, f"no page errors ({errors})")
     page.close()
 
+    # --- Audit lot 3: a repo that became public stops the sync; an edit made while a write is on its way goes in the next one;
+    #     a contact from the Outlook macro is completed from its signature; no AI key kept while the AI is off
+    b64 = lambda o: base64.b64encode(json.dumps(o).encode()).decode()
+    puts, held = [], []
+    inbox = [{"id": "ci1", "firstName": "", "lastName": "", "email": "", "forwarded": True, "signature": "Claire Martin\nResponsable énergie\nHélio Ouest\nclaire.martin@helio-ouest.fr\n06 12 34 56 78"}]
+    def gh3(route):
+        u, m = route.request.url, route.request.method
+        if u.endswith("/repos/o/r"): route.fulfill(status=200, content_type="application/json", body=json.dumps({"private": True}))
+        elif "contacts-inbox.json" in u and m == "GET": route.fulfill(status=200, content_type="application/json", body=json.dumps({"sha": "s0", "content": b64(inbox)}))
+        elif "tasks.json" in u and m == "PUT":
+            puts.append(json.loads(base64.b64decode(json.loads(route.request.post_data)["content"]).decode()))
+            if len(puts) == 1: held.append(route)   # the first write stays on its way for a moment
+            else: route.fulfill(status=200, content_type="application/json", body=json.dumps({"content": {"sha": "s%d" % len(puts)}}))
+        else: route.fulfill(status=404, body="{}")
+    page, errors = new_page(browser, {"todo_sync-config": json.dumps({"owner": "o", "repo": "r", "token": "tok", "enabled": True}), "ai-key": "sk-test",
+                                      "todo_todo-widget-tasks": json.dumps([T("w1", "Première version")])}, viewport={"width": 1300, "height": 850})
+    page.route("https://api.github.com/**", gh3)
+    page.goto(URL); page.wait_for_timeout(500)
+    check(page.evaluate("localStorage.getItem('ai-key')") is None, "AI set aside: no Claude key kept on the device")
+    page.click('[data-tab="contacts"]'); page.wait_for_timeout(600)
+    check("Claire Martin" in page.inner_text("#contact-inbox-list") and "Responsable énergie" in page.inner_text("#contact-inbox-list"), f"Outlook macro: a forwarded contact is read from its signature ({page.inner_text('#contact-inbox-list')[:120]!r})")
+    page.evaluate("document.getElementById('sync-now-btn').click()")
+    for _ in range(50):
+        if held: break
+        page.wait_for_timeout(100)
+    page.click('[data-tab="tasks"]')   # a task added while the first write is still on its way
+    page.fill("#quick-add-input", "Ajoutée pendant l'envoi"); page.press("#quick-add-input", "Enter")
+    held[0].fulfill(status=200, content_type="application/json", body=json.dumps({"content": {"sha": "s1"}}))
+    for _ in range(80):
+        if len(puts) >= 2: break
+        page.wait_for_timeout(100)
+    check(len(puts) >= 2 and any(t.get("title") == "Ajoutée pendant l'envoi" for t in puts[-1]), f"sync: what changed while a write was on its way goes in the next write ({len(puts)} writes)")
+    check(not errors, f"no page errors ({errors})")
+    page.close()
+    def gh_public(route):
+        if route.request.url.endswith("/repos/o/r"): route.fulfill(status=200, content_type="application/json", body=json.dumps({"private": False}))
+        else: route.fulfill(status=404, body="{}")
+    page, errors = new_page(browser, {"todo_sync-config": json.dumps({"owner": "o", "repo": "r", "token": "tok", "enabled": True})}, viewport={"width": 1300, "height": 850})
+    page.route("https://api.github.com/**", gh_public)
+    page.goto(URL); page.wait_for_timeout(800)
+    cfg = json.loads(page.evaluate("localStorage.getItem('todo_sync-config')"))
+    check(cfg["enabled"] is False and page.is_visible("#storage-alert") and "PUBLIC" in page.inner_text("#storage-alert"), "sync: a data repo that became public stops the sync, a red banner says why")
+    check(not errors, f"no page errors ({errors})")
+    page.close()
+    page, errors = new_page(browser, None, viewport={"width": 390, "height": 800}, user_agent="Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1")
+    page.goto(URL + "?lite"); page.wait_for_timeout(500)
+    check(page.is_visible("#storage-alert") and "écran d’accueil" in page.inner_text("#storage-alert") and not page.is_visible("#storage-alert-see"), "iPhone in Safari: advice to put the app on the home screen")
+    page.click("#storage-alert-close"); page.reload(); page.wait_for_timeout(400)
+    check(not page.is_visible("#storage-alert"), "iPhone advice: closed, it does not come back at once")
+    check(not errors, f"no page errors ({errors})")
+    page.close()
+
     # --- Doublons: a company written two ways, a plant entered twice; merged in one click, or marked as different
     du = [{"id": "d1", "kind": "installation", "company": "GAEC Dupont", "centrale": "Hangar Est", "title": "Hangar Est", "stage": "pricing_indicatif", "kwc": "900", "createdAt": 1, "updatedAt": 5, "deleted": False},
           {"id": "d2", "kind": "installation", "company": "Gaec Dupont SARL", "centrale": "Centrale Hangar Est", "title": "Centrale Hangar Est", "stage": "collecte", "mwh": "1100", "commune": "Cholet",
@@ -2517,7 +2569,8 @@ Responsable technique
     page.goto(URL); page.wait_for_timeout(500); page.click('[data-tab="parc"]')
     page.set_input_files("#parc-file", str(parc)); page.wait_for_function("document.getElementById('parc-info').textContent.includes('lignes')", timeout=20000)
     page.wait_for_timeout(1500); page.click('[data-tab="lists"]'); page.click('[data-tab="parc"]')
-    check("parc.json" not in files2 and "gardé sur cet appareil" in page.inner_text("#parc-info"), "portefeuille sync: never sent if GitHub does not confirm the repo is private")
+    check("parc.json" not in files2 and ("gardé sur cet appareil" in page.inner_text("#parc-info") or "PUBLIC" in page.inner_text("#storage-alert")),
+          "portefeuille sync: never sent if GitHub does not confirm the repo is private (the whole sync stops for a public repo)")
     page.close()
 
     # --- Pipeline ↔ Suivi Agrégation: each deal sent to the Suivi says whether it is there, with the right status
