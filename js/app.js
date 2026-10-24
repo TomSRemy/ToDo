@@ -8823,7 +8823,7 @@
     if(window.CompressionStream){ try{ const buf=await new Response(new Blob([raw]).stream().pipeThrough(new CompressionStream('deflate-raw'))).arrayBuffer(); return MK_SITE+'#solo=z'+mkB64u(new Uint8Array(buf)); }catch(e){} }
     return MK_SITE+'#solo=j'+mkB64u(raw);
   }
-  const mkPick=()=>{ try{ return localStorage.getItem('market-board')||'orig'; }catch(e){ return 'orig'; } };
+  const mkPick=()=>{ try{ return localStorage.getItem('market-board')||'mu'; }catch(e){ return 'mu'; } };
   const mkOwn=v=>{ const m=/^https:\/\/tomsremy\.github\.io\/PowerKlock\/(?:index\.html)?#(?:solo|board)=([zj][A-Za-z0-9_-]+)$/.exec(String(v||'').trim()); return m?MK_SITE+'#solo='+m[1]:null; };
   async function renderMarket(force){
     const root=$('market-root'); if(!root) return; const e=escapeHtml, pick=mkPick(), own=mkOwn(pick), bd=MK_BOARDS.find(b=>b.id===pick)||(own?null:MK_BOARDS[0]);

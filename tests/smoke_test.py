@@ -1949,12 +1949,12 @@ with sync_playwright() as p:
     page.context.grant_permissions(["clipboard-read", "clipboard-write"])
     page.goto(URL); page.click('[data-tab="market"]'); page.wait_for_selector(".mk-frame")
     src = page.get_attribute(".mk-frame", "src")
-    check(src.startswith("https://tomsremy.github.io/PowerKlock/index.html#solo=z") and page.input_value(".mk-board") == "orig", f"market: the ready-made « Origination · France » dashboard, as a solo link ({src[:70]})")
+    check(src.startswith("https://tomsremy.github.io/PowerKlock/index.html#solo=z") and page.input_value(".mk-board") == "mu", f"market: the ready-made « Market update » dashboard, as a solo link ({src[:70]})")
     board = page.evaluate("""async u=>{ const b=Uint8Array.from(atob(u.split('#solo=z')[1].replace(/-/g,'+').replace(/_/g,'/')), c=>c.charCodeAt(0));
       return JSON.parse(await new Response(new Blob([b]).stream().pipeThrough(new DecompressionStream('deflate-raw'))).text()); }""", src)
-    check(board["n"] == "Origination · France" and any(i.get("wid") == "fr-m0" for i in board["items"]) and all(i["t"] in ("s", "w") for i in board["items"]), "market: the link holds the dashboard in the site's own format")
-    page.select_option(".mk-board", "mu"); page.wait_for_timeout(200)
-    check(page.get_attribute(".mk-frame", "src") != src and page.evaluate("localStorage.getItem('market-board')") == "mu", "market: another template of the site can be picked, and is remembered")
+    check(board["n"] == "Market update" and any(i.get("wid") == "fr-spot-30d" for i in board["items"]) and all(i["t"] in ("s", "w") for i in board["items"]), "market: the link holds the dashboard in the site's own format")
+    page.select_option(".mk-board", "orig"); page.wait_for_timeout(200)
+    check(page.get_attribute(".mk-frame", "src") != src and page.evaluate("localStorage.getItem('market-board')") == "orig", "market: another template of the site can be picked, and is remembered")
     own = "https://tomsremy.github.io/PowerKlock/index.html#board=zAbC_d-1"
     page.once("dialog", lambda d: d.accept(own)); page.select_option(".mk-board", "own"); page.wait_for_timeout(200)
     check(page.get_attribute(".mk-frame", "src") == own.replace("#board=", "#solo=") and page.input_value(".mk-board") == "own", "market: my own dashboard, from a link copied on the site")
