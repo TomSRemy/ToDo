@@ -111,6 +111,11 @@
     }
     const toScreen=(x,y)=>[(x*view.k+view.x)+W/2, (y*view.k+view.y)+H/2];
     const toWorld=(sx,sy)=>[((sx-W/2)-view.x)/view.k, ((sy-H/2)-view.y)/view.k];
+    // a colour half way to the grey of the page: the kind stays guessable, nothing shouts
+    const greyCache=new Map();
+    function greyed(c){ if(greyCache.has(c)) return greyCache.get(c); const m=/^#?([0-9a-f]{6})$/i.exec(c); let out='rgba(120,132,145,.7)';
+      if(m){ const v=parseInt(m[1],16), mix=(x,g)=>Math.round(x*.42+g*.58); out='rgba('+mix(v>>16,104)+','+mix((v>>8)&255,116)+','+mix(v&255,128)+',.78)'; }
+      greyCache.set(c,out); return out; }
     function draw(){
       const ok=visibleSet(); ctx.setTransform(dpr,0,0,dpr,0,0); ctx.clearRect(0,0,W,H);
       const focus=hover||(multi.size?null:selected), near=focus?new Set([focus.id, ...(adj.get(focus.id)||[])]):(multi.size?new Set(multi):null), lit=near?null:(typeHover||typeFocus);
@@ -118,17 +123,18 @@
       ctx.lineWidth=1; const pNorm=new Path2D(), pOn=new Path2D();
       edges.forEach(([a,b])=>{ const A=byId.get(a), B=byId.get(b); if(!ok(A)||!ok(B)) return; const on=(near && (focus?(a===focus.id||b===focus.id):(multi.has(a)||multi.has(b)))) || (lit && (A.type===lit||B.type===lit));
         const [x1,y1]=toScreen(A.p.x,A.p.y), [x2,y2]=toScreen(B.p.x,B.p.y); const p=on?pOn:pNorm; p.moveTo(x1,y1); p.lineTo(x2,y2); });
-      ctx.strokeStyle=near||lit?'rgba(140,160,180,.07)':'rgba(140,160,180,.22)'; ctx.stroke(pNorm);
+      ctx.strokeStyle=near||lit?'rgba(140,160,180,.09)':'rgba(140,160,180,.16)'; ctx.stroke(pNorm);
       if(near){ ctx.strokeStyle='rgba(20,211,169,.75)'; ctx.stroke(pOn); } else if(lit){ ctx.strokeStyle='rgba(140,160,180,.32)'; ctx.stroke(pOn); }
       // nodes: one path per colour and brightness
       const groups=new Map(), labels=[], litCount=lit?nodes.filter(n=>n.type===lit && ok(n)).length:0;
       nodes.forEach(n=>{ if(!ok(n)) return; const [x,y]=toScreen(n.p.x,n.p.y), r=n.r*Math.max(.6,Math.min(1.6,view.k)); if(x<-30||y<-30||x>W+30||y>H+30) return;
-        const dim=(near && !near.has(n.id)) || (matches && !matches.has(n.id)) || (lit && n.type!==lit), key=(TYPES[n.type]||TYPES.task).color+(dim?'|d':'');
+        // at rest everything is softly greyed; what is pointed (and its links), searched or put forward lights up in its colour
+        const on=near?near.has(n.id):matches?matches.has(n.id):lit?n.type===lit:false, dim=!on, col=(TYPES[n.type]||TYPES.task).color, key=dim?greyed(col):col;
         let g=groups.get(key); if(!g){ g=new Path2D(); groups.set(key,g); } g.moveTo(x+r,y); g.arc(x,y,r,0,Math.PI*2);
         // names only on demand: the point under the mouse (or selected) and its neighbours, search results, the kind put forward
         const showLabel=(near && near.has(n.id)) || (matches && matches.has(n.id)) || (lit===n.type && (litCount<=40 || view.k>1.3));
         if(showLabel && !dim) labels.push([n,x,y,r]); });
-      groups.forEach((p,key)=>{ const [color,d]=key.split('|'); ctx.globalAlpha=d?.18:1; ctx.fillStyle=color; ctx.fill(p); });
+      groups.forEach((p,key)=>{ ctx.fillStyle=key; ctx.fill(p); });
       ctx.globalAlpha=1;
       if(pins.size){ ctx.strokeStyle='rgba(232,238,245,.55)'; ctx.lineWidth=1; ctx.setLineDash([2,2]); nodes.forEach(n=>{ if(!pins.has(n.id) || !ok(n)) return; const [x,y]=toScreen(n.p.x,n.p.y), r=n.r*Math.max(.6,Math.min(1.6,view.k))+3; ctx.beginPath(); ctx.arc(x,y,r,0,Math.PI*2); ctx.stroke(); }); ctx.setLineDash([]); }
       if(multi.size){ ctx.strokeStyle='#fff'; ctx.lineWidth=1.5; multi.forEach(id=>{ const n=byId.get(id); if(!n || !ok(n)) return; const [x,y]=toScreen(n.p.x,n.p.y), r=n.r*Math.max(.6,Math.min(1.6,view.k))+1; ctx.beginPath(); ctx.arc(x,y,r,0,Math.PI*2); ctx.stroke(); }); ctx.lineWidth=1; }

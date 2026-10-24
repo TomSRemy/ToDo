@@ -480,6 +480,15 @@ with sync_playwright() as p:
     check(st and st["nodes"] == 7 and st["edges"] >= 6, f"network: companies, contacts, installation, task and meeting as nodes, linked ({st})")
     types = page.eval_on_selector_all(".nw-type", "els=>els.map(e=>e.textContent.replace(/\\s+/g,' ').trim())")
     check(any(x.startswith("Sociétés 2") for x in types) and any(x.startswith("RDV") for x in types), f"network: one filter per kind, with counts ({types})")
+    # at rest everything is softly greyed; the point under the mouse lights up in its colour, with its links
+    px = """id=>{ const c=document.querySelector('.nw-stage canvas'), p=window.todoNetworkPos(id), d=c.width/c.clientWidth; return [...c.getContext('2d').getImageData(Math.round(p[0]*d), Math.round(p[1]*d), 1, 1).data]; }"""
+    rest = page.evaluate(f"({px})('co:solaris')")
+    nb = page.locator(".nw-stage canvas").bounding_box(); sp = page.evaluate("window.todoNetworkPos('co:solaris')")
+    page.mouse.move(nb["x"] + sp[0], nb["y"] + sp[1]); page.wait_for_timeout(200)
+    lit = page.evaluate(f"({px})('co:solaris')")
+    check(abs(lit[0] - 20) < 25 and abs(lit[1] - 211) < 25 and lit[1] - rest[1] > 30 and rest[1] > 90,
+          f"network: softly grey at rest, the point under the mouse lights up in its colour (rest {rest[:3]}, hover {lit[:3]})")
+    page.mouse.move(nb["x"] + 2, nb["y"] + nb["height"] - 2)
     page.fill(".nw-search input", "toit"); page.press(".nw-search input", "Enter"); page.wait_for_timeout(300)
     side = page.inner_text(".nw-side")
     check("Toit Durand" in side and "Paul Durand" in side and "Solaris" in side, "network: finding a node shows its links (company and contact via the mail)")
