@@ -53,6 +53,24 @@ def dialogs(page): page.add_init_script("window.__dlgAuto=true;"); page.evaluate
 def dialog_once(page, accept=True, text=None): page.evaluate("a=>{ window.__dlg.once=a; }", {"accept": accept, "text": text})
 
 
+_PAGES = []   # every page opened, the last one still open lets eventually() wait
+
+
+def eventually(cond, timeout=3000):
+    """A check that holds as soon as the page is ready (instead of a fixed pause): retried every 50 ms up to timeout."""
+    import time
+    end = time.time() + timeout / 1000
+    while True:
+        try:
+            if cond(): return True
+        except Exception:
+            pass
+        if time.time() > end: return False
+        live = [pg for pg in _PAGES if not pg.is_closed()]
+        if live: live[-1].wait_for_timeout(50)   # lets Playwright deliver what the page sent (routes, events) meanwhile
+        else: time.sleep(0.05)
+
+
 def task(tid, title, archived=False, updated=1000, **kw):
     t = {"id": tid, "title": title, "description": "", "client": "", "project": "", "urgency": "moyenne",
          "status": "a_faire", "due": "", "reminder": "", "link": "", "recur": None,
@@ -136,8 +154,8 @@ SYNC_ON = {"todo_sync-config": json.dumps({"owner": "o", "repo": "r", "token": "
 with sync_playwright() as p:
     browser = p.chromium.launch()
     _np, _nc = browser.new_page, browser.new_context
-    def _page(**k): pg = _np(**k); pg.add_init_script(DLG_JS); return pg
-    def _ctx(**k): c = _nc(**k); c.add_init_script(DLG_JS); return c
+    def _page(**k): pg = _np(**k); pg.add_init_script(DLG_JS); _PAGES.append(pg); return pg
+    def _ctx(**k): c = _nc(**k); c.add_init_script(DLG_JS); c.on("page", lambda pg: _PAGES.append(pg)); return c
     browser.new_page, browser.new_context = _page, _ctx
 
     # --- Tasks: create, validate (archive), delete -> Corbeille -> restore
@@ -183,8 +201,8 @@ with sync_playwright() as p:
         state = mock_github(page, files, put_ok=put_ok)
         page.goto(URL)
         page.wait_for_timeout(4500)  # pull + 3s debounced push
-        page.click('[data-tab="lists"]'); page.click("#sync-now-btn"); page.wait_for_timeout(1500)
-        check(stored(page, "todo-widget-tasks")[0]["archived"] is True, f"unpushed validation survives sync (put_ok={put_ok})")
+        page.click('[data-tab="lists"]'); page.click("#sync-now-btn")
+        check(eventually(lambda: stored(page, "todo-widget-tasks")[0]["archived"] is True, 7500), f"unpushed validation survives sync (put_ok={put_ok})")
         if put_ok:
             check(files["tasks.json"][0]["archived"] is True, "unpushed validation reaches the server")
         check(not errors, f"no page errors ({errors})")
@@ -210,8 +228,8 @@ with sync_playwright() as p:
     check("widget" in page.url and page.is_visible("#widget-bubble") and not page.is_visible("#todo-panel") and not page.is_visible(".app-sidebar"),
           "widget: widget.html opens the app's widget mode, closed on its bubble")
     check(page.inner_text("#widget-badge") == "1", "widget: open tasks counted on the bubble")
-    page.click("#widget-bubble"); page.wait_for_timeout(150)
-    check(page.is_visible("#todo-panel") and page.evaluate("document.activeElement.id") == "quick-add-input" and page.is_visible("#task-list .task-line:has-text('Envoyer ARPE')"),
+    page.click("#widget-bubble")
+    check(eventually(lambda: page.is_visible("#todo-panel") and page.evaluate("document.activeElement.id") == "quick-add-input" and page.is_visible("#task-list .task-line:has-text('Envoyer ARPE')"), 3000),
           "widget: the bubble opens the task panel, ready to type")
     page.keyboard.type("Rappeler Paul"); page.keyboard.press("Enter")
     page.wait_for_function("document.getElementById('widget-badge').textContent==='2'", timeout=10000)
@@ -221,8 +239,8 @@ with sync_playwright() as p:
     b = page.locator("#widget-bubble").bounding_box()
     page.mouse.move(b["x"] + 20, b["y"] + 20); page.mouse.down(); page.mouse.move(300, 300, steps=8); page.mouse.up(); page.wait_for_timeout(100)
     check(not page.is_visible("#todo-panel") and abs(page.locator("#widget-bubble").bounding_box()["x"] - 280) < 6, "widget: the bubble can be dragged without opening the panel")
-    page.reload(); page.wait_for_timeout(400)
-    check(abs(page.locator("#widget-bubble").bounding_box()["x"] - 280) < 6, "widget: bubble position remembered")
+    page.reload()
+    check(eventually(lambda: abs(page.locator("#widget-bubble").bounding_box()["x"] - 280) < 6, 3000), "widget: bubble position remembered")
     check(not errors, f"no page errors ({errors})")
     page.close()
 
@@ -281,8 +299,8 @@ with sync_playwright() as p:
     page.click('[data-tab="tasks"]')
     page.locator("#task-list .task-check").first.click()
     page.wait_for_timeout(4000)
-    page.click('[data-tab="lists"]'); page.click("#sync-now-btn"); page.wait_for_timeout(1500)
-    check(stored(page, "todo-widget-tasks")[0]["archived"] is True, "failed push doesn't revert validation")
+    page.click('[data-tab="lists"]'); page.click("#sync-now-btn")
+    check(eventually(lambda: stored(page, "todo-widget-tasks")[0]["archived"] is True, 7500), "failed push doesn't revert validation")
     page.close()
 
     # --- Post-it: type, persists, line -> task for tomorrow, minimise / reopen, legacy notes folded in
@@ -305,8 +323,8 @@ with sync_playwright() as p:
     check("Envoyer offre PPA" not in page.input_value("#postit-text"), "converted line removed from post-it")
     page.click("#postit-min")
     check(not page.is_visible("#postit") and page.is_visible("#postit-tab"), "minimise shows the small tab")
-    page.keyboard.press("p"); page.wait_for_timeout(100)
-    check(page.is_visible("#postit") and page.evaluate("document.activeElement.id") == "postit-text", "'p' reopens the post-it with focus")
+    page.keyboard.press("p")
+    check(eventually(lambda: page.is_visible("#postit") and page.evaluate("document.activeElement.id") == "postit-text", 3000), "'p' reopens the post-it with focus")
     check(not errors, f"no page errors ({errors})")
     page.close()
 
@@ -347,12 +365,12 @@ with sync_playwright() as p:
     page.locator("#gs-results .gs-item", has_text="Paul Durand").click(); page.wait_for_timeout(200)
     check(page.is_hidden("#gs-overlay") and page.is_visible("#tab-contacts") and page.is_visible("#contacts-list .contact-info-card, #contacts-list .contact-detail-links"),
           "search: choosing a contact opens its card in Contacts")
-    page.keyboard.press("Control+k"); page.keyboard.type("toit durand"); page.keyboard.press("Enter"); page.wait_for_timeout(300)
-    check(page.is_visible("#opp-detail-overlay") and "Toit Durand" in page.inner_text("#opp-detail-title"), "search: Enter opens the first result (here the installation)")
+    page.keyboard.press("Control+k"); page.keyboard.type("toit durand"); page.keyboard.press("Enter")
+    check(eventually(lambda: page.is_visible("#opp-detail-overlay") and "Toit Durand" in page.inner_text("#opp-detail-title"), 3000), "search: Enter opens the first result (here the installation)")
     page.keyboard.press("Escape"); page.wait_for_timeout(100)
     if page.is_visible("#opp-detail-overlay"): page.click("#opp-detail-actions >> text=Fermer")
-    page.keyboard.press("Control+k"); page.keyboard.type("Appeler le notaire"); page.keyboard.press("Enter"); page.wait_for_timeout(200)
-    check(any(t["title"] == "Appeler le notaire" for t in stored(page, "todo-widget-tasks")), "search: nothing found, Enter creates the task (old Ctrl+K habit)")
+    page.keyboard.press("Control+k"); page.keyboard.type("Appeler le notaire"); page.keyboard.press("Enter")
+    check(eventually(lambda: any(t["title"] == "Appeler le notaire" for t in stored(page, "todo-widget-tasks")), 3000), "search: nothing found, Enter creates the task (old Ctrl+K habit)")
     # saved views: ready-made ones and the user's own
     page.keyboard.press("Escape"); page.click('[data-tab="tasks"]')
     page.click("#tasks-views-btn"); page.click(".views-menu .views-item >> text=Sans date")
@@ -362,16 +380,16 @@ with sync_playwright() as p:
     page.click("#tasks-view-chip button")
     check(not page.is_visible("#tasks-view-chip") and page.locator("#task-list .task-line").count() >= 1, "views: the chip's × goes back to the normal list")
     dialog_once(page, text="Mes urgences")
-    page.click("#tasks-views-btn"); page.click(".views-menu .views-item.save"); page.wait_for_timeout(200)
-    check([v["name"] for v in page.evaluate("JSON.parse(localStorage.getItem('saved-views-tasks')||'[]')")] == ["Mes urgences"], "views: the current view can be saved under a name")
+    page.click("#tasks-views-btn"); page.click(".views-menu .views-item.save")
+    check(eventually(lambda: [v["name"] for v in page.evaluate("JSON.parse(localStorage.getItem('saved-views-tasks')||'[]')")] == ["Mes urgences"], 3000), "views: the current view can be saved under a name")
     page.click('[data-tab="pipeline"]'); page.click("#pipe-views-btn"); page.click(".views-menu .views-item >> text=Dossiers sans tâche")
     check("Dossiers sans tâche" in page.inner_text("#pipe-view-chip") and page.locator("#pipeline-board .pipe-card").count() >= 1, "views: pipeline « dossiers sans tâche »")
     page.click("#pipe-view-chip button")
     # command palette: Ctrl+P, every action from the keyboard
     page.keyboard.press("Control+p")
     check(page.is_visible("#gs-overlay") and page.input_value("#gs-input") == ">" and page.locator("#gs-results .gs-item").count() > 15, "palette: Ctrl+P lists the commands")
-    page.keyboard.type("reunion"); page.keyboard.press("Enter"); page.wait_for_timeout(300)
-    check(page.is_visible("#tab-pipeline") and page.locator(".meet-table, .meet-head").count() > 0, "palette: « vue réunion » opens the pipeline's meeting view")
+    page.keyboard.type("reunion"); page.keyboard.press("Enter")
+    check(eventually(lambda: page.is_visible("#tab-pipeline") and page.locator(".meet-table, .meet-head").count() > 0, 3000), "palette: « vue réunion » opens the pipeline's meeting view")
     page.keyboard.press("Control+k"); page.keyboard.type("nouveau contact")
     check("commandes" in page.inner_text("#gs-results").lower() and "Nouveau contact" in page.inner_text("#gs-results"), "palette: commands also come up in the normal search")
     page.keyboard.press("Escape"); page.keyboard.press("Escape"); page.click('[data-tab="tasks"]'); page.locator("body").click(position={"x": 5, "y": 5})
@@ -441,8 +459,8 @@ with sync_playwright() as p:
     # --- backup reminder: no sync and no export for a month
     page, errors = new_page(browser, {"todo_todo-widget-tasks": json.dumps([task("bk", "Une tâche")])}, viewport={"width": 1300, "height": 850})
     page.add_init_script("if(!sessionStorage.getItem('bk')){ localStorage.setItem('first-seen-at', String(Date.now()-40*864e5)); sessionStorage.setItem('bk','1'); }")
-    page.goto(URL); page.wait_for_timeout(300)
-    check(page.is_visible("#backup-banner") and "40 jours" in page.inner_text("#backup-banner"), "backup reminder: shown after a month without sync nor export")
+    page.goto(URL)
+    check(eventually(lambda: page.is_visible("#backup-banner") and "40 jours" in page.inner_text("#backup-banner"), 3000), "backup reminder: shown after a month without sync nor export")
     with page.expect_download() as dl: page.click("#backup-banner .bk-go")
     check(dl.value.suggested_filename.startswith("todo-backup-") and not page.is_visible("#backup-banner"), "backup reminder: one click exports, then it goes away")
     page.evaluate("localStorage.setItem('last-export-at', String(Date.now()-35*864e5))"); page.click('[data-tab="tasks"]'); page.click('[data-tab="today"]'); page.wait_for_timeout(100)
@@ -466,8 +484,8 @@ with sync_playwright() as p:
     page.locator('.wl[data-peek="ct:pc1"]').first.hover(); page.wait_for_timeout(700)
     pk = page.inner_text(".peek") if page.is_visible(".peek") else ""
     check("contact" in pk.lower() and "06 11 22 33 44" in pk and "1 le cite" in pk and "Gérant · Solaris" in pk, f"hover preview: a [[link]] to a contact ({pk!r})")
-    page.click('[data-tab="pipeline"]'); page.locator('.pipe-card-company[data-peek="co:Solaris"]').first.hover(); page.wait_for_timeout(700)
-    check(page.is_visible(".peek") and "KYC" in page.inner_text(".peek"), "hover preview: also on the pipeline cards")
+    page.click('[data-tab="pipeline"]'); page.locator('.pipe-card-company[data-peek="co:Solaris"]').first.hover()
+    check(eventually(lambda: page.is_visible(".peek") and "KYC" in page.inner_text(".peek"), 3500), "hover preview: also on the pipeline cards")
     check(not errors, f"no page errors ({errors})")
     page.close()
 
@@ -535,10 +553,10 @@ with sync_playwright() as p:
     page.fill(".nw-search input", "solaris"); page.press(".nw-search input", "Enter"); page.wait_for_timeout(200)
     info = page.inner_text(".nw-side .nw-info") if page.locator(".nw-side .nw-info").count() else ""
     check("Paul Durand" in info and "Pipeline" in info, f"network: the panel shows a few lines of the sheet ({info!r})")
-    page.locator(".nw-type", has_text="Contacts").hover(); page.wait_for_timeout(100)
-    check(page.evaluate("window.todoNetworkState().lit") == "contact", "network: hovering a kind puts it forward")
-    page.locator(".nw-type", has_text="Contacts").locator(".nw-lit").click(); page.mouse.move(box["x"] + 5, box["y"] + 5); page.wait_for_timeout(100)
-    check(page.evaluate("window.todoNetworkState().lit") == "contact" and page.locator(".nw-type.lit").count() == 1, "network: ◎ keeps that kind put forward")
+    page.locator(".nw-type", has_text="Contacts").hover()
+    check(eventually(lambda: page.evaluate("window.todoNetworkState().lit") == "contact", 3000), "network: hovering a kind puts it forward")
+    page.locator(".nw-type", has_text="Contacts").locator(".nw-lit").click(); page.mouse.move(box["x"] + 5, box["y"] + 5)
+    check(eventually(lambda: page.evaluate("window.todoNetworkState().lit") == "contact" and page.locator(".nw-type.lit").count() == 1, 3000), "network: ◎ keeps that kind put forward")
     page.click(".nw-fit"); page.wait_for_timeout(700)
     st = page.evaluate("window.todoNetworkState()")
     check(st["lit"] is None and st["selected"] is None and page.input_value(".nw-search input") == "" and page.is_disabled(".nw-local input"), f"network: « Vue d'ensemble » clears everything ({st})")
@@ -551,12 +569,11 @@ with sync_playwright() as p:
     page.keyboard.press("Escape"); page.wait_for_timeout(100)
     check(page.evaluate("window.todoNetworkState().multi") == [], "network: Escape clears the selection")
     page.fill(".nw-search input", "toit"); page.press(".nw-search input", "Enter"); page.wait_for_timeout(200)
-    page.click(".nw-side .nw-open"); page.wait_for_timeout(300)
-    check(page.is_visible("#opp-detail-overlay") and "Toit Durand" in page.inner_text("#opp-detail-title"), "network: « Ouvrir la fiche » opens the installation")
+    page.click(".nw-side .nw-open")
+    check(eventually(lambda: page.is_visible("#opp-detail-overlay") and "Toit Durand" in page.inner_text("#opp-detail-title"), 3000), "network: « Ouvrir la fiche » opens the installation")
     act(page, "Voir dans le réseau"); page.wait_for_timeout(500)
-    page.wait_for_timeout(300)
-    check(page.is_visible("#tab-network") and page.evaluate("window.todoNetworkState().selected") == "op:no1" and page.is_checked(".nw-local input")
-          and page.evaluate("window.todoNetworkState().visible") < page.evaluate("window.todoNetworkState().nodes"), "network: « Voir dans le réseau » from a sheet shows its neighbourhood")
+    check(eventually(lambda: page.is_visible("#tab-network") and page.evaluate("window.todoNetworkState().selected") == "op:no1" and page.is_checked(".nw-local input")
+          and page.evaluate("window.todoNetworkState().visible") < page.evaluate("window.todoNetworkState().nodes"), 3000), "network: « Voir dans le réseau » from a sheet shows its neighbourhood")
     st = page.evaluate("window.todoNetworkState()")
     page.close()
     # contacts joined to their company even when written « Solaris SAS », or with no company but the colleagues' mail domain
@@ -583,12 +600,12 @@ with sync_playwright() as p:
     check(t_new and t_new["title"] == "Rappeler [[Paul Durand]] pour [[Toit Durand]]", f"links: the task is created with its links ({t_new and t_new['title']})")
     link = page.locator("#task-list .task-line .wl", has_text="Paul Durand").first
     check(link.count() == 1, "links: shown as clickable names in the list")
-    link.click(); page.wait_for_timeout(300)
-    check(page.is_visible("#tab-contacts") and "mentionné dans" in page.inner_text("#tab-contacts").lower() and "Rappeler Paul Durand pour Toit Durand" in page.inner_text("#tab-contacts"),
+    link.click()
+    check(eventually(lambda: page.is_visible("#tab-contacts") and "mentionné dans" in page.inner_text("#tab-contacts").lower() and "Rappeler Paul Durand pour Toit Durand" in page.inner_text("#tab-contacts"), 3000),
           "links: a click opens the contact, whose card lists where it is mentioned")
     page.click('[data-tab="network"]'); page.wait_for_timeout(300)
-    page.fill(".nw-search input", "rappeler"); page.press(".nw-search input", "Enter"); page.wait_for_timeout(300)
-    check("Paul Durand" in page.inner_text(".nw-side") and "Toit Durand" in page.inner_text(".nw-side"), "links: in the network, the task is linked to what it mentions")
+    page.fill(".nw-search input", "rappeler"); page.press(".nw-search input", "Enter")
+    check(eventually(lambda: "Paul Durand" in page.inner_text(".nw-side") and "Toit Durand" in page.inner_text(".nw-side"), 3000), "links: in the network, the task is linked to what it mentions")
     check(not errors, f"no page errors ({errors})")
     page.close()
 
@@ -605,8 +622,8 @@ with sync_playwright() as p:
     page.click("#postit-history"); page.wait_for_timeout(200)
     hist = page.inner_text("#daynotes-overlay .dn-list")
     check("Envoyé l'offre SOLARIS" in hist and "Mail CR" in hist and page.locator("#daynotes-overlay .dn-line.done").count() == 2, "note of the day: the history shows yesterday, ticked lines struck")
-    page.fill("#daynotes-overlay .dn-search", "mail"); page.wait_for_timeout(100)
-    check(page.locator("#daynotes-overlay .dn-line").count() == 1, "note of the day: the history can be searched")
+    page.fill("#daynotes-overlay .dn-search", "mail")
+    check(eventually(lambda: page.locator("#daynotes-overlay .dn-line").count() == 1, 3000), "note of the day: the history can be searched")
     page.keyboard.press("Escape"); page.wait_for_timeout(150); page.reload(); page.wait_for_timeout(400)
     note2 = next(n for n in stored(page, "todo-widget-notes") if n["id"] == "scratchpad")
     check(note2["text"] == "Rappeler [[Paul Durand]]" and note2.get(yk) == note.get(yk), "note of the day: opening again the same day changes nothing")
@@ -680,12 +697,12 @@ with sync_playwright() as p:
           f"company sheet: history of meetings, done tasks and pipeline steps ({hist[:120]!r})")
     page.locator("#co-sheet-overlay .co-row", has_text="Toit Durand").click(); page.wait_for_timeout(200)
     check(page.is_hidden("#co-sheet-overlay") and page.is_visible("#opp-detail-overlay"), "company sheet: a line opens the opportunity")
-    page.click(".opp-co-link"); page.wait_for_timeout(100)
-    check(page.is_visible("#co-sheet-overlay") and page.inner_text("#co-sheet-title") == "Solaris", "company sheet: reached from the opportunity too")
+    page.click(".opp-co-link")
+    check(eventually(lambda: page.is_visible("#co-sheet-overlay") and page.inner_text("#co-sheet-title") == "Solaris", 3000), "company sheet: reached from the opportunity too")
     page.keyboard.press("Escape"); page.wait_for_timeout(100)
     page.keyboard.press("Control+k"); page.keyboard.type("solaris")
-    page.locator("#gs-results .gs-item", has_text="Solaris").filter(has_text="contact").first.click(); page.wait_for_timeout(100)
-    check(page.is_visible("#co-sheet-overlay"), "company sheet: reached from the global search")
+    page.locator("#gs-results .gs-item", has_text="Solaris").filter(has_text="contact").first.click()
+    check(eventually(lambda: page.is_visible("#co-sheet-overlay"), 3000), "company sheet: reached from the global search")
     check(not errors, f"no page errors ({errors})")
     page.close()
 
@@ -703,8 +720,8 @@ with sync_playwright() as p:
     watch = page.inner_text("#today-watch")
     check("Préparer le comité" in watch and "Toit Durand" in watch and "20 j" in watch and "Hangar" not in watch,
           "today: next 7 days listed, and the deal without movement for 20 days (not the active one)")
-    page.locator("#today-watch .tw-row", has_text="Toit Durand").click(); page.wait_for_timeout(200)
-    check(page.is_visible("#opp-detail-overlay"), "today: a stalled deal opens in one click")
+    page.locator("#today-watch .tw-row", has_text="Toit Durand").click()
+    check(eventually(lambda: page.is_visible("#opp-detail-overlay"), 3000), "today: a stalled deal opens in one click")
     check(not errors, f"no page errors ({errors})")
     page.close()
 
@@ -715,10 +732,10 @@ with sync_playwright() as p:
     page, errors = new_page(browser, {"todo_todo-widget-opportunities": json.dumps(dd)}, viewport={"width": 1400, "height": 900})
     page.add_init_script("window.todoCelebrate=()=>{};")
     page.goto(URL); page.click('[data-tab="pipeline"]')
-    page.drag_and_drop(".pipe-req-card[data-id=rqd]", '.pipe-col[data-phase="offre"]'); page.wait_for_timeout(150)
-    check(page.is_visible(".drop-menu") and "2 installations" in page.inner_text(".drop-menu").lower() and "pricing indicatif" in page.inner_text(".drop-menu").lower(), "pipeline: a block dropped on « Offre » asks which step")
-    page.click(".drop-menu button[data-stage=pricing_indicatif]"); page.wait_for_timeout(100)
-    check(page.is_visible("#stage-advance-overlay"), "pipeline: moving forward by dragging offers the task, like « Étape suivante »")
+    page.drag_and_drop(".pipe-req-card[data-id=rqd]", '.pipe-col[data-phase="offre"]')
+    check(eventually(lambda: page.is_visible(".drop-menu") and "2 installations" in page.inner_text(".drop-menu").lower() and "pricing indicatif" in page.inner_text(".drop-menu").lower(), 3000), "pipeline: a block dropped on « Offre » asks which step")
+    page.click(".drop-menu button[data-stage=pricing_indicatif]")
+    check(eventually(lambda: page.is_visible("#stage-advance-overlay"), 3000), "pipeline: moving forward by dragging offers the task, like « Étape suivante »")
     page.click("#stage-advance-confirm"); page.wait_for_timeout(200)
     st = {o["id"]: o.get("stage") for o in stored(page, "todo-widget-opportunities")}
     check(st["d1"] == "pricing_indicatif" and st["d2"] == "pricing_indicatif" and page.locator('.pipe-col[data-phase="offre"] .pipe-req-card').count() == 1, f"pipeline: both installations move together ({st})")
@@ -772,10 +789,10 @@ with sync_playwright() as p:
     check(names == ["Parc C", "Sol B", "Toit A"] and "3 installations · 5,7 mwc" in page.inner_text(".pl-head").lower(), f"pipeline list: every installation, most advanced first, with totals ({names})")
     page.click(".pl-table th button[data-k=kwc]")
     check(page.eval_on_selector_all(".pl-table tbody td.pl-name", "els=>els.map(e=>e.textContent)") == ["Sol B", "Parc C", "Toit A"], "pipeline list: a click on a column sorts by it")
-    page.fill("#opp-search", "alpha"); page.wait_for_timeout(200)
-    check(page.locator(".pl-table tbody tr").count() == 1, "pipeline list: the search filters it")
-    page.click(".pl-table tbody tr"); page.wait_for_timeout(200)
-    check(page.is_visible("#opp-detail-overlay") and "Toit A" in page.inner_text("#opp-detail-title"), "pipeline list: a click opens the sheet")
+    page.fill("#opp-search", "alpha")
+    check(eventually(lambda: page.locator(".pl-table tbody tr").count() == 1, 3000), "pipeline list: the search filters it")
+    page.click(".pl-table tbody tr")
+    check(eventually(lambda: page.is_visible("#opp-detail-overlay") and "Toit A" in page.inner_text("#opp-detail-title"), 3000), "pipeline list: a click opens the sheet")
     check(not errors, f"no page errors ({errors})")
     page.close()
 
@@ -785,11 +802,11 @@ with sync_playwright() as p:
     page.click('[data-tab="tasks"]'); page.click('[data-tab="pipeline"]'); page.click(".pipe-card[data-id=bk1]"); page.wait_for_timeout(200)
     page.go_back(); page.wait_for_timeout(300)
     check(not page.is_visible("#opp-detail-overlay") and page.is_visible("#tab-pipeline") and page.url == start, "Back: closes the open sheet, stays in the app")
-    page.go_back(); page.wait_for_timeout(300)
-    check(page.is_visible("#tab-tasks") and page.url == start, "Back: then the previous tab")
+    page.go_back()
+    check(eventually(lambda: page.is_visible("#tab-tasks") and page.url == start, 3000), "Back: then the previous tab")
     page.click('[data-tab="pipeline"]'); page.click(".pipe-card[data-id=bk1]"); page.click("#opp-detail-actions >> text=Fermer"); page.wait_for_timeout(200)
-    page.go_back(); page.wait_for_timeout(300)
-    check(page.is_visible("#tab-tasks"), "Back: a sheet closed on screen leaves no extra step")
+    page.go_back()
+    check(eventually(lambda: page.is_visible("#tab-tasks"), 3000), "Back: a sheet closed on screen leaves no extra step")
     check(not errors, f"no page errors ({errors})")
     page.close()
 
@@ -809,11 +826,11 @@ with sync_playwright() as p:
     page.click("#opp-detail-body .opp-history > summary"); hist = page.inner_text("#opp-detail-body .opp-history")
     check("Opportunité créée" in hist and "Go" in hist and "Fait : Appeler Luc" in hist and "Pricing engageant" in hist, f"sheet: the history lists what happened ({hist[:160]!r})")
     check(page.locator("#opp-detail-actions .act-more").count() == 1 and not page.is_visible("#opp-detail-actions button:has-text('Supprimer')"), "sheet: occasional actions folded in « Plus ▾ »")
-    page.click("#opp-detail-body .sf-nature button:has-text('Indicative')"); page.wait_for_timeout(200)
-    check(next(o for o in stored(page, "todo-widget-opportunities") if o["id"] == "h1").get("nature") == "Non engageante" and "Pricing indicatif" in page.inner_text(".pipe-card[data-id=h1]"),
+    page.click("#opp-detail-body .sf-nature button:has-text('Indicative')")
+    check(eventually(lambda: next(o for o in stored(page, "todo-widget-opportunities") if o["id"] == "h1").get("nature") == "Non engageante" and "Pricing indicatif" in page.inner_text(".pipe-card[data-id=h1]"), 3000),
           "pricing: one click switches to an indicative offer")
-    page.click("#opp-detail-body .sf-nature button:has-text('Engageante')"); page.wait_for_timeout(200)
-    check(page.locator("#opp-detail-body .opp-stage-step.skipped:has-text('inclus')").count() == 1, "pricing: an offer engageante shows the firm pricing as included")
+    page.click("#opp-detail-body .sf-nature button:has-text('Engageante')")
+    check(eventually(lambda: page.locator("#opp-detail-body .opp-stage-step.skipped:has-text('inclus')").count() == 1, 3000), "pricing: an offer engageante shows the firm pricing as included")
     check(not errors, f"no page errors ({errors})")
     page.close()
 
@@ -835,8 +852,8 @@ with sync_playwright() as p:
     page.click("#opp-detail-actions button:has-text('Copier le mail')"); page.wait_for_timeout(200)
     page.click("#opp-detail-actions >> text=Fermer"); page.click(".pipe-req-card .pipe-card-title")
     check(page.is_checked("#opp-detail-body .sp-check:has-text('Mail de demande envoyé') input"), "step by step: copying the mail ticks « Mail de demande envoyé »")
-    page.click("#opp-detail-body .sp-check:has-text('Retour d') input"); page.wait_for_timeout(150)
-    check(all((o.get("checks") or {}).get("pricing_indicatif", {}).get("ops") for o in stored(page, "todo-widget-opportunities") if o.get("requestId") == "rqs"), "step by step: a box ticked by hand is kept for the block")
+    page.click("#opp-detail-body .sp-check:has-text('Retour d') input")
+    check(eventually(lambda: all((o.get("checks") or {}).get("pricing_indicatif", {}).get("ops") for o in stored(page, "todo-widget-opportunities") if o.get("requestId") == "rqs"), 3000), "step by step: a box ticked by hand is kept for the block")
     # a lot of two installations, out of three
     page.click("#opp-detail-body .req-inst:has-text('Toit 1') .req-pick"); page.click("#opp-detail-body .req-inst:has-text('Toit 2') .req-pick")
     page.fill("#opp-detail-body .req-lot-name", "Lot A"); page.click("#opp-detail-body .req-lot-make"); page.wait_for_timeout(200)
@@ -865,14 +882,14 @@ with sync_playwright() as p:
     page.click("#opp-detail-actions >> text=Fermer")
     page.locator(".pipe-card", has_text="Hangar").first.click()
     check("à compléter" in page.inner_text("#opp-detail-body .sp-check:has-text('Infos obligatoires')"), "checklist: the missing boxes are counted next to the line")
-    page.click("#opp-detail-body .sp-check:has-text('Fichier Caractéristiques reçu') input"); page.wait_for_timeout(200)
-    check(page.is_checked("#opp-detail-body .sp-check:has-text('Fichier Caractéristiques reçu') input"), "checklist: a line the app ticks itself can also be ticked by hand")
-    page.click("#opp-detail-body .sp-act:has-text('Compléter')"); page.wait_for_timeout(300)
-    check(page.evaluate("document.querySelector('#opp-detail-body details.req-compare').open"), "checklist: « Compléter » opens the table of the plant")
+    page.click("#opp-detail-body .sp-check:has-text('Fichier Caractéristiques reçu') input")
+    check(eventually(lambda: page.is_checked("#opp-detail-body .sp-check:has-text('Fichier Caractéristiques reçu') input"), 3000), "checklist: a line the app ticks itself can also be ticked by hand")
+    page.click("#opp-detail-body .sp-act:has-text('Compléter')")
+    check(eventually(lambda: page.evaluate("document.querySelector('#opp-detail-body details.req-compare').open"), 3000), "checklist: « Compléter » opens the table of the plant")
     page.click("#opp-detail-actions >> text=Fermer")
     page.locator(".pipe-card", has_text="Sol").first.click()
-    page.click("#opp-detail-body .sp-check:has-text('DocuSign') input"); page.wait_for_timeout(150)
-    check("le " in page.inner_text("#opp-detail-body .sp-check:has-text('DocuSign')"), "checklist: a box ticked by hand shows the day")
+    page.click("#opp-detail-body .sp-check:has-text('DocuSign') input")
+    check(eventually(lambda: "le " in page.inner_text("#opp-detail-body .sp-check:has-text('DocuSign')"), 3000), "checklist: a box ticked by hand shows the day")
     page.click("#opp-detail-body .sp-next"); page.click("#stage-advance-confirm"); page.wait_for_timeout(200)
     page.reload(); page.click('[data-tab="pipeline"]'); page.wait_for_timeout(200)
     c3 = next(o for o in stored(page, "todo-widget-opportunities") if o["id"] == "c3")
@@ -891,15 +908,15 @@ with sync_playwright() as p:
           "pipeline: a long block shows its totals, its installations folded")
     blk.locator(".pipe-req-more").click()
     check(page.locator(".pipe-req-card[data-id=rqb] .pipe-req-line:visible").count() == 8, "pipeline: one click unfolds it")
-    page.hover(".pipe-req-card[data-id=rqb]"); page.click(".pipe-req-card[data-id=rqb] .pipe-req-rename"); page.keyboard.type("Lot toitures"); page.keyboard.press("Enter"); page.wait_for_timeout(150)
-    check("Lot toitures" in page.inner_text(".pipe-req-card[data-id=rqb] .pipe-req-head") and next(o for o in stored(page, "todo-widget-opportunities") if o["id"] == "rqb").get("label") == "Lot toitures",
+    page.hover(".pipe-req-card[data-id=rqb]"); page.click(".pipe-req-card[data-id=rqb] .pipe-req-rename"); page.keyboard.type("Lot toitures"); page.keyboard.press("Enter")
+    check(eventually(lambda: "Lot toitures" in page.inner_text(".pipe-req-card[data-id=rqb] .pipe-req-head") and next(o for o in stored(page, "todo-widget-opportunities") if o["id"] == "rqb").get("label") == "Lot toitures", 3000),
           "pipeline: a block can be named after its producer")
     col = page.locator('.pipe-col[data-phase="contrat"]').bounding_box(); src = page.locator(".pipe-card[data-id=lone]").bounding_box()
     page.mouse.move(src["x"] + 30, src["y"] + 12); page.mouse.down(); page.mouse.move(src["x"] + 60, src["y"] + 40, steps=3)
     page.mouse.move(col["x"] + col["width"] / 2, col["y"] + col["height"] + 250, steps=6)
     check(page.locator(".pipe-ghost").count() == 1, "pipeline: the dragged card follows the mouse")
-    page.mouse.up(); page.wait_for_timeout(100)
-    check(page.is_visible(".drop-menu") and "kyc" in page.inner_html(".drop-menu").lower(), "pipeline: dropped below an empty column, it still asks the step")
+    page.mouse.up()
+    check(eventually(lambda: page.is_visible(".drop-menu") and "kyc" in page.inner_html(".drop-menu").lower(), 3000), "pipeline: dropped below an empty column, it still asks the step")
     page.keyboard.press("Escape")
     page.drag_and_drop(".pipe-card[data-id=lone]", ".pipe-req-card[data-id=rqb] .pipe-req-head")
     check(page.is_visible(".drop-menu") and not page.is_visible(".drop-menu .drop-menu-group"), "pipeline: dropped on a block, a card only changes step (grouping is done by picking)")
@@ -1347,13 +1364,13 @@ with sync_playwright() as p:
           and page.locator("#pq-form button[data-toall='centrale']").count() == 0 and page.locator("#pq-form button[data-toall='kwc']").count() == 0,
           "« → toutes »: hidden while empty, ✓ when all the same, never on a plant's name or power")
     page.fill("#pq-0-particularites", "Toiture"); page.locator("#pq-0-particularites").dispatch_event("change")
-    page.select_option("#pq-0-install", "PV"); page.wait_for_timeout(100)
-    check("go" in cls("particularites"), "« → toutes » stands out when the others differ")
+    page.select_option("#pq-0-install", "PV")
+    check(eventually(lambda: "go" in cls("particularites"), 3000), "« → toutes » stands out when the others differ")
     page.click("#pq-form button[data-toall='particularites'][data-s='0']"); page.click("#choice-btns >> text=Appliquer à toutes")
     check([page.input_value(f"#pq-{i}-particularites") for i in range(3)] == ["Toiture"] * 3, "« → toutes » for Particularités too")
     check(page.locator("#pq-form .pq-inst.many .pq-inst-n").count() == 3, "each installation in its own numbered card")
-    page.select_option("#pq-0-contrat", ""); page.locator("#pq-0-contrat").dispatch_event("change"); page.wait_for_timeout(100)
-    check("clear" in cls("contrat"), "« → toutes » on an empty field when the others are filled")
+    page.select_option("#pq-0-contrat", ""); page.locator("#pq-0-contrat").dispatch_event("change")
+    check(eventually(lambda: "clear" in cls("contrat"), 3000), "« → toutes » on an empty field when the others are filled")
     page.click("#pq-form button[data-toall='contrat'][data-s='0']")
     check("Vider" in page.inner_text("#choice-btns"), "pushing an empty field asks before emptying it everywhere")
     page.click("#choice-btns >> text=Vider partout")
@@ -1369,8 +1386,8 @@ with sync_playwright() as p:
     page.goto(URL); page.click('[data-tab="pipeline"]'); page.locator(".pipe-req-name", has_text="Centrale 1").click()
     check(page.locator("#opp-detail-body .stage-scope button.on").inner_text() == "Toutes les installations (3)", "batch: by default a stage applies to all the installations")
     check(page.inner_text("#opp-detail-sum") == "3 installations", "sheet: the header sums up the opportunity (installations · power · technology · volume)")
-    page.click("#opp-detail-body .opp-stage-step:has-text('Pricing indicatif')"); page.wait_for_timeout(100)
-    check(page.is_visible("#choice-overlay") and "2 étapes" in page.inner_text("#choice-text"), "step track: jumping over a step is asked first")
+    page.click("#opp-detail-body .opp-stage-step:has-text('Pricing indicatif')")
+    check(eventually(lambda: page.is_visible("#choice-overlay") and "2 étapes" in page.inner_text("#choice-text"), 3000), "step track: jumping over a step is asked first")
     page.click("#choice-btns >> text=Avancer"); page.wait_for_timeout(200)
     st_ = {o["id"]: o.get("stage") for o in stored(page, "todo-widget-opportunities")}
     check(st_["b1"] == st_["b2"] == st_["b3"] == "pricing_indicatif", f"batch: the three installations moved together ({st_})")
@@ -1381,8 +1398,8 @@ with sync_playwright() as p:
     page.click(".opp-back")
     check("1" in page.inner_text("#opp-detail-body .opp-stage-step.current:has-text('Offre à remettre') .ost-n") and page.locator("#opp-detail-body .req-inst").count() == 3,
           "request sheet: the same step track, with the number of installations at each step")
-    page.click("#opp-detail-body .opp-stage-step:has-text('Négociation')"); page.click("#choice-btns >> text=Avancer"); page.wait_for_timeout(200)
-    check(page.inner_text("#opp-detail-edit") == "Modifier les fiches" and page.locator("#opp-detail-body .req-inst-ed").count() == 3, "request sheet: edit buttons in the global view")
+    page.click("#opp-detail-body .opp-stage-step:has-text('Négociation')"); page.click("#choice-btns >> text=Avancer")
+    check(eventually(lambda: page.inner_text("#opp-detail-edit") == "Modifier les fiches" and page.locator("#opp-detail-body .req-inst-ed").count() == 3, 3000), "request sheet: edit buttons in the global view")
     st_ = {o["id"]: o.get("stage") for o in stored(page, "todo-widget-opportunities")}
     check(st_["b1"] == st_["b2"] == st_["b3"] == "negociation", "batch: from the request sheet, all installations to one stage")
     page.locator("#opp-detail-body .req-inst", has_text="Centrale 2").locator(".req-inst-ed").click()
@@ -1405,8 +1422,8 @@ with sync_playwright() as p:
     page.click("#choice-btns >> text=Une seule ligne pour toutes"); page.wait_for_timeout(200)
     clip = page.evaluate("navigator.clipboard.readText()")
     check(clip.count("\n") == 0 and "Toit 1 + Toit 2" in clip and "\t300\t" in clip.replace(",", "."), f"pipe copy: one line, names joined, powers added ({clip[:80]!r})")
-    act(page, "Copier lignes Pipe"); page.click("#choice-btns >> text=Une ligne par installation"); page.wait_for_timeout(200)
-    check(page.evaluate("navigator.clipboard.readText()").count("\n") == 1, "pipe copy: or one line each")
+    act(page, "Copier lignes Pipe"); page.click("#choice-btns >> text=Une ligne par installation")
+    check(eventually(lambda: page.evaluate("navigator.clipboard.readText()").count("\n") == 1, 3000), "pipe copy: or one line each")
     clip = page.evaluate("navigator.clipboard.readText()")
     check("[[" not in clip and "Voir Paul Durand" in clip, "pipe copy: [[links]] go to the Excel as plain names")
     page.click("#opp-detail-edit")
@@ -1440,10 +1457,10 @@ with sync_playwright() as p:
 
     # --- Sync pill: state visible everywhere, token problems explained
     page, errors = new_page(browser, viewport={"width": 1300, "height": 800})
-    page.goto(URL); page.wait_for_timeout(300)
-    check(page.get_attribute("#sync-pill", "data-k") == "off" and "désactivée" in page.inner_text("#sync-pill"), "sync pill: says when sync is off")
-    page.click("#sync-pill"); page.wait_for_timeout(200)
-    check(page.is_visible("#sync-section") and page.evaluate("document.activeElement.id") == "sync-owner", "sync pill: click opens the sync settings")
+    page.goto(URL)
+    check(eventually(lambda: page.get_attribute("#sync-pill", "data-k") == "off" and "désactivée" in page.inner_text("#sync-pill"), 3000), "sync pill: says when sync is off")
+    page.click("#sync-pill")
+    check(eventually(lambda: page.is_visible("#sync-section") and page.evaluate("document.activeElement.id") == "sync-owner", 3000), "sync pill: click opens the sync settings")
     page.close()
     files = {"tasks.json": [], "crm.json": {"companies": [], "contacts": [], "meetings": [], "opportunities": []}, "notes.json": []}
     page, errors = new_page(browser, SYNC_ON, viewport={"width": 1300, "height": 800})
@@ -1470,11 +1487,10 @@ with sync_playwright() as p:
     files = {"notes.json": [{"id": "scratchpad", "text": "écrit sur le téléphone", "createdAt": 1, "updatedAt": 5, "deleted": False}]}
     page, errors = new_page(browser, SYNC_ON, viewport={"width": 1300, "height": 850})
     mock_github(page, files)
-    page.goto(URL); page.wait_for_timeout(800)
-    check(page.input_value("#postit-text") == "écrit sur le téléphone", "post-it pulled from the other device")
+    page.goto(URL)
+    check(eventually(lambda: page.input_value("#postit-text") == "écrit sur le téléphone", 4000), "post-it pulled from the other device")
     postit_edit(page); page.keyboard.press("End"); page.keyboard.type(" + PC")
-    page.wait_for_timeout(4500)
-    check(files["notes.json"][0]["text"] == "écrit sur le téléphone + PC", "post-it edit pushed")
+    check(eventually(lambda: files["notes.json"][0]["text"] == "écrit sur le téléphone + PC", 22500), "post-it edit pushed")
     page.close()
 
     # --- Sync: a data file over 1 MB is read through the raw media type
@@ -1483,8 +1499,8 @@ with sync_playwright() as p:
     files = {"crm.json": {"companies": [], "contacts": big, "meetings": [], "opportunities": []}, "tasks.json": [], "notes.json": []}
     page, errors = new_page(browser, SYNC_ON)
     mock_github(page, files, large=("crm.json",))
-    page.goto(URL); page.wait_for_timeout(1500)
-    check(len(stored(page, "todo-widget-contacts") or []) == 300, "sync reads a data file over 1 MB")
+    page.goto(URL)
+    check(eventually(lambda: len(stored(page, "todo-widget-contacts") or []) == 300, 7500), "sync reads a data file over 1 MB")
     check(not errors, f"no page errors ({errors})")
     page.close()
 
@@ -1566,8 +1582,8 @@ with sync_playwright() as p:
     page.click("#pq-cancel-btn")
     page.click("#opp-add-btn"); page.fill("#pq1-company", "SCEA Les Vergers du Lot")
     check("Nouveau client" in page.inner_text("#pq1-company-hint"), "step 1 flags a new client")
-    page.click("#pq-next-btn"); page.fill("#pq-mail", MAIL); page.wait_for_timeout(500)
-    check(page.input_value("#pq-0-kwc") == "2400" and page.input_value("#pq-0-dept") == "46 - Lot" and page.input_value("#pq-s-prenom") == "Pierre",
+    page.click("#pq-next-btn"); page.fill("#pq-mail", MAIL)
+    check(eventually(lambda: page.input_value("#pq-0-kwc") == "2400" and page.input_value("#pq-0-dept") == "46 - Lot" and page.input_value("#pq-s-prenom") == "Pierre", 3000),
           "pasted mail prefills the installation and the contact")
     page.click("#pq-add-inst"); page.fill("#pq-1-centrale", "Le Moulin"); page.fill("#pq-1-kwc", "1800")
     page.select_option("#pq-s-charge", "PGU"); page.click("#pq-save-btn")
@@ -1600,8 +1616,7 @@ with sync_playwright() as p:
     page.click("#opp-detail-actions >> text=Fermer")
     # validating the task offers the next stage for the whole request
     page.click('[data-tab="tasks"]'); page.locator(".task-line", has_text="Appeler Pierre").locator(".task-check").first.click()
-    page.wait_for_timeout(200)
-    check(page.is_visible("#stage-advance-overlay"), "validating a linked task offers the next stage")
+    check(eventually(lambda: page.is_visible("#stage-advance-overlay"), 3000), "validating a linked task offers the next stage")
     page.click("#stage-advance-confirm")
     check(all(o["stage"] == "prise_contact" for o in opps() if o.get("requestId") == req[0]["id"]), "the request's installations advance together")
     # Go from the installation sheet
@@ -1655,8 +1670,8 @@ with sync_playwright() as p:
     page.click("#opp-detail-actions >> text=Fermer")
     check(page.evaluate("document.documentElement.scrollWidth") <= 390, "phone version fits the screen")
     # the network on the phone: in the bottom bar, pinch to zoom
-    page.click("#lite-nav [data-go=network]"); page.wait_for_timeout(800)
-    check(page.is_visible("#tab-network") and page.evaluate("window.todoNetworkState().nodes") >= 3, "phone version: the network is in the bottom bar")
+    page.click("#lite-nav [data-go=network]")
+    check(eventually(lambda: page.is_visible("#tab-network") and page.evaluate("window.todoNetworkState().nodes") >= 3, 4000), "phone version: the network is in the bottom bar")
     box = page.locator(".nw-stage canvas").bounding_box()
     check(box["width"] <= 390 and box["height"] > 250, f"phone version: the network fills the screen ({box})")
     cdp = page.context.new_cdp_session(page)
@@ -1691,16 +1706,16 @@ with sync_playwright() as p:
     check(got == ["RHÔNE ÉNERGIES SAS", "Camille", "DUBOIS", "Responsable financement de projets", "06 77 00 00 06", "04 75 00 00 06", "camille.dubois@rhone-energies.fr"],
           f"step 1: a pasted signature fills client and contact ({got})")
     # a second signature (another person) becomes an additional contact; the main one stays
-    page.fill("#pq1-sig", "Marc LEROY\nDirecteur technique\nRHÔNE ÉNERGIES SAS\n06 11 11 11 11\nmarc.leroy@rhone-energies.fr"); page.wait_for_timeout(500)
-    check(page.input_value("#pq1-prenom") == "Camille" and page.input_value("#pq1-extras input[data-xk='prenom']") == "Marc", "a second signature adds a second contact")
+    page.fill("#pq1-sig", "Marc LEROY\nDirecteur technique\nRHÔNE ÉNERGIES SAS\n06 11 11 11 11\nmarc.leroy@rhone-energies.fr")
+    check(eventually(lambda: page.input_value("#pq1-prenom") == "Camille" and page.input_value("#pq1-extras input[data-xk='prenom']") == "Marc", 3000), "a second signature adds a second contact")
     page.click("#pq1-add-extra"); page.fill("#pq1-extras input[data-x='1'][data-xk='prenom']", "Lucie"); page.fill("#pq1-extras input[data-x='1'][data-xk='nom']", "Roy")
     check(page.locator("#pq1-principal [data-principal]").count() == 3, "the main contact can be chosen among the three people")
     page.click("#pq1-principal [data-principal='x:0']")   # Marc becomes the main contact
     page.click("#pq-next-btn")
     check(page.input_value("#pq-s-producteur") == "RHÔNE ÉNERGIES SAS" and page.input_value("#pq-s-prenom") == "Marc" and page.input_value("#pq-s-tel") == "06 11 11 11 11",
           "step 2 uses the chosen main contact")
-    page.select_option("#pq-contact-switch", "p:0"); page.wait_for_timeout(100)
-    check(page.input_value("#pq-s-prenom") == "Camille" and page.input_value("#pq-s-tel") == "06 77 00 00 06 / 04 75 00 00 06", "step 2: the main contact can be changed")
+    page.select_option("#pq-contact-switch", "p:0")
+    check(eventually(lambda: page.input_value("#pq-s-prenom") == "Camille" and page.input_value("#pq-s-tel") == "06 77 00 00 06 / 04 75 00 00 06", 3000), "step 2: the main contact can be changed")
     page.select_option("#pq-contact-switch", "p:1"); page.wait_for_timeout(100)
     page.fill("#pq-0-centrale", "Toit A"); page.click("#pq-save-btn")
     names = sorted(c["firstName"] for c in stored(page, "todo-widget-contacts"))
@@ -1714,8 +1729,8 @@ with sync_playwright() as p:
     page.locator(".pipe-card", has_text="Toit A").first.click(); page.click("#opp-detail-edit")
     cam_opt = page.eval_on_selector("#pq-contact-switch", "s=>[...s.options].find(o=>o.textContent.startsWith('Camille')).value")
     page.select_option("#pq-contact-switch", cam_opt); page.wait_for_timeout(100)
-    page.fill("#pq-mail", "Bonjour, notre centrale fait 2,4 MWc à Valence (26000).\nCordialement"); page.wait_for_timeout(500)
-    check(page.input_value("#pq-0-kwc") == "2400" and page.input_value("#pq-0-centrale") == "Toit A", "editing: a pasted mail fills empty fields only")
+    page.fill("#pq-mail", "Bonjour, notre centrale fait 2,4 MWc à Valence (26000).\nCordialement")
+    check(eventually(lambda: page.input_value("#pq-0-kwc") == "2400" and page.input_value("#pq-0-centrale") == "Toit A", 3000), "editing: a pasted mail fills empty fields only")
     page.click("#pq-save-btn")
     inst = [o for o in stored(page, "todo-widget-opportunities") if o.get("kind") == "installation"][0]
     marc = next(c for c in stored(page, "todo-widget-contacts") if c["firstName"] == "Marc")
@@ -1728,8 +1743,8 @@ with sync_playwright() as p:
     page, errors = new_page(browser)
     page.goto(URL); page.click('[data-tab="pipeline"]'); page.click("#opp-add-btn"); page.fill("#pq1-company", "SEM RESET"); page.click("#pq-next-btn")
     check(not page.is_visible("#pq-restart"), "form: nothing to start over before a mail is pasted")
-    page.fill("#pq-mail", "De : H R <h@sem.fr>\nObjet : Nos centrales\n\nNous avons deux projets :\n- Gymnase : 250 kWc\n- École : 100 kWc\nH R"); page.wait_for_timeout(500)
-    check(page.input_value("#pq-0-centrale") == "Gymnase" and page.input_value("#pq-1-centrale") == "École" and page.is_visible("#pq-restart"), "form: the mail fills two installations")
+    page.fill("#pq-mail", "De : H R <h@sem.fr>\nObjet : Nos centrales\n\nNous avons deux projets :\n- Gymnase : 250 kWc\n- École : 100 kWc\nH R")
+    check(eventually(lambda: page.input_value("#pq-0-centrale") == "Gymnase" and page.input_value("#pq-1-centrale") == "École" and page.is_visible("#pq-restart"), 3000), "form: the mail fills two installations")
     page.click("[data-clear='1']"); page.click("#choice-btns >> text=Vider"); page.wait_for_timeout(100)
     check(page.input_value("#pq-1-centrale") == "" and page.input_value("#pq-1-kwc") == "" and page.input_value("#pq-0-centrale") == "Gymnase", "form: « Vider » clears one installation only")
     page.fill("#pq-0-particularites", "Tapé à la main") if page.locator("#pq-0-particularites").count() else None
@@ -1983,8 +1998,8 @@ with sync_playwright() as p:
     page.select_option(".mk-board", "orig"); page.wait_for_timeout(200)
     check(page.get_attribute(".mk-frame", "src") != src and page.evaluate("localStorage.getItem('market-board')") == "orig", "market: another template of the site can be picked, and is remembered")
     own = "https://tomsremy.github.io/PowerKlock/index.html#board=zAbC_d-1"
-    dialog_once(page, text=own); page.select_option(".mk-board", "own"); page.wait_for_timeout(200)
-    check(page.get_attribute(".mk-frame", "src") == own.replace("#board=", "#solo=") and page.input_value(".mk-board") == "own", "market: my own dashboard, from a link copied on the site")
+    dialog_once(page, text=own); page.select_option(".mk-board", "own")
+    check(eventually(lambda: page.get_attribute(".mk-frame", "src") == own.replace("#board=", "#solo=") and page.input_value(".mk-board") == "own", 3000), "market: my own dashboard, from a link copied on the site")
     check(page.is_visible("#postit") and page.evaluate("parseFloat(getComputedStyle(document.getElementById('market-root')).paddingRight)") < 40, "market: the note floats over the dashboard, nothing moves for it")
     page.click(".mk-copy"); page.wait_for_timeout(300); txt = page.evaluate("navigator.clipboard.readText()")
     check("Spot France (day-ahead) : 61,5 €/MWh" in txt and "1,5 h à prix négatif" in txt and "août 2026 : 110,0 / 104,0 / 77,7 (CRE)" in txt and "estimation PowerKlock" in txt
@@ -2081,8 +2096,8 @@ with sync_playwright() as p:
     page.route("https://api.github.com/**", gh3)
     page.goto(URL); page.wait_for_timeout(500)
     check(page.evaluate("localStorage.getItem('ai-key')") is None, "AI set aside: no Claude key kept on the device")
-    page.click('[data-tab="contacts"]'); page.wait_for_timeout(600)
-    check("Claire Martin" in page.inner_text("#contact-inbox-list") and "Responsable énergie" in page.inner_text("#contact-inbox-list"), f"Outlook macro: a forwarded contact is read from its signature ({page.inner_text('#contact-inbox-list')[:120]!r})")
+    page.click('[data-tab="contacts"]')
+    check(eventually(lambda: "Claire Martin" in page.inner_text("#contact-inbox-list") and "Responsable énergie" in page.inner_text("#contact-inbox-list"), 3000), f"Outlook macro: a forwarded contact is read from its signature ({page.inner_text('#contact-inbox-list')[:120]!r})")
     page.evaluate("document.getElementById('sync-now-btn').click()")
     for _ in range(50):
         if held: break
@@ -2186,8 +2201,8 @@ with sync_playwright() as p:
     co = [c for c in stored(page, "todo-widget-companies") if c.get("name") == "Solaris"]
     check(co and co[0].get("whatTheyDo") == "Producteur solaire FR" and co[0].get("website") == "https://solaris.example", f"company sheet: what they do and the site are saved ({co})")
     page.locator(".contact-row", has_text="Durand").locator(".contact-main").first.click(); page.wait_for_timeout(200)
-    page.click(".contact-detail-links >> text=+ Nouvelle tâche"); page.wait_for_timeout(200)
-    check(page.input_value("#f-title") == "Contacter Paul Durand" and page.input_value("#f-client") == "Solaris", f"contact: « + Nouvelle tâche » opens the task form, filled ({page.input_value('#f-title')!r})")
+    page.click(".contact-detail-links >> text=+ Nouvelle tâche")
+    check(eventually(lambda: page.input_value("#f-title") == "Contacter Paul Durand" and page.input_value("#f-client") == "Solaris", 3000), f"contact: « + Nouvelle tâche » opens the task form, filled ({page.input_value('#f-title')!r})")
     check(not errors, f"no page errors ({errors})")
     page.close()
 
@@ -2233,8 +2248,8 @@ with sync_playwright() as p:
     page, errors = new_page(browser, {"todo_todo-widget-opportunities": json.dumps(du), "todo_todo-widget-tasks": json.dumps([dict(task("dt", "Relancer"), opportunityId="d2")])}, viewport={"width": 1400, "height": 900})
     page.goto(URL); page.click('[data-tab="pipeline"]')
     check(page.is_visible("#pipe-dup-btn") and "Doublons · 2" in page.inner_text("#pipe-dup-btn"), f"doublons: the pipeline says there are some ({page.inner_text('#pipe-dup-btn') if page.is_visible('#pipe-dup-btn') else ''})")
-    page.click('[data-tab="today"]'); page.wait_for_timeout(100)
-    check(page.is_visible("#dup-banner") and "1 installation saisie deux fois" in page.inner_text("#dup-banner"), f"doublons: a banner at the top of every page ({page.inner_text('#dup-banner') if page.is_visible('#dup-banner') else ''})")
+    page.click('[data-tab="today"]')
+    check(eventually(lambda: page.is_visible("#dup-banner") and "1 installation saisie deux fois" in page.inner_text("#dup-banner"), 3000), f"doublons: a banner at the top of every page ({page.inner_text('#dup-banner') if page.is_visible('#dup-banner') else ''})")
     page.click('[data-tab="pipeline"]')
     page.click("#pipe-dup-btn")
     check("Gaec Dupont SARL" in page.inner_text("#dup-overlay") and "GAEC Dupont" in page.inner_text("#dup-overlay"), "doublons: the company written two ways")
@@ -2249,8 +2264,8 @@ with sync_playwright() as p:
     page.click("#dup-overlay .dup-close"); page.wait_for_timeout(150)
     check(not page.is_visible("#pipe-dup-btn"), "doublons: the button goes away")
     check(not page.is_visible("#dup-banner"), "doublons: the banner goes away too")
-    page.click('[data-tab="parc"]'); page.click("#parc-xs-btn"); page.wait_for_timeout(200)
-    check(page.is_visible("#xs-overlay") and "on" in (page.get_attribute("#xs-overlay .xs-scope [data-s=parc]", "class") or ""), "Portefeuille: « Excel ⇄ » opens on the signed installations")
+    page.click('[data-tab="parc"]'); page.click("#parc-xs-btn")
+    check(eventually(lambda: page.is_visible("#xs-overlay") and "on" in (page.get_attribute("#xs-overlay .xs-scope [data-s=parc]", "class") or ""), 3000), "Portefeuille: « Excel ⇄ » opens on the signed installations")
     page.keyboard.press("Escape"); page.click("#xs-overlay .xs-x") if page.is_visible("#xs-overlay") else None
     check(not errors, f"no page errors ({errors})")
     page.close()
@@ -2288,8 +2303,8 @@ with sync_playwright() as p:
     page.goto(URL); page.click('[data-tab="pipeline"]'); page.click("#opp-add-btn"); page.wait_for_timeout(150)
     page.keyboard.press("Escape"); page.wait_for_timeout(150)
     check(not page.is_visible("#pq-overlay"), "new opportunity: Escape closes the empty form")
-    page.click("#opp-add-btn"); page.fill("#pq1-company", "TEST SAS"); page.keyboard.press("Escape"); page.wait_for_timeout(150)
-    check(page.is_visible("#choice-overlay") and page.is_visible("#pq-overlay"), "new opportunity: Escape asks before losing what was typed")
+    page.click("#opp-add-btn"); page.fill("#pq1-company", "TEST SAS"); page.keyboard.press("Escape")
+    check(eventually(lambda: page.is_visible("#choice-overlay") and page.is_visible("#pq-overlay"), 3000), "new opportunity: Escape asks before losing what was typed")
     page.click("#choice-btns button:has-text('Fermer')"); page.wait_for_timeout(150)
     check(not page.is_visible("#pq-overlay"), "new opportunity: « Fermer » closes it")
     check(not errors, f"no page errors ({errors})")
@@ -2336,8 +2351,8 @@ with sync_playwright() as p:
     o = stored(page, "todo-widget-opportunities")[0]
     check(o.get("commune") == "Cholet" and any(v == "47,06" for v in (o.get("caract") or {}).values()) and not any(v == "100" for v in (o.get("caract") or {}).values()),
           f"IA: only the ticked lines are filled ({o.get('caract')})")
-    page.evaluate("localStorage.removeItem('ai-key')"); page.click("#opp-detail-body .req-ai"); page.wait_for_timeout(150)
-    check(page.is_visible("#ai-key-here") and len(sent) == 1, "IA: without a key, the window asks for it (nothing sent yet)")
+    page.evaluate("localStorage.removeItem('ai-key')"); page.click("#opp-detail-body .req-ai")
+    check(eventually(lambda: page.is_visible("#ai-key-here") and len(sent) == 1, 3000), "IA: without a key, the window asks for it (nothing sent yet)")
     page.fill("#ai-key-here", "sk-autre"); page.click("#ai-overlay button:has-text('Enregistrer et demander')"); page.wait_for_selector("#ai-overlay .ai-row", timeout=5000)
     check(len(sent) == 2 and page.evaluate("localStorage.getItem('ai-key')") == "sk-autre", "IA: the key typed in the window is kept on this device and the request goes at once")
     check(not errors, f"no page errors ({errors})")
@@ -2360,8 +2375,8 @@ with sync_playwright() as p:
     pdat = {"fileName": "suivi.xlsx", "importedAt": int(time.time() * 1000), "objectives": {str(cy): 100},
             "items": [{"id": "p1", "prod": "A", "inst": "A1", "dev": "A", "statut": "Gagné", "kwc": 1000, "p50": 1200, "vols": {str(cy): 80000}, "siteDept": "", "dept": "", "cadre": "CR", "enr": "PV"}]}
     page, errors = new_page(browser, {"todo_parc-data": json.dumps(pdat), "goal-milestones": json.dumps({str(cy): 0})}, viewport={"width": 1300, "height": 850})
-    page.goto(URL); page.click('[data-tab="parc"]'); page.wait_for_timeout(300)
-    check(page.locator(".celebrate-goal").count() == 1 and page.get_attribute(".celebrate-goal", "data-variant") == "g75", "goal: crossing 75 % plays the 75 % animation")
+    page.goto(URL); page.click('[data-tab="parc"]')
+    check(eventually(lambda: page.locator(".celebrate-goal").count() == 1 and page.get_attribute(".celebrate-goal", "data-variant") == "g75", 3000), "goal: crossing 75 % plays the 75 % animation")
     page.wait_for_selector("#goal-toast", timeout=5000)
     check("80 % atteint" in page.inner_text("#goal-toast") and "Il reste 20 GWh" in page.inner_text("#goal-toast"), f"goal: a summary ready for the manager ({page.inner_text('#goal-toast')!r})")
     page.click("#goal-toast .goal-close"); page.click('[data-tab="today"]'); page.click('[data-tab="parc"]'); page.wait_for_timeout(300)
@@ -2391,8 +2406,8 @@ with sync_playwright() as p:
     page.evaluate("window.__dlg.said=[]"); dialog_once(page, accept=False)
     page.click("#vcf-import-btn"); page.wait_for_timeout(150); said = page.evaluate("window.__dlg.said")
     check(said and "Exporter" in said[0] and ".vcf" in said[0], f"phone import on iPhone: how to export the contacts first ({said})")
-    page.set_input_files("#card-scan-input", files=[{"name": "carte.jpg", "mimeType": "image/jpeg", "buffer": b"fake"}]); page.wait_for_timeout(500)
-    check(page.input_value("#ct-first") == "Claire" and page.input_value("#ct-email") == "claire.dubois@helio-ouest.fr" and "Directrice" in page.input_value("#ct-role"),
+    page.set_input_files("#card-scan-input", files=[{"name": "carte.jpg", "mimeType": "image/jpeg", "buffer": b"fake"}])
+    check(eventually(lambda: page.input_value("#ct-first") == "Claire" and page.input_value("#ct-email") == "claire.dubois@helio-ouest.fr" and "Directrice" in page.input_value("#ct-role"), 3000),
           f"business card: the photo's text fills a new contact ({page.input_value('#ct-first')!r}, {page.input_value('#ct-role')!r})")
     check(not errors, f"no page errors ({errors})")
     page.close()
@@ -2401,12 +2416,12 @@ with sync_playwright() as p:
     kb = [{"id": "k1", "kind": "installation", "company": "KB", "centrale": "Toit", "title": "Toit", "stage": "kyc", "createdAt": 1, "updatedAt": 1, "deleted": False}]
     page, errors = new_page(browser, {"todo_todo-widget-opportunities": json.dumps(kb)}, viewport={"width": 1400, "height": 900})
     page.goto(URL); page.click('[data-tab="pipeline"]'); page.locator(".pipe-card", has_text="Toit").first.click(); page.wait_for_timeout(150)
-    page.keyboard.press("1"); page.wait_for_timeout(150)
-    check(page.is_checked("#opp-detail-body .sp-check:has-text('Documents KYC') input"), "keyboard: 1 ticks the first box of the list")
-    page.keyboard.press("n"); page.wait_for_timeout(150)
-    check(page.evaluate("document.activeElement.id") == "qn-text", "keyboard: n opens the notes")
-    page.click("#opp-detail-title"); page.keyboard.press("Enter"); page.wait_for_timeout(150)
-    check(page.is_visible("#stage-advance-overlay"), "keyboard: Entrée asks for the next step")
+    page.keyboard.press("1")
+    check(eventually(lambda: page.is_checked("#opp-detail-body .sp-check:has-text('Documents KYC') input"), 3000), "keyboard: 1 ticks the first box of the list")
+    page.keyboard.press("n")
+    check(eventually(lambda: page.evaluate("document.activeElement.id") == "qn-text", 3000), "keyboard: n opens the notes")
+    page.click("#opp-detail-title"); page.keyboard.press("Enter")
+    check(eventually(lambda: page.is_visible("#stage-advance-overlay"), 3000), "keyboard: Entrée asks for the next step")
     page.keyboard.press("Enter"); page.wait_for_timeout(200)
     k1 = next(o for o in stored(page, "todo-widget-opportunities") if o["id"] == "k1")
     check(k1["stage"] == "negociation", f"keyboard: Entrée again confirms ({k1['stage']})")
@@ -2423,8 +2438,8 @@ with sync_playwright() as p:
     blk = page.locator(".meet-table tr.meet-blk")
     check(blk.count() == 1 and "Lot Nord" in blk.inner_text() and "2 installations" in blk.inner_text() and "Ops" in blk.inner_text() and page.locator(".meet-table tr.meet-inblk").count() == 2,
           f"meeting view: the lot has one title line, its installations under it ({blk.all_inner_texts()})")
-    blk.click(); page.wait_for_timeout(200)
-    check("Lot Nord" in page.inner_text("#opp-detail-title"), "meeting view: a click on the lot opens its sheet")
+    blk.click()
+    check(eventually(lambda: "Lot Nord" in page.inner_text("#opp-detail-title"), 3000), "meeting view: a click on the lot opens its sheet")
     check(not errors, f"no page errors ({errors})")
     page.close()
 
@@ -2432,10 +2447,9 @@ with sync_playwright() as p:
     page, errors = new_page(browser)
     page.goto(URL); page.click('[data-tab="pipeline"]'); page.click("#opp-add-btn"); page.fill("#pq1-company", "HELIO OUEST SAS"); page.click("#pq-next-btn")
     page.fill("#pq-mail", "De : R C <r@helio.fr>\nObjet : x\n\nBonjour,\n- Centrale de Cholet (49) : 1,2 MWc, MES 03/2027\n- Centrale de Saumur (49) : 800 kWc\nCordialement,\nRomain Chevalier")
-    page.wait_for_timeout(500)
-    check(page.input_value("#pq-1-centrale") == "Centrale de Saumur" and page.input_value("#pq-0-mesPrev") == "Mars 2027", "mail listing two plants → two installations")
-    page.fill("#pq-mail", "De\tObjet\tReçu\tTaille\tCatégories\t\nPierre Dupont;  Paul Guérin\tRE: Projets PV\tlun. 16:07\t318 Ko\tTodo-synced"); page.wait_for_timeout(400)
-    check(page.is_visible("#pq-mail-warning"), "pasting the Outlook list line explains how to get the mail content")
+    check(eventually(lambda: page.input_value("#pq-1-centrale") == "Centrale de Saumur" and page.input_value("#pq-0-mesPrev") == "Mars 2027", 3000), "mail listing two plants → two installations")
+    page.fill("#pq-mail", "De\tObjet\tReçu\tTaille\tCatégories\t\nPierre Dupont;  Paul Guérin\tRE: Projets PV\tlun. 16:07\t318 Ko\tTodo-synced")
+    check(eventually(lambda: page.is_visible("#pq-mail-warning"), 3000), "pasting the Outlook list line explains how to get the mail content")
     page.fill("#pq-0-centrale", 'x" autofocus onfocus="window.__xss=1" y="')
     page.select_option("#pq-0-install", "Eolien"); page.wait_for_timeout(300)  # re-renders the form with the value in an attribute
     check(page.evaluate("window.__xss") is None and page.input_value("#pq-0-centrale").startswith('x" autofocus'), "a quote in a field can't inject HTML")
@@ -2595,10 +2609,10 @@ Responsable technique
     check(years == [str(TODAY.year + i) for i in range(5)], f"portefeuille: 5 years from the current one ({years})")
     page.wait_for_selector(".parc-map .dep", timeout=10000)   # the map file is loaded on demand
     check(page.locator(".parc-map .dot").count() == 2 and page.locator(".parc-map .dep").count() == 96, "portefeuille: map of the 96 départements, one dot per signed plant")
-    page.hover(".parc-map .dot[data-dep='30']"); page.wait_for_timeout(100)
-    check(page.is_visible(".parc-map-wrap .parc-map-tip") and "CS DU MOULIN" in page.inner_text(".parc-map-wrap .parc-map-tip") and "Solaire PV" in page.inner_text(".parc-map-wrap .parc-map-tip"), "portefeuille: hovering a dot shows the plant and its technology")
-    page.click(".parc-map .dot[data-dep='30']"); page.wait_for_timeout(100)
-    check("gard" in page.inner_text(".parc-map-side").lower(), "portefeuille: a plant is placed where it is (Département2), not at the contract's département")
+    page.hover(".parc-map .dot[data-dep='30']")
+    check(eventually(lambda: page.is_visible(".parc-map-wrap .parc-map-tip") and "CS DU MOULIN" in page.inner_text(".parc-map-wrap .parc-map-tip") and "Solaire PV" in page.inner_text(".parc-map-wrap .parc-map-tip"), 3000), "portefeuille: hovering a dot shows the plant and its technology")
+    page.click(".parc-map .dot[data-dep='30']")
+    check(eventually(lambda: "gard" in page.inner_text(".parc-map-side").lower(), 3000), "portefeuille: a plant is placed where it is (Département2), not at the contract's département")
     check(page.inner_text(".parc-map-side .map-row.two .map-p") == "SOLARIS", "portefeuille: each installation of the département shows its producer")
     page.click(".parc-map-side .map-plant"); page.wait_for_timeout(200)
     pt = page.inner_text("#opp-detail-title") if page.is_visible("#opp-detail-overlay") else ""
@@ -2606,8 +2620,8 @@ Responsable technique
     made = [o for o in stored(page, "todo-widget-opportunities") if o.get("fromSuivi")]
     check(len(made) == 1 and made[0]["kwc"] == "2990" and made[0]["mwh"] == "4500" and made[0]["stage"] in ("actif", "onboarding"), f"map: the sheet is made from the Suivi line ({[(o.get('kwc'), o.get('mwh'), o.get('stage')) for o in made]})")
     page.keyboard.press("Escape"); page.wait_for_timeout(100)
-    page.locator(".parc-table tr[data-pid]", has_text="CS DU MOULIN").first.click(); page.wait_for_timeout(200)
-    check("CS DU MOULIN" in page.inner_text("#opp-detail-title") and len([o for o in stored(page, "todo-widget-opportunities") if o.get("fromSuivi")]) == 1,
+    page.locator(".parc-table tr[data-pid]", has_text="CS DU MOULIN").first.click()
+    check(eventually(lambda: "CS DU MOULIN" in page.inner_text("#opp-detail-title") and len([o for o in stored(page, "todo-widget-opportunities") if o.get("fromSuivi")]) == 1, 3000),
           "portefeuille: a line of the table opens the same sheet (no second one made)")
     page.keyboard.press("Escape"); page.click('[data-tab="parc"]'); page.wait_for_timeout(100)
     vb0 = page.get_attribute(".parc-map", "viewBox")
@@ -2617,8 +2631,8 @@ Responsable technique
     page.wait_for_function("document.querySelector('.parc-map').dataset.hd==='true'", timeout=10000)
     check(len(page.get_attribute(".parc-map .reg-line", "d")) > 150000 and "zoomed" in page.get_attribute(".parc-map", "class"),
           "portefeuille: zoomed in, the detailed outlines are loaded and the shadow is dropped (sharp borders)")
-    page.click(".map-zoom button >> nth=2"); page.wait_for_timeout(100)
-    check(page.get_attribute(".parc-map", "viewBox").startswith("-14 -14 "), "portefeuille: reset shows all France again")
+    page.click(".map-zoom button >> nth=2")
+    check(eventually(lambda: page.get_attribute(".parc-map", "viewBox").startswith("-14 -14 "), 3000), "portefeuille: reset shows all France again")
     def centre(code):
         bb = page.locator(f".parc-map path.dep[data-dep='{code}']").bounding_box(); return bb["x"] + bb["width"] / 2, bb["y"] + bb["height"] / 2
     x, y = centre("29"); page.mouse.move(x, y)
@@ -2627,21 +2641,21 @@ Responsable technique
     vb_zoomed = page.get_attribute(".parc-map", "viewBox")
     check("finistère" in page.inner_text(".parc-map-side .map-eyebrow").lower() and not vb_zoomed.startswith("-14 -14 "),
           "portefeuille: on a zoomed map, a click on a département opens it (the press used to pan the map and swallow the click)")
-    x, y = centre("22"); page.mouse.click(x, y); page.wait_for_timeout(200)
-    check("finistère" in page.inner_text(".parc-map-side .map-eyebrow").lower() and page.get_attribute(".parc-map", "viewBox") == vb_zoomed,
+    x, y = centre("22"); page.mouse.click(x, y)
+    check(eventually(lambda: "finistère" in page.inner_text(".parc-map-side .map-eyebrow").lower() and page.get_attribute(".parc-map", "viewBox") == vb_zoomed, 3000),
           "portefeuille: a click on a département without plants keeps the selection and the zoom")
     page.click(".map-zoom button >> nth=2"); page.click(".map-back"); page.wait_for_timeout(100)
-    page.hover(".parc-kpis .stat-card >> nth=1"); page.wait_for_timeout(100)
-    check(page.is_visible(".parc-kpis .chart-tip") and "Solaire PV" in page.inner_text(".parc-kpis .chart-tip"), "portefeuille: hovering a figure shows its detail")
-    page.click(".parc-kpis .stat-card >> nth=2"); page.wait_for_timeout(150)
-    check(page.is_visible(".parc-kpi-filter") and page.locator(".parc-map .dot").count() == 1 and page.locator(".parc-table tbody tr").count() == 1,
+    page.hover(".parc-kpis .stat-card >> nth=1")
+    check(eventually(lambda: page.is_visible(".parc-kpis .chart-tip") and "Solaire PV" in page.inner_text(".parc-kpis .chart-tip"), 3000), "portefeuille: hovering a figure shows its detail")
+    page.click(".parc-kpis .stat-card >> nth=2")
+    check(eventually(lambda: page.is_visible(".parc-kpi-filter") and page.locator(".parc-map .dot").count() == 1 and page.locator(".parc-table tbody tr").count() == 1, 3000),
           "portefeuille: clicking « fins de contrat » filters the map and the table")
     page.click(".parc-kpi-filter button"); page.wait_for_timeout(150)
     check(not page.is_visible(".parc-kpi-filter") and page.locator(".parc-map .dot").count() == 2, "portefeuille: removing the filter shows everything again")
     page.click("#parc-source-btn"); page.fill("#parc-link", "https://example.sharepoint.com/sites/x/Suivi.xlsx"); page.click("#parc-link-save")
     check(page.get_attribute("#parc-open-link", "href") == "https://example.sharepoint.com/sites/x/Suivi.xlsx" and page.is_visible("#parc-open-link"), "portefeuille: Excel link saved, opens in one click")
-    page.hover(".parc-chart .hz >> nth=0"); page.wait_for_timeout(100)
-    check(page.is_visible(".parc-chart-wrap .chart-tip") and "GWh" in page.inner_text(".parc-chart-wrap .chart-tip"), "portefeuille: hovering a year of the chart shows its detail")
+    page.hover(".parc-chart .hz >> nth=0")
+    check(eventually(lambda: page.is_visible(".parc-chart-wrap .chart-tip") and "GWh" in page.inner_text(".parc-chart-wrap .chart-tip"), 3000), "portefeuille: hovering a year of the chart shows its detail")
     page.click(".parc-years .parc-global"); k = page.inner_text(".parc-kpis")
     check("50,5 GWh" in k and "%d–%d" % (TODAY.year, TODAY.year + 4) in k, f"portefeuille: global view sums the 5 years ({k[:70]!r})")
     page.click(".parc-years button:text-is('2026')")
@@ -2650,10 +2664,10 @@ Responsable technique
     check("CS DU MOULIN" in page.inner_text("#parc-body") and page.locator(".parc-due").count() == 1, "parc: contract ending soon is listed")
     renew = [t for t in stored(page, "todo-widget-tasks") if t["id"].startswith("renew_")]
     check(len(renew) == 1 and "CS DU MOULIN" in renew[0]["title"] and renew[0]["urgency"] == "haute", "parc: renewal task created for the contract ending soon")
-    page.set_input_files("#parc-file", str(parc)); page.wait_for_timeout(1500)
-    check(len([t for t in stored(page, "todo-widget-tasks") if t["id"].startswith("renew_")]) == 1, "parc: reloading the file doesn't duplicate the renewal task")
-    page.click(".parc-due .pq-link:has-text('Remettre dans le pipeline')"); page.wait_for_timeout(300)
-    check(page.is_visible("#opp-detail-overlay") and "CS DU MOULIN" in page.inner_text("#opp-detail-title"), "parc: contract put back into the pipeline")
+    page.set_input_files("#parc-file", str(parc))
+    check(eventually(lambda: len([t for t in stored(page, "todo-widget-tasks") if t["id"].startswith("renew_")]) == 1, 7500), "parc: reloading the file doesn't duplicate the renewal task")
+    page.click(".parc-due .pq-link:has-text('Remettre dans le pipeline')")
+    check(eventually(lambda: page.is_visible("#opp-detail-overlay") and "CS DU MOULIN" in page.inner_text("#opp-detail-title"), 3000), "parc: contract put back into the pipeline")
     page.click("#opp-detail-actions >> text=Fermer")
     page.click('[data-tab="parc"]'); dialog_once(page); page.click(".parc-due .parc-due-nogo"); page.wait_for_timeout(400)
     lost = [o for o in stored(page, "todo-widget-opportunities") if o.get("renewalOf")]
@@ -2679,8 +2693,7 @@ Responsable technique
     mock_github(page, files); repo_meta(page, True)
     page.goto(URL); page.wait_for_timeout(500); page.click('[data-tab="parc"]')
     page.set_input_files("#parc-file", str(parc)); page.wait_for_function("document.getElementById('parc-info').textContent.includes('lignes')", timeout=20000)
-    page.wait_for_timeout(1500)
-    check("parc.json" in files and len(files["parc.json"]["items"]) == 3, "portefeuille sync: the workbook loaded on the computer goes to the private data repo")
+    check(eventually(lambda: "parc.json" in files and len(files["parc.json"]["items"]) == 3, 7500), "portefeuille sync: the workbook loaded on the computer goes to the private data repo")
     check(not errors, f"no page errors ({errors})")
     page.close()
     phone, errors = new_page(browser, SYNC_ON, viewport={"width": 390, "height": 800}, is_mobile=True, has_touch=True)
@@ -2778,10 +2791,10 @@ Responsable technique
     check("Le Pré" in xs and "Pas envoyé" in xs, "excel ⇄ app: an installation never sent is listed")
     check("Commentaires : Excel « Vu au salon (Marie) »" in xs and "ligne 3" in xs, f"excel ⇄ app: a cell changed in the Pipe by a colleague is shown, with its line ({xs[:300]!r})")
     check("avant le pricing" in xs, "excel ⇄ app: the Suivi only from the pricing on")
-    page.click("#xs-overlay .xs-diff:has-text('Commentaires') .pq-link:has-text('Reprendre')"); page.wait_for_timeout(150)
-    check(next(o for o in stored(page, "todo-widget-opportunities") if o["id"] == "xa").get("commentaires") == "Vu au salon (Marie)", "excel ⇄ app: « Reprendre dans l’appli » takes the colleague's value")
-    page.click("#xs-overlay .pq-link:has-text('Passer à Onboarding')"); page.wait_for_timeout(150)
-    check(next(o for o in stored(page, "todo-widget-opportunities") if o["id"] == "xa").get("stage") == "onboarding", "excel ⇄ app: « Gagné » in the Suivi moves the deal to Onboarding")
+    page.click("#xs-overlay .xs-diff:has-text('Commentaires') .pq-link:has-text('Reprendre')")
+    check(eventually(lambda: next(o for o in stored(page, "todo-widget-opportunities") if o["id"] == "xa").get("commentaires") == "Vu au salon (Marie)", 3000), "excel ⇄ app: « Reprendre dans l’appli » takes the colleague's value")
+    page.click("#xs-overlay .pq-link:has-text('Passer à Onboarding')")
+    check(eventually(lambda: next(o for o in stored(page, "todo-widget-opportunities") if o["id"] == "xa").get("stage") == "onboarding", 3000), "excel ⇄ app: « Gagné » in the Suivi moves the deal to Onboarding")
     page.click("#xs-overlay .xs-send[data-k=pipe]"); page.wait_for_timeout(400)
     sent_ids = [r["values"][19] for k, b in xs_sent if k == "pipe" for r in b["rows"]]
     check("Le Pré" in sent_ids, f"excel ⇄ app: « Envoyer au Pipe » sends what is pending ({sent_ids})")
@@ -2915,8 +2928,8 @@ Responsable technique
     check(page.locator("#new-version-marker").count() == 1, "a published update shows at the first reload")
     app_js = (site / "js" / "app.js").read_text(encoding="utf-8")
     (site / "js" / "app.js").write_text(app_js + "\ndocument.body.dataset.codeVersion='new';\n", encoding="utf-8")
-    page.reload(); page.wait_for_timeout(300)
-    check(page.evaluate("document.body.dataset.codeVersion") == "new", "a published update of the app's code (js/app.js) runs at the first reload too")
+    page.reload()
+    check(eventually(lambda: page.evaluate("document.body.dataset.codeVersion") == "new", 3000), "a published update of the app's code (js/app.js) runs at the first reload too")
     # a new service worker version takes over by itself and the open page reloads once onto it
     sw = (site / "sw.js").read_text(encoding="utf-8")
     (site / "sw.js").write_text(sw.replace("todo-pwa-v", "todo-pwa-test-v"), encoding="utf-8")
@@ -2934,14 +2947,70 @@ Responsable technique
     check(page.is_hidden("#choice-title") and "Corbeille" in page.inner_text("#choice-text") and page.is_hidden("#choice-input"), "question window: the question shown, no title, no text field")
     page.click("#choice-btns button:text-is('Annuler')"); page.wait_for_timeout(150)
     check(page.locator("#archive-list .task-line", has_text="Garder ou pas").count() == 1 and page.is_hidden("#choice-overlay"), "question window: Annuler keeps the task")
-    row.hover(); row.locator(".del-btn").click(); page.keyboard.press("Escape"); page.wait_for_timeout(150)
-    check(page.locator("#archive-list .task-line", has_text="Garder ou pas").count() == 1, "question window: Escape keeps it too")
+    row.hover(); row.locator(".del-btn").click(); page.keyboard.press("Escape")
+    check(eventually(lambda: page.locator("#archive-list .task-line", has_text="Garder ou pas").count() == 1, 3000), "question window: Escape keeps it too")
     row.hover(); row.locator(".del-btn").click(); page.click("#choice-btns button >> nth=0"); page.wait_for_timeout(150)
     check(page.locator("#archive-list .task-line", has_text="Garder ou pas").count() == 0, "question window: « Supprimer » deletes")
     page.click('[data-tab="tasks"]'); page.click("#tasks-views-btn"); page.click(".views-menu .views-item.save"); page.wait_for_selector("#choice-input:visible")
-    page.fill("#choice-input", "Vue du test"); page.press("#choice-input", "Enter"); page.wait_for_timeout(150)
-    check([v["name"] for v in page.evaluate("JSON.parse(localStorage.getItem('saved-views-tasks')||'[]')")] == ["Vue du test"], "question window: a text answered with Enter")
+    page.fill("#choice-input", "Vue du test"); page.press("#choice-input", "Enter")
+    check(eventually(lambda: [v["name"] for v in page.evaluate("JSON.parse(localStorage.getItem('saved-views-tasks')||'[]')")] == ["Vue du test"], 3000), "question window: a text answered with Enter")
     check(not errors, f"question window: no page errors ({errors})")
+    page.close()
+
+    # --- Corners no check reached before (code audit, night of 2026-10-24): task views, postpone, status, lists, pipeline exits, recovery
+    import datetime as _dt
+    d = lambda n: (TODAY + _dt.timedelta(days=n)).isoformat()
+    seed_t = [task("v1", "Rappeler Alpha", client="Alpha", project="Toiture", urgency="haute", due=d(-2)),
+              task("v2", "Devis Beta", client="Beta", urgency="basse", due=d(0)),
+              task("v3", "Sans rien", due="")]
+    seed_o = [{"id": "x1", "kind": "installation", "company": "Gamma", "centrale": "Hangar G", "title": "Hangar G", "kwc": "800", "stage": "pricing_indicatif",
+               "createdAt": 1, "updatedAt": 1, "deleted": False}]
+    page, errors = new_page(browser, seed={"todo_todo-widget-tasks": json.dumps(seed_t), "todo_todo-widget-opportunities": json.dumps(seed_o),
+                                           "todo_todo-widget-clients": json.dumps(["Alpha", "Beta"]), "todo_todo-widget-projects": json.dumps(["Toiture"])})
+    page.goto(URL); page.click('[data-tab="tasks"]')
+    heads = lambda: [h.strip().upper() for h in page.locator("#task-list .group-header").all_inner_texts()]   # shown in capitals
+    page.click('#view-switch [data-view="client"]')
+    check(eventually(lambda: any("ALPHA" in h for h in heads()) and any("SANS CLIENT" in h for h in heads())), f"task view by client: one group per client, then « Sans client » ({heads()})")
+    page.click('#view-switch [data-view="urgence"]')
+    check(eventually(lambda: len(heads()) >= 2), f"task view by urgency: grouped by urgency ({heads()})")
+    page.click('#view-switch [data-view="date"]')
+    check(eventually(lambda: any("EN RETARD" in h for h in heads()) and any("AUJOURD" in h for h in heads()) and any("SANS DATE" in h for h in heads())), f"task view by date: late, today, no date ({heads()})")
+    page.click('#view-switch [data-view="liste"]')
+    # postpone: + 3 days from the due date
+    page.locator("#task-list .task-line", has_text="Devis Beta").locator(".task-date-tag").click()
+    page.click('#snooze-popover [data-days="3"]')
+    check(eventually(lambda: [t["due"] for t in stored(page, "todo-widget-tasks") if t["id"] == "v2"] == [d(3)]), "postpone: « +3 jours » moves the due date 3 days on")
+    # status tag cycles « À faire » → next
+    before = [t["status"] for t in stored(page, "todo-widget-tasks") if t["id"] == "v1"][0]
+    page.locator("#task-list .task-line", has_text="Rappeler Alpha").locator(".meta-tag.solid").first.click()
+    check(eventually(lambda: [t["status"] for t in stored(page, "todo-widget-tasks") if t["id"] == "v1"][0] != before), "status tag: one click moves the task to the next status")
+    # lists: add a client, rename a project (its tasks follow), remove a client (asked first)
+    page.click('[data-tab="lists"]'); page.fill("#new-client-input", "Delta"); page.click("#add-client-btn")
+    check(eventually(lambda: "Delta" in page.evaluate("JSON.parse(window.storage.peek('todo-widget-clients')||'[]')")), "lists: a client added")
+    dialog_once(page, text="Toiture solaire"); page.locator(".manage-chip", has_text="Toiture").locator('button[title="Renommer"]').click()
+    check(eventually(lambda: [t["project"] for t in stored(page, "todo-widget-tasks") if t["id"] == "v1"] == ["Toiture solaire"]), "lists: a project renamed, its tasks follow")
+    dialog_once(page); page.click('[data-tab="tasks"]'); page.click('[data-tab="lists"]')
+    page.fill("#client-list-search", "Alpha")   # the groups open on a search
+    page.locator("#client-list-rows .client-list-row", has_text="Alpha").first.locator('button[title="Supprimer"]').click()
+    check(eventually(lambda: [t["client"] for t in stored(page, "todo-widget-tasks") if t["id"] == "v1"] == [""] and "Alpha" not in page.evaluate("JSON.parse(window.storage.peek('todo-widget-clients')||'[]')")),
+          "lists: a client removed, after asking, and taken off its tasks")
+    # pipeline: « Abandonner » asks, then moves the deal to the exits
+    page.click('[data-tab="pipeline"]'); page.locator("#pipeline-board .pipe-card", has_text="Hangar G").first.click()
+    page.wait_for_selector("#opp-detail-overlay:not(.hidden)")
+    act(page, "Abandonner")   # nothing answered yet: the question is refused → nothing moves
+    check(eventually(lambda: [o["stage"] for o in stored(page, "todo-widget-opportunities") if o["id"] == "x1"] == ["pricing_indicatif"]), "pipeline exit: refused question, the deal stays")
+    if not page.is_visible("#opp-detail-overlay"): page.locator("#pipeline-board .pipe-card", has_text="Hangar G").first.click()
+    dialog_once(page); act(page, "Abandonner")
+    check(eventually(lambda: [(o["stage"], o.get("stageBeforeExit")) for o in stored(page, "todo-widget-opportunities") if o["id"] == "x1"] == [("abandonne", "pricing_indicatif")]),
+          "pipeline exit: « Abandonner » confirmed, the deal is out, its step remembered")
+    # console recovery of deleted tasks
+    page.click('[data-tab="tasks"]'); page.locator("#task-list .task-line", has_text="Sans rien").locator(".task-check").click()
+    page.click('[data-tab="archive"]'); dialog_once(page)
+    row = page.locator("#archive-list .task-line", has_text="Sans rien"); row.hover(); row.locator(".del-btn").click()
+    check(eventually(lambda: [t["deleted"] for t in stored(page, "todo-widget-tasks") if t["id"] == "v3"] == [True]), "a task deleted (to the Corbeille)")
+    page.evaluate("recoverDeletedTasks()")
+    check(eventually(lambda: [t["deleted"] for t in stored(page, "todo-widget-tasks") if t["id"] == "v3"] == [False]), "console: recoverDeletedTasks() brings deleted tasks back")
+    check(not errors, f"corners: no page errors ({errors})")
     page.close()
 
     browser.close()
