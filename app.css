@@ -2323,3 +2323,13 @@ html.widget .dup-banner{ display:none; }
 .mk-zone i{ display:block; height:10px; border-radius:3px; background:#7DA2CF; } .mk-zone.fr i{ background:#0E9C7E; } .mk-zone.fr span{ font-weight:700; } .mk-zone b{ text-align:right; font-variant-numeric:tabular-nums; } .mk-zone em{ font-style:normal; font-size:11px; color:#C27A00; }
 .call-market{ margin:10px 0 4px; } .call-market p{ margin:2px 0; font-size:12.5px; line-height:1.45; color:var(--tx1); } .call-market small{ font-size:10.5px; color:var(--tx3); }
 @media (max-width:640px){ .mk-root{ padding:12px; } .mk-zone{ grid-template-columns:80px 1fr 50px; } .mk-zone em{ display:none; } }
+/* « Restaurer une version » */
+.rs-sets{ display:flex; flex-wrap:wrap; gap:14px; margin:6px 0 12px; font-size:13px; color:var(--tx1); } .rs-sets label{ display:flex; align-items:center; gap:6px; cursor:pointer; }
+.rs-list{ display:flex; flex-wrap:wrap; gap:6px; max-height:180px; overflow:auto; }
+.rs-k{ width:100%; font:600 10.5px var(--font-ui); letter-spacing:.08em; text-transform:uppercase; color:var(--tx3); margin:4px 0; }
+.rs-ver{ background:var(--panel-2); border:1px solid var(--bd); color:var(--tx1); border-radius:var(--radius); padding:5px 10px; font:500 12px var(--font-ui); cursor:pointer; }
+.rs-ver.on, .rs-ver:hover{ border-color:var(--accent); color:var(--accent); }
+.rs-plan{ margin-top:12px; } .rs-sum{ margin:6px 0 10px; padding-left:18px; font-size:13px; color:var(--tx1); line-height:1.55; }
+.rs-opt{ display:flex; align-items:center; gap:7px; font-size:12.5px; color:var(--tx2); margin-bottom:10px; } .rs-opt input{ width:auto; }
+.rs-done{ color:var(--accent); font-weight:600; font-size:13px; }
+.rs-go{ background:var(--accent); color:#06231C; border:none; border-radius:var(--radius); padding:8px 16px; font:600 13px var(--font-ui); cursor:pointer; } .rs-go:hover{ filter:brightness(1.08); }

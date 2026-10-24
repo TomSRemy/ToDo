@@ -67,15 +67,34 @@
     tasks.forEach(t=>{ if(typeof t.title!=='string') t.title=asText(t.title); ['due','reminder'].forEach(k=>{ if(t[k] && !/^\d{4}-\d{2}-\d{2}/.test(String(t[k]))) t[k]=''; }); if(!Array.isArray(t.subtasks)) t.subtasks=(t.subtasks==null?[]:[]); t.subtasks=t.subtasks.filter(x=>x && typeof x==='object'); });
     contacts.forEach(c=>['firstName','lastName','company','email','phone1','phone2','role','comment'].forEach(k=>{ if(c[k]!=null && typeof c[k]!=='string') c[k]=asText(c[k]); }));
   }
+  // A data key that can't be read (damaged JSON): its raw text is put aside as « corrupt-<key>-<time> » before anything is
+  // saved over it, and a red banner says so (audit A5). It used to restart from an empty list without a word.
+  const corruptKeys=[];
+  async function loadKey(key, fallback){
+    let r=null; try{ r=await window.storage.get(key,false); }catch(e){ return fallback; }
+    if(!r || !r.value) return fallback;
+    try{ const v=JSON.parse(r.value); return v==null?fallback:v; }
+    catch(e){
+      const keep='corrupt-'+key+'-'+Date.now();
+      try{ localStorage.setItem(keep, r.value); }catch(e2){ try{ await window.storage.set(keep, r.value, false); }catch(e3){} }
+      corruptKeys.push(key); console.error('unreadable data, kept as '+keep, e);
+      return fallback;
+    }
+  }
+  function reportCorrupt(){
+    if(!corruptKeys.length) return;
+    showStorageAlert('crit', 'Une partie des données de cet appareil était illisible ('+corruptKeys.length+' ensemble'+(corruptKeys.length>1?'s':'')+'). Une copie brute est gardée sur cet appareil. '
+      +(syncConfig.enabled?'La synchro va reprendre le contenu depuis GitHub.':'Restaure ta dernière sauvegarde (Réf. & data › Importer), ou active la synchro.'));
+  }
   async function loadAll(){
-    try{ const r=await window.storage.get(TASKS_KEY,false); tasks=r&&r.value?JSON.parse(r.value):[]; }catch(e){ tasks=[]; }
-    try{ const r=await window.storage.get(CLIENTS_KEY,false); clientsList=r&&r.value?JSON.parse(r.value):[]; }catch(e){ clientsList=[]; }
-    try{ const r=await window.storage.get(PROJECTS_KEY,false); projectsList=r&&r.value?JSON.parse(r.value):[]; }catch(e){ projectsList=[]; }
-    try{ const r=await window.storage.get(COMPANIES_KEY,false); companies=r&&r.value?JSON.parse(r.value):[]; }catch(e){ companies=[]; }
-    try{ const r=await window.storage.get(CONTACTS_KEY,false); contacts=r&&r.value?JSON.parse(r.value):[]; }catch(e){ contacts=[]; }
-    try{ const r=await window.storage.get(MEETINGS_KEY,false); meetings=r&&r.value?JSON.parse(r.value):[]; }catch(e){ meetings=[]; }
-    try{ const r=await window.storage.get(OPPS_KEY,false); opportunities=r&&r.value?JSON.parse(r.value):[]; }catch(e){ opportunities=[]; }
-    try{ const r=await window.storage.get(COMPANY_TYPES_KEY,false); companyTypesList=r&&r.value?JSON.parse(r.value):[]; }catch(e){ companyTypesList=[]; }
+    tasks=await loadKey(TASKS_KEY, []);
+    clientsList=await loadKey(CLIENTS_KEY, []);
+    projectsList=await loadKey(PROJECTS_KEY, []);
+    companies=await loadKey(COMPANIES_KEY, []);
+    contacts=await loadKey(CONTACTS_KEY, []);
+    meetings=await loadKey(MEETINGS_KEY, []);
+    opportunities=await loadKey(OPPS_KEY, []);
+    companyTypesList=await loadKey(COMPANY_TYPES_KEY, []);
     try{ const r=await window.storage.get('sync-conflicts',false); conflicts=r&&r.value?JSON.parse(r.value):[]; }catch(e){ conflicts=[]; }
     // the conflicts already logged: one per record and field (the latest), none about the app's own bookkeeping or logs
     { const before=conflicts.length, seen=new Set(), keep=[];
@@ -85,7 +104,7 @@
     if(conflicts.some(c=>c.entityType==='note')){ conflicts=conflicts.filter(c=>c.entityType!=='note'); try{ await window.storage.set('sync-conflicts', JSON.stringify(conflicts), false); }catch(e){} }
     try{ const r=await window.storage.get('sync-tasks-base',false); tasksBaseSnapshot=r&&r.value?JSON.parse(r.value):null; }catch(e){ tasksBaseSnapshot=null; }
     try{ const r=await window.storage.get('sync-crm-base',false); crmBaseSnapshot=r&&r.value?JSON.parse(r.value):null; }catch(e){ crmBaseSnapshot=null; }
-    try{ const r=await window.storage.get(NOTES_KEY,false); notes=r&&r.value?JSON.parse(r.value):[]; }catch(e){ notes=[]; }
+    notes=await loadKey(NOTES_KEY, []);
     try{ const r=await window.storage.get('sync-notes-base',false); notesBaseSnapshot=r&&r.value?JSON.parse(r.value):null; }catch(e){ notesBaseSnapshot=null; }
     try{ const r=await window.storage.get('visible-columns',false); if(r&&r.value) visibleColumns=Object.assign(visibleColumns, JSON.parse(r.value)); }catch(e){}
     cleanRecords();
@@ -211,6 +230,14 @@
   }
   async function saveSyncConfig(){ try{ await window.storage.set(SYNC_CONFIG_KEY,JSON.stringify(syncConfig),false); }catch(e){} }
 
+  // every call to GitHub gives up after a while (audit A6): on a phone whose network drops, a request could hang for
+  // minutes, the sync pill stayed on « Synchronisation… » and the next pushes piled up behind it
+  function ghFetch(url, opt){
+    opt=Object.assign({}, opt||{}); const ms=opt.method==='PUT'?45000:20000;
+    if(window.AbortSignal && AbortSignal.timeout) opt.signal=AbortSignal.timeout(ms);
+    else { const c=new AbortController(); setTimeout(()=>c.abort(), ms); opt.signal=c.signal; }
+    return fetch(url, opt);
+  }
   function syncApiUrl(path){ return 'https://api.github.com/repos/'+syncConfig.owner+'/'+syncConfig.repo+'/contents/'+(path||SYNC_TASKS_PATH); }
   function b64EncodeUtf8(str){ return btoa(unescape(encodeURIComponent(str))); }
   function b64DecodeUtf8(b64){ return decodeURIComponent(escape(atob(b64.replace(/\n/g,'')))); }
@@ -219,14 +246,14 @@
   // at 1 MB); above 1 MB the content comes empty and is fetched again as raw text.
   async function ghGetJson(path){
     const auth={ 'Authorization':'Bearer '+syncConfig.token };
-    const res=await fetch(syncApiUrl(path), { headers:Object.assign({ 'Accept':'application/vnd.github.object+json' }, auth), cache:'no-store' }).catch(e=>{ syncNote(null); throw e; });
+    const res=await ghFetch(syncApiUrl(path), { headers:Object.assign({ 'Accept':'application/vnd.github.object+json' }, auth), cache:'no-store' }).catch(e=>{ syncNote(null); throw e; });
     syncNote(res);
     if(!res.ok) return { ok:false, status:res.status };
     const data=await res.json();
     let text;
     if(data.content && data.encoding!=='none') text=b64DecodeUtf8(data.content);
     else {
-      const raw=await fetch(syncApiUrl(path), { headers:Object.assign({ 'Accept':'application/vnd.github.raw+json' }, auth), cache:'no-store' });
+      const raw=await ghFetch(syncApiUrl(path), { headers:Object.assign({ 'Accept':'application/vnd.github.raw+json' }, auth), cache:'no-store' });
       if(!raw.ok) return { ok:false, status:raw.status };
       text=await raw.text();
     }
@@ -526,7 +553,7 @@
       await saveConflicts(); updateConflictBadge();
       const body={ message:'Sync tasks', content:b64EncodeUtf8(JSON.stringify(tasks)), branch:'main' };
       if(sha) body.sha=sha;
-      const putRes=await fetch(syncApiUrl(), {
+      const putRes=await ghFetch(syncApiUrl(), {
         method:'PUT',
         headers:{ 'Authorization':'Bearer '+syncConfig.token, 'Accept':'application/vnd.github+json', 'Content-Type':'application/json' },
         body:JSON.stringify(body)
@@ -597,7 +624,7 @@
       const bundle=JSON.stringify({companies,contacts,meetings,opportunities});
       const body={ message:'Sync CRM data', content:b64EncodeUtf8(bundle), branch:'main' };
       if(sha) body.sha=sha;
-      const putRes=await fetch(syncApiUrl(SYNC_CRM_PATH), {
+      const putRes=await ghFetch(syncApiUrl(SYNC_CRM_PATH), {
         method:'PUT',
         headers:{ 'Authorization':'Bearer '+syncConfig.token, 'Accept':'application/vnd.github+json', 'Content-Type':'application/json' },
         body:JSON.stringify(body)
@@ -677,7 +704,7 @@
   async function syncRepoIsPrivate(){
     if(repoPrivate!==null) return repoPrivate;
     try{
-      const r=await fetch('https://api.github.com/repos/'+syncConfig.owner+'/'+syncConfig.repo, { headers:{ 'Authorization':'Bearer '+syncConfig.token, 'Accept':'application/vnd.github+json' }, cache:'no-store' });
+      const r=await ghFetch('https://api.github.com/repos/'+syncConfig.owner+'/'+syncConfig.repo, { headers:{ 'Authorization':'Bearer '+syncConfig.token, 'Accept':'application/vnd.github+json' }, cache:'no-store' });
       if(!r.ok) return false;
       const d=await r.json(); repoPrivate=d.private===true; return repoPrivate;
     }catch(e){ return false; }
@@ -706,7 +733,7 @@
       }
       const body={ message:'Sync Portefeuille', content:b64EncodeUtf8(JSON.stringify(parcData)), branch:'main' };
       if(sha) body.sha=sha;
-      const res=await fetch(syncApiUrl(SYNC_PARC_PATH), { method:'PUT', headers:{ 'Authorization':'Bearer '+syncConfig.token, 'Accept':'application/vnd.github+json', 'Content-Type':'application/json' }, body:JSON.stringify(body) });
+      const res=await ghFetch(syncApiUrl(SYNC_PARC_PATH), { method:'PUT', headers:{ 'Authorization':'Bearer '+syncConfig.token, 'Accept':'application/vnd.github+json', 'Content-Type':'application/json' }, body:JSON.stringify(body) });
       syncNote(res);
     }catch(e){ console.error('parc sync push failed', e); syncNote(null); }
   }
@@ -735,7 +762,7 @@
       await saveConflicts(); updateConflictBadge();
       const body={ message:'Sync notes', content:b64EncodeUtf8(JSON.stringify(notes)), branch:'main' };
       if(sha) body.sha=sha;
-      const putRes=await fetch(syncApiUrl(SYNC_NOTES_PATH), {
+      const putRes=await ghFetch(syncApiUrl(SYNC_NOTES_PATH), {
         method:'PUT',
         headers:{ 'Authorization':'Bearer '+syncConfig.token, 'Accept':'application/vnd.github+json', 'Content-Type':'application/json' },
         body:JSON.stringify(body)
@@ -1356,7 +1383,7 @@
     if(!syncConfig.enabled){ inboxItems = []; renderInbox(); return; }
     try{
       const url='https://api.github.com/repos/'+syncConfig.owner+'/'+syncConfig.repo+'/contents/'+INBOX_FILE_PATH;
-      const res = await fetch(url, { headers:{ 'Authorization':'Bearer '+syncConfig.token, 'Accept':'application/vnd.github+json' } });
+      const res = await ghFetch(url, { headers:{ 'Authorization':'Bearer '+syncConfig.token, 'Accept':'application/vnd.github+json' } });
       if(!res.ok) throw new Error('no inbox file');
       const data = await res.json();
       inboxItems = JSON.parse(b64DecodeUtf8(data.content));
@@ -1413,20 +1440,23 @@
   const INBOX_FILE_PATH='data/tasks-inbox.json';
   const CONTACT_INBOX_FILE_PATH='data/contacts-inbox.json';
 
-  async function removeFromInboxOnGitHub(itemId){
+  // an item taken from a queue the Outlook macro also writes: if both write at once (409), read again and retry (audit A13)
+  async function removeFromGhList(path, itemId, message){
     if(!syncConfig.enabled) return;
-    try{
-      const url='https://api.github.com/repos/'+syncConfig.owner+'/'+syncConfig.repo+'/contents/'+INBOX_FILE_PATH;
-      const getRes=await fetch(url, { headers:{ 'Authorization':'Bearer '+syncConfig.token, 'Accept':'application/vnd.github+json' } });
-      if(!getRes.ok) return;
-      const getData=await getRes.json();
-      const currentItems=JSON.parse(b64DecodeUtf8(getData.content));
-      const filtered=currentItems.filter(x=>x.id!==itemId);
-      if(filtered.length===currentItems.length) return;
-      const body={ message:'Remove imported inbox item', content:b64EncodeUtf8(JSON.stringify(filtered)), sha:getData.sha, branch:'main' };
-      await fetch(url, { method:'PUT', headers:{ 'Authorization':'Bearer '+syncConfig.token, 'Accept':'application/vnd.github+json', 'Content-Type':'application/json' }, body:JSON.stringify(body) });
-    }catch(e){ console.error('failed to remove inbox item from GitHub', e); }
+    const url='https://api.github.com/repos/'+syncConfig.owner+'/'+syncConfig.repo+'/contents/'+path, auth={ 'Authorization':'Bearer '+syncConfig.token, 'Accept':'application/vnd.github+json' };
+    for(let attempt=0; attempt<3; attempt++){
+      try{
+        const getRes=await ghFetch(url, { headers:auth, cache:'no-store' }); if(!getRes.ok) return;
+        const getData=await getRes.json(), currentItems=JSON.parse(b64DecodeUtf8(getData.content)), filtered=currentItems.filter(x=>x.id!==itemId);
+        if(filtered.length===currentItems.length) return;
+        const put=await ghFetch(url, { method:'PUT', headers:Object.assign({ 'Content-Type':'application/json' }, auth), body:JSON.stringify({ message, content:b64EncodeUtf8(JSON.stringify(filtered)), sha:getData.sha, branch:'main' }) });
+        if(put.ok || (put.status!==409 && put.status!==422)) return;
+      }catch(e){ console.error('failed to remove an item from '+path, e); return; }
+      await new Promise(r=>setTimeout(r, 800*(attempt+1)));
+    }
   }
+  const removeFromInboxOnGitHub=itemId=>removeFromGhList(INBOX_FILE_PATH, itemId, 'Remove imported inbox item');
+
 
   function importInboxItem(it){
     createTask({
@@ -2205,7 +2235,7 @@
     if(!syncConfig.enabled){ contactInboxItems=[]; renderContactInbox(); return; }
     try{
       const url='https://api.github.com/repos/'+syncConfig.owner+'/'+syncConfig.repo+'/contents/'+CONTACT_INBOX_FILE_PATH;
-      const res=await fetch(url, { headers:{ 'Authorization':'Bearer '+syncConfig.token, 'Accept':'application/vnd.github+json' } });
+      const res=await ghFetch(url, { headers:{ 'Authorization':'Bearer '+syncConfig.token, 'Accept':'application/vnd.github+json' } });
       if(!res.ok) throw new Error('no contact inbox file');
       const data=await res.json();
       contactInboxItems=JSON.parse(b64DecodeUtf8(data.content));
@@ -2214,20 +2244,8 @@
   }
   function pendingContactInboxItems(){ return contactInboxItems.filter(it=>!contactInboxSeenIds.has(it.id)); }
 
-  async function removeFromContactInboxOnGitHub(itemId){
-    if(!syncConfig.enabled) return;
-    try{
-      const url='https://api.github.com/repos/'+syncConfig.owner+'/'+syncConfig.repo+'/contents/'+CONTACT_INBOX_FILE_PATH;
-      const getRes=await fetch(url, { headers:{ 'Authorization':'Bearer '+syncConfig.token, 'Accept':'application/vnd.github+json' } });
-      if(!getRes.ok) return;
-      const getData=await getRes.json();
-      const currentItems=JSON.parse(b64DecodeUtf8(getData.content));
-      const filtered=currentItems.filter(x=>x.id!==itemId);
-      if(filtered.length===currentItems.length) return;
-      const body={ message:'Remove imported contact', content:b64EncodeUtf8(JSON.stringify(filtered)), sha:getData.sha, branch:'main' };
-      await fetch(url, { method:'PUT', headers:{ 'Authorization':'Bearer '+syncConfig.token, 'Accept':'application/vnd.github+json', 'Content-Type':'application/json' }, body:JSON.stringify(body) });
-    }catch(e){ console.error('failed to remove contact inbox item from GitHub', e); }
-  }
+  const removeFromContactInboxOnGitHub=itemId=>removeFromGhList(CONTACT_INBOX_FILE_PATH, itemId, 'Remove imported contact');
+
 
   function renderContactInbox(){
     const section=$('contact-inbox-section'), list=$('contact-inbox-list');
@@ -7316,6 +7334,88 @@
   }
 
   // export / import
+  // ---------- « Restaurer une version » : go back to the tasks, the CRM or the note as they were on GitHub at a past sync (audit A4) ----------
+  // Every sync is a commit of the private data repo, so every past state exists. A restore writes that state back as new
+  // edits (dated now, so they win the merge on every device); what was created since is kept, or removed if asked.
+  const RESTORE_SETS={
+    tasks:{ label:'Tâches', path:()=>SYNC_TASKS_PATH, lists:()=>[['task', ()=>tasks, v=>{ tasks=v; }]], pick:j=>({ task:Array.isArray(j)?j:[] }), save:()=>{ saveTasks(); refreshAllViews(); } },
+    crm:{ label:'Contacts, sociétés et pipeline', path:()=>SYNC_CRM_PATH,
+      lists:()=>[['company', ()=>companies, v=>{ companies=v; }], ['contact', ()=>contacts, v=>{ contacts=v; }], ['meeting', ()=>meetings, v=>{ meetings=v; }], ['opportunity', ()=>opportunities, v=>{ opportunities=v; }]],
+      pick:j=>({ company:j.companies||[], contact:j.contacts||[], meeting:j.meetings||[], opportunity:j.opportunities||[] }), save:()=>{ saveCrm(); renderCrm(); if(typeof renderPipeline==='function') renderPipeline(); } },
+    notes:{ label:'La note', path:()=>SYNC_NOTES_PATH, lists:()=>[['note', ()=>notes, v=>{ notes=v; }]], pick:j=>({ note:Array.isArray(j)?j:[] }), save:()=>{ consolidateNotes(); saveNotes(); renderNotes(); } }
+  };
+  const restoreName=(t,x)=>{ const m=CONFLICT_ENTITY_LABELS[t]; return m?m.name(x):x.id; };
+  // what restoring that version would change, record by record
+  function restorePlan(setKey, version){
+    const set=RESTORE_SETS[setKey], want=set.pick(version), plan={ back:[], changed:[], since:[], lists:set.lists() };
+    plan.lists.forEach(([t,get])=>{
+      const cur=new Map((get()||[]).map(x=>[x.id,x])), old=new Map(recs(want[t]||[]).map(x=>[x.id,x]));
+      old.forEach((o,id)=>{ const c=cur.get(id); if(!c || (c.deleted && !o.deleted)) plan.back.push([t,o]); else if(stableStringify(Object.assign({},c,{updatedAt:0}))!==stableStringify(Object.assign({},o,{updatedAt:0}))) plan.changed.push([t,o]); });
+      cur.forEach((c,id)=>{ if(!old.has(id) && !c.deleted) plan.since.push([t,c]); });
+    });
+    return plan;
+  }
+  function applyRestore(setKey, plan, removeSince){
+    const now=Date.now(), byType={};
+    plan.back.concat(plan.changed).forEach(([t,o])=>{ (byType[t]=byType[t]||[]).push(Object.assign(JSON.parse(JSON.stringify(o)), { updatedAt:now })); });
+    plan.lists.forEach(([t,get,set])=>{
+      const list=(get()||[]).slice(), at=new Map(list.map((x,i)=>[x.id,i]));
+      (byType[t]||[]).forEach(o=>{ if(at.has(o.id)) list[at.get(o.id)]=o; else list.push(o); });
+      if(removeSince) plan.since.filter(([tt])=>tt===t).forEach(([,c])=>{ const i=at.get(c.id); if(i!=null){ list[i]=Object.assign({}, list[i], { deleted:true, updatedAt:now }); } });
+      set(list);
+    });
+    RESTORE_SETS[setKey].save();
+  }
+  async function openRestore(){
+    let ov=$('restore-overlay'); if(ov) ov.remove();
+    ov=document.createElement('div'); ov.id='restore-overlay'; ov.className='modal-overlay';
+    ov.innerHTML='<div class="modal-box wide rs-box" role="dialog" aria-label="Restaurer une version"><h3>Restaurer une version</h3>'
+      +'<p class="modal-hint">Chaque synchro garde une version sur GitHub. Choisis ce que tu veux remettre et le moment : tu vois ce qui change avant de valider. Ce qui a été créé depuis est gardé, sauf si tu demandes le contraire.</p>'
+      +'<div class="rs-sets">'+Object.entries(RESTORE_SETS).map(([k,s],i)=>'<label><input type="radio" name="rs-set" value="'+k+'"'+(i?'':' checked')+'> '+escapeHtml(s.label)+'</label>').join('')+'</div>'
+      +'<div class="rs-list" aria-live="polite"></div><div class="rs-plan"></div><div class="crm-form-actions"><button type="button" class="ghost-btn rs-close">Fermer</button></div></div>';
+    document.body.appendChild(ov);
+    const box=ov.querySelector('.rs-list'), planBox=ov.querySelector('.rs-plan'), close=()=>ov.remove();
+    ov.querySelector('.rs-close').onclick=close;
+    ov.addEventListener('click', e=>{ if(e.target===ov) close(); });
+    ov.addEventListener('keydown', e=>{ if(e.key==='Escape'){ e.stopPropagation(); close(); } });
+    if(!syncConfig.enabled || !syncConfig.token){ box.innerHTML='<p class="muted">Il faut la synchro GitHub pour retrouver les versions passées. Sans elle : Réf. & data › Importer, avec ton dernier export.</p>'; return; }
+    const auth={ 'Authorization':'Bearer '+syncConfig.token, 'Accept':'application/vnd.github+json' }, repoUrl='https://api.github.com/repos/'+syncConfig.owner+'/'+syncConfig.repo;
+    const listVersions=async()=>{
+      const key=ov.querySelector('input[name=rs-set]:checked').value; planBox.innerHTML=''; box.innerHTML='<p class="muted">Lecture des versions…</p>';
+      try{
+        const r=await ghFetch(repoUrl+'/commits?path='+encodeURIComponent(RESTORE_SETS[key].path())+'&per_page=40', { headers:auth, cache:'no-store' });
+        if(!r.ok) throw new Error(r.status); const commits=await r.json();
+        if(!commits.length){ box.innerHTML='<p class="muted">Aucune version sur GitHub pour l’instant.</p>'; return; }
+        box.innerHTML='<div class="rs-k">Versions, de la plus récente à la plus ancienne</div>';
+        commits.forEach((c,i)=>{ const d=new Date(c.commit.committer.date), b=document.createElement('button'); b.type='button'; b.className='rs-ver';
+          b.textContent=d.toLocaleDateString('fr-FR',{ weekday:'short', day:'numeric', month:'short' })+' à '+d.toLocaleTimeString('fr-FR',{ hour:'2-digit', minute:'2-digit' })+(i===0?' · la dernière':'');
+          b.onclick=()=>{ box.querySelectorAll('.rs-ver').forEach(x=>x.classList.toggle('on', x===b)); showPlan(key, c.sha, b.textContent); }; box.appendChild(b); });
+      }catch(e){ box.innerHTML='<p class="muted">Impossible de lire les versions (réseau ou jeton). Réessaie plus tard.</p>'; }
+    };
+    const showPlan=async(key, sha, when)=>{
+      planBox.innerHTML='<p class="muted">Comparaison…</p>';
+      try{
+        const r=await ghFetch(repoUrl+'/contents/'+RESTORE_SETS[key].path()+'?ref='+sha, { headers:Object.assign({}, auth, { 'Accept':'application/vnd.github.raw+json' }), cache:'no-store' });
+        if(!r.ok) throw new Error(r.status); const version=JSON.parse(await r.text()), plan=restorePlan(key, version);
+        const names=l=>l.slice(0,6).map(([t,x])=>escapeHtml(restoreName(t,x))).join(', ')+(l.length>6?' et '+(l.length-6)+' autres':'');
+        planBox.innerHTML='<div class="rs-k">Revenir au '+escapeHtml(when)+'</div><ul class="rs-sum">'
+          +'<li><b>'+plan.back.length+'</b> élément'+(plan.back.length>1?'s':'')+' qui revien'+(plan.back.length>1?'nent':'t')+(plan.back.length?' : '+names(plan.back):'')+'</li>'
+          +'<li><b>'+plan.changed.length+'</b> élément'+(plan.changed.length>1?'s':'')+' remis comme à ce moment-là'+(plan.changed.length?' : '+names(plan.changed):'')+'</li>'
+          +'<li><b>'+plan.since.length+'</b> créé'+(plan.since.length>1?'s':'')+' depuis'+(plan.since.length?' : '+names(plan.since):'')+'</li></ul>'
+          +(plan.back.length+plan.changed.length+plan.since.length?'<label class="rs-opt"'+(plan.since.length?'':' hidden')+'><input type="checkbox" class="rs-remove"> Supprimer aussi ce qui a été créé depuis</label><button type="button" class="rs-go">Restaurer</button>':'<p class="muted">Rien ne change : c’est déjà l’état actuel.</p>');
+        const go=planBox.querySelector('.rs-go'); if(go) go.onclick=()=>{ applyRestore(key, plan, planBox.querySelector('.rs-remove').checked); planBox.innerHTML='<p class="rs-done">✓ Restauré. Tu peux l’annuler avec Ctrl+Z ; la synchro l’envoie à tes autres appareils.</p>'; };
+      }catch(e){ planBox.innerHTML='<p class="muted">Impossible de lire cette version. Réessaie.</p>'; }
+    };
+    ov.querySelectorAll('input[name=rs-set]').forEach(x=>x.onchange=listVersions);
+    listVersions();
+  }
+  // a file of the data repo, downloaded by hand (tasks.json, crm.json, notes.json): restored like a version
+  function restoreKindOf(data){
+    if(data && !Array.isArray(data) && (Array.isArray(data.companies) || Array.isArray(data.contacts) || Array.isArray(data.opportunities))) return 'crm';
+    if(Array.isArray(data) && data.length && data.every(x=>x && typeof x==='object' && x.id)){ if(data.some(x=>x.id===POSTIT_ID || ('text' in x && !('title' in x)))) return 'notes'; if(data.some(x=>'title' in x || 'urgency' in x)) return 'tasks'; }
+    return null;
+  }
+
   function exportData(){
     const payload={ version:2, exportedAt:new Date().toISOString(), tasks, clients:clientsList, projects:projectsList, notes, crm:{ companies, contacts, meetings, opportunities, companyTypes:companyTypesList } };
     const blob=new Blob([JSON.stringify(payload,null,2)],{type:'application/json'});
@@ -7329,6 +7429,11 @@
     reader.onload=e=>{
       try{
         const data=JSON.parse(e.target.result);
+        const raw=(!data || !Array.isArray(data.tasks))?restoreKindOf(data):null;
+        if(raw){   // a file taken from the data repo: shown and restored like a version
+          const plan=restorePlan(raw, data);
+          if(!confirm('Fichier « '+RESTORE_SETS[raw].label+' » du dépôt GitHub :\n'+plan.back.length+' élément(s) qui reviennent, '+plan.changed.length+' remis comme dans le fichier, '+plan.since.length+' créé(s) depuis (gardés).\n\nRestaurer ?')) return;
+          applyRestore(raw, plan, false); return; }
         if(!data||!Array.isArray(data.tasks)) throw new Error('format');
         const extra=[data.crm?'les contacts/CRM':null, Array.isArray(data.notes)?'le calepin':null].filter(Boolean);
         if(!confirm('Remplacer les '+tasks.length+' tâche(s) actuelles par les '+data.tasks.length+' du fichier'+(extra.length?(' (ainsi que '+extra.join(' et ')+')'):'')+' ?')) return;
@@ -7421,7 +7526,7 @@
     if(!syncConfig.owner || !syncConfig.repo || !syncConfig.token){ setSyncStatus('Pseudo, repo et token requis.'); return; }
     setSyncStatus('Vérification du repo…');
     try{
-      const infoRes=await fetch('https://api.github.com/repos/'+syncConfig.owner+'/'+syncConfig.repo, { headers:{ 'Authorization':'Bearer '+syncConfig.token, 'Accept':'application/vnd.github+json' } });
+      const infoRes=await ghFetch('https://api.github.com/repos/'+syncConfig.owner+'/'+syncConfig.repo, { headers:{ 'Authorization':'Bearer '+syncConfig.token, 'Accept':'application/vnd.github+json' } });
       if(!infoRes.ok){ setSyncStatus('Repo introuvable ou token invalide (vérifie pseudo/repo/token).'); return; }
       const info=await infoRes.json();
       if(info.private===false){
@@ -7435,6 +7540,7 @@
     repoPrivate=null; syncPull(); syncPullCrm(); syncPullNotes(); syncPullParc();
   };
   // the token leaves this device (the app moved to another address, or a borrowed device): the data stays here and on GitHub
+  $('sync-restore-btn').onclick=()=>openRestore();
   $('sync-forget-btn').onclick=async ()=>{
     if(!syncConfig.token){ setSyncStatus('Aucun jeton enregistré sur cet appareil.'); return; }
     if(!confirm('Retirer le jeton GitHub de cet appareil ?\n\nLa synchro s\u2019arrête ici ; tes données restent sur cet appareil et sur GitHub. Pour la reprendre, recolle un jeton.')) return;
@@ -9475,7 +9581,7 @@
   window.addEventListener('offline', paintSyncPill);
   $('storage-alert-close').onclick=()=>{ $('storage-alert').hidden=true; };
   $('storage-alert-see').onclick=()=>{ $('storage-alert').hidden=true; openStorageSection(); };
-  loadAll().then(()=>{ try{ paintDupBanner(); }catch(e){}
+  loadAll().then(()=>{ try{ paintDupBanner(); }catch(e){} try{ reportCorrupt(); }catch(e){}
     paintSyncPill(); checkStorageFull(); setInterval(checkStorageFull, 10*60*1000);
     $('sync-token-exp').value=syncConfig.tokenExpires||'';
     if(location.hash==='#sync' && !window.TODO_LITE) openSyncSettings();

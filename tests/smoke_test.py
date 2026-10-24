@@ -2007,6 +2007,43 @@ with sync_playwright() as p:
     check(not errors, f"no page errors ({errors})")
     page.close()
 
+    # --- « Restaurer une version » : back to the tasks of a past sync (GitHub history), what was created since is kept (audit A4)
+    T = lambda i, title, **k: dict({"id": i, "title": title, "urgency": "moyenne", "status": "a_faire", "subtasks": [], "archived": False, "deleted": False, "createdAt": 1, "updatedAt": 5}, **k)
+    now_t = [T("r1", "Nouveau titre"), T("r2", "Supprimée depuis", deleted=True), T("r3", "Créée depuis")]
+    old_t = [T("r1", "Ancien titre", updatedAt=1), T("r2", "Supprimée depuis", updatedAt=1)]
+    def gh(route):
+        u = route.request.url
+        if "/commits?path=" in u: route.fulfill(status=200, content_type="application/json", body=json.dumps([{"sha": "abc1", "commit": {"committer": {"date": "2026-10-20T09:15:00Z"}}}]))
+        elif "?ref=abc1" in u: route.fulfill(status=200, content_type="application/json", body=json.dumps(old_t))
+        else: route.fulfill(status=404, body="{}")
+    page, errors = new_page(browser, {"todo_sync-config": json.dumps({"owner": "o", "repo": "r", "token": "tok", "enabled": True}), "todo_todo-widget-tasks": json.dumps(now_t)}, viewport={"width": 1300, "height": 850})
+    page.route("https://api.github.com/**", gh)
+    page.goto(URL); page.click('[data-tab="lists"]'); page.click("#sync-restore-btn"); page.wait_for_selector(".rs-ver"); page.click(".rs-ver")
+    page.wait_for_selector(".rs-sum"); summ = page.inner_text(".rs-sum")
+    check("1 élément qui revient : Supprimée depuis" in summ and "1 élément remis comme à ce moment-là : Ancien titre" in summ and "1 créé depuis : Créée depuis" in summ, f"restore: what would change, before anything is done ({summ!r})")
+    page.click(".rs-go"); page.wait_for_timeout(300)
+    st_t = {t["id"]: t for t in stored(page, "todo-widget-tasks")}
+    check(st_t["r1"]["title"] == "Ancien titre" and not st_t["r2"]["deleted"] and not st_t["r3"]["deleted"] and st_t["r1"]["updatedAt"] > 10**12,
+          f"restore: the past version is back (dated now, so it wins the sync), what was created since is kept ({[(t['title'], t['deleted']) for t in st_t.values()]})")
+    page.click(".rs-close")
+    # a raw crm.json downloaded from the data repo, given to « Importer »
+    crm_file = pathlib.Path(tempfile.mkdtemp()) / "crm.json"
+    crm_file.write_text(json.dumps({"companies": [], "contacts": [{"id": "rc1", "firstName": "Revenu", "lastName": "Contact", "createdAt": 1, "updatedAt": 1, "deleted": False}], "meetings": [], "opportunities": []}), encoding="utf-8")
+    page.once("dialog", lambda d: d.accept()); page.set_input_files("#import-file", str(crm_file)); page.wait_for_timeout(400)
+    check(any(c["id"] == "rc1" and not c["deleted"] for c in stored(page, "todo-widget-contacts")) and any(t["id"] == "r3" for t in stored(page, "todo-widget-tasks")),
+          "restore: a raw crm.json of the data repo can be imported; tasks untouched")
+    check(not errors, f"no page errors ({errors})")
+    page.close()
+
+    # --- Damaged local data: kept aside, said, never silently replaced by an empty list (audit A5)
+    page, errors = new_page(browser, {"todo_todo-widget-tasks": '[{"id":"x1","title":"cass'}, viewport={"width": 1300, "height": 850})
+    page.goto(URL); page.wait_for_timeout(800)
+    kept = page.evaluate("Object.keys(localStorage).filter(k=>k.startsWith('corrupt-todo-widget-tasks-')).map(k=>localStorage.getItem(k))")
+    check(kept == ['[{"id":"x1","title":"cass'] and page.is_visible("#storage-alert") and "illisible" in page.inner_text("#storage-alert"),
+          f"damaged data: the raw text is kept and a red banner says so ({kept})")
+    check(not errors, f"no page errors ({errors})")
+    page.close()
+
     # --- Doublons: a company written two ways, a plant entered twice; merged in one click, or marked as different
     du = [{"id": "d1", "kind": "installation", "company": "GAEC Dupont", "centrale": "Hangar Est", "title": "Hangar Est", "stage": "pricing_indicatif", "kwc": "900", "createdAt": 1, "updatedAt": 5, "deleted": False},
           {"id": "d2", "kind": "installation", "company": "Gaec Dupont SARL", "centrale": "Centrale Hangar Est", "title": "Centrale Hangar Est", "stage": "collecte", "mwh": "1100", "commune": "Cholet",

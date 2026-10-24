@@ -470,6 +470,9 @@
             <li>Chaque appareil garde une copie locale : l'app marche sans réseau, puis se resynchronise (toutes les 5 minutes, et en quittant l'app).</li>
             <li>Si le même champ a été modifié sur deux appareils, la version la plus récente gagne et le cas est listé dans Réf. &amp; data → Conflits.</li>
             <li>Sauvegarde : Réf. &amp; data → Exporter (fichier JSON complet).</li>
+            <li><b>Restaurer une version</b> (Réf. &amp; data, avec la synchro) : chaque synchro garde une version sur GitHub. Choisis les tâches, le CRM ou la note et un moment passé : l'appli montre ce qui revient, ce qui est remis comme avant et ce qui a été créé depuis (gardé, sauf si tu demandes de le supprimer), puis restaure. Ctrl+Z annule. « Importer » accepte aussi un fichier tasks.json, crm.json ou notes.json téléchargé du dépôt.</li>
+            <li><b>Oublier le jeton sur cet appareil</b> : retire le jeton GitHub (appareil prêté, ou changement d'adresse de l'appli) ; les données restent sur l'appareil et sur GitHub.</li>
+            <li><b>Donnée illisible</b> : si une partie des données de l'appareil est abîmée, l'appli en garde une copie brute et l'annonce par un bandeau rouge, au lieu de repartir de zéro.</li>
           </ul>
         </section>
       </div>
@@ -693,6 +696,7 @@
         <a class="sync-token-link" href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener">Créer ou renouveler un jeton sur GitHub ↗</a>
         <button class="data-btn" id="sync-save-btn" style="width:100%;">Activer la synchro sur cet appareil</button>
         <button class="data-btn" id="sync-now-btn" style="width:100%;">Synchroniser maintenant</button>
+        <button class="data-btn" id="sync-restore-btn" style="width:100%;" title="Revenir aux tâches, aux contacts et au pipeline, ou à la note, tels qu'ils étaient à une synchro passée (chaque synchro garde une version sur GitHub)">Restaurer une version…</button>
         <button class="data-btn" id="sync-forget-btn" style="width:100%;" title="Retire le jeton GitHub de cet appareil (après un changement d'adresse, ou sur un appareil prêté). Les données restent ici et sur GitHub.">Oublier le jeton sur cet appareil</button>
         <span id="sync-status" style="font-size:11px; color:var(--tx3); font-family:var(--font-mono);"></span>
       </div>
