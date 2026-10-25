@@ -31,9 +31,18 @@
 param([int]$Port = 8765, [switch]$Reconfigurer, [switch]$Mock)
 
 $ErrorActionPreference = 'Stop'
-$Version = '1.10'
+$Version = '1.11'
 $Here = Split-Path -Parent $MyInvocation.MyCommand.Path
-$ConfigPath = Join-Path $Here 'pont-excel-config.json'
+# the settings (the two files, the key) live in the Windows profile, not next to the script: a new download, in any folder,
+# finds them again (no new key to copy into the app). An older settings file next to the script is taken over once.
+$LegacyConfig = Join-Path $Here 'pont-excel-config.json'
+$ConfigPath = $LegacyConfig
+if (-not $Mock -and $env:APPDATA) {
+  $cfgDir = Join-Path $env:APPDATA 'Todo Pont Excel'
+  if (-not (Test-Path $cfgDir)) { $null = New-Item -ItemType Directory -Path $cfgDir }
+  $ConfigPath = Join-Path $cfgDir 'pont-excel-config.json'
+  if (-not (Test-Path $ConfigPath) -and (Test-Path $LegacyConfig)) { Copy-Item $LegacyConfig $ConfigPath }
+}
 # the app's addresses: GitHub Pages, and its own Cloudflare Pages address (an address given by hand: "origins" in pont-excel-config.json)
 $AllowedOrigins = @('https://tomsremy.github.io', 'https://todo-tom.pages.dev', 'http://localhost:8000', 'http://127.0.0.1:8000')
 if ($Mock) { $AllowedOrigins += 'null' }   # pages opened from a file, for tests only
