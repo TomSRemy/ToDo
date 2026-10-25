@@ -2783,6 +2783,7 @@ Responsable technique
     pipe_a = [None] * 37; pipe_a[6] = "SCEA"; pipe_a[19] = "Les Vignes"; pipe_a[35] = "Vu au salon (Marie)"
     bdd_head = [""] * 91; bdd_head[6] = "Nom_prod"; bdd_head[33] = "Nom_Installation_prod"; bdd_head[24] = "Statut"
     bdd_a = [None] * 91; bdd_a[6] = "SCEA"; bdd_a[33] = "Les Vignes"; bdd_a[24] = "Gagné"
+    decoy = list(pipe_a); decoy[19] = "Leurre"   # same columns, another plant: if the app read it, « Les Vignes » would look absent from the Pipe
     def xs_bridge(route, request):
         if request.method == "OPTIONS":
             return route.fulfill(status=204, headers={"Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "*", "Access-Control-Allow-Methods": "*"})
@@ -2790,7 +2791,7 @@ Responsable technique
         u = request.url
         if u.endswith("/status"):
             return route.fulfill(status=200, headers=h, body=json.dumps({"ok": True, "version": "1.2", "authorized": True, "pipe": {"name": "Pipe.xlsx", "found": True}, "bdd": {"name": "Suivi.xlsx", "found": True}}))
-        if u.endswith("/pipe/read"): return route.fulfill(status=200, headers=h, body=json.dumps({"ok": True, "sheets": {"Pipe agrégation": [["Pipe"], pipe_head, pipe_a]}}))
+        if u.endswith("/pipe/read"): return route.fulfill(status=200, headers=h, body=json.dumps({"ok": True, "sheets": {"Pipe fourniture": [["Pipe"], pipe_head, decoy], "Pipe agrégation": [["Pipe"], pipe_head, pipe_a]}}))   # another « Pipe … » sheet first: never the one read
         if u.endswith("/bdd/read"): return route.fulfill(status=200, headers=h, body=json.dumps({"ok": True, "sheets": {"BDD Agrégation": [bdd_head, bdd_a]}}))
         body = json.loads(request.post_data); xs_sent.append((u.rsplit("/", 2)[-2], body))
         return route.fulfill(status=200, headers=h, body=json.dumps({"ok": True, "results": [{"ok": True, "action": "ajoutée", "row": 30 + i} for i in range(len(body["rows"]))]}))

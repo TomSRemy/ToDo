@@ -6,6 +6,7 @@
   Excel lui-même : mise en forme, listes déroulantes et formules sont conservées. OneDrive synchronise ensuite.
 
   Règles d'écriture (plusieurs personnes travaillent dans les mêmes fichiers) :
+   - le pont n'écrit que dans l'onglet « Pipe agrégation » du Pipe et « BDD Agrégation » du Suivi, jamais ailleurs ;
    - une ligne est retrouvée par sa clé (Pipe : Nom Producteur + Nom Centrale ; BDD : Nom_prod + Nom_Installation_prod) ;
    - une ligne close (Perdu, Abandonné, No Go, Résilié) n'est jamais modifiée : une nouvelle ligne est ajoutée.
      Si elle a été close il y a moins de 6 mois (date d'entrée de la ligne), l'app demande : nouvelle ligne ou reprendre ?
@@ -30,7 +31,7 @@
 param([int]$Port = 8765, [switch]$Reconfigurer, [switch]$Mock)
 
 $ErrorActionPreference = 'Stop'
-$Version = '1.3'
+$Version = '1.4'
 $Here = Split-Path -Parent $MyInvocation.MyCommand.Path
 $ConfigPath = Join-Path $Here 'pont-excel-config.json'
 # the app's addresses: GitHub Pages, and its own Cloudflare Pages address (an address given by hand: "origins" in pont-excel-config.json)
@@ -98,15 +99,19 @@ function Open-Book($path) {
   foreach ($wb in $xl.Workbooks) { if ($wb.FullName -eq $path -or $wb.Name -eq $name) { return @{ wb = $wb; opened = $false } } }
   return @{ wb = $xl.Workbooks.Open($path); opened = $true }
 }
+# Writing happens in ONE sheet of each workbook, never elsewhere: « Pipe agrégation » in the Pipe, « BDD Agrégation » in
+# the Suivi (the other sheets — Tableau de bord, Paramètres, Dashboard… — are never touched). Sheet found by its name
+# (accents and case ignored); renamed or missing: nothing is written, the app is told why.
 function Find-Table($wb, $kind) {
   $k = $Kinds[$kind]
-  foreach ($ws in $wb.Worksheets) {
-    foreach ($lo in $ws.ListObjects) {
-      $h = $lo.HeaderRowRange.Value2
-      for ($c = 1; $c -le $lo.ListColumns.Count; $c++) { if ((Norm $h[1, $c]) -eq (Norm $k.header)) { return $lo } }
-    }
+  $ws = $null
+  foreach ($w in $wb.Worksheets) { if ((Norm $w.Name) -eq (Norm $k.sheet)) { $ws = $w; break } }
+  if (-not $ws) { throw ("Onglet « " + $k.sheet + " » introuvable dans " + $wb.Name + " : rien n'est écrit (le pont n'écrit que dans cet onglet).") }
+  foreach ($lo in $ws.ListObjects) {
+    $h = $lo.HeaderRowRange.Value2
+    for ($c = 1; $c -le $lo.ListColumns.Count; $c++) { if ((Norm $h[1, $c]) -eq (Norm $k.header)) { return $lo } }
   }
-  throw ("Tableau « " + $k.label + " » introuvable (colonne « " + $k.header + " »).")
+  throw ("Tableau « " + $k.label + " » introuvable dans l'onglet « " + $k.sheet + " » (colonne « " + $k.header + " ») : rien n'est écrit.")
 }
 function New-ComAdapter($kind) {
   $path = $Config.$kind
@@ -390,7 +395,8 @@ function Read-Sheets($kind) {
   $book = Open-Book $Config.$kind
   try {
     foreach ($ws in $book.wb.Worksheets) {
-      if ($ws.Name -notmatch 'BDD|Dashboard|Pipe') { continue }
+      # only the sheet the app works with (and the Suivi's Dashboard, for the yearly goals): never another « Pipe … » sheet
+      if ((Norm $ws.Name) -ne (Norm $Kinds[$kind].sheet) -and -not ($kind -eq 'bdd' -and $ws.Name -match 'Dashboard')) { continue }
       $v = $ws.UsedRange.Value2
       $rows = New-Object System.Collections.ArrayList
       if ($v -is [array]) {

@@ -56,7 +56,7 @@ window.TodoExcelSync=(function(){
   const xsCellText=(v, dateish)=>{ if(v==null) return ''; if(typeof v==='number' && dateish && v>20000 && v<80000){ const d=new Date(Math.round((v-25569)*86400000)); return pqPad(d.getUTCDate())+'/'+pqPad(d.getUTCMonth()+1)+'/'+d.getUTCFullYear(); }
     if(typeof v==='number') return String(Math.round(v*1000)/1000).replace('.',','); if(typeof v==='boolean') return v?'VRAI':'FAUX'; return String(v).trim(); };
   let xsRead={ pipe:null, bdd:null };   // last reading of each file through the bridge: { at, rows: Map(key → row), off }
-  const XS_KEYS={ pipe:{ header:'Nom Producteur', a:6, b:19, sheet:/pipe/i }, bdd:{ header:'Nom_prod', a:6, b:33, sheet:/bdd/i } };
+  const XS_KEYS={ pipe:{ header:'Nom Producteur', a:6, b:19, sheet:/^\s*pipe\s+agr[eé]gation\s*$/i }, bdd:{ header:'Nom_prod', a:6, b:33, sheet:/^\s*bdd\s+agr[eé]gation\s*$/i } };   // that sheet only, never another « Pipe … » one
   const xsAppValues=(kind,o)=>kind==='pipe'?PQ_FIELDS.reduce((row,f,i)=>{ row[xsColIdx(f.col)]=pipeCells(o)[i]; return row; }, []):bddCells(o);
   const xsKey=(kind, vals)=>xsNorm(vals[XS_KEYS[kind].a])+'|'+xsNorm(vals[XS_KEYS[kind].b]);
   async function xsReadFile(kind){
