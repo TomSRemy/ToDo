@@ -81,6 +81,7 @@ window.TodoExcelSync=(function(){
         const cols=kind==='pipe'?PQ_FIELDS.map(f=>({ i:xsColIdx(f.col), f, label:f.label, dateish:f.type==='date'||['mesPrev','mesEff','debut','fin'].includes(f.k) })):[{ i:24, label:'Statut' }];
         cols.forEach(c=>{ const ex=xsCellText(hit.vals[c.i], c.dateish), ap=cellToText(vals[c.i]), pv=cellToText(prev[c.i]);
           if(xsNorm(ex)===xsNorm(ap)) return;
+          if(xsKept(kind, o, kind==='pipe'?PQ_FIELDS.indexOf(c.f):c.i, ex)) return;   // « Garder l'Excel » already answered for this value
           // changed in the Excel by someone (not what the app wrote last), or still to send from the app
           st.diffs.push({ col:c, excel:ex, app:ap, byExcel:!!ex && xsNorm(ex)!==xsNorm(pv) }); });
         if(kind==='bdd') st.statut=xsCellText(hit.vals[24]);
@@ -98,6 +99,33 @@ window.TodoExcelSync=(function(){
     if(f.type==='check') v=/^(vrai|true|oui|1|x)$/i.test(v);
     else if(f.type==='date'){ const m=/^(\d{2})\/(\d{2})\/(\d{4})$/.exec(v); v=m?m[3]+'-'+m[2]+'-'+m[1]:v; }
     o[f.k]=v; touchCrm(o); saveCrm();
+  }
+  // A difference between the app and an Excel cell: « Garder l'appli » (written into the Excel) or « Garder l'Excel », then
+  // « Mettre aussi l'appli à jour ? » (yes: the sheet takes the Excel's value; no: not asked again while the cell stays the same).
+  // vi = index of the value in what the app sends (Pipe: field order; Suivi: column)
+  const xsViOf=(kind, d)=>kind==='pipe'?PQ_FIELDS.indexOf(d.col.f):d.col.i;
+  function xsKeep(kind, o, vi, excel){ o.excelKeep=o.excelKeep||{}; o.excelKeep[kind]=Object.assign({}, o.excelKeep[kind]||{}, { [vi]:excel }); touchCrm(o); saveCrm(); }
+  const xsKept=(kind, o, vi, excel)=>{ const k=o.excelKeep && o.excelKeep[kind] && o.excelKeep[kind][vi]; return k!=null && xsNorm(cellToText(k))===xsNorm(excel); };
+  // what « aligner l'appli » does for this cell, or null when the app has no such field
+  function xsAlignAction(kind, o, vi, excel){
+    if(kind==='pipe'){ const f=PQ_FIELDS[vi]; return f?{ label:'la fiche prend « '+(excel||'vide')+' »', run:()=>xsTake(o, { col:{ f }, excel }) }:null; }
+    if(vi===24){ const a=xsStatutAction(o, excel); return a?{ label:a.label.toLowerCase(), run:a.run }:null; }
+    return null;
+  }
+  // the two questions, in a given place (the Excel ⇄ panel, the review after a send); done(choice) once answered
+  function xsAsk(box, kind, o, vi, d, done, canMerge){
+    box.innerHTML=''; const q=document.createElement('span'); q.className='xs-q'; box.appendChild(q);
+    const btn=(label, cls, fn)=>{ const b=document.createElement('button'); b.type='button'; b.className='xs-choice'+(cls?' '+cls:''); b.textContent=label; b.onclick=fn; box.appendChild(b); return b; };
+    q.textContent='Garder :';
+    btn('l’appli « '+(d.app||'vide')+' »', '', ()=>done({ keep:'app' }));
+    btn('l’Excel « '+(d.excel||'vide')+' »', '', ()=>{
+      const al=xsAlignAction(kind, o, vi, d.excel);
+      if(!al){ done({ keep:'excel', align:false }); return; }
+      box.innerHTML=''; const q2=document.createElement('span'); q2.className='xs-q'; q2.textContent='Mettre aussi l’appli à jour ('+al.label+') ?'; box.appendChild(q2);
+      btn('Oui', 'yes', ()=>done({ keep:'excel', align:true, run:al.run }));
+      btn('Non', '', ()=>done({ keep:'excel', align:false }));
+    });
+    if(canMerge) btn('les deux (fusionner)', '', ()=>done({ keep:'merge' }));
   }
   // a status typed in the Suivi by someone: Gagné / Perdu / Abandon brought into the pipeline
   function xsStatutAction(o, statut){
@@ -156,9 +184,15 @@ window.TodoExcelSync=(function(){
       if(st.excel==='statut') tag('info','Statut Suivi : '+(st.statut||'?'));
       if(st.line) { const l=document.createElement('span'); l.className='xs-line'; l.textContent='ligne '+st.line; td.appendChild(l); }
       st.diffs.filter(d=>d.byExcel).slice(0,6).forEach(d=>{ const r=document.createElement('div'); r.className='xs-diff';
-        r.innerHTML='<span></span><b></b>'; r.firstChild.textContent=d.col.label+' : Excel « '+(d.excel||'vide')+' »'; r.lastChild.textContent=' · appli « '+(d.app||'vide')+' »';
-        if(kind==='pipe' && d.col.f){ const b=document.createElement('button'); b.type='button'; b.className='pq-link'; b.textContent='Reprendre dans l’appli'; b.onclick=()=>{ xsTake(o,d); renderPipeline(); paintExcelSync(); }; r.appendChild(b); }
-        if(kind==='bdd'){ const a=xsStatutAction(o, d.excel); if(a){ const b=document.createElement('button'); b.type='button'; b.className='pq-link'; b.textContent=a.label; b.onclick=()=>{ a.run(); renderPipeline(); paintExcelSync(); }; r.appendChild(b); } }
+        const t=document.createElement('span'); t.textContent=d.col.label+' : Excel « '+(d.excel||'vide')+' » · appli « '+(d.app||'vide')+' »'; r.appendChild(t);
+        const ask=document.createElement('div'); ask.className='xs-ask'; r.appendChild(ask);
+        const vi=xsViOf(kind, d);
+        xsAsk(ask, kind, o, vi, d, async ch=>{
+          if(ch.keep==='excel'){ if(ch.align) ch.run(); else xsKeep(kind, o, vi, d.excel); renderPipeline(); paintExcelSync(); return; }
+          // « Garder l'appli »: written only if the cell still holds what was shown here
+          ask.textContent='Envoi…';
+          await sendToExcel(kind, [o], null, { force:{ [vi]:'replace' }, seen:{ [vi]:d.excel } });
+          try{ await xsReadFile(kind); }catch(e){ softFail('relecture de l\u2019Excel', e); } paintExcelSync(); });
         td.appendChild(r); });
       if(st.excel==='statut'){ const a=xsStatutAction(o, st.statut); if(a){ const b=document.createElement('button'); b.type='button'; b.className='pq-link'; b.textContent=a.label; b.onclick=()=>{ a.run(); renderPipeline(); paintExcelSync(); }; td.appendChild(b); } }
       if(xsTodo(st) && !st.diffs.some(d=>d.byExcel) && bridgeConfigured()){ const b=document.createElement('button'); b.type='button'; b.className='pq-link xs-one'; b.textContent='Envoyer'; b.onclick=async()=>{ await sendToExcel(kind,[o],b); try{ await xsReadFile(kind); }catch(e){ softFail('relecture de l\u2019Excel', e); } paintExcelSync(); }; td.appendChild(b); }
@@ -169,12 +203,12 @@ window.TodoExcelSync=(function(){
       tr.append(n, cell('pipe', o, p), cell('bdd', o, b)); tb.appendChild(tr); });
     t.appendChild(tb); body.appendChild(t);
   }
-  async function sendToExcel(kind, list, btn){
+  async function sendToExcel(kind, list, btn, extra){
     if(ON_PHONE) return;
     const label=btn?btn.textContent:'';
     if(btn){ btn.disabled=true; btn.textContent='Envoi…'; }
     try{
-      const { res, results, pending }=await xlSend(kind, list, list.map(o=>xlRowFor(kind, o)));
+      const { res, results, pending }=await xlSend(kind, list, list.map(o=>xlRowFor(kind, o, extra)));
       const msg=xlSummary(kind, results, res);
       if(btn){ btn.textContent=pending.length?'À vérifier':'✓ Envoyé'; btn.title=msg; setTimeout(()=>{ btn.textContent=label; btn.disabled=false; },2500); }
       showBridgeMsg(msg, true);
@@ -186,8 +220,9 @@ window.TodoExcelSync=(function(){
   }
   // What was not written: cells changed by someone else (Garder / Remplacer / Fusionner) and questions
   // (duplicate lines, plant lost recently). « Garder » is the default everywhere.
+  let xrChoice={};
   function openXlReview(kind, pending){
-    const box=$('xl-review-body'); box.innerHTML='';
+    const box=$('xl-review-body'); box.innerHTML=''; xrChoice={};
     $('xl-review-title').textContent=(kind==='pipe'?'Pipe Excel':'Suivi Agrégation')+' : à vérifier';
     pending.forEach((p,idx)=>{
       const s=document.createElement('section'); s.className='xr-item';
@@ -208,15 +243,19 @@ window.TodoExcelSync=(function(){
         opts.forEach(([v,l])=>{ const lab=document.createElement('label'); lab.className='xr-opt'; const i=document.createElement('input'); i.type='radio'; i.name='xq-'+idx; i.value=v; i.checked=v===def; lab.append(i, document.createTextNode(' '+l)); s.appendChild(lab); });
       }
       if(p.r.conflicts && p.r.conflicts.length){
-        const intro=document.createElement('p'); intro.className='xr-intro'; intro.textContent='Ces cases ont été modifiées dans l’Excel par quelqu’un d’autre ; elles n’ont pas été touchées.'; s.appendChild(intro);
+        const intro=document.createElement('p'); intro.className='xr-intro'; intro.textContent='Ces cases ont été modifiées dans l’Excel par quelqu’un d’autre ; rien n’y a été écrit. Pour chacune : que garder ?'; s.appendChild(intro);
         const t=document.createElement('div'); t.className='xr-table';
         p.r.conflicts.forEach(c=>{
           const r=document.createElement('div'); r.className='xr-row';
           r.innerHTML='<b></b><span class="xr-v"><i>Excel</i><span></span></span><span class="xr-v"><i>Appli</i><span></span></span>';
           r.querySelector('b').textContent=c.header; r.querySelectorAll('.xr-v span')[0].textContent=c.excel; r.querySelectorAll('.xr-v span')[1].textContent=c.app;
-          const sel=document.createElement('select'); sel.id='xr-'+idx+'-'+c.i; sel.setAttribute('aria-label','Choix pour '+c.header);
-          [['keep','Garder l’Excel'],['replace','Remplacer par l’appli']].concat(c.comment?[['merge','Fusionner les deux']]:[]).forEach(([v,l])=>{ const o=document.createElement('option'); o.value=v; o.textContent=l; sel.appendChild(o); });
-          r.appendChild(sel); t.appendChild(r);
+          const ask=document.createElement('div'); ask.className='xs-ask'; ask.id='xr-'+idx+'-'+c.i; r.appendChild(ask); t.appendChild(r);
+          const key=idx+'-'+c.i; xrChoice[key]={ keep:'excel', align:false };
+          const again=()=>xsAsk(ask, kind, p.o, c.i, { app:c.app, excel:c.excel }, ch=>{ xrChoice[key]=ch;
+            ask.innerHTML=''; const sp=document.createElement('span'); sp.className='xs-done';
+            sp.textContent=ch.keep==='app'?'→ l’appli sera écrite dans l’Excel':ch.keep==='merge'?'→ les deux textes seront gardés':ch.align?'→ Excel gardé, appli mise à jour':'→ Excel gardé, appli inchangée';
+            const ch2=document.createElement('button'); ch2.type='button'; ch2.className='pq-link'; ch2.textContent='changer'; ch2.onclick=again; ask.append(sp, ch2); }, c.comment);
+          again();
         });
         s.appendChild(t);
       }
@@ -227,9 +266,9 @@ window.TodoExcelSync=(function(){
       pending.forEach((p,idx)=>{
         const force={}, seen={}, o=p.o;
         (p.r.conflicts||[]).forEach(c=>{
-          const v=$('xr-'+idx+'-'+c.i).value;
-          if(v==='keep'){ o.excelKeep=o.excelKeep||{}; o.excelKeep[kind]=Object.assign({}, o.excelKeep[kind]||{}, { [c.i]:c.excel }); touchCrm(o); }
-          else { force[c.i]=v; seen[c.i]=c.excel; }   // the bridge replaces only if the cell still holds what was shown here
+          const ch=xrChoice[idx+'-'+c.i]||{ keep:'excel', align:false };
+          if(ch.keep==='excel'){ if(ch.align && ch.run) ch.run(); else xsKeep(kind, o, c.i, c.excel); }
+          else { force[c.i]=ch.keep==='app'?'replace':'merge'; seen[c.i]=c.excel; }   // the bridge replaces only if the cell still holds what was shown here
         });
         let target=null;
         if(p.r.question){ const ch=document.querySelector('input[name="xq-'+idx+'"]:checked'); const v=ch?ch.value:'skip'; if(v==='skip') return; target=v==='new'?'new':+v; }

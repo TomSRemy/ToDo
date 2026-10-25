@@ -2806,10 +2806,15 @@ Responsable technique
     check("Le Pré" in xs and "Pas envoyé" in xs, "excel ⇄ app: an installation never sent is listed")
     check("Commentaires : Excel « Vu au salon (Marie) »" in xs and "ligne 3" in xs, f"excel ⇄ app: a cell changed in the Pipe by a colleague is shown, with its line ({xs[:300]!r})")
     check("avant le pricing" in xs, "excel ⇄ app: the Suivi only from the pricing on")
-    page.click("#xs-overlay .xs-diff:has-text('Commentaires') .pq-link:has-text('Reprendre')")
-    check(eventually(lambda: next(o for o in stored(page, "todo-widget-opportunities") if o["id"] == "xa").get("commentaires") == "Vu au salon (Marie)", 3000), "excel ⇄ app: « Reprendre dans l’appli » takes the colleague's value")
-    page.click("#xs-overlay .pq-link:has-text('Passer à Onboarding')")
-    check(eventually(lambda: next(o for o in stored(page, "todo-widget-opportunities") if o["id"] == "xa").get("stage") == "onboarding", 3000), "excel ⇄ app: « Gagné » in the Suivi moves the deal to Onboarding")
+    # each difference: « Garder l'appli » or « Garder l'Excel », then « Mettre aussi l'appli à jour ? »
+    diff = "#xs-overlay .xs-diff:has-text('Commentaires')"
+    check(page.locator(diff + " .xs-choice").all_inner_texts() == ["l’appli « vide »", "l’Excel « Vu au salon (Marie) »"], f"excel ⇄ app: a difference asks which to keep ({page.locator(diff + ' .xs-choice').all_inner_texts()})")
+    page.click(diff + " .xs-choice:has-text('l’Excel')")
+    check("Mettre aussi l’appli à jour" in page.inner_text(diff), "excel ⇄ app: keeping the Excel asks whether to update the app too")
+    page.click(diff + " .xs-choice:text-is('Oui')")
+    check(eventually(lambda: next(o for o in stored(page, "todo-widget-opportunities") if o["id"] == "xa").get("commentaires") == "Vu au salon (Marie)", 3000), "excel ⇄ app: « Oui » puts the Excel's value in the app")
+    page.click("#xs-overlay .xs-diff:has-text('Statut') .xs-choice:has-text('l’Excel')"); page.click("#xs-overlay .xs-diff:has-text('Statut') .xs-choice:text-is('Oui')")
+    check(eventually(lambda: next(o for o in stored(page, "todo-widget-opportunities") if o["id"] == "xa").get("stage") == "onboarding", 3000), "excel ⇄ app: « Gagné » kept from the Suivi, app aligned: the deal moves to Onboarding")
     page.click("#xs-overlay .xs-send[data-k=pipe]"); page.wait_for_timeout(400)
     sent_ids = [r["values"][19] for k, b in xs_sent if k == "pipe" for r in b["rows"]]
     check("Le Pré" in sent_ids, f"excel ⇄ app: « Envoyer au Pipe » sends what is pending ({sent_ids})")
@@ -2844,9 +2849,13 @@ Responsable technique
     review = page.inner_text("#xl-review-overlay")
     check(len(first["values"]) == 37 and first["prev"] is None and "Vu au salon (Marie)" in review and "Perdu" in review
           and "ouvre-le avant" in page.inner_text("#bridge-msg"), "shared Excel: changed cells shown, closed file reported")
-    opts = page.eval_on_selector_all("#xl-review-body select", "els=>els.map(e=>[...e.options].map(o=>o.value).join(','))")
-    check(opts == ["keep,replace", "keep,replace,merge"], f"shared Excel: « Fusionner » offered for comments only ({opts})")
-    page.select_option("#xr-0-35", "merge"); page.click("#xl-review-apply")
+    opts = [page.locator(f"#xr-0-{i} .xs-choice").count() for i in (30, 35)]
+    check(opts == [2, 3] and page.locator("#xr-0-35 .xs-choice:has-text('fusionner')").count() == 1, f"shared Excel: « les deux (fusionner) » offered for comments only ({opts})")
+    page.click("#xr-0-30 .xs-choice:has-text('l’Excel')")
+    check("Mettre aussi l’appli à jour" in page.inner_text("#xr-0-30"), "shared Excel: keeping the Excel asks whether to update the app too")
+    page.click("#xr-0-30 .xs-choice:text-is('Non')")
+    check("appli inchangée" in page.inner_text("#xr-0-30") and page.locator("#xr-0-30 .pq-link:has-text('changer')").count() == 1, "shared Excel: the choice is shown, and can be changed")
+    page.click("#xr-0-35 .xs-choice:has-text('fusionner')"); page.click("#xl-review-apply")
     page.wait_for_function("document.getElementById('xl-review-overlay').classList.contains('hidden')")
     page.wait_for_timeout(300)
     second = sent2[1]["rows"][0] if len(sent2) > 1 else {}
@@ -3080,6 +3089,39 @@ Responsable technique
     check(eventually(lambda: page.is_hidden("#pipe-more-menu") and "Hangar" in page.inner_text("#pipeline-board") and "on" in (page.get_attribute("#pipe-more-btn", "class") or "")),
           "« ⋯ » › Sorties shows the exited deals, the menu closes, « ⋯ » marked as on")
     check(not errors, f"pipeline bar: no page errors ({errors})")
+    page.close()
+
+    # --- Excel ⇄ panel: « Garder l'appli » writes the app's value (only if the cell still holds what was shown); « Garder l'Excel » + « Non » is not asked again
+    sent3 = []
+    ph = [""] * 37; ph[6] = "Nom Producteur"; ph[19] = "Nom Centrale"; ph[35] = "Commentaires"
+    pa = [None] * 37; pa[6] = "GAEC"; pa[19] = "Toit A"; pa[35] = "Note Excel A"
+    pb = [None] * 37; pb[6] = "GAEC"; pb[19] = "Toit B"; pb[35] = "Note Excel B"
+    def bridge3(route, request):
+        h = {"Access-Control-Allow-Origin": "*", "Content-Type": "application/json", "Access-Control-Allow-Headers": "*", "Access-Control-Allow-Methods": "*"}
+        if request.method == "OPTIONS": return route.fulfill(status=204, headers=h)
+        u = request.url
+        if u.endswith("/status"): return route.fulfill(status=200, headers=h, body=json.dumps({"ok": True, "version": "1.5", "authorized": True, "pipe": {"name": "Pipe.xlsx", "found": True}, "bdd": {"name": "Suivi.xlsx", "found": True}}))
+        if u.endswith("/pipe/read"): return route.fulfill(status=200, headers=h, body=json.dumps({"ok": True, "sheets": {"Pipe Agrégation": [ph, pa, pb]}}))
+        if u.endswith("/bdd/read"): return route.fulfill(status=200, headers=h, body=json.dumps({"ok": True, "sheets": {"BDD Agrégation": [[""] * 91]}}))
+        body = json.loads(request.post_data); sent3.append(body)
+        return route.fulfill(status=200, headers=h, body=json.dumps({"ok": True, "results": [{"ok": True, "action": "mise à jour", "row": 2, "written": [35], "mine": [35], "conflicts": []} for _ in body["rows"]]}))
+    i3 = [{"id": i, "kind": "installation", "company": "GAEC", "producteur": "GAEC", "centrale": c, "title": c, "stage": "collecte", "commentaires": "Note appli " + c[-1], "pipeSentAt": 1,
+           "createdAt": 1, "updatedAt": 1, "deleted": False} for i, c in (("ya", "Toit A"), ("yb", "Toit B"))]
+    page, errors = new_page(browser, {"todo_todo-widget-opportunities": json.dumps(i3), "todo_bridge-config": json.dumps({"port": 8765, "token": "k1"})}, viewport={"width": 1400, "height": 900})
+    page.route("http://127.0.0.1:8765/**", bridge3)
+    page.goto(URL); page.click('[data-tab="pipeline"]'); page.click("#pipe-more-btn"); page.click("#pipe-xs-btn")
+    rowA = "#xs-overlay tr:has-text('Toit A') .xs-diff:has-text('Commentaires')"; rowB = "#xs-overlay tr:has-text('Toit B') .xs-diff:has-text('Commentaires')"
+    page.wait_for_selector(rowA + " .xs-choice", timeout=8000)
+    page.click(rowA + " .xs-choice:has-text('l’appli')")
+    check(eventually(lambda: len(sent3) == 1), f"excel ⇄ panel: « Garder l'appli » sends at once ({page.evaluate("(document.getElementById('bridge-msg')||{}).textContent")})")
+    r = sent3[0]["rows"][0] if sent3 else {}
+    vi = str(r.get("values", [None] * 40).index("Note appli A")) if "Note appli A" in r.get("values", []) else "?"
+    check(r.get("force") == {vi: "replace"} and r.get("seen") == {vi: "Note Excel A"}, f"excel ⇄ panel: the app's value replaces the cell only if it still holds the one shown ({r.get('force')}, {r.get('seen')})")
+    page.click(rowB + " .xs-choice:has-text('l’Excel')"); page.click(rowB + " .xs-choice:text-is('Non')")
+    yb = lambda: next(o for o in stored(page, "todo-widget-opportunities") if o["id"] == "yb")
+    check(eventually(lambda: page.locator(rowB).count() == 0) and yb()["commentaires"] == "Note appli B" and "Note Excel B" in json.dumps(yb().get("excelKeep")),
+          "excel ⇄ panel: « Garder l'Excel » + « Non »: the app unchanged, the question not asked again for that value")
+    check(not errors, f"excel ⇄ panel: no page errors ({errors})")
     page.close()
 
     browser.close()

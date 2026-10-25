@@ -2417,3 +2417,14 @@ html.widget .dup-banner{ display:none; }
   .pipe-col{ min-width:185px; }
   #pipeline-board{ gap:8px; padding:10px; }
 }
+
+/* ---------- Excel ⇄ appli: for each difference, « Garder l'appli » or « Garder l'Excel », then « Mettre aussi l'appli à jour ? » ---------- */
+.xs-ask{ display:flex; flex-wrap:wrap; align-items:center; gap:6px; margin:4px 0 2px; }
+.xs-q{ font-size:12px; color:var(--tx2); }
+.xs-choice{ background:var(--panel-2); border:1px solid var(--bd); color:var(--tx1); border-radius:999px; padding:3px 10px; font:500 12px var(--font-ui); cursor:pointer; max-width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.xs-choice:hover{ border-color:var(--accent); color:var(--accent); }
+.xs-choice.yes{ border-color:var(--accent); color:var(--accent); }
+.xs-choice:focus-visible{ outline:2px solid var(--accent); outline-offset:1px; }
+.xs-done{ font-size:12px; color:var(--accent); }
+.xr-row{ grid-template-columns:120px minmax(0,1fr) minmax(0,1fr); }
+.xr-row .xs-ask{ grid-column:1 / -1; }
