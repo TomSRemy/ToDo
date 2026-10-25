@@ -2756,7 +2756,7 @@ Responsable technique
         h = {"Access-Control-Allow-Origin": "*", "Content-Type": "application/json"}
         if request.url.endswith("/status"):
             ok = request.headers.get("x-bridge-token") == "k1"
-            return route.fulfill(status=200, headers=h, body=json.dumps({"ok": True, "version": "1.2", "authorized": ok, "pipe": {"name": "Pipe.xlsx", "found": True}, "bdd": {"name": "Suivi.xlsx", "found": True}}))
+            return route.fulfill(status=200, headers=h, body=json.dumps({"ok": True, "version": "1.4", "authorized": ok, "pipe": {"name": "Pipe.xlsx", "found": True}, "bdd": {"name": "Suivi.xlsx", "found": True}}))
         sent.append((request.url.rsplit("/", 2)[-2], json.loads(request.post_data)))
         return route.fulfill(status=200, headers=h, body=json.dumps({"ok": True, "results": [{"ok": True, "action": "ajoutée", "row": 12}]}))
     inst = [{"id": "i1", "kind": "installation", "company": "SCEA", "producteur": "SCEA", "centrale": "Les Vignes", "title": "Les Vignes", "stage": "pricing_indicatif",
@@ -2790,7 +2790,7 @@ Responsable technique
         h = {"Access-Control-Allow-Origin": "*", "Content-Type": "application/json"}
         u = request.url
         if u.endswith("/status"):
-            return route.fulfill(status=200, headers=h, body=json.dumps({"ok": True, "version": "1.2", "authorized": True, "pipe": {"name": "Pipe.xlsx", "found": True}, "bdd": {"name": "Suivi.xlsx", "found": True}}))
+            return route.fulfill(status=200, headers=h, body=json.dumps({"ok": True, "version": "1.4", "authorized": True, "pipe": {"name": "Pipe.xlsx", "found": True}, "bdd": {"name": "Suivi.xlsx", "found": True}}))
         if u.endswith("/pipe/read"): return route.fulfill(status=200, headers=h, body=json.dumps({"ok": True, "sheets": {"Pipe fourniture": [["Pipe"], pipe_head, decoy], "Pipe agrégation": [["Pipe"], pipe_head, pipe_a]}}))   # another « Pipe … » sheet first: never the one read
         if u.endswith("/bdd/read"): return route.fulfill(status=200, headers=h, body=json.dumps({"ok": True, "sheets": {"BDD Agrégation": [bdd_head, bdd_a]}}))
         body = json.loads(request.post_data); xs_sent.append((u.rsplit("/", 2)[-2], body))
@@ -2825,7 +2825,7 @@ Responsable technique
             return route.fulfill(status=204, headers={"Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "*", "Access-Control-Allow-Methods": "*"})
         h = {"Access-Control-Allow-Origin": "*", "Content-Type": "application/json"}
         if request.url.endswith("/status"):
-            return route.fulfill(status=200, headers=h, body=json.dumps({"ok": True, "version": "1.2", "authorized": True, "pipe": {"name": "Pipe.xlsx", "found": True}, "bdd": {"name": "Suivi.xlsx", "found": True}}))
+            return route.fulfill(status=200, headers=h, body=json.dumps({"ok": True, "version": "1.4", "authorized": True, "pipe": {"name": "Pipe.xlsx", "found": True}, "bdd": {"name": "Suivi.xlsx", "found": True}}))
         body = json.loads(request.post_data); sent2.append(body)
         if len(sent2) == 1:
             res = {"ok": True, "action": "mise à jour", "row": 12, "key": "SCEA / Les Vignes", "cells": 2, "written": [3, 22], "mine": [0, 3, 22],

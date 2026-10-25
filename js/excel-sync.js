@@ -37,10 +37,10 @@ window.TodoExcelSync=(function(){
   }
   // 1.2 = the bridge that never overwrites a colleague's cell, checks the business code and the line again right before
   // writing, and keeps a journal of every cell; an older one is refused
-  const bridgeUpToDate=info=>{ const v=String(info&&info.version||'0').split('.').map(Number); return v[0]>1 || (v[0]===1 && (v[1]||0)>=2); };
+  const bridgeUpToDate=info=>{ const v=String(info&&info.version||'0').split('.').map(Number); return v[0]>1 || (v[0]===1 && (v[1]||0)>=4); };   // 1.4: writes only in « Pipe Agrégation » / « BDD Agrégation »
   async function xlSend(kind, list, rows){
     if(!app.bridgeState.info || Date.now()-app.bridgeState.checkedAt>60000) await bridgeCheck();
-    if(app.bridgeState.ok && !bridgeUpToDate(app.bridgeState.info)) throw new Error('Ton pont Excel est une ancienne version, moins protégée que la nouvelle : rien n\u2019a été envoyé. Dans Réglages → Pont Excel, télécharge pont-excel.ps1, remplace l\u2019ancien fichier et relance le pont.');
+    if(app.bridgeState.ok && !bridgeUpToDate(app.bridgeState.info)) throw new Error('Ton pont Excel est une ancienne version, moins protégée que la nouvelle (elle peut viser un autre onglet du classeur) : rien n\u2019a été envoyé. Dans Réglages → Pont Excel, télécharge pont-excel.ps1, remplace l\u2019ancien fichier et relance le pont.');
     const res=await bridgeCall('POST','/'+kind+'/upsert',{ rows }, 30000);
     const results=res.results||[], pending=[];
     results.forEach((r,i)=>{ const o=list[i]; xlRemember(kind, o, rows[i].values, r); if(r.ok && ((r.conflicts&&r.conflicts.length) || r.question)) pending.push({ o, r });
