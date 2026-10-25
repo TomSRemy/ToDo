@@ -2873,11 +2873,11 @@ Responsable technique
     check(heads == ["Client· 2", "Fournisseur· 1", "Sans type· 1"], f"client sections by type {heads}")
     check(page.locator("#client-list-rows .client-list-row:visible").count() == 0, "sections collapsed by default")
     page.locator("#client-list-rows .client-type-head", has_text="Client").click()
-    check(page.locator("#client-list-rows .client-list-row:visible").count() == 2, "opening a section shows its clients")
+    check(eventually(lambda: page.locator("#client-list-rows .client-list-row:visible").count() == 2), "opening a section shows its clients")
     page.reload(); page.click('[data-tab="lists"]')
-    check(page.locator("#client-list-rows .client-list-row:visible").count() == 2, "open sections remembered")
+    check(eventually(lambda: page.locator("#client-list-rows .client-list-row:visible").count() == 2), "open sections remembered")   # after a reload the data comes back a moment later
     page.fill("#client-list-search", "alp")
-    check(page.locator("#client-list-rows .client-list-row:visible").count() == 1, "search opens matching sections")
+    check(eventually(lambda: page.locator("#client-list-rows .client-list-row:visible").count() == 1), "search opens matching sections")
     page.fill("#client-list-search", "")
     dialog_once(page, text="Beta Énergie")
     page.locator("#client-list-rows .client-list-row", has_text="Beta").locator("button[title=Renommer]").click()
@@ -2963,7 +2963,7 @@ Responsable technique
 
     # --- Corners no check reached before (code audit, night of 2026-10-24): task views, postpone, status, lists, pipeline exits, recovery
     import datetime as _dt
-    d = lambda n: (TODAY + _dt.timedelta(days=n)).isoformat()
+    d = lambda n: (_dt.date.today() + _dt.timedelta(days=n)).isoformat()   # today now (the run may cross midnight)
     seed_t = [task("v1", "Rappeler Alpha", client="Alpha", project="Toiture", urgency="haute", due=d(-2)),
               task("v2", "Devis Beta", client="Beta", urgency="basse", due=d(0)),
               task("v3", "Sans rien", due="")]
