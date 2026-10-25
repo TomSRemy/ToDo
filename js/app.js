@@ -119,7 +119,7 @@
   function reportCorrupt(){
     if(!corruptKeys.length) return;
     showStorageAlert('crit', 'Une partie des données de cet appareil était illisible ('+corruptKeys.length+' ensemble'+(corruptKeys.length>1?'s':'')+'). Une copie brute est gardée sur cet appareil. '
-      +(syncConfig.enabled?'La synchro va reprendre le contenu depuis GitHub.':'Restaure ta dernière sauvegarde (Réf. & data › Importer), ou active la synchro.'));
+      +(syncConfig.enabled?'La synchro va reprendre le contenu depuis GitHub.':'Restaure ta dernière sauvegarde (Réglages › Importer), ou active la synchro.'));
   }
   async function loadAll(){
     tasks=await loadKey(TASKS_KEY, []);
@@ -344,7 +344,7 @@
     const tab=document.querySelector('.tab[data-tab="lists"]'); if(tab) tab.click();
     setTimeout(()=>{ const s=$('sync-section'); if(s) s.scrollIntoView({ behavior:'smooth', block:'start' }); const f=$(syncConfig.token?'sync-token-exp':'sync-owner'); if(f) f.focus({ preventScroll:true }); }, 60);
   }
-  // ---------- storage space: gauge in Réf. & data, red banner when a save fails, amber when nearly full ----------
+  // ---------- storage space: gauge in Réglages, red banner when a save fails, amber when nearly full ----------
   const fmtMo=n=>n>=1048576?(n/1048576).toLocaleString('fr-FR',{ maximumFractionDigits:1 })+' Mo':Math.max(1,Math.round(n/1024))+' Ko';
   const fmtGo=n=>n>=1073741824?(n/1073741824).toLocaleString('fr-FR',{ maximumFractionDigits:1 })+' Go':fmtMo(n);
   function showStorageAlert(kind, text){
@@ -456,7 +456,7 @@
       const info=await r.json();
       if(info.private===false){
         syncConfig.enabled=false; await saveSyncConfig(); paintSyncPill();
-        showStorageAlert('crit', 'Synchro suspendue : le dépôt GitHub « '+syncConfig.repo+' » est devenu PUBLIC. Rien n\u2019y est plus envoyé. Repasse-le en privé (Settings › Danger Zone sur GitHub), puis réactive la synchro dans Réf. & data.');
+        showStorageAlert('crit', 'Synchro suspendue : le dépôt GitHub « '+syncConfig.repo+' » est devenu PUBLIC. Rien n\u2019y est plus envoyé. Repasse-le en privé (Settings › Danger Zone sur GitHub), puis réactive la synchro dans Réglages.');
         return false;
       }
       lsSet('repo-private-checked-at', String(Date.now()));
@@ -702,6 +702,14 @@
     Object.defineProperty(input,'value',{ configurable:true, get(){ return desc.get.call(this); }, set(v){ desc.set.call(this,v); paint(); } });
   }
   function hashColor(name,pal){ if(!name)return null; let h=0; for(let i=0;i<name.length;i++){h=(h*31+name.charCodeAt(i))>>>0;} return pal[h%pal.length]; }
+  // a colour lightened (same hue) until it reads at 4.5:1 on the dark panels (UX audit TD6)
+  function readableOnDark(hex){
+    const rgb=h=>[1,3,5].map(i=>parseInt(h.slice(i,i+2),16)), lum=c=>{ const f=v=>{ v/=255; return v<=0.03928?v/12.92:Math.pow((v+0.055)/1.055,2.4); }; return 0.2126*f(c[0])+0.7152*f(c[1])+0.0722*f(c[2]); };
+    if(!/^#[0-9a-f]{6}$/i.test(hex||'')) return hex;
+    const bg=lum([20,25,34]); let c=rgb(hex);
+    for(let i=0;i<10 && (lum(c)+0.05)/(bg+0.05)<4.5;i++) c=c.map(v=>Math.round(v+(255-v)*0.15));
+    return '#'+c.map(v=>v.toString(16).padStart(2,'0')).join('');
+  }
   const clientColor=n=>{
     if(!n) return null;
     const co=companies.find(x=>x.name===n);
@@ -3415,7 +3423,7 @@
     const card=document.createElement('div'); card.className='pipe-card'; card.dataset.id=o.id;
     if(o.kind==='installation' && !isExited(o) && !window.TODO_LITE){ card.dataset.drag=o.id; card.appendChild(pickBox()); }
     card.style.borderLeft='3px solid '+clientColor(o.company);
-    const c=document.createElement('div'); c.className='pipe-card-company'; c.style.color=clientColor(o.company); c.textContent=o.company; if(o.company) c.dataset.peek='co:'+o.company;
+    const c=document.createElement('div'); c.className='pipe-card-company'; c.style.color=readableOnDark(clientColor(o.company)); c.textContent=o.company; if(o.company) c.dataset.peek='co:'+o.company;
     const cs=companyStars(o.company); if(cs) c.appendChild(starsWidget(cs));
     card.appendChild(c);
     if(o.kind==='prequal'){
@@ -3445,7 +3453,7 @@
     if(!window.TODO_LITE){ card.dataset.drag=group.map(x=>x.id).join(','); card.appendChild(pickBox()); }
     card.style.borderLeft='3px solid '+clientColor(company);
     const head=document.createElement('div'); head.className='pipe-card-title pipe-req-head';
-    const c=document.createElement('span'); c.className='pipe-card-company'; c.style.color=clientColor(company); c.textContent=company; if(company) c.dataset.peek='co:'+company;
+    const c=document.createElement('span'); c.className='pipe-card-company'; c.style.color=readableOnDark(clientColor(company)); c.textContent=company; if(company) c.dataset.peek='co:'+company;
     const lotName=group.every(x=>(x.lot||'')===(group[0].lot||''))?group[0].lot||'':'';
     const lab=document.createElement('span'); lab.className='pipe-req-label'; lab.textContent=lotName||req.label||'';
     const tot=document.createElement('span'); tot.className='pipe-req-tot'; tot.textContent=reqTotals(group); tot.title=group.length+' installations au total';
@@ -4846,6 +4854,7 @@
   }
   // duplicates are serious (MWc counted twice, two lines in the Pipe): a banner at the top of every page while there are some (backlog decision 10)
   function paintDupBanner(){ const el=$('dup-banner'); if(!el) return; if(window.TODO_WIDGET || window.TODO_LITE){ el.hidden=true; return; }
+    if(Number(lsGet('dup-banner-later')||0)>Date.now()){ el.hidden=true; return; }   // « Me le rappeler demain » (UX audit TD10)
     let ig=0, cg=0; try{ ig=instDupGroups().length; cg=coDupGroups().length; }catch(e){ softFail('recherche des doublons', e); }
     el.hidden=!(ig+cg); if(!(ig+cg)) return;
     $('dup-banner-text').textContent='Doublons possibles : '+[ig?ig+' installation'+(ig>1?'s':'')+' saisie'+(ig>1?'s':'')+' deux fois':'', cg?cg+' société'+(cg>1?'s':'')+' écrite'+(cg>1?'s':'')+' de deux façons':''].filter(Boolean).join(', ')+'. Les totaux peuvent être faussés.'; }
@@ -5658,7 +5667,7 @@
     ov.querySelector('.rs-close').onclick=close;
     ov.addEventListener('click', e=>{ if(e.target===ov) close(); });
     ov.addEventListener('keydown', e=>{ if(e.key==='Escape'){ e.stopPropagation(); close(); } });
-    if(!syncConfig.enabled || !syncConfig.token){ box.innerHTML='<p class="muted">Il faut la synchro GitHub pour retrouver les versions passées. Sans elle : Réf. & data › Importer, avec ton dernier export.</p>'; return; }
+    if(!syncConfig.enabled || !syncConfig.token){ box.innerHTML='<p class="muted">Il faut la synchro GitHub pour retrouver les versions passées. Sans elle : Réglages › Importer, avec ton dernier export.</p>'; return; }
     const auth={ 'Accept':'application/vnd.github+json' }, repoUrl='https://api.github.com/repos/'+syncConfig.owner+'/'+syncConfig.repo;
     const listVersions=async()=>{
       const key=ov.querySelector('input[name=rs-set]:checked').value; planBox.innerHTML=''; box.innerHTML='<p class="muted">Lecture des versions…</p>';
@@ -5867,7 +5876,7 @@
     }
 
     let added=0, updated=0, conflictCount=0;
-    let importSrc=null;   // where the two values of a conflict come from (shown in Réf. & data)
+    let importSrc=null;   // where the two values of a conflict come from (shown in Réglages)
     rows.forEach((row, idx)=>{
       importSrc={ a:'Déjà dans tes contacts', b:'Dans le fichier « '+file.name+' », ligne '+(idx+2) };
       const firstName=pickHeader(row, ['first name','prénom','prenom']);
@@ -5936,7 +5945,7 @@
       renderContacts();
     }
     let msg=added+' contact(s) créé(s), '+updated+' complété(s) ou fusionné(s).';
-    if(conflictCount>0) msg+=' '+conflictCount+' conflit(s) à trancher dans Réf. & data → Conflits de synchro.';
+    if(conflictCount>0) msg+=' '+conflictCount+' conflit(s) à trancher dans Réglages → Conflits de synchro.';
     tell(msg);
   }
 
@@ -5992,6 +6001,14 @@
   $('card-scan-btn').onclick=()=>$('card-scan-input').click();
   $('card-scan-input').addEventListener('change', e=>{ const f=e.target.files[0]; e.target.value=''; scanCard(f); });
   $('dup-banner-btn').onclick=()=>openDupes();
+  $('dup-banner-later').onclick=()=>{ const t=new Date(); t.setDate(t.getDate()+1); t.setHours(6,0,0,0); lsSet('dup-banner-later', String(t.getTime())); paintDupBanner(); };
+  // « Réglages »: a table of contents at the top, one click to each part (UX audit TD3)
+  function paintSettingsToc(){ const nav=$('settings-toc'); if(!nav) return; nav.innerHTML='';
+    [['clients-section','Clients'],['projects-section','Projets'],['conflicts-section','Conflits'],['sync-section','Synchro'],['bridge-section','Pont Excel'],['backup-section','Sauvegarde'],['storage-section','Stockage'],['stats-section','Statistiques']].forEach(([id,label])=>{
+      const s=$(id); if(!s || s.classList.contains('hidden') || s.style.display==='none') return;
+      const b=document.createElement('button'); b.type='button'; b.textContent=label; if(id==='conflicts-section'){ const n=document.createElement('span'); n.className='n'; n.textContent='●'; b.appendChild(n); }
+      b.onclick=()=>s.scrollIntoView({ behavior:'smooth', block:'start' }); nav.appendChild(b); }); }
+  document.querySelector('.tab[data-tab="lists"]').addEventListener('click', ()=>setTimeout(paintSettingsToc, 0));
   $('vcf-import-btn').onclick=phoneImportStart;
   $('vcf-import-input').addEventListener('change', async e=>{ const f=e.target.files[0]; e.target.value=''; if(!f) return; const list=parseVcf(await f.text()); if(!list.length){ tell('Aucun contact lu dans ce fichier (.vcf attendu).'); return; } openPhoneImport(list); });
   $('sig-paste-btn').onclick=()=>{
@@ -6411,7 +6428,7 @@
     const a=$('parc-open-link'); const ok=/^https:\/\//i.test(s.link||''); a.classList.toggle('hidden', !ok); if(ok) a.href=s.link;
     $('parc-source-hint').textContent=bridgeConfigured()
       ? (s.auto?'Actualisation automatique active : le pont Excel de cet ordinateur relit le fichier synchronisé à l\u2019ouverture du portefeuille puis toutes les 15 minutes.':'Actualisation automatique désactivée : utilise « Lire depuis l\u2019Excel ».')
-      : 'L\u2019actualisation automatique passe par le pont Excel de l\u2019ordinateur (Réf. & data → Pont Excel), qui lit la copie synchronisée du fichier. Sans lui (sur le téléphone par exemple), recharge le fichier avec « Charger le Suivi Agrégation ».';
+      : 'L\u2019actualisation automatique passe par le pont Excel de l\u2019ordinateur (Réglages → Pont Excel), qui lit la copie synchronisée du fichier. Sans lui (sur le téléphone par exemple), recharge le fichier avec « Charger le Suivi Agrégation ».';
   }
   setInterval(()=>{ if(parcSource().auto && bridgeConfigured()) importParcFromBridge(true); }, 15*60*1000);
 
@@ -6931,7 +6948,7 @@
       { t:'Rétablir (Ctrl+Maj+Z)', k:'redo refaire', go:()=>redoLast() },
       { t:'Mode d’emploi', k:'aide guide help', go:clickEl('help-btn') }
     ];
-    [['today','Aujourd’hui'],['tasks','Tâches'],['inbox','Boîte mail'],['archive','Archive'],['contacts','Contacts'],['pipeline','Pipeline'],['parc','Portefeuille'],['network','Réseau'],['market','Marché'],['lists','Réf. & data']]
+    [['today','Aujourd’hui'],['tasks','Tâches'],['inbox','Boîte mail'],['archive','Archive'],['contacts','Contacts'],['pipeline','Pipeline'],['parc','Portefeuille'],['network','Réseau'],['market','Marché'],['lists','Réglages']]
       .forEach(([tab,label])=>{ if(document.querySelector('.tab[data-tab="'+tab+'"]')) list.push({ t:'Aller à : '+label, k:'onglet ouvrir '+tab, go:go(tab) }); });
     (window.todoExtraCommands||[]).forEach(c=>list.push(c));   // added by other parts (saved views, network…)
     return list;
@@ -6990,12 +7007,12 @@
     const curTab=()=>{ const t=document.querySelector('.tab.active'); return t?t.dataset.tab:null; };
     try{ history.replaceState({ todo:'tab', tab:curTab() }, ''); }catch(e){}
     const watch=()=>{ const now=new Set(openOverlays());
-      now.forEach(o=>{ if(!known.has(o)){ try{ history.pushState({ todo:'ov' }, ''); }catch(e){} } });
+      now.forEach(o=>{ if(!known.has(o)){ try{ history.pushState({ todo:'ov' }, '', o.id==='opp-detail-overlay' && viewingOppId?'#fiche/'+viewingOppId:undefined); }catch(e){} } });   // a sheet has its own address (UX audit TD5)
       known.forEach(o=>{ if(!now.has(o) && !restoring && history.state && history.state.todo==='ov'){ ignorePop++; history.back(); } });   // closed on screen: its step in the history goes too
       known=now; };
     new MutationObserver(()=>setTimeout(watch,0)).observe(document.body, { subtree:true, attributes:true, attributeFilter:['class','hidden'], childList:true });
     document.addEventListener('click', e=>{ const t=e.target.closest && e.target.closest('.tab[data-tab]'); if(!t || restoring) return;
-      setTimeout(()=>{ const tab=curTab(); if(tab && !(history.state && history.state.tab===tab)){ try{ history.pushState({ todo:'tab', tab }, ''); }catch(err){} } }, 0); }, true);
+      setTimeout(()=>{ const tab=curTab(); if(tab && !(history.state && history.state.tab===tab)){ try{ history.pushState({ todo:'tab', tab }, '', '#'+tab); }catch(err){} } }, 0); }, true);   // #pipeline, #contacts…: the tab in the address (UX audit TD5)
     window.addEventListener('popstate', e=>{
       if(ignorePop>0){ ignorePop--; return; }
       const open=openOverlays();
@@ -7095,7 +7112,15 @@
     paintSyncPill(); checkStorageFull(); setInterval(checkStorageFull, 10*60*1000);
     $('sync-token-exp').value=syncConfig.tokenExpires||'';
     if(location.hash==='#sync' && !window.TODO_LITE) openSyncSettings();
+    else openFromAddress();
   });
+  // an address opened from a link: #pipeline (a tab) or #fiche/<id> (an installation sheet) — UX audit TD5
+  function openFromAddress(){
+    const h=decodeURIComponent(location.hash.slice(1)); if(!h || window.TODO_WIDGET) return;
+    const m=/^fiche\/(.+)$/.exec(h);
+    if(m){ if(opportunities.some(o=>o.id===m[1] && !o.deleted)){ gsTab('pipeline'); openOppDetail(m[1]); } return; }
+    const t=document.querySelector('.tab[data-tab="'+h+'"]'); if(t) t.click();
+  }
   // ---------- What other files (js/network.js, the note), the tests and the console call in this one, in one place (code audit C12) ----------
   Object.assign(window, {
     todoSettingsChanged: prefsToNote,

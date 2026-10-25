@@ -42,7 +42,7 @@
       <span class="tab" data-tab="parc" title="Portefeuille"><svg class="tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="12" width="4" height="9"/><rect x="10" y="7" width="4" height="14"/><rect x="17" y="3" width="4" height="18"/></svg><span class="sidebar-label-text">Portefeuille</span></span>
       <span class="tab" data-tab="network" title="Réseau : toutes les connexions"><svg class="tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="5" cy="6" r="2.5"/><circle cx="19" cy="5" r="2.5"/><circle cx="12" cy="13" r="2.5"/><circle cx="5" cy="19" r="2.5"/><circle cx="19" cy="19" r="2.5"/><path d="M7 7.2l3.2 4.2M17 6.6l-3.4 4.6M10.2 14.6L6.8 17.6M13.8 14.6l3.4 3"/></svg><span class="sidebar-label-text">Réseau</span></span>
       <span class="tab" data-tab="market" title="Marché : prix spot, M0, captures"><svg class="tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 17 9 11 13 15 21 7"/><polyline points="15 7 21 7 21 13"/></svg><span class="sidebar-label-text">Marché</span></span>
-      <span class="tab" data-tab="lists" title="Réf. & data"><svg class="tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg><span class="sidebar-label-text">Réf. &amp; data</span><span class="tab-badge" id="conflicts-badge"></span></span>
+      <span class="tab" data-tab="lists" title="Réglages : clients, projets, synchro, pont Excel, sauvegarde"><svg class="tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg><span class="sidebar-label-text">Réglages</span><span class="tab-badge" id="conflicts-badge"></span></span>
     </div>
 
     <button type="button" class="gs-open" id="gs-open-btn" title="Rechercher partout (Ctrl+K)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg><span class="sidebar-label-text">Rechercher</span><kbd class="sidebar-label-text">Ctrl K</kbd></button>
@@ -72,9 +72,9 @@
     <button type="button" class="widget-btn" id="widget-full" title="Vue complète"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h6v6"/><path d="M10 14L21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></svg></button>
     <button type="button" class="widget-btn" id="widget-close" title="Réduire en bulle (Échap)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
   </div>
-  <div class="dup-banner" id="dup-banner" role="status" hidden><span id="dup-banner-text"></span><button type="button" id="dup-banner-btn">Vérifier et fusionner</button></div>
+  <div class="dup-banner" id="dup-banner" role="status" hidden><span id="dup-banner-text"></span><button type="button" id="dup-banner-btn">Vérifier et fusionner</button><button type="button" id="dup-banner-later" class="dup-later">Me le rappeler demain</button></div>
   <div class="tab-panel" id="tab-today">
-    <div class="lite-banner" id="lite-sync-banner" hidden>Synchro GitHub pas encore activée sur ce téléphone : active-la une fois dans la <a href="index.html#sync">version complète</a> (onglet Réf. &amp; data), puis reviens ici.</div>
+    <div class="lite-banner" id="lite-sync-banner" hidden>Synchro GitHub pas encore activée sur ce téléphone : active-la une fois dans la <a href="index.html#sync">version complète</a> (onglet Réglages), puis reviens ici.</div>
     <div id="today-stats-row"></div>
     <div class="table-header">
       <span></span><span></span>
@@ -268,7 +268,7 @@
         <button class="view-icon-btn" data-view="groupe" title="Par société"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></button>
         <button class="view-icon-btn active" data-view="liste" title="Liste (sans regroupement)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg></button>
       </div>
-      <select id="contacts-type-filter" class="type-filter-select">
+      <select id="contacts-type-filter" class="type-filter-select" aria-label="Type de société">
         <option value="">Tous les types</option>
       </select>
     </div>
@@ -428,7 +428,7 @@
             <li><b>Lots</b> : dans la fiche d'une demande, section « Installations », coche quelques centrales, donne un nom (ex. « Lot 1 — toitures ») et « Faire un lot » : le lot avance à son rythme, avec sa propre carte, sans quitter la demande. Une installation qu'on fait avancer seule a aussi sa carte, avec « ↳ demande … » pour revenir à l'ensemble.</li>
             <li><b>Copier-coller</b> (partout) : « Copier ligne Pipe » (37 colonnes) ou « Copier ligne BDD » (91 colonnes), puis clic en colonne A d'une ligne vide et <kbd>Ctrl</kbd>+<kbd>V</kbd>.</li>
             <li><b>Pont Excel</b> (sur l'ordinateur) : « Envoyer au Pipe / à la BDD Excel » écrit directement dans les fichiers synchronisés avec SharePoint. Une ligne existante (même producteur + centrale) est mise à jour, sinon elle est ajoutée ; les formules ne sont jamais écrasées.</li>
-            <li>Installation du pont : <b>Réf. &amp; data → Pont Excel</b>. Télécharge les deux fichiers dans un même dossier, double-clique sur le .bat, choisis les deux Excel, recopie la clé. Laisse la fenêtre ouverte (réduite).</li>
+            <li>Installation du pont : <b>Réglages → Pont Excel</b>. Télécharge les deux fichiers dans un même dossier, double-clique sur le .bat, choisis les deux Excel, recopie la clé. Laisse la fenêtre ouverte (réduite).</li>
             <li><b>Excel partagé avec des collègues</b> : le pont n'écrase jamais une case modifiée par quelqu'un d'autre ; il te la montre avec Garder / Remplacer (et Fusionner pour les commentaires). Une ligne Perdu, Abandonné, No Go ou Résilié n'est jamais modifiée : un re-pricing ajoute une ligne (question si la ligne a moins de 6 mois). Un renouvellement a sa propre ligne. Une copie du fichier est gardée avant chaque écriture (dossier « Sauvegardes pont », 3 dernières).</li>
           </ul>
         </section>
@@ -458,7 +458,7 @@
           <ul>
             <li><b>Réseau</b> aussi sur le téléphone (barre du bas) : pincer pour zoomer, toucher un point pour ses liens, deux fois pour sa fiche.</li>
             <li>Ouvre l'adresse de l'appli suivie de <b>/mobile.html</b> (par exemple <b>todo-tom.pages.dev/mobile.html</b>) puis « Sur l'écran d'accueil ». Version allégée : Aujourd'hui, Tâches, Contacts, Portefeuille, Pipeline (lecture) et la note.</li>
-            <li>Mêmes données que l'ordinateur dès que la synchro est activée sur le téléphone (une fois, dans la version complète, onglet Réf. &amp; data).</li>
+            <li>Mêmes données que l'ordinateur dès que la synchro est activée sur le téléphone (une fois, dans la version complète, onglet Réglages).</li>
             <li>Pour changer l'icône après une mise à jour : retirer l'app de l'écran d'accueil puis la rajouter.</li>
           </ul>
         </section>
@@ -468,9 +468,9 @@
             <li><b>Rappel de sauvegarde</b> : sans synchro GitHub, si aucun export n'a été fait depuis un mois, Aujourd'hui propose « Exporter maintenant » (ou « Plus tard » pour une semaine).</li>
             <li>Les données passent par ton repo GitHub <b>privé</b> (TomSRemy/todo-data) avec un token stocké seulement dans le navigateur. Le code de l'app est public, tes données non.</li>
             <li>Chaque appareil garde une copie locale : l'app marche sans réseau, puis se resynchronise (toutes les 5 minutes, et en quittant l'app).</li>
-            <li>Si le même champ a été modifié sur deux appareils, la version la plus récente gagne et le cas est listé dans Réf. &amp; data → Conflits.</li>
-            <li>Sauvegarde : Réf. &amp; data → Exporter (fichier JSON complet).</li>
-            <li><b>Restaurer une version</b> (Réf. &amp; data, avec la synchro) : chaque synchro garde une version sur GitHub. Choisis les tâches, le CRM ou la note et un moment passé : l'appli montre ce qui revient, ce qui est remis comme avant et ce qui a été créé depuis (gardé, sauf si tu demandes de le supprimer), puis restaure. Ctrl+Z annule. « Importer » accepte aussi un fichier tasks.json, crm.json ou notes.json téléchargé du dépôt.</li>
+            <li>Si le même champ a été modifié sur deux appareils, la version la plus récente gagne et le cas est listé dans Réglages → Conflits.</li>
+            <li>Sauvegarde : Réglages → Exporter (fichier JSON complet).</li>
+            <li><b>Restaurer une version</b> (Réglages, avec la synchro) : chaque synchro garde une version sur GitHub. Choisis les tâches, le CRM ou la note et un moment passé : l'appli montre ce qui revient, ce qui est remis comme avant et ce qui a été créé depuis (gardé, sauf si tu demandes de le supprimer), puis restaure. Ctrl+Z annule. « Importer » accepte aussi un fichier tasks.json, crm.json ou notes.json téléchargé du dépôt.</li>
             <li><b>Oublier le jeton sur cet appareil</b> : retire le jeton GitHub (appareil prêté, ou changement d'adresse de l'appli) ; les données restent sur l'appareil et sur GitHub.</li>
             <li><b>Donnée illisible</b> : si une partie des données de l'appareil est abîmée, l'appli en garde une copie brute et l'annonce par un bandeau rouge, au lieu de repartir de zéro.</li>
           </ul>
@@ -655,7 +655,8 @@
   </div>
 
   <div class="tab-panel hidden" id="tab-lists">
-    <div class="list-manager">
+    <nav class="settings-toc" id="settings-toc" aria-label="Sommaire des réglages"></nav>
+    <div class="list-manager" id="clients-section">
       <h2>Clients</h2>
       <p class="list-hint">Prélistés ici, disponibles en suggestion dans le formulaire.</p>
       <div class="search-box" style="width:100%;margin-bottom:10px;">
@@ -666,7 +667,7 @@
       <div id="client-list-rows"></div>
       <div class="add-item-row"><input type="text" id="new-client-input" placeholder="Nouveau client"><button id="add-client-btn">Ajouter</button></div>
     </div>
-    <div class="list-manager" style="margin-top:22px;">
+    <div class="list-manager" style="margin-top:22px;" id="projects-section">
       <h2>Projets</h2>
       <p class="list-hint">Idem, à préparer à l'avance ou au fil de l'eau.</p>
       <div class="chip-row" id="project-chip-row"></div>
@@ -682,7 +683,7 @@
       <p class="list-hint">Même champ modifié différemment sur deux appareils avant que la synchro ait eu lieu entre les deux. La version la plus récente a été gardée automatiquement — ajuste ici si besoin.</p>
       <div id="conflicts-list"></div>
     </div>
-    <div class="list-manager" style="margin-top:22px;">
+    <div class="list-manager" style="margin-top:22px;" id="stats-section">
       <h2>Statistiques</h2>
       <div id="stats-panel"></div>
     </div>
@@ -731,7 +732,7 @@
         <span id="bridge-status" class="bridge-status"></span>
       </div>
     </div>
-    <div class="list-manager" style="margin-top:22px;">
+    <div class="list-manager" style="margin-top:22px;" id="backup-section">
       <h2>Sauvegarde</h2>
       <p class="list-hint">Les données vivent dans ce navigateur. Exporte régulièrement pour ne rien perdre.</p>
       <div class="data-actions">

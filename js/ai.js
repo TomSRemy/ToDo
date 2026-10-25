@@ -38,7 +38,7 @@ window.TodoAI=(function(){
     const r=await fetch('https://api.anthropic.com/v1/messages', { method:'POST', headers:{ 'content-type':'application/json', 'x-api-key':aiKey(), 'anthropic-version':'2023-06-01', 'anthropic-dangerous-direct-browser-access':'true' },
       body:JSON.stringify({ model:AI_MODEL, max_tokens:4000, messages:[{ role:'user', content:prompt }] }) });
     const j=await r.json().catch(()=>({}));
-    if(!r.ok) throw new Error(r.status===401?'Clé Claude refusée (Réf. & data).':(j.error && j.error.message)||('Erreur '+r.status));
+    if(!r.ok) throw new Error(r.status===401?'Clé Claude refusée (Réglages).':(j.error && j.error.message)||('Erreur '+r.status));
     return (j.content||[]).filter(c=>c.type==='text').map(c=>c.text).join('\n');
   }
   function openAiFill(list, done){

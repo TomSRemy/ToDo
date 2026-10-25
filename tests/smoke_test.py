@@ -800,14 +800,21 @@ with sync_playwright() as p:
     # --- the browser's Back button: closes the sheet on screen, then goes back to the previous tab; never leaves the app
     page, errors = new_page(browser, {"todo_todo-widget-opportunities": json.dumps([{"id": "bk1", "kind": "installation", "company": "BACK", "centrale": "Toit", "title": "Toit", "stage": "collecte", "createdAt": 1, "updatedAt": 1, "deleted": False}])}, viewport={"width": 1300, "height": 850})
     page.goto(URL); page.wait_for_timeout(300); start = page.url
-    page.click('[data-tab="tasks"]'); page.click('[data-tab="pipeline"]'); page.click(".pipe-card[data-id=bk1]"); page.wait_for_timeout(200)
+    base = start.split("#")[0]
+    page.click('[data-tab="tasks"]'); page.click('[data-tab="pipeline"]'); page.click(".pipe-card[data-id=bk1]")
+    check(eventually(lambda: page.url == base + "#fiche/bk1"), f"address: an open sheet has its own address ({page.url[-20:]})")
     page.go_back(); page.wait_for_timeout(300)
-    check(not page.is_visible("#opp-detail-overlay") and page.is_visible("#tab-pipeline") and page.url == start, "Back: closes the open sheet, stays in the app")
+    check(not page.is_visible("#opp-detail-overlay") and page.is_visible("#tab-pipeline") and page.url == base + "#pipeline", "Back: closes the open sheet, stays in the app (address back to #pipeline)")
     page.go_back()
-    check(eventually(lambda: page.is_visible("#tab-tasks") and page.url == start, 3000), "Back: then the previous tab")
+    check(eventually(lambda: page.is_visible("#tab-tasks") and page.url == base + "#tasks", 3000), "Back: then the previous tab")
     page.click('[data-tab="pipeline"]'); page.click(".pipe-card[data-id=bk1]"); page.click("#opp-detail-actions >> text=Fermer"); page.wait_for_timeout(200)
     page.go_back()
     check(eventually(lambda: page.is_visible("#tab-tasks"), 3000), "Back: a sheet closed on screen leaves no extra step")
+    # an address opened from a link (sent by a colleague, a bookmark): the tab, or the sheet
+    page.goto(base + "#contacts"); page.reload()
+    check(eventually(lambda: page.is_visible("#tab-contacts")), "address: #contacts opens the Contacts tab")
+    page.goto(base + "#fiche/bk1"); page.reload()
+    check(eventually(lambda: page.is_visible("#opp-detail-overlay") and "Toit" in page.inner_text("#opp-detail-title")), "address: #fiche/<id> opens that sheet")
     check(not errors, f"no page errors ({errors})")
     page.close()
 
@@ -892,7 +899,9 @@ with sync_playwright() as p:
     page.click("#opp-detail-body .sp-check:has-text('DocuSign') input")
     check(eventually(lambda: "le " in page.inner_text("#opp-detail-body .sp-check:has-text('DocuSign')"), 3000), "checklist: a box ticked by hand shows the day")
     page.click("#opp-detail-body .sp-next"); page.click("#stage-advance-confirm"); page.wait_for_timeout(200)
-    page.reload(); page.click('[data-tab="pipeline"]'); page.wait_for_timeout(200)
+    page.reload()
+    if page.is_visible("#opp-detail-overlay"): page.keyboard.press("Escape")   # the sheet in the address comes back on a reload
+    page.click('[data-tab="pipeline"]'); page.wait_for_timeout(200)
     c3 = next(o for o in stored(page, "todo-widget-opportunities") if o["id"] == "c3")
     check(c3["stage"] == "signature", f"« Signature » is reached and stays after a reload ({c3['stage']})")
     check(not errors, f"no page errors ({errors})")
@@ -3016,6 +3025,25 @@ Responsable technique
     page.evaluate("recoverDeletedTasks()")
     check(eventually(lambda: [t["deleted"] for t in stored(page, "todo-widget-tasks") if t["id"] == "v3"] == [False]), "console: recoverDeletedTasks() brings deleted tasks back")
     check(not errors, f"corners: no page errors ({errors})")
+    page.close()
+
+    # --- UX audit quick wins: duplicates banner « Me le rappeler demain », « Réglages » table of contents, labels, contrast
+    dups = [{"id": f"dd{i}", "kind": "installation", "company": "Dupli", "centrale": "Toit Même", "title": "Toit Même", "kwc": "500", "stage": "collecte", "createdAt": 1, "updatedAt": 1, "deleted": False} for i in range(2)]
+    page, errors = new_page(browser, seed={"todo_todo-widget-opportunities": json.dumps(dups)}); page.goto(URL)
+    check(eventually(lambda: page.is_visible("#dup-banner")), "duplicates banner shown")
+    page.click("#dup-banner-later")
+    check(eventually(lambda: page.is_hidden("#dup-banner")), "« Me le rappeler demain » hides the banner")
+    page.reload()
+    check(eventually(lambda: page.evaluate("!!window.storage")) and page.is_hidden("#dup-banner"), "… and it stays hidden until tomorrow")
+    page.click('[data-tab="lists"]')
+    toc = lambda: page.locator("#settings-toc button").all_inner_texts()
+    check(eventually(lambda: "Synchro" in toc() and "Sauvegarde" in toc() and "Clients" in toc()), f"Réglages: a table of contents ({toc()})")
+    check("Réglages" in page.inner_text('.tab[data-tab="lists"]'), "« Réf. & data » is now « Réglages »")
+    check(page.get_attribute("#contacts-type-filter", "aria-label") == "Type de société", "the company-type filter has a label")
+    page.click('[data-tab="pipeline"]')
+    col = page.evaluate("getComputedStyle(document.querySelector('.pipe-card-company')).color")
+    check(col != "rgb(26, 123, 140)", f"pipeline: a company name in a dark palette colour is lightened to be readable ({col})")
+    check(not errors, f"UX quick wins: no page errors ({errors})")
     page.close()
 
     browser.close()

@@ -40,7 +40,7 @@ window.TodoExcelSync=(function(){
   const bridgeUpToDate=info=>{ const v=String(info&&info.version||'0').split('.').map(Number); return v[0]>1 || (v[0]===1 && (v[1]||0)>=2); };
   async function xlSend(kind, list, rows){
     if(!app.bridgeState.info || Date.now()-app.bridgeState.checkedAt>60000) await bridgeCheck();
-    if(app.bridgeState.ok && !bridgeUpToDate(app.bridgeState.info)) throw new Error('Ton pont Excel est une ancienne version, moins protégée que la nouvelle : rien n\u2019a été envoyé. Dans Réf. & data → Pont Excel, télécharge pont-excel.ps1, remplace l\u2019ancien fichier et relance le pont.');
+    if(app.bridgeState.ok && !bridgeUpToDate(app.bridgeState.info)) throw new Error('Ton pont Excel est une ancienne version, moins protégée que la nouvelle : rien n\u2019a été envoyé. Dans Réglages → Pont Excel, télécharge pont-excel.ps1, remplace l\u2019ancien fichier et relance le pont.');
     const res=await bridgeCall('POST','/'+kind+'/upsert',{ rows }, 30000);
     const results=res.results||[], pending=[];
     results.forEach((r,i)=>{ const o=list[i]; xlRemember(kind, o, rows[i].values, r); if(r.ok && ((r.conflicts&&r.conflicts.length) || r.question)) pending.push({ o, r });
@@ -135,7 +135,7 @@ window.TodoExcelSync=(function(){
     const fmtD=t=>t>1e12?new Date(t).toLocaleDateString('fr-FR'):'';
     ov.querySelector('.xs-info').textContent=bridgeConfigured()
       ? 'Pipe '+(xsRead.pipe?'relu le '+fmtD(xsRead.pipe.at)+' à '+new Date(xsRead.pipe.at).toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'}):'pas encore relu')+' · Suivi '+(xsRead.bdd?'relu':'pas encore relu')+'. Envoyer ne remplace jamais une case modifiée par un collègue : elle te sera demandée.'
-      : 'Pont Excel non connecté sur cet ordinateur : la colonne « appli » dit ce qui a été envoyé ; le Suivi est relu depuis le Portefeuille (fichier chargé). Le pont se règle dans Réf. & data.';
+      : 'Pont Excel non connecté sur cet ordinateur : la colonne « appli » dit ce qui a été envoyé ; le Suivi est relu depuis le Portefeuille (fichier chargé). Le pont se règle dans Réglages.';
     ov.querySelectorAll('.xs-scope button').forEach(b=>b.classList.toggle('on', b.dataset.s===xsScope));
     const rows=xsList().filter(xsInScope).map(o=>({ o, p:xsState('pipe',o), b:xsBddApplies(o)?xsState('bdd',o):null }));
     const todo=rows.filter(r=>xsTodo(r.p) || (r.b && xsTodo(r.b)));

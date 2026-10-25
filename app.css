@@ -2335,3 +2335,19 @@ html.widget .dup-banner{ display:none; }
 .rs-opt{ display:flex; align-items:center; gap:7px; font-size:12.5px; color:var(--tx2); margin-bottom:10px; } .rs-opt input{ width:auto; }
 .rs-done{ color:var(--accent); font-weight:600; font-size:13px; }
 .rs-go{ background:var(--accent); color:#06231C; border:none; border-radius:var(--radius); padding:8px 16px; font:600 13px var(--font-ui); cursor:pointer; } .rs-go:hover{ filter:brightness(1.08); }
+
+/* ---------- UX audit, quick wins (proposal branch) ---------- */
+/* TD2: the menu in plain words, 13 px, instead of small spaced capitals */
+.tab{ font-family:var(--font-ui); font-size:13px; text-transform:none; letter-spacing:0; }
+/* TD6: the note's title and « → tâche demain » were 4.4:1, now above 4.5:1 */
+.postit-title, #postit-to-task{ color:var(--tx2); }
+/* TD9: « Mode d'emploi » and « Widget » easy to hit (28 px) */
+.app-sidebar-help, .app-sidebar-widget{ min-height:28px; box-sizing:border-box; }
+/* TD10: the duplicates banner can wait until tomorrow */
+.dup-banner .dup-later{ margin-left:0; background:none; border:1px solid var(--bd); color:var(--tx2); border-radius:6px; padding:4px 10px; font-size:12px; cursor:pointer; }
+.dup-banner .dup-later:hover{ color:var(--tx1); border-color:var(--tx3); }
+/* TD3: « Réglages » with a table of contents */
+.settings-toc{ display:flex; flex-wrap:wrap; gap:6px; padding:14px 20px 4px; position:sticky; top:0; z-index:2; background:var(--bg); border-bottom:1px solid var(--bd); }
+.settings-toc button{ background:var(--panel-2); border:1px solid var(--bd); color:var(--tx2); border-radius:999px; padding:5px 12px; font:500 12.5px var(--font-ui); cursor:pointer; }
+.settings-toc button:hover{ color:var(--tx1); border-color:var(--accent); }
+.settings-toc button .n{ color:#ED6965; margin-left:4px; }
