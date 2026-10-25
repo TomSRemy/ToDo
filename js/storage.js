@@ -101,7 +101,7 @@
       set(key,value){ return whenReady(()=>doSet(key,value)); },
       delete(key){ return whenReady(()=>doDelete(key)); },
       async list(prefix){ await ready; prefix=prefix||''; const keys=new Set([...cache.keys()].filter(k=>k.startsWith(prefix))); try{ Object.keys(localStorage).filter(k=>k.startsWith('todo_'+prefix)).forEach(k=>keys.add(k.slice(5))); }catch(e){} return { keys:[...keys], shared:false }; },
-      // what the data takes on this device, for the gauge in Réf. & data
+      // what the data takes on this device, for the gauge in Réglages
       async usage(){
         await ready;
         let data=0; const parts={};
