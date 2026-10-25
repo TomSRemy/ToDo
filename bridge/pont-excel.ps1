@@ -31,7 +31,7 @@
 param([int]$Port = 8765, [switch]$Reconfigurer, [switch]$Mock)
 
 $ErrorActionPreference = 'Stop'
-$Version = '1.4'
+$Version = '1.5'
 $Here = Split-Path -Parent $MyInvocation.MyCommand.Path
 $ConfigPath = Join-Path $Here 'pont-excel-config.json'
 # the app's addresses: GitHub Pages, and its own Cloudflare Pages address (an address given by hand: "origins" in pont-excel-config.json)
@@ -84,21 +84,67 @@ if ($Config.origins) { $AllowedOrigins += @($Config.origins | ForEach-Object { [
 # ---------------- Table adapters (Excel via COM, or in-memory for -Mock) ----------------
 # An adapter exposes: Headers (string[]), FirstCol (sheet column of the table's first column), RowCount,
 # Get(r,c), HasFormula(r,c), Set(r,c,value), AddRow() -> new row index, ExcelRow(r), Save(), Close(), Sheets() for reading.
+# Excel: a workbook already open (in ANY Excel window — several Excel processes can run side by side) is used where it is;
+# otherwise the bridge opens it in its own invisible Excel, closes it right after, and quits that Excel when it holds
+# nothing more (so no hidden Excel keeps the file open: « … est ouvert dans une autre application »).
 $script:xl = $null
 function Get-Excel {
   if ($script:xl) { try { $null = $script:xl.Version; return $script:xl } catch { $script:xl = $null } }
-  try { $script:xl = [Runtime.InteropServices.Marshal]::GetActiveObject('Excel.Application') }
-  catch { $script:xl = New-Object -ComObject Excel.Application; $script:xl.Visible = $false; $script:xl.DisplayAlerts = $false }
+  $script:xl = New-Object -ComObject Excel.Application; $script:xl.Visible = $false; $script:xl.DisplayAlerts = $false
   return $script:xl
+}
+function Release-Excel {
+  if (-not $script:xl) { return }
+  try { if ($script:xl.Workbooks.Count -eq 0) { $script:xl.Quit(); [void][Runtime.InteropServices.Marshal]::ReleaseComObject($script:xl); $script:xl = $null; [GC]::Collect() } } catch { $script:xl = $null }
+}
+$script:rotReady = $false
+function Find-OpenBook($name) {
+  # the Running Object Table lists every open workbook of every Excel, under its path or its SharePoint address
+  if (-not $script:rotReady) {
+    Add-Type -TypeDefinition @"
+using System; using System.Runtime.InteropServices; using System.Runtime.InteropServices.ComTypes;
+public static class TodoRot {
+  [DllImport("ole32.dll")] static extern int GetRunningObjectTable(int r, out IRunningObjectTable t);
+  [DllImport("ole32.dll")] static extern int CreateBindCtx(int r, out IBindCtx c);
+  public static object Find(string fileName) {
+    IRunningObjectTable rot; IEnumMoniker en; IBindCtx ctx;
+    if (GetRunningObjectTable(0, out rot) != 0) return null;
+    rot.EnumRunning(out en); CreateBindCtx(0, out ctx);
+    IMoniker[] m = new IMoniker[1];
+    while (en.Next(1, m, IntPtr.Zero) == 0) {
+      string n = null; try { m[0].GetDisplayName(ctx, null, out n); } catch { continue; }
+      if (n == null) continue;
+      string d = Uri.UnescapeDataString(n).Replace('/', '\\');
+      if (d.EndsWith("\\" + fileName, StringComparison.OrdinalIgnoreCase)) { object o; if (rot.GetObject(m[0], out o) == 0) return o; }
+    }
+    return null;
+  }
+}
+"@
+    $script:rotReady = $true
+  }
+  try { return [TodoRot]::Find($name) } catch { return $null }
 }
 function Open-Book($path) {
   if (-not (Test-Path $path)) { throw "Fichier introuvable : $path" }
-  $xl = Get-Excel
   $name = [IO.Path]::GetFileName($path)
-  # A file of a synced folder that is open in Excel reports its SharePoint URL as FullName: match on the name too.
-  foreach ($wb in $xl.Workbooks) { if ($wb.FullName -eq $path -or $wb.Name -eq $name) { return @{ wb = $wb; opened = $false } } }
-  return @{ wb = $xl.Workbooks.Open($path); opened = $true }
+  $open = Find-OpenBook $name
+  if ($open) {
+    try { $null = $open.Worksheets.Count; return @{ wb = $open; opened = $false } } catch { }   # (an entry that is not a workbook: ignored)
+  }
+  $xl = Get-Excel
+  try { $wb = $xl.Workbooks.Open($path) }
+  catch {
+    Release-Excel
+    throw ("« " + $name + " » est ouvert dans un Excel que le pont ne peut pas rejoindre. Ferme ce fichier dans Excel (ou, s'il n'est ouvert nulle part, termine les « Microsoft Excel » restants dans le Gestionnaire des tâches), puis réessaie.")
+  }
+  if ($wb.ReadOnly) {
+    $wb.Close($false); Release-Excel
+    throw ("« " + $name + " » ne s'ouvre qu'en lecture seule (ouvert ou verrouillé ailleurs) : rien n'est écrit. Ferme-le dans Excel, puis réessaie.")
+  }
+  return @{ wb = $wb; opened = $true }
 }
+function Close-Book($book) { if ($book.opened) { try { $book.wb.Close($false) } catch { } ; Release-Excel } }
 # Writing happens in ONE sheet of each workbook, never elsewhere: « Pipe agrégation » in the Pipe, « BDD Agrégation » in
 # the Suivi (the other sheets — Tableau de bord, Paramètres, Dashboard… — are never touched). Sheet found by its name
 # (accents and case ignored); renamed or missing: nothing is written, the app is told why.
@@ -116,7 +162,7 @@ function Find-Table($wb, $kind) {
 function New-ComAdapter($kind) {
   $path = $Config.$kind
   $book = Open-Book $path
-  $lo = Find-Table $book.wb $kind
+  try { $lo = Find-Table $book.wb $kind } catch { Close-Book $book; throw }   # never leave the file open behind an error
   $hdr = $lo.HeaderRowRange.Value2
   $headers = @(); for ($c = 1; $c -le $lo.ListColumns.Count; $c++) { $headers += [string]$hdr[1, $c] }
   $a = @{ kind = $kind; book = $book; lo = $lo; Headers = $headers; FirstCol = $lo.Range.Column }
@@ -134,7 +180,7 @@ function New-ComAdapter($kind) {
   $a.Backup = { param($a, $dir, $stamp) $n = [IO.Path]::GetFileNameWithoutExtension($a.book.wb.Name); $e = [IO.Path]::GetExtension($a.book.wb.Name); $p = Join-Path $dir ($n + "-" + $stamp + $e); $a.book.wb.SaveCopyAs($p); $p }
   $a.BackupPattern = { param($a) [IO.Path]::GetFileNameWithoutExtension($a.book.wb.Name) + "-*" + [IO.Path]::GetExtension($a.book.wb.Name) }
   $a.Save = { param($a) $a.book.wb.Save() }
-  $a.Close = { param($a) if ($a.book.opened) { $a.book.wb.Close($false) } }
+  $a.Close = { param($a) Close-Book $a.book }
   return $a
 }
 $script:mockTables = @{}
@@ -405,7 +451,7 @@ function Read-Sheets($kind) {
       }
       $out[$ws.Name] = $rows
     }
-  } finally { if ($book.opened) { $book.wb.Close($false) } }
+  } finally { Close-Book $book }
   return $out
 }
 
@@ -491,6 +537,7 @@ Write-Host ('  BDD  : ' + $Config.bdd)
 Write-Host ('  Clé à recopier dans l''app (Réglages → Pont Excel) : ' + $Config.token) -ForegroundColor Yellow
 Write-Host '  Laisse cette fenêtre ouverte (tu peux la réduire). Ctrl+C pour arrêter.'
 Write-Host ''
+try {
 while ($true) {
   $client = $listener.AcceptTcpClient()
   try {
@@ -510,3 +557,4 @@ while ($true) {
   } catch { Write-Info ("Connexion interrompue : " + $_.Exception.Message) 'DarkGray' }
   finally { $client.Close() }
 }
+} finally { if ($script:xl) { try { $script:xl.Quit() } catch { } } ; $listener.Stop() }   # Ctrl+C or window closed: the bridge's own Excel goes too
