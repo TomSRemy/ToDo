@@ -5291,6 +5291,8 @@
     renderBridgeStatus();
     return bridgeState;
   }
+  // the bridge's files: always the published version, never a copy the browser kept (a new address each time)
+  document.querySelectorAll('a.bridge-dl').forEach(a=>a.addEventListener('click', ()=>{ a.href=a.getAttribute('href').split('?')[0]+'?t='+Date.now(); }));
   function renderBridgeStatus(){
     const el=$('bridge-status'); if(!el) return;
     const s=bridgeState;
@@ -5298,7 +5300,7 @@
     if(!s.ok){ el.textContent=s.error||'Pont non détecté.'; el.className='bridge-status off'; return; }
     if(!s.authorized){ el.textContent='Pont détecté, mais la clé ne correspond pas.'; el.className='bridge-status off'; return; }
     el.textContent='Connecté · Pipe : '+(s.info.pipe.found?s.info.pipe.name:'fichier introuvable')+' · BDD : '+(s.info.bdd.found?s.info.bdd.name:'fichier introuvable')
-      +(bridgeUpToDate(s.info)?'':' · ⚠ ancienne version du pont : télécharge pont-excel.ps1 ci-dessus, remplace l\u2019ancien fichier et relance le pont');
+      +(bridgeUpToDate(s.info)?' · pont v'+s.info.version:' · ⚠ ton pont est en version '+(s.info.version||'?')+', la '+window.TodoExcelSync.BRIDGE_LATEST+' est disponible : télécharge pont-excel.ps1 ci-dessus, remplace l\u2019ancien fichier et relance le pont');
     el.className='bridge-status '+(bridgeUpToDate(s.info)?'on':'off');
   }
   window.TodoExcelSync.init({ $, ON_PHONE, PQ_FIELDS, bddCells, bridgeCall, bridgeCheck, bridgeConfigured, cellToText, importParcFromBridge, isExited, openOppDetail, oppActionBtn, oppName, pipeCells, pqFold, pqPad, relanceOnMove, renderPipeline, saveCrm, setOppStage, softFail, stageIndex, stageLabel, suiviState, touchCrm, get bridgeState(){ return bridgeState; }, set bridgeState(v){ bridgeState=v; }, get opportunities(){ return opportunities; }, set opportunities(v){ opportunities=v; } });   // Envoi vers les Excel partagés et Excel ⇄ appli — js/excel-sync.js

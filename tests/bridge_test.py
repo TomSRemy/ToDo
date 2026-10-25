@@ -32,6 +32,11 @@ def check(cond, msg):
         failures.append(msg)
 
 
+import re as _re
+_v = _re.search(r"\$Version = '([0-9.]+)'", (ROOT / "bridge" / "pont-excel.ps1").read_text(encoding="utf-8-sig")).group(1)
+_l = _re.search(r"BRIDGE_LATEST='([0-9.]+)'", (ROOT / "js" / "excel-sync.js").read_text(encoding="utf-8")).group(1)
+check(_v == _l, f"the app asks for the bridge it publishes (pont-excel.ps1 {_v}, app {_l})")
+
 work = pathlib.Path(tempfile.mkdtemp())
 shutil.copy(ROOT / "bridge" / "pont-excel.ps1", work / "pont-excel.ps1")
 with socket.socket() as s_:

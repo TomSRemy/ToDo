@@ -1,15 +1,17 @@
 @echo off
 chcp 65001 >nul
 title Pont Excel - Todo
-rem Starts the bridge: pont-excel.ps1 must sit next to this file. A copy downloaded under another name
-rem (pont-excel (1).ps1, pont-excel.ps1.txt) is taken instead; nothing found: says what to do.
+rem Starts the bridge with the NEWEST copy of pont-excel.ps1 in this folder: a new download is often saved as
+rem "pont-excel (1).ps1" or "pont-excel.ps1.txt" next to the old one. That copy becomes pont-excel.ps1.
 set "PS1=%~dp0pont-excel.ps1"
-if exist "%PS1%" goto run
-for /f "delims=" %%f in ('dir /b /a-d /o-d "%~dp0pont-excel*.ps1" "%~dp0pont-excel*.ps1.txt" 2^>nul') do (
-  copy /y "%~dp0%%f" "%PS1%" >nul
-  echo Fichier "%%f" trouve : copie sous le nom pont-excel.ps1.
-  goto run
-)
+set "NEWEST="
+for /f "delims=" %%f in ('dir /b /a-d /o-d "%~dp0pont-excel*.ps1*" 2^>nul') do if not defined NEWEST set "NEWEST=%%f"
+if not defined NEWEST goto missing
+if /i "%NEWEST%"=="pont-excel.ps1" goto run
+copy /y "%~dp0%NEWEST%" "%PS1%" >nul
+echo Copie la plus recente prise : %NEWEST%
+goto run
+:missing
 echo.
 echo Le fichier pont-excel.ps1 est introuvable dans ce dossier :
 echo   %~dp0

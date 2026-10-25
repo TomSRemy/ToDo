@@ -31,7 +31,7 @@
 param([int]$Port = 8765, [switch]$Reconfigurer, [switch]$Mock)
 
 $ErrorActionPreference = 'Stop'
-$Version = '1.7'
+$Version = '1.8'
 $Here = Split-Path -Parent $MyInvocation.MyCommand.Path
 $ConfigPath = Join-Path $Here 'pont-excel-config.json'
 # the app's addresses: GitHub Pages, and its own Cloudflare Pages address (an address given by hand: "origins" in pont-excel-config.json)
@@ -280,6 +280,10 @@ function Write-Journal($a, $kind, $r, $c, $key, $old, $new, $why) {
   [IO.File]::AppendAllText($JournalPath, $line + "`r`n", (New-Object Text.UTF8Encoding $true))
 }
 # the row still holds this plant (and, when given, this business code): checked again right before writing
+function Row-Filled($a, $r) {
+  $out = @(); for ($c = 1; $c -le $a.Headers.Count -and $out.Count -lt 4; $c++) { if (& $a.HasFormula $a $r $c) { continue }; $v = & $a.Get $a $r $c; if (-not (Is-Blank $v)) { $out += ('« ' + $a.Headers[$c - 1] + ' » = « ' + (Show-Value $v) + ' »') } }
+  return ($out -join ', ')
+}
 function Row-Still($a, $r, $keyCols, $keyVals) {
   if ($r -lt 1 -or $r -gt (& $a.RowCount $a)) { return $false }
   for ($j = 0; $j -lt $keyCols.Count; $j++) { if ((Norm (& $a.Get $a $r $keyCols[$j])) -ne $keyVals[$j]) { return $false } }
@@ -378,7 +382,7 @@ function Upsert-Rows($kind, $rows) {
       }
       $written = New-Object System.Collections.ArrayList; $mine = New-Object System.Collections.ArrayList; $conflicts = New-Object System.Collections.ArrayList
       $rowCodeOk = $isNew -or (& $codeOk $target)
-      $moved = $false
+      $moved = $false; $why = ''
       $order = @(); foreach ($kc in $keyCols) { $order += ($kc + $off - 1) }; for ($x = 0; $x -lt $vals.Count; $x++) { if ($order -notcontains $x) { $order += $x } }
       foreach ($i in $order) {
         $c = $i + 1 - $off
@@ -407,18 +411,18 @@ function Upsert-Rows($kind, $rows) {
         # read the line again: a colleague may have sorted or inserted lines since it was found
         if ($isNew) {
           # a new line: still empty before the first cell, then still holding the cells written so far
-          if ($written.Count -eq 0) { if (-not (& $a.RowEmpty $a $target)) { $moved = $true; break } }
-          else { foreach ($w in $written) { if (-not (Same-Value (& $a.Get $a $target ($w + 1 - $off)) (Convert-Cell $vals[$w]))) { $moved = $true } }; if ($moved) { break } }
-        } elseif (-not (Row-Still $a $target $keyCols $keyVals)) { $moved = $true; break }
+          if ($written.Count -eq 0) { if (-not (& $a.RowEmpty $a $target)) { $moved = $true; $why = 'la nouvelle ligne ' + (& $a.ExcelRow $a $target) + ' n''est pas vide : ' + (Row-Filled $a $target); break } }
+          else { foreach ($w in $written) { $got = & $a.Get $a $target ($w + 1 - $off); if (-not (Same-Value $got (Convert-Cell $vals[$w]))) { $moved = $true; $why = 'colonne « ' + $a.Headers[$w - $off] + ' » : écrit « ' + (Show-Value (Convert-Cell $vals[$w])) + ' », relu « ' + (Show-Value $got) + ' » (' + $(if ($null -eq $got) { 'vide' } else { $got.GetType().Name }) + ')' } }; if ($moved) { break } }
+        } elseif (-not (Row-Still $a $target $keyCols $keyVals)) { $moved = $true; $why = 'la ligne ' + (& $a.ExcelRow $a $target) + ' ne porte plus ' + $keyText; break }
         $old = & $a.Get $a $target $c
-        if (-not (Same-Value $old $e)) { $moved = $true; break }   # the cell changed under our feet
+        if (-not (Same-Value $old $e)) { $moved = $true; $why = 'colonne « ' + $a.Headers[$c - 1] + ' » : « ' + (Show-Value $e) + ' » devenu « ' + (Show-Value $old) + ' »'; break }   # the cell changed under our feet
         & $a.Set $a $target $c $toWrite
         Write-Journal $a $kind $target $c $keyText $old $toWrite $(if (Is-Blank $old) { 'case vide remplie' } elseif ($f -eq 'replace') { 'Remplacer (choisi dans l''app)' } elseif ($f -eq 'merge') { 'Fusionner (choisi dans l''app)' } else { 'valeur écrite par l''app, inchangée depuis' })
         [void]$written.Add($i); [void]$mine.Add($i)
       }
       if ($moved) {
-        [void]$results.Add(@{ ok = $false; key = $keyText; message = $(if ($written.Count) { "Le tableau a bougé pendant l'écriture (tri ou insertion par un collègue) : arrêt après " + $written.Count + " case(s), notées dans le journal. Renvoie l'affaire." } else { "Le tableau a bougé (tri ou insertion par un collègue) : rien n'a été écrit sur cette ligne. Renvoie l'affaire." }); written = @($written); mine = @($mine) })
-        Write-Info ("$($Kinds[$kind].label) : tableau modifié pendant l'envoi, ligne arrêtée (" + $keyText + ')') 'Yellow'
+        [void]$results.Add(@{ ok = $false; key = $keyText; message = ($(if ($written.Count) { "Le tableau a bougé pendant l'écriture (tri ou insertion par un collègue) : arrêt après " + $written.Count + " case(s), notées dans le journal. Renvoie l'affaire." } else { "Le tableau a bougé (tri ou insertion par un collègue) : rien n'a été écrit sur cette ligne. Renvoie l'affaire." }) + $(if ($why) { ' (' + $why + ')' } else { '' })); written = @($written); mine = @($mine) })
+        Write-Info ("$($Kinds[$kind].label) : tableau modifié pendant l'envoi, ligne arrêtée (" + $keyText + ')' + $(if ($why) { ' — ' + $why } else { '' })) 'Yellow'
         continue
       }
       if (-not $isNew -and $written.Count -eq 0 -and $conflicts.Count -eq 0) { $action = 'aucun changement' }
@@ -583,7 +587,8 @@ while ($true) {
         # Excel busy (a cell being typed, a dialog open): tried again for about 10 s before giving up
         if ($busy -and $tries -lt 6) { Write-Info 'Excel est occupé, nouvel essai dans 2 s…' 'DarkGray'; Start-Sleep -Seconds 2; continue }
         if ($busy) { $msg = 'Excel est occupé (une cellule en cours de saisie, ou une fenêtre de message ouverte dans Excel) : termine la saisie ou ferme la fenêtre, puis réessaie.' }
-        Write-Info ("Erreur : " + $msg) 'Red'
+        $at = ''; try { $at = ' [pont, ligne ' + $_.InvocationInfo.ScriptLineNumber + ' : ' + ($_.InvocationInfo.Line.Trim() -replace '\s+', ' ').Substring(0, [Math]::Min(90, ($_.InvocationInfo.Line.Trim() -replace '\s+', ' ').Length)) + ']' } catch { }
+        Write-Info ("Erreur : " + $msg + $at) 'Red'
         $res = @(500, @{ ok = $false; message = $msg })
       }
     }
