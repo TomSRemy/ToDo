@@ -2396,3 +2396,24 @@ html.widget .dup-banner{ display:none; }
 }
 /* the tasks' figures, now in the pipeline's Tableau de bord */
 .pd-stats{ display:flex; flex-direction:column; gap:6px; }
+
+/* ---------- A narrower window, or the page zoomed in: everything keeps its shape ---------- */
+.who-chip, .pipe-days, .stage-chip{ white-space:nowrap; flex-shrink:0; }   /* « À moi » never breaks into a bubble */
+/* the producer of a request is written in full (on two lines if needed) instead of « Watt & … » */
+.pipe-req-head .pipe-card-company{ flex:1 0 100%; max-width:100%; white-space:normal; overflow:visible; text-overflow:clip; overflow-wrap:break-word; }
+.pipe-req-head .pipe-req-tot{ margin-left:0; }
+.pipe-summary .sm, .quick-add-bar .sm{ display:none; }
+#tab-pipeline .search-box{ flex:0 1 220px; min-width:130px; width:auto; }
+@media (max-width: 1500px){
+  .pipe-summary .lg, #opp-add-btn .lg{ display:none; }
+  .pipe-summary .sm{ display:inline; }
+  .pipe-seg button{ padding:7px 9px; }
+}
+@media (max-width: 1300px){
+  #tab-pipeline .search-box{ flex-basis:150px; }
+  .pipe-seg button{ padding:7px 7px; font-size:12px; }
+}
+@media (max-width: 1250px){
+  .pipe-col{ min-width:185px; }
+  #pipeline-board{ gap:8px; padding:10px; }
+}

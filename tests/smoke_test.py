@@ -853,7 +853,8 @@ with sync_playwright() as p:
     card = page.inner_text(".pipe-req-card")
     check("→ En attente d’Ops : pricing indicatif" in card and "Ops" in card and "depuis 20 j" in card, f"step by step: the card tells what's next, who has it, since when ({card[:120]!r})")
     check("Pricing · 1" in page.inner_text('.pipe-col[data-phase="offre"]').replace("PRICING", "Pricing") and page.locator(".pipe-sub-h").count() >= 1, "step by step: a small title per step in the column")
-    check("Bloqués" in page.inner_text("#pipe-summary") and "En attente des autres 1" in page.inner_text("#pipe-summary"), "step by step: « à moi / en attente / bloqués » over the board")
+    check("Bloqués" in page.inner_text("#pipe-summary") and ("En attente des autres 1" in page.inner_text("#pipe-summary") or "Autres 1" in page.inner_text("#pipe-summary")),
+          f"step by step: « à moi / en attente / bloqués » over the board (short words in a narrower window: {page.inner_text('#pipe-summary')!r})")
     page.click(".pipe-req-card .pipe-card-title")
     panel = page.inner_text("#opp-detail-body .step-panel")
     check("Pricing indicatif" in panel and "depuis 20 jours" in panel and "Mail de demande envoyé" in panel and "Passer à « Offre à remettre »" in panel, f"step by step: « Étape en cours », its checklist, one button ({panel[:200]!r})")

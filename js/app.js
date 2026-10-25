@@ -3198,7 +3198,7 @@
   function paintPipeSummary(){ try{ paintDupBtn(); paintDupBanner(); }catch(e){ softFail('bandeau doublons', e); } let el=$('pipe-summary'); const bar=document.querySelector('#tab-pipeline .quick-add-bar'); if(!bar) return;
     if(!el){ el=document.createElement('span'); el.id='pipe-summary'; el.className='pipe-summary'; const ref=$('pipe-bar-spacer'); bar.insertBefore(el, ref); }
     const show=pipeTallyN.on && !pipeDash && !pipeMeet && !pipeList && !pipeMap; el.hidden=!show; if(!show) return;
-    el.innerHTML='À moi <b></b> · En attente des autres <b></b>'+(pipeTallyN.stuck?' · Bloqués &gt; 15 j <b class="late"></b>':'');
+    el.innerHTML='À moi <b></b> · <span class="lg">En attente des autres</span><span class="sm">Autres</span> <b></b>'+(pipeTallyN.stuck?' · Bloqués<span class="lg"> &gt; 15 j</span> <b class="late"></b>':'');
     const bs=el.querySelectorAll('b'); bs[0].textContent=pipeTallyN.me; bs[1].textContent=pipeTallyN.others; if(bs[2]) bs[2].textContent=pipeTallyN.stuck; }
   // the card's « what's next »: the linked open task, else what the step asks; who has it and since when; its request
   function cardStepInfo(card, group, reqId){
