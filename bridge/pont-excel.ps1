@@ -24,7 +24,7 @@
      et chaque case écrite est notée dans « Sauvegardes pont/journal-pont.csv » avec son ancienne valeur (jamais effacé).
 
   Lancement : double-clic sur « Lancer-pont-excel.bat ». Au premier lancement, choisir les deux fichiers Excel
-  et recopier la clé affichée dans l'app (Réf. & data → Pont Excel).
+  et recopier la clé affichée dans l'app (Réglages → Pont Excel).
   Options : -Reconfigurer (choisir à nouveau les fichiers), -Port 8765, -Mock (test sans Excel).
 #>
 param([int]$Port = 8765, [switch]$Reconfigurer, [switch]$Mock)
@@ -482,7 +482,7 @@ Write-Host ''
 Write-Host "Pont Excel pour Todo v$Version — http://127.0.0.1:$Port" -ForegroundColor Cyan
 Write-Host ('  Pipe : ' + $Config.pipe)
 Write-Host ('  BDD  : ' + $Config.bdd)
-Write-Host ('  Clé à recopier dans l''app (Réf. & data → Pont Excel) : ' + $Config.token) -ForegroundColor Yellow
+Write-Host ('  Clé à recopier dans l''app (Réglages → Pont Excel) : ' + $Config.token) -ForegroundColor Yellow
 Write-Host '  Laisse cette fenêtre ouverte (tu peux la réduire). Ctrl+C pour arrêter.'
 Write-Host ''
 while ($true) {
