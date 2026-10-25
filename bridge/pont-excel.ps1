@@ -31,7 +31,7 @@
 param([int]$Port = 8765, [switch]$Reconfigurer, [switch]$Mock)
 
 $ErrorActionPreference = 'Stop'
-$Version = '1.8'
+$Version = '1.9'
 $Here = Split-Path -Parent $MyInvocation.MyCommand.Path
 $ConfigPath = Join-Path $Here 'pont-excel-config.json'
 # the app's addresses: GitHub Pages, and its own Cloudflare Pages address (an address given by hand: "origins" in pont-excel-config.json)
@@ -171,14 +171,18 @@ function New-ComAdapter($kind) {
   $a.Get = { param($a, $r, $c) (& $a.Cell $a $r $c).Value2 }
   $a.Column = { param($a, $c) $n = $a.lo.ListRows.Count; $out = New-Object object[] ($n + 1); if ($n -gt 0) { $v = $a.lo.ListColumns.Item($c).DataBodyRange.Value2; if ($n -eq 1) { $out[1] = $v } else { for ($r = 1; $r -le $n; $r++) { $out[$r] = $v[$r, 1] } } }; ,$out }
   $a.HasFormula = { param($a, $r, $c) [bool](& $a.Cell $a $r $c).HasFormula }
-  $a.Set = { param($a, $r, $c, $v) $cell = (& $a.Cell $a $r $c); if ($v -is [datetime]) { $cell.Value = $v } else { $cell.Value2 = $v } }
+  $a.Set = { param($a, $r, $c, $v) $cell = (& $a.Cell $a $r $c); $b = $(if ($v -is [psobject]) { $v.PSObject.BaseObject } else { $v })
+    try { if ($b -is [datetime]) { $cell.Value = $b } else { $cell.Value2 = $b } }
+    catch { if ($b -is [double] -or $b -is [int]) { $cell.Formula = ([double]$b).ToString([Globalization.CultureInfo]::InvariantCulture) } elseif ($b -is [bool]) { $cell.Formula = $(if ($b) { 'TRUE' } else { 'FALSE' }) } else { throw } } }
   $a.BeforeWrite = { param($a) }
   $a.AddRow = { param($a) $null = $a.lo.ListRows.Add(); $a.lo.ListRows.Count }
   $a.ExcelRow = { param($a, $r) $a.lo.DataBodyRange.Row + $r - 1 }
   # empty = every cell that is not a formula is blank (the table's calculated columns fill a new row by themselves)
   $a.RowEmpty = { param($a, $r) $rg = $a.lo.ListRows.Item($r).Range; $v = $rg.Value2; $f = $rg.Formula
-    if ($v -is [array]) { $n = $v.GetLength(1); for ($c = 1; $c -le $n; $c++) { if (([string]$f[1, $c]).StartsWith('=')) { continue }; if (-not (Is-Blank $v[1, $c])) { return $false } }; return $true }
-    return ((Is-Blank $v) -or ([string]$f).StartsWith('=')) }
+    if ($v -is [array]) { $n = $v.GetLength(1); for ($c = 1; $c -le $n; $c++) { if (([string]$f[1, $c]).StartsWith('=')) { continue }; if (-not (Is-EmptyCell $v[1, $c])) { return $false } }; return $true }
+    return ((Is-EmptyCell $v) -or ([string]$f).StartsWith('=')) }
+  $a.DeleteRow = { param($a, $r) $a.lo.ListRows.Item($r).Delete() }
+  $a.DeleteRows = { param($a, $first, $count) $a.lo.DataBodyRange.Rows.Item($first).Resize($count).Delete() }
   $a.WasClosed = [bool]$book.opened
   $a.Backup = { param($a, $dir, $stamp) $n = [IO.Path]::GetFileNameWithoutExtension($a.book.wb.Name); $e = [IO.Path]::GetExtension($a.book.wb.Name); $p = Join-Path $dir ($n + "-" + $stamp + $e); $a.book.wb.SaveCopyAs($p); $p }
   $a.BackupPattern = { param($a) [IO.Path]::GetFileNameWithoutExtension($a.book.wb.Name) + "-*" + [IO.Path]::GetExtension($a.book.wb.Name) }
@@ -204,9 +208,11 @@ function New-MockAdapter($kind) {
   $a.Set = { param($a, $r, $c, $v) $a.t.rows[$r - 1][$c - 1] = $v }
   # test only: a colleague inserts a line at the top just before the bridge writes
   $a.BeforeWrite = { param($a) if ($a.t.shiftOnWrite) { $a.t.shiftOnWrite = $false; $a.t.rows.Insert(0, (New-Object object[] $a.t.headers.Count)) } }
-  $a.AddRow = { param($a) $line = New-Object object[] $a.t.headers.Count; foreach ($fc in $a.t.formulas.Keys) { $line[$fc - 1] = 'calculé' }; $null = $a.t.rows.Add($line); $a.t.rows.Count }   # like a calculated column
+  $a.AddRow = { param($a) $line = New-Object object[] $a.t.headers.Count; foreach ($fc in $a.t.formulas.Keys) { $line[$fc - 1] = 'calculé' }; foreach ($bc in @($a.t.checkboxes)) { if ($bc) { $line[$bc - 1] = $false } }; $null = $a.t.rows.Add($line); $a.t.rows.Count }   # like a calculated column / a checkbox column
+  $a.DeleteRow = { param($a, $r) $a.t.rows.RemoveAt($r - 1) }
+  $a.DeleteRows = { param($a, $first, $count) $a.t.rows.RemoveRange($first - 1, $count) }
   $a.ExcelRow = { param($a, $r) $r + 1 }
-  $a.RowEmpty = { param($a, $r) $line = $a.t.rows[$r - 1]; for ($c = 1; $c -le $line.Count; $c++) { if ($a.t.formulas[$c]) { continue }; if (-not (Is-Blank $line[$c - 1])) { return $false } }; return $true }
+  $a.RowEmpty = { param($a, $r) $line = $a.t.rows[$r - 1]; for ($c = 1; $c -le $line.Count; $c++) { if ($a.t.formulas[$c]) { continue }; if (-not (Is-EmptyCell $line[$c - 1])) { return $false } }; return $true }
   $a.WasClosed = [bool]$t.closed
   $a.Backup = { param($a, $dir, $stamp) $p = Join-Path $dir ("mock-" + $a.kind + "-" + $stamp + ".json"); (ConvertTo-Json -InputObject @($a.t.rows) -Depth 4 -Compress) | Set-Content -Path $p -Encoding UTF8; $p }
   $a.BackupPattern = { param($a) "mock-" + $a.kind + "-*.json" }
@@ -222,6 +228,8 @@ $RecentDays = 183
 $BackupDir = Join-Path $Here 'Sauvegardes pont'
 $KeepBackups = 3
 function Is-Blank($v) { return ($null -eq $v -or ([string]$v).Trim() -eq '') }
+# a cell of a new line counts as empty when blank or FALSE (an unticked checkbox: Excel fills checkbox columns by itself)
+function Is-EmptyCell($v) { return ((Is-Blank $v) -or ($v -is [bool] -and -not $v)) }
 function Convert-Cell($v) {
   if ($null -eq $v) { return $null }
   if ($v -is [string]) { if ($v.Trim() -eq '') { return $null } return $v }
@@ -281,7 +289,7 @@ function Write-Journal($a, $kind, $r, $c, $key, $old, $new, $why) {
 }
 # the row still holds this plant (and, when given, this business code): checked again right before writing
 function Row-Filled($a, $r) {
-  $out = @(); for ($c = 1; $c -le $a.Headers.Count -and $out.Count -lt 4; $c++) { if (& $a.HasFormula $a $r $c) { continue }; $v = & $a.Get $a $r $c; if (-not (Is-Blank $v)) { $out += ('« ' + $a.Headers[$c - 1] + ' » = « ' + (Show-Value $v) + ' »') } }
+  $out = @(); for ($c = 1; $c -le $a.Headers.Count -and $out.Count -lt 4; $c++) { if (& $a.HasFormula $a $r $c) { continue }; $v = & $a.Get $a $r $c; if (-not (Is-EmptyCell $v)) { $out += ('« ' + $a.Headers[$c - 1] + ' » = « ' + (Show-Value $v) + ' »') } }
   return ($out -join ', ')
 }
 function Row-Still($a, $r, $keyCols, $keyVals) {
@@ -293,6 +301,17 @@ function Upsert-Rows($kind, $rows) {
   $a = New-Adapter $kind
   $state = @{ backup = $null }
   try {
+    # empty lines left at the end of the table (by bridges before 1.9, which added a line and saved even when they wrote nothing): removed
+    $n = & $a.RowCount $a; $last = $n
+    while ($last -ge 2 -and (& $a.RowEmpty $a $last)) { $last-- }
+    $trail = $n - $last
+    if ($trail -gt 0) {
+      Ensure-Backup $a $state
+      & $a.DeleteRows $a ($last + 1) $trail
+      $state.wrote = $true
+      Write-Journal $a $kind ($last + 1) 1 '(fin du tableau)' '' '' ("$trail ligne(s) vide(s) retirée(s) en fin de tableau")
+      Write-Info ("$($Kinds[$kind].label) : $trail ligne(s) vide(s) retirée(s) en fin de tableau") 'Cyan'
+    }
     $keyCols = @()
     foreach ($kh in $Kinds[$kind].keys) {
       $i = -1; for ($c = 0; $c -lt $a.Headers.Count; $c++) { if ((Norm $a.Headers[$c]) -eq (Norm $kh)) { $i = $c + 1; break } }
@@ -370,7 +389,7 @@ function Upsert-Rows($kind, $rows) {
         Write-Info ("$($Kinds[$kind].label) : question posée (" + $keyText + ')') 'Yellow'
         continue
       }
-      $action = 'mise à jour'
+      $action = 'mise à jour'; $addedNow = $false
       if ($isNew) {
         $action = 'ajoutée'
         # reuse a completely empty row at the end of the table, else extend the table
@@ -378,11 +397,12 @@ function Upsert-Rows($kind, $rows) {
         if ($n -ge 1 -and (& $a.RowEmpty $a $n)) {
           $first = $n; while ($first -gt 1 -and (& $a.RowEmpty $a ($first - 1))) { $first-- }
           $target = $first
-        } else { Ensure-Backup $a $state; $target = & $a.AddRow $a }
+        } else { Ensure-Backup $a $state; $target = & $a.AddRow $a; $addedNow = $true }
       }
       $written = New-Object System.Collections.ArrayList; $mine = New-Object System.Collections.ArrayList; $conflicts = New-Object System.Collections.ArrayList
       $rowCodeOk = $isNew -or (& $codeOk $target)
       $moved = $false; $why = ''
+      if (-not $isNew) { $addedNow = $false }
       $order = @(); foreach ($kc in $keyCols) { $order += ($kc + $off - 1) }; for ($x = 0; $x -lt $vals.Count; $x++) { if ($order -notcontains $x) { $order += $x } }
       foreach ($i in $order) {
         $c = $i + 1 - $off
@@ -420,6 +440,10 @@ function Upsert-Rows($kind, $rows) {
         Write-Journal $a $kind $target $c $keyText $old $toWrite $(if (Is-Blank $old) { 'case vide remplie' } elseif ($f -eq 'replace') { 'Remplacer (choisi dans l''app)' } elseif ($f -eq 'merge') { 'Fusionner (choisi dans l''app)' } else { 'valeur écrite par l''app, inchangée depuis' })
         [void]$written.Add($i); [void]$mine.Add($i)
       }
+      # a line added then abandoned is removed — only if the line at that place is still empty (a colleague's insertion may have
+      # pushed it down: then nothing is removed here, the empty line goes with the end-of-table clean-up next time)
+      if ($moved -and $addedNow -and $written.Count -eq 0) { try { if (& $a.RowEmpty $a $target) { & $a.DeleteRow $a $target } } catch { } }
+      if ($written.Count -gt 0) { $state.wrote = $true }
       if ($moved) {
         [void]$results.Add(@{ ok = $false; key = $keyText; message = ($(if ($written.Count) { "Le tableau a bougé pendant l'écriture (tri ou insertion par un collègue) : arrêt après " + $written.Count + " case(s), notées dans le journal. Renvoie l'affaire." } else { "Le tableau a bougé (tri ou insertion par un collègue) : rien n'a été écrit sur cette ligne. Renvoie l'affaire." }) + $(if ($why) { ' (' + $why + ')' } else { '' })); written = @($written); mine = @($mine) })
         Write-Info ("$($Kinds[$kind].label) : tableau modifié pendant l'envoi, ligne arrêtée (" + $keyText + ')' + $(if ($why) { ' — ' + $why } else { '' })) 'Yellow'
@@ -429,7 +453,7 @@ function Upsert-Rows($kind, $rows) {
       [void]$results.Add(@{ ok = $true; action = $action; row = (& $a.ExcelRow $a $target); cells = $written.Count; key = $keyText; note = $note; written = @($written); mine = @($mine); conflicts = @($conflicts) })
       Write-Info ("$($Kinds[$kind].label) : ligne $action (" + $keyText + ')' + $(if ($conflicts.Count) { ' — ' + $conflicts.Count + ' case(s) gardée(s)' } else { '' })) 'Green'
     }
-    if ($state.backup) { & $a.Save $a }
+    if ($state.wrote) { & $a.Save $a }   # nothing written: the file is not saved (a line added then abandoned was already removed)
     return @{ ok = $true; results = $results; backup = $state.backup; fileWasClosed = [bool]$a.WasClosed }
   } finally { & $a.Close $a }
 }
@@ -523,6 +547,7 @@ function Handle($req) {
     $t.formulas = @{}; foreach ($f in @($data.formulas)) { if ($null -ne $f) { $t.formulas[[int]$f] = $true } }
     $t.closed = [bool]$data.closed
     $t.shiftOnWrite = [bool]$data.shiftOnWrite
+    $t.checkboxes = @($data.checkboxes | ForEach-Object { [int]$_ })
     return @(200, @{ ok = $true })
   }
   if ($Mock -and $req.method -eq 'GET' -and $req.path -match '^/mock/dump/(pipe|bdd)$') {

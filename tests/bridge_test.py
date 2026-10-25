@@ -154,6 +154,16 @@ try:
     send(row(["SOLARIS", "Toit Durand", "En préparation", 61]))
     check(len(dump()) == 2 and dump()[1][1] == "Toit Durand", "a completely empty line is reused")
 
+    # 7b. checkbox columns (FALSE in every new line) do not make a line « not empty »; empty lines left at the end are removed
+    call("POST", "/mock/seed/pipe", {"headers": H, "rows": [["SOLARIS", "Autre", "", "", "", "", "=x"], ["", "", False, "", "", "", "=x"], ["", "", False, "", "", "", "=x"], ["", "", False, "", "", "", "=x"]],
+                                     "formulas": [7], "checkboxes": [3]})
+    r = send(row(["SOLARIS", "Toit Durand", None, 61]))["results"][0]
+    d = dump()
+    check(r["ok"] and r["action"] == "ajoutée" and len(d) == 2 and d[1][1] == "Toit Durand", f"checkbox columns at FALSE: the line is added, empty lines left at the end removed ({len(d)} lines, {r.get('message', '')})")
+    seed([["SOLARIS", "Autre", "", "", "", "", ""]])
+    send(row(["SOLARIS", "Autre"]))
+    check(len(dump()) == 1, "nothing to write: no line added")
+
     # 8. duplicates → nothing written, the app asks which one
     seed([["SOLARIS", "Toit Durand", "En attente", 61, "", "", ""], ["SOLARIS", "Toit Durand", "En préparation", "", "", "doublon ?", ""]])
     r = send(row(["SOLARIS", "Toit Durand", "Gagné", 61]))["results"][0]
@@ -197,7 +207,7 @@ try:
     bseed([["2126 - Autre - A", "AUTRE", "Hangar", "Gagné", "", "", ""]], shiftOnWrite=True)
     r = bsend(row(["2729 - SOLARIS_Toit - A", "SOLARIS", "Toit", "En préparation", None, None, 400]))["results"][0]
     d = bdump()
-    check(not r["ok"] and d[1] == ["2126 - Autre - A", "AUTRE", "Hangar", "Gagné", "", "", ""] and all(x == "" for x in d[0]), "new line + moved table: the colleague's line is not touched")
+    check(not r["ok"] and d[1] == ["2126 - Autre - A", "AUTRE", "Hangar", "Gagné", "", "", ""] and all(x == "" for x in d[0]), "new line + moved table: the colleague's line is not touched (never removed)")
     # 12. every written cell is in the journal, with its old value
     j = (work / "Sauvegardes pont" / "journal-pont.csv").read_text(encoding="utf-8-sig")
     check(j.startswith("Date;Fichier;Ligne;Colonne") and '"Vu par Marie";"Relancer";"Remplacer (choisi dans l\'app)"' in j and '"2729 - SOLARIS_Toit - A";"27(06)30 - SOLARIS_Toit - A"' in j,

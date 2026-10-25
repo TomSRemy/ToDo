@@ -39,7 +39,7 @@ window.TodoExcelSync=(function(){
   // writing, and keeps a journal of every cell; an older one is refused
   // the bridge published with this app (bridge/pont-excel.ps1 $Version; tests/bridge_test.py checks they match). Writing needs it:
   // 1.4 writes only in « Pipe Agrégation » / « BDD Agrégation », 1.7 adds new lines in a table with calculated columns
-  const BRIDGE_LATEST='1.8';
+  const BRIDGE_LATEST='1.9';
   const bridgeUpToDate=info=>{ const v=String(info&&info.version||'0').split('.').map(Number), l=BRIDGE_LATEST.split('.').map(Number); return v[0]>l[0] || (v[0]===l[0] && (v[1]||0)>=l[1]); };
   async function xlSend(kind, list, rows){
     if(!app.bridgeState.info || Date.now()-app.bridgeState.checkedAt>60000) await bridgeCheck();
