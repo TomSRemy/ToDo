@@ -1559,9 +1559,9 @@ with sync_playwright() as p:
     check(names()[:6] == ["Adam Durand", "Hugo Petit", "Léa Bernard", "P0 Nom00", "P1 Nom01", "P2 Nom02"],
           f"list view: alphabetical as displayed (first name, then last name; P2 before P10) {names()[:6]}")
     page.evaluate("document.getElementById('tab-contacts').scrollTop=600")
-    before = page.evaluate("document.getElementById('tab-contacts').scrollTop")
     row = page.locator("#contacts-list .contact-row", has_text="Nom20")
-    row.locator(".contact-main").click()
+    row.locator(".contact-main").click()   # (Playwright may scroll to reach the row: the position is taken after this click)
+    page.wait_for_timeout(150); before = page.evaluate("document.getElementById('tab-contacts').scrollTop")
     page.locator(".contact-detail-links button", has_text="Modifier la fiche").click()
     check(page.is_visible("#contact-form") and page.evaluate("document.getElementById('tab-contacts').scrollTop") == before, "opening the edit form keeps the list position")
     page.fill("#ct-role", "Acheteur"); page.click("#contact-save-btn")
