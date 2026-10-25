@@ -31,7 +31,7 @@
 param([int]$Port = 8765, [switch]$Reconfigurer, [switch]$Mock)
 
 $ErrorActionPreference = 'Stop'
-$Version = '1.5'
+$Version = '1.6'
 $Here = Split-Path -Parent $MyInvocation.MyCommand.Path
 $ConfigPath = Join-Path $Here 'pont-excel-config.json'
 # the app's addresses: GitHub Pages, and its own Cloudflare Pages address (an address given by hand: "origins" in pont-excel-config.json)
@@ -529,7 +529,31 @@ function Handle($req) {
 }
 
 $listener = New-Object System.Net.Sockets.TcpListener ([System.Net.IPAddress]::Loopback), $Port
-try { $listener.Start() } catch { Write-Info "Le port $Port est déjà utilisé : le pont tourne peut-être déjà dans une autre fenêtre." 'Red'; exit 1 }
+$started = $false
+try { $listener.Start(); $started = $true } catch { }
+if (-not $started) {
+  # another bridge (an older window, often) holds the port: say so, and offer to stop it
+  $old = $null
+  try { $old = Invoke-RestMethod -Uri ("http://127.0.0.1:" + $Port + "/status") -TimeoutSec 3 } catch { }
+  if ($old -and $old.version) {
+    Write-Info ("Un pont Excel tourne déjà (version " + $old.version + "), dans une autre fenêtre.") 'Yellow'
+    $pids = @()
+    try { $pids = @(Get-NetTCPConnection -LocalPort $Port -State Listen -ErrorAction Stop | Select-Object -ExpandProperty OwningProcess -Unique) } catch { }
+    $pids = @($pids | Where-Object { $_ -and $_ -ne $PID })
+    if ($pids.Count -gt 0) {
+      $ans = Read-Host "Arrêter l'ancien pont et démarrer celui-ci ? (O/N)"
+      if ($ans -match '^\s*[oOyY]') {
+        foreach ($p in $pids) { try { Stop-Process -Id $p -Force -ErrorAction Stop } catch { } }
+        Start-Sleep -Seconds 1
+        try { $listener.Start(); $started = $true } catch { }
+      }
+    }
+  }
+  if (-not $started) {
+    Write-Info ("Le port " + $Port + " est déjà utilisé : ferme la fenêtre de l'ancien pont (fenêtre noire « Pont Excel - Todo »), puis relance celui-ci.") 'Red'
+    exit 1
+  }
+}
 Write-Host ''
 Write-Host "Pont Excel pour Todo v$Version — http://127.0.0.1:$Port" -ForegroundColor Cyan
 Write-Host ('  Pipe : ' + $Config.pipe)

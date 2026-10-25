@@ -209,6 +209,13 @@ try:
         res = send(row(["SOLARIS", "Sauvegarde %d" % k, "En préparation", k + 1])); time.sleep(1.1)
     kept = sorted(p.name for p in (work / "Sauvegardes pont").glob("mock-pipe-*.json"))
     check(len(kept) == 3 and res["backup"] in kept and res["fileWasClosed"] is True, f"backup before writing, 3 kept ({len(kept)}), closed file reported")
+
+    # a second bridge started while this one runs: it says an older bridge holds the port (never two at once), and stops
+    second = subprocess.run([PWSH, "-NoProfile", "-File", str(work / "pont-excel.ps1"), "-Mock", "-Port", str(PORT)], cwd=work, input=b"N\n",
+                            stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=60)
+    out = second.stdout.decode("utf-8", "replace")
+    check(second.returncode != 0 and "Un pont Excel tourne déjà (version" in out and "ferme la fenêtre de l'ancien pont" in out, f"a second bridge on the same port explains what to do ({out[-200:]!r})")
+    check(call("GET", "/status")["ok"], "the first bridge keeps running")
 finally:
     proc.terminate()
     try:
