@@ -166,7 +166,7 @@ with sync_playwright() as p:
     page.fill("#quick-add-input", "Tâche B"); page.press("#quick-add-input", "Enter")
     page.click("#quick-add-more"); page.click('#add-section .qd-chips button:text-is("Demain")')
     tomorrow = (TODAY + datetime.timedelta(days=1)).isoformat()
-    check(page.input_value("#f-due") == tomorrow and page.locator("#add-section .qd-chips button.on").inner_text() == "Demain",
+    check(page.input_value("#f-due") == tomorrow and "Demain" in page.locator("#add-section .qd-chips button.on").all_inner_texts(),   # on a Sunday « Lundi » is the same day, lit too
           "date field: one click on « Demain » fills the deadline")
     page.click("#reminder-toggle"); page.click('#reminder-row .qd-chips button:text-is("Demain 9 h")')
     check(page.input_value("#f-reminder") == tomorrow + "T09:00", "reminder: « Demain 9 h » fills date and time")
