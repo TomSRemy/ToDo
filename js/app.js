@@ -1914,8 +1914,8 @@
     renderConflicts();
   }
 
-  function renderStats(){
-    const panel=$('stats-panel');
+  // the tasks in figures, drawn in the pipeline's Tableau de bord (moved out of Réglages, UX audit TD3)
+  function renderStats(panel){
     panel.innerHTML='';
     const open=activeTasks();
     const archived=tasks.filter(t=>t.archived && !t.deleted);
@@ -2963,6 +2963,8 @@
     stalled.slice(0,10).forEach(o=>{ const d=Math.floor((now-lastMove(o))/864e5); const r=document.createElement('button'); r.type='button'; r.className='tw-row'+(d>=30?' late':'');
       r.innerHTML='<span class="k"><b></b><span></span></span><span class="v"></span>'; r.querySelector('b').textContent=o.kind==='prequal'?o.company+' (pré-qualif)':oppName(o);
       r.querySelector('.k span').textContent=[o.kind==='prequal'?'':o.company, stageLabel(o.stage, o)].filter(Boolean).join(' · '); r.querySelector('.v').textContent=d+' j'; r.onclick=()=>openOppDetail(o.id); c3.appendChild(r); });
+    // the tasks too: open, archived, done this week, by urgency, status, client and project
+    { const c6=card('Tâches', null); const sp=document.createElement('div'); sp.className='pd-stats'; c6.appendChild(sp); renderStats(sp); }
   }
   // ----- List view: every installation in one sortable table (search, saved view and « Sorties » apply) -----
   const PL_COLS=[
@@ -5749,7 +5751,7 @@
   }
 
   const tabContacts=$('tab-contacts'), tabPipeline=$('tab-pipeline'), tabParc=$('tab-parc');
-  tabs.forEach(el=>{ el.onclick=()=>{ tabs.forEach(t=>t.classList.remove('active')); el.classList.add('active'); const tgt=el.dataset.tab; tabToday.classList.toggle('hidden',tgt!=='today'); tabTasks.classList.toggle('hidden',tgt!=='tasks'); tabInbox.classList.toggle('hidden',tgt!=='inbox'); tabArchive.classList.toggle('hidden',tgt!=='archive'); tabLists.classList.toggle('hidden',tgt!=='lists'); tabContacts.classList.toggle('hidden',tgt!=='contacts'); tabPipeline.classList.toggle('hidden',tgt!=='pipeline'); tabParc.classList.toggle('hidden',tgt!=='parc'); $('tab-network').classList.toggle('hidden',tgt!=='network'); if(tgt==='network') showNetwork(); $('tab-market').classList.toggle('hidden',tgt!=='market'); if(tgt==='market') renderMarket(); if(tgt==='parc'){ renderParc(); $('parc-bridge-btn').classList.toggle('hidden', !bridgeConfigured()); renderParcSource(); if(bridgeConfigured() && parcSource().auto && (!parcData || Date.now()-(parcData.importedAt||0)>600000)) importParcFromBridge(true); } if(tgt==='today')renderToday(); if(tgt==='archive')renderArchive(); if(tgt==='contacts'){ refreshContactsTypeFilter(); renderContacts(); fetchContactInbox(); } if(tgt==='pipeline')renderPipeline(); if(tgt==='lists'){ if(bridgeConfigured()) bridgeCheck(); else renderBridgeStatus(); renderLists(); renderStats(); renderConflicts(); $('sync-owner').value=syncConfig.owner||''; $('sync-repo').value=syncConfig.repo||''; if(syncConfig.enabled) setSyncStatus('Synchro active'); } if(tgt==='inbox')fetchInbox(); }; });
+  tabs.forEach(el=>{ el.onclick=()=>{ tabs.forEach(t=>t.classList.remove('active')); el.classList.add('active'); const tgt=el.dataset.tab; tabToday.classList.toggle('hidden',tgt!=='today'); tabTasks.classList.toggle('hidden',tgt!=='tasks'); tabInbox.classList.toggle('hidden',tgt!=='inbox'); tabArchive.classList.toggle('hidden',tgt!=='archive'); tabLists.classList.toggle('hidden',tgt!=='lists'); tabContacts.classList.toggle('hidden',tgt!=='contacts'); tabPipeline.classList.toggle('hidden',tgt!=='pipeline'); tabParc.classList.toggle('hidden',tgt!=='parc'); $('tab-network').classList.toggle('hidden',tgt!=='network'); if(tgt==='network') showNetwork(); $('tab-market').classList.toggle('hidden',tgt!=='market'); if(tgt==='market') renderMarket(); if(tgt==='parc'){ renderParc(); $('parc-bridge-btn').classList.toggle('hidden', !bridgeConfigured()); renderParcSource(); if(bridgeConfigured() && parcSource().auto && (!parcData || Date.now()-(parcData.importedAt||0)>600000)) importParcFromBridge(true); } if(tgt==='today')renderToday(); if(tgt==='archive')renderArchive(); if(tgt==='contacts'){ refreshContactsTypeFilter(); renderContacts(); fetchContactInbox(); } if(tgt==='pipeline')renderPipeline(); if(tgt==='lists'){ if(bridgeConfigured()) bridgeCheck(); else renderBridgeStatus(); renderLists(); renderConflicts(); $('sync-owner').value=syncConfig.owner||''; $('sync-repo').value=syncConfig.repo||''; if(syncConfig.enabled) setSyncStatus('Synchro active'); } if(tgt==='inbox')fetchInbox(); }; });
 
   $('submit-task').onclick=addTask;
   addSection.addEventListener('keydown', e=>{ if(e.key==='Enter' && e.target.tagName!=='TEXTAREA'){ e.preventDefault(); addTask(); } });
@@ -6010,11 +6012,36 @@
   $('dup-banner-btn').onclick=()=>openDupes();
   $('dup-banner-later').onclick=()=>{ const t=new Date(); t.setDate(t.getDate()+1); t.setHours(6,0,0,0); lsSet('dup-banner-later', String(t.getTime())); paintDupBanner(); };
   // « Réglages »: a table of contents at the top, one click to each part (UX audit TD3)
-  function paintSettingsToc(){ const nav=$('settings-toc'); if(!nav) return; nav.innerHTML='';
-    [['clients-section','Clients'],['projects-section','Projets'],['conflicts-section','Conflits'],['sync-section','Synchro'],['bridge-section','Pont Excel'],['backup-section','Sauvegarde'],['storage-section','Stockage'],['stats-section','Statistiques']].forEach(([id,label])=>{
-      const s=$(id); if(!s || s.classList.contains('hidden') || s.style.display==='none') return;
-      const b=document.createElement('button'); b.type='button'; b.textContent=label; if(id==='conflicts-section'){ const n=document.createElement('span'); n.className='n'; n.textContent='●'; b.appendChild(n); }
-      b.onclick=()=>s.scrollIntoView({ behavior:'smooth', block:'start' }); nav.appendChild(b); }); }
+  // « Réglages » (UX audit TD3): four groups, a table of contents beside them, and each part's state on its title
+  const SETTINGS_NAMES={ 'clients-section':'Clients', 'projects-section':'Projets', 'sync-section':'Synchro GitHub', 'conflicts-section':'Conflits', 'backup-section':'Sauvegarde',
+    'storage-section':'Stockage', 'bridge-section':'Pont Excel', 'install-section':'Installer l\u2019appli', 'ai-section':'Claude (facultatif)' };
+  const settingsShown=s=>!s.classList.contains('hidden') && !s.hidden && s.style.display!=='none';
+  function settingsPill(id, text, kind){ const s=$(id); if(!s) return; const h=s.querySelector('h2'); if(!h) return;
+    let p=h.querySelector('.settings-pill'); if(!text){ if(p) p.remove(); return; }
+    if(!p){ p=document.createElement('span'); h.appendChild(p); } p.className='settings-pill'+(kind?' '+kind:''); p.textContent=text; }
+  function backupState(){ const ex=Number(lsGet('last-export-at')||0); if(!ex) return ['Jamais exporté sur cet appareil','warn'];
+    const d=Math.floor((Date.now()-ex)/864e5); return [d===0?'Exporté aujourd\u2019hui':'Dernier export il y a '+d+' j', d<8?'':'warn']; }
+  function bridgePillState(){ if(ON_PHONE) return ['Ordinateur seulement',''];
+    if(bridgeState.ok && bridgeState.authorized) return ['Branché','ok'];
+    return [bridgeConfigured()?'Pas joignable':'Pas installé','']; }
+  function paintSettingsState(){
+    const si=syncPillInfo(); settingsPill('sync-section', si.label, si.k==='ok'?'ok':si.k==='off'?'':'warn');
+    settingsPill('conflicts-section', conflicts.length?conflicts.length+' à trancher':'', 'warn');
+    settingsPill('backup-section', ...backupState());
+    settingsPill('bridge-section', ...bridgePillState());
+    storageRatio().then(({ ratio })=>settingsPill('storage-section', Math.round(ratio*100)+' % utilisé', ratio>=.8?'warn':'')).catch(()=>{});
+  }
+  function paintSettingsToc(){ const nav=$('settings-toc'), main=document.querySelector('#tab-lists .settings-main'); if(!nav || !main) return; nav.innerHTML='';
+    [...main.children].forEach(el=>{
+      if(el.classList.contains('settings-group')){ const g=document.createElement('div'); g.className='g'; g.textContent=el.textContent; nav.appendChild(g); return; }
+      if(!el.id || !SETTINGS_NAMES[el.id] || !settingsShown(el)) return;
+      const b=document.createElement('button'); b.type='button'; b.textContent=SETTINGS_NAMES[el.id];
+      if(el.id==='conflicts-section' && conflicts.length){ const n=document.createElement('span'); n.className='n'; n.textContent=conflicts.length; b.appendChild(n); }
+      b.onclick=()=>{ nav.querySelectorAll('button').forEach(x=>x.classList.toggle('on', x===b)); el.scrollIntoView({ behavior:'smooth', block:'start' }); };
+      nav.appendChild(b); });
+    // a group with nothing shown (Appli on a computer where the app is installed) loses its title too
+    [...nav.children].forEach((x,k,all)=>{ if(x.className==='g' && (!all[k+1] || all[k+1].className==='g')) x.remove(); });
+    paintSettingsState(); }
   document.querySelector('.tab[data-tab="lists"]').addEventListener('click', ()=>setTimeout(paintSettingsToc, 0));
   $('vcf-import-btn').onclick=phoneImportStart;
   $('vcf-import-input').addEventListener('change', async e=>{ const f=e.target.files[0]; e.target.value=''; if(!f) return; const list=parseVcf(await f.text()); if(!list.length){ tell('Aucun contact lu dans ce fichier (.vcf attendu).'); return; } openPhoneImport(list); });

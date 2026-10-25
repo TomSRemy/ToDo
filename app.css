@@ -2346,11 +2346,6 @@ html.widget .dup-banner{ display:none; }
 /* TD10: the duplicates banner can wait until tomorrow */
 .dup-banner .dup-later{ margin-left:0; background:none; border:1px solid var(--bd); color:var(--tx2); border-radius:6px; padding:4px 10px; font-size:12px; cursor:pointer; }
 .dup-banner .dup-later:hover{ color:var(--tx1); border-color:var(--tx3); }
-/* TD3: « Réglages » with a table of contents */
-.settings-toc{ display:flex; flex-wrap:wrap; gap:6px; padding:14px 20px 4px; position:sticky; top:0; z-index:2; background:var(--bg); border-bottom:1px solid var(--bd); }
-.settings-toc button{ background:var(--panel-2); border:1px solid var(--bd); color:var(--tx2); border-radius:999px; padding:5px 12px; font:500 12.5px var(--font-ui); cursor:pointer; }
-.settings-toc button:hover{ color:var(--tx1); border-color:var(--accent); }
-.settings-toc button .n{ color:#ED6965; margin-left:4px; }
 
 /* ---------- Pipeline bar (UX audit TD1): one view selector, one main action, the rest under « ⋯ » ---------- */
 .pipe-seg{ display:inline-flex; border:1px solid var(--bd); border-radius:6px; overflow:hidden; flex-shrink:0; }
@@ -2373,3 +2368,31 @@ html.widget .dup-banner{ display:none; }
 .pipe-more-menu #pipe-xs-btn.xs-pending{ color:#E5B54F; }
 .pipe-more-menu .pipe-dup-btn{ color:#E5B54F; }
 @media (max-width: 760px){ .pipe-bar-spacer{ display:none; } .pipe-seg{ max-width:100%; overflow-x:auto; } }
+
+/* ---------- « Réglages » (UX audit TD3): table of contents beside four groups, each part's state on its title ---------- */
+#tab-lists{ padding:0; }
+.settings-layout{ display:grid; grid-template-columns:210px minmax(0,1fr); align-items:start; min-height:100%; }
+.settings-toc{ position:sticky; top:0; align-self:start; display:flex; flex-direction:column; gap:1px; padding:18px 10px; border-right:1px solid var(--bd); background:var(--panel); min-height:100%; box-sizing:border-box; }
+.settings-toc .g{ font:600 10.5px var(--font-mono); letter-spacing:.7px; text-transform:uppercase; color:var(--tx3); padding:14px 10px 4px; }
+.settings-toc .g:first-child{ padding-top:0; }
+.settings-toc button{ display:flex; justify-content:space-between; align-items:center; gap:8px; background:none; border:none; border-radius:4px; color:var(--tx2); font:13px var(--font-ui); text-align:left; padding:6px 10px; cursor:pointer; }
+.settings-toc button:hover{ background:var(--panel-2); color:var(--tx1); }
+.settings-toc button.on{ background:var(--accent-dim); color:var(--accent); }
+.settings-toc button .n{ color:#ED6965; font:600 11px var(--font-mono); }
+.settings-toc button:focus-visible{ outline:2px solid var(--accent); outline-offset:-2px; }
+.settings-main{ padding:18px 22px 40px; display:flex; flex-direction:column; gap:22px; min-width:0; }
+.settings-group{ font:600 12px var(--font-ui); letter-spacing:.3px; color:var(--tx3); text-transform:uppercase; margin:12px 0 -6px; padding-bottom:6px; border-bottom:1px solid var(--bd); }
+.settings-group:first-child{ margin-top:0; }
+.settings-main .list-manager{ scroll-margin-top:12px; }
+.settings-pill{ margin-left:10px; font:600 11px var(--font-ui); text-transform:none; letter-spacing:0; border:1px solid var(--bd); color:var(--tx2); border-radius:999px; padding:1px 8px; vertical-align:1px; }
+.settings-pill.ok{ color:var(--accent); border-color:#14D3A955; }
+.settings-pill.warn{ color:#E5B54F; border-color:#E5B54F66; }
+@media (max-width: 900px){
+  .settings-layout{ grid-template-columns:1fr; }
+  .settings-toc{ position:static; flex-direction:row; flex-wrap:wrap; min-height:0; border-right:none; border-bottom:1px solid var(--bd); padding:12px; gap:4px; }
+  .settings-toc .g{ display:none; }
+  .settings-toc button{ border:1px solid var(--bd); border-radius:999px; padding:4px 10px; }
+  .settings-main{ padding:14px; }
+}
+/* the tasks' figures, now in the pipeline's Tableau de bord */
+.pd-stats{ display:flex; flex-direction:column; gap:6px; }

@@ -666,7 +666,10 @@
   </div>
 
   <div class="tab-panel hidden" id="tab-lists">
+   <div class="settings-layout">
     <nav class="settings-toc" id="settings-toc" aria-label="Sommaire des réglages"></nav>
+    <div class="settings-main">
+    <h3 class="settings-group" id="grp-lists">Mes listes</h3>
     <div class="list-manager" id="clients-section">
       <h2>Clients</h2>
       <p class="list-hint">Prélistés ici, disponibles en suggestion dans le formulaire.</p>
@@ -678,27 +681,14 @@
       <div id="client-list-rows"></div>
       <div class="add-item-row"><input type="text" id="new-client-input" placeholder="Nouveau client"><button id="add-client-btn">Ajouter</button></div>
     </div>
-    <div class="list-manager" style="margin-top:22px;" id="projects-section">
+    <div class="list-manager" id="projects-section">
       <h2>Projets</h2>
       <p class="list-hint">Idem, à préparer à l'avance ou au fil de l'eau.</p>
       <div class="chip-row" id="project-chip-row"></div>
       <div class="add-item-row"><input type="text" id="new-project-input" placeholder="Nouveau projet"><button id="add-project-btn">Ajouter</button></div>
     </div>
-    <div class="list-manager" id="install-section" style="margin-top:22px; display:none;">
-      <h2>Application</h2>
-      <p class="list-hint">Installe la page comme application (icône, plein écran, hors-ligne).</p>
-      <button class="data-btn" id="install-btn" style="width:100%;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="2" width="14" height="20" rx="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg>Installer l'app</button>
-    </div>
-    <div class="list-manager hidden" id="conflicts-section" style="margin-top:22px;">
-      <h2>Conflits de synchro</h2>
-      <p class="list-hint">Même champ modifié différemment sur deux appareils avant que la synchro ait eu lieu entre les deux. La version la plus récente a été gardée automatiquement — ajuste ici si besoin.</p>
-      <div id="conflicts-list"></div>
-    </div>
-    <div class="list-manager" style="margin-top:22px;" id="stats-section">
-      <h2>Statistiques</h2>
-      <div id="stats-panel"></div>
-    </div>
-    <div class="list-manager" style="margin-top:22px;" id="sync-section">
+    <h3 class="settings-group" id="grp-data">Données</h3>
+    <div class="list-manager" id="sync-section">
       <h2>Synchronisation multi-appareils</h2>
       <p class="list-hint">À configurer une fois par appareil. Une fois activée, toutes les tâches (pas seulement celles d'Outlook) se synchronisent via ton repo GitHub. ⚠️ Utilise un repo <strong>privé</strong> : les données (dont les contacts/CRM) y sont stockées en clair.</p>
       <div style="display:flex; flex-direction:column; gap:8px;">
@@ -714,22 +704,27 @@
         <span id="sync-status" style="font-size:11px; color:var(--tx3); font-family:var(--font-mono);"></span>
       </div>
     </div>
-    <div class="list-manager" style="margin-top:22px;" id="ai-section">
-      <h2>Claude pour compléter les fiches (facultatif)</h2>
-      <p class="list-hint">« Compléter avec l’IA » interroge Claude directement depuis l’appli, avec une clé de l’API Claude (créée sur la console Anthropic, facturée à l’usage, à part de l’abonnement Pro). La clé peut aussi être collée dans la fenêtre la première fois. Elle reste sur cet appareil (jamais synchronisée ni exportée) ; les infos de la fiche concernée sont envoyées à Anthropic.</p>
-      <div style="display:flex; flex-direction:column; gap:8px;">
-        <input type="password" id="ai-key-input" placeholder="Clé API Claude (sk-ant-…)" autocomplete="off">
-        <a class="sync-token-link" href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener">Créer une clé sur la console Anthropic ↗</a>
-        <button class="data-btn" id="ai-key-save" style="width:100%;">Enregistrer la clé sur cet appareil</button>
-        <span id="ai-key-status" style="font-size:11px; color:var(--tx3); font-family:var(--font-mono);"></span>
-      </div>
+    <div class="list-manager hidden" id="conflicts-section">
+      <h2>Conflits de synchro</h2>
+      <p class="list-hint">Même champ modifié différemment sur deux appareils avant que la synchro ait eu lieu entre les deux. La version la plus récente a été gardée automatiquement — ajuste ici si besoin.</p>
+      <div id="conflicts-list"></div>
     </div>
-    <div class="list-manager" style="margin-top:22px;" id="storage-section">
+    <div class="list-manager" id="backup-section">
+      <h2>Sauvegarde</h2>
+      <p class="list-hint">Les données vivent dans ce navigateur. Exporte régulièrement pour ne rien perdre.</p>
+      <div class="data-actions">
+        <button class="data-btn" id="export-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>Exporter JSON</button>
+        <button class="data-btn" id="import-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>Importer JSON</button>
+      </div>
+      <input type="file" id="import-file" accept="application/json" style="display:none;">
+    </div>
+    <div class="list-manager" id="storage-section">
       <h2>Stockage sur cet appareil</h2>
       <p class="list-hint">Tes données sont enregistrées dans ce navigateur (et sur GitHub si la synchro est active). Si l'espace venait à manquer, un bandeau rouge te prévient aussitôt.</p>
       <div id="storage-gauge" class="storage-gauge"><span class="muted">Calcul…</span></div>
     </div>
-    <div class="list-manager" style="margin-top:22px;" id="bridge-section">
+    <h3 class="settings-group" id="grp-pc">Outils du PC</h3>
+    <div class="list-manager" id="bridge-section">
       <h2>Pont Excel (ordinateur)</h2>
       <p class="list-hint bridge-phone-note" id="bridge-phone-note" hidden>Sur téléphone ou tablette, rien n'est jamais écrit dans les fichiers Excel : le pont ne s'utilise que depuis l'ordinateur.</p>
       <p class="list-hint">Pour écrire directement dans tes fichiers Excel synchronisés avec SharePoint. Télécharge les deux fichiers dans un même dossier de l’ordinateur, double-clique sur le .bat, choisis le fichier Pipe puis le Suivi Agrégation, et recopie ici la clé affichée. Laisse la fenêtre ouverte pendant que tu travailles.</p>
@@ -743,18 +738,25 @@
         <span id="bridge-status" class="bridge-status"></span>
       </div>
     </div>
-    <div class="list-manager" style="margin-top:22px;" id="backup-section">
-      <h2>Sauvegarde</h2>
-      <p class="list-hint">Les données vivent dans ce navigateur. Exporte régulièrement pour ne rien perdre.</p>
-      <div class="data-actions">
-        <button class="data-btn" id="export-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>Exporter JSON</button>
-        <button class="data-btn" id="import-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>Importer JSON</button>
-      </div>
-      <input type="file" id="import-file" accept="application/json" style="display:none;">
+    <h3 class="settings-group" id="grp-app">Appli</h3>
+    <div class="list-manager" id="install-section" style="display:none;">
+      <h2>Application</h2>
+      <p class="list-hint">Installe la page comme application (icône, plein écran, hors-ligne).</p>
+      <button class="data-btn" id="install-btn" style="width:100%;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="2" width="14" height="20" rx="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg>Installer l'app</button>
     </div>
+    <div class="list-manager" id="ai-section">
+      <h2>Claude pour compléter les fiches (facultatif)</h2>
+      <p class="list-hint">« Compléter avec l’IA » interroge Claude directement depuis l’appli, avec une clé de l’API Claude (créée sur la console Anthropic, facturée à l’usage, à part de l’abonnement Pro). La clé peut aussi être collée dans la fenêtre la première fois. Elle reste sur cet appareil (jamais synchronisée ni exportée) ; les infos de la fiche concernée sont envoyées à Anthropic.</p>
+      <div style="display:flex; flex-direction:column; gap:8px;">
+        <input type="password" id="ai-key-input" placeholder="Clé API Claude (sk-ant-…)" autocomplete="off">
+        <a class="sync-token-link" href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener">Créer une clé sur la console Anthropic ↗</a>
+        <button class="data-btn" id="ai-key-save" style="width:100%;">Enregistrer la clé sur cet appareil</button>
+        <span id="ai-key-status" style="font-size:11px; color:var(--tx3); font-family:var(--font-mono);"></span>
+      </div>
+    </div>
+    </div>
+   </div>
   </div>
-</div>
-</div>
 
 <datalist id="client-datalist"></datalist>
 <datalist id="project-datalist"></datalist>
