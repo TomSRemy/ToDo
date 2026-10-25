@@ -325,16 +325,27 @@
         <input type="text" id="opp-search" placeholder="Rechercher un producteur, une centrale, un contact">
         <button id="opp-search-clear"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
       </div>
+      <!-- one view selector (UX audit TD1) -->
+      <div class="pipe-seg" role="group" aria-label="Affichage du pipeline">
+        <button id="pipe-cols-toggle" type="button" aria-pressed="true" title="Les installations en colonnes, par étape">Colonnes</button>
+        <button id="pipe-list-toggle" type="button" aria-pressed="false" title="Toutes les installations en tableau, triable">Liste</button>
+        <button id="pipe-map-toggle" type="button" aria-pressed="false" title="Les installations en cours sur la carte de France, par phase">Carte</button>
+        <button id="pipe-meet-toggle" type="button" aria-pressed="false" title="Une ligne par installation, à partager avec le pricing">Réunion</button>
+        <button id="pipe-dash-toggle" type="button" aria-pressed="false" title="MWc par phase, temps passé à chaque étape, dossiers qui traînent">Tableau de bord</button>
+      </div>
+      <span class="pipe-bar-spacer" id="pipe-bar-spacer"></span>
       <button type="button" class="views-btn" id="pipe-views-btn" title="Vues prêtes et vues enregistrées">Vues ▾</button>
       <span class="view-chip" id="pipe-view-chip" hidden></span>
-      <button id="opp-add-btn" type="button" class="primary-btn">Nouvelle opportunité</button>
-      <button id="prequal-add-btn" type="button" class="pipe-bar-btn">Pré-qualif</button>
-      <button id="pipe-exited-toggle" type="button" class="pipe-bar-link">Sorties</button>
-      <button id="pipe-xs-btn" type="button" class="pipe-bar-btn" title="Ce qui a été envoyé (ou pas) au Pipe et au Suivi, et ce qui a changé dans les Excel">Excel ⇄</button>
-      <button id="pipe-list-toggle" type="button" class="pipe-bar-btn" aria-pressed="false" title="Toutes les installations en tableau, triable">Liste</button>
-      <button id="pipe-map-toggle" type="button" class="pipe-bar-btn" aria-pressed="false" title="Les installations en cours sur la carte de France, par phase">Carte</button>
-      <button id="pipe-meet-toggle" type="button" class="pipe-bar-btn" aria-pressed="false" title="Une ligne par installation, à partager avec le pricing">Vue réunion</button>
-      <button id="pipe-dash-toggle" type="button" class="pipe-bar-btn" aria-pressed="false">Tableau de bord</button>
+      <button id="opp-add-btn" type="button" class="primary-btn">+ Nouvelle opportunité</button>
+      <!-- the rest, one click away; what needs attention shows as a number on « ⋯ » -->
+      <div class="pipe-more">
+        <button type="button" id="pipe-more-btn" class="pipe-bar-btn" aria-haspopup="true" aria-expanded="false" aria-controls="pipe-more-menu" title="Excel ⇄, doublons, sorties, pré-qualif">⋯<span class="pipe-more-n" id="pipe-more-n" hidden></span></button>
+        <div class="pipe-more-menu" id="pipe-more-menu" hidden>
+          <button id="pipe-xs-btn" type="button" title="Ce qui a été envoyé (ou pas) au Pipe et au Suivi, et ce qui a changé dans les Excel">Excel ⇄</button>
+          <button id="pipe-exited-toggle" type="button" title="Les installations perdues, en no go ou abandonnées">Sorties</button>
+          <button id="prequal-add-btn" type="button" title="Une piste à qualifier, avant la demande de prix">Pré-qualif</button>
+        </div>
+      </div>
     </div>
     <div id="pipeline-board"></div>
   </div>

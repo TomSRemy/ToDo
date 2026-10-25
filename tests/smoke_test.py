@@ -1648,7 +1648,7 @@ with sync_playwright() as p:
     check(re.match(r"^\[?\w*\]?[\w()\[\]]* – .+_Le Moulin – A$", row[7]) is not None, f"BDD row: business code in column H « Ref_Watt.ee » ({row[7]})")
     page.click("#opp-detail-actions >> text=Fermer")
     # pré-qualif → installation
-    page.click("#prequal-add-btn"); page.fill("#prequal-company", "Ferme Dupont"); page.fill("#prequal-note", "Salon"); page.click("#prequal-save-btn")
+    page.click("#pipe-more-btn"); page.click("#prequal-add-btn"); page.fill("#prequal-company", "Ferme Dupont"); page.fill("#prequal-note", "Salon"); page.click("#prequal-save-btn")
     page.click('[data-phase="prequal"] .pipe-card'); page.click("#opp-detail-actions >> text=Projet identifié")
     check(page.input_value("#pq1-company") == "Ferme Dupont", "pré-qualif opens the form on its client")
     page.click("#pq-next-btn"); page.fill("#pq-0-centrale", "Toiture A"); page.click("#pq-save-btn")
@@ -2259,11 +2259,11 @@ with sync_playwright() as p:
           {"id": "d4", "kind": "installation", "company": "Autre", "centrale": "Toit 3", "title": "Toit 3", "stage": "collecte", "createdAt": 1, "updatedAt": 1, "deleted": False}]
     page, errors = new_page(browser, {"todo_todo-widget-opportunities": json.dumps(du), "todo_todo-widget-tasks": json.dumps([dict(task("dt", "Relancer"), opportunityId="d2")])}, viewport={"width": 1400, "height": 900})
     page.goto(URL); page.click('[data-tab="pipeline"]')
-    check(page.is_visible("#pipe-dup-btn") and "Doublons · 2" in page.inner_text("#pipe-dup-btn"), f"doublons: the pipeline says there are some ({page.inner_text('#pipe-dup-btn') if page.is_visible('#pipe-dup-btn') else ''})")
+    check(eventually(lambda: page.is_visible("#pipe-more-n") and "Doublons · 2" in (page.text_content("#pipe-dup-btn") or "")), f"doublons: the pipeline says there are some, as a number on « ⋯ » ({page.text_content('#pipe-more-n')})")
     page.click('[data-tab="today"]')
     check(eventually(lambda: page.is_visible("#dup-banner") and "1 installation saisie deux fois" in page.inner_text("#dup-banner"), 3000), f"doublons: a banner at the top of every page ({page.inner_text('#dup-banner') if page.is_visible('#dup-banner') else ''})")
     page.click('[data-tab="pipeline"]')
-    page.click("#pipe-dup-btn")
+    page.click("#pipe-more-btn"); page.click("#pipe-dup-btn")
     check("Gaec Dupont SARL" in page.inner_text("#dup-overlay") and "GAEC Dupont" in page.inner_text("#dup-overlay"), "doublons: the company written two ways")
     page.click("#dup-overlay .dup-group:has-text('Gaec Dupont SARL') .dup-merge"); page.wait_for_timeout(200)
     check("installations saisies deux fois · 1" in page.inner_text("#dup-overlay").lower() and "sociétés écrites" not in page.inner_text("#dup-overlay").lower(), "doublons: the company merged, the plant entered twice is still there")
@@ -2274,7 +2274,7 @@ with sync_playwright() as p:
           and ops["d1"]["stage"] == "pricing_indicatif" and tk["opportunityId"] == "d1", "doublons: the most advanced plant is kept, takes the other's figures and task")
     check("Aucune installation ni société en double" in page.inner_text("#dup-overlay"), "doublons: nothing left")
     page.click("#dup-overlay .dup-close"); page.wait_for_timeout(150)
-    check(not page.is_visible("#pipe-dup-btn"), "doublons: the button goes away")
+    check(page.locator("#pipe-dup-btn").count() == 0 or page.locator("#pipe-dup-btn").is_hidden(), "doublons: the button goes away")
     check(not page.is_visible("#dup-banner"), "doublons: the banner goes away too")
     page.click('[data-tab="parc"]'); page.click("#parc-xs-btn")
     check(eventually(lambda: page.is_visible("#xs-overlay") and "on" in (page.get_attribute("#xs-overlay .xs-scope [data-s=parc]", "class") or ""), 3000), "Portefeuille: « Excel ⇄ » opens on the signed installations")
@@ -2798,7 +2798,7 @@ Responsable technique
                {"id": "xb", "kind": "installation", "company": "SCEA", "producteur": "SCEA", "centrale": "Le Pré", "title": "Le Pré", "stage": "collecte", "createdAt": 1, "updatedAt": 1, "deleted": False}]
     page, errors = new_page(browser, {"todo_todo-widget-opportunities": json.dumps(xs_inst), "todo_bridge-config": json.dumps({"port": 8765, "token": "k1"})}, viewport={"width": 1400, "height": 900})
     page.route("http://127.0.0.1:8765/**", xs_bridge)
-    page.goto(URL); page.click('[data-tab="pipeline"]'); page.click("#pipe-xs-btn")
+    page.goto(URL); page.click('[data-tab="pipeline"]'); page.click("#pipe-more-btn"); page.click("#pipe-xs-btn")
     page.wait_for_function("document.querySelector('#xs-overlay .xs-info').textContent.includes('relu le')", timeout=8000)
     xs = page.inner_text("#xs-overlay .xs-body")
     check("Le Pré" in xs and "Pas envoyé" in xs, "excel ⇄ app: an installation never sent is listed")
@@ -3044,6 +3044,29 @@ Responsable technique
     col = page.evaluate("getComputedStyle(document.querySelector('.pipe-card-company')).color")
     check(col != "rgb(26, 123, 140)", f"pipeline: a company name in a dark palette colour is lightened to be readable ({col})")
     check(not errors, f"UX quick wins: no page errors ({errors})")
+    page.close()
+
+    # --- Pipeline bar (UX audit TD1): one view selector, « ⋯ » for the rest
+    po = [{"id": "pb1", "kind": "installation", "company": "Barre", "centrale": "Toit", "title": "Toit", "stage": "collecte", "createdAt": 1, "updatedAt": 1, "deleted": False},
+          {"id": "pb2", "kind": "installation", "company": "Sortie", "centrale": "Hangar", "title": "Hangar", "stage": "perdu", "lostAt": 1, "createdAt": 1, "updatedAt": 1, "deleted": False}]
+    page, errors = new_page(browser, seed={"todo_todo-widget-opportunities": json.dumps(po)}, viewport={"width": 1400, "height": 900}); page.goto(URL); page.click('[data-tab="pipeline"]')
+    pressed = lambda: [b.get_attribute("id") for b in page.locator(".pipe-seg button[aria-pressed=true]").all()]
+    check(eventually(lambda: pressed() == ["pipe-cols-toggle"]), f"pipeline bar: « Colonnes » is the view at start ({pressed()})")
+    page.click("#pipe-list-toggle")
+    check(eventually(lambda: pressed() == ["pipe-list-toggle"] and page.locator("#pipeline-board .pl-table").count() == 1), "pipeline bar: « Liste » selected alone")
+    page.click("#pipe-cols-toggle")
+    check(eventually(lambda: pressed() == ["pipe-cols-toggle"] and page.locator("#pipeline-board .pipe-card").count() >= 1), "pipeline bar: « Colonnes » goes back to the columns")
+    check(page.is_hidden("#pipe-more-menu"), "« ⋯ » closed at rest")
+    page.click("#pipe-more-btn")
+    check(page.is_visible("#pipe-more-menu") and page.get_attribute("#pipe-more-btn", "aria-expanded") == "true", "« ⋯ » opens its menu")
+    page.keyboard.press("Escape")
+    check(eventually(lambda: page.is_hidden("#pipe-more-menu")), "« ⋯ »: Escape closes it")
+    page.click("#pipe-more-btn"); page.click("#pipeline-board", position={"x": 5, "y": 5})
+    check(eventually(lambda: page.is_hidden("#pipe-more-menu")), "« ⋯ »: a click elsewhere closes it")
+    page.click("#pipe-more-btn"); page.click("#pipe-exited-toggle")
+    check(eventually(lambda: page.is_hidden("#pipe-more-menu") and "Hangar" in page.inner_text("#pipeline-board") and "on" in (page.get_attribute("#pipe-more-btn", "class") or "")),
+          "« ⋯ » › Sorties shows the exited deals, the menu closes, « ⋯ » marked as on")
+    check(not errors, f"pipeline bar: no page errors ({errors})")
     page.close()
 
     browser.close()

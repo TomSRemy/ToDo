@@ -3194,7 +3194,7 @@
   function pipeTally(g){ const o=g[0]; if(o.kind!=='installation' || isExited(o)) return; const st=oppStage(o.stage); if(!st) return;
     if(st.who==='Com') pipeTallyN.me++; else pipeTallyN.others++; const d=daysInStage(o); if(d!=null && d>15) pipeTallyN.stuck++; }
   function paintPipeSummary(){ try{ paintDupBtn(); paintDupBanner(); }catch(e){ softFail('bandeau doublons', e); } let el=$('pipe-summary'); const bar=document.querySelector('#tab-pipeline .quick-add-bar'); if(!bar) return;
-    if(!el){ el=document.createElement('span'); el.id='pipe-summary'; el.className='pipe-summary'; const ref=$('pipe-exited-toggle'); bar.insertBefore(el, ref); }
+    if(!el){ el=document.createElement('span'); el.id='pipe-summary'; el.className='pipe-summary'; const ref=$('pipe-bar-spacer'); bar.insertBefore(el, ref); }
     const show=pipeTallyN.on && !pipeDash && !pipeMeet && !pipeList && !pipeMap; el.hidden=!show; if(!show) return;
     el.innerHTML='À moi <b></b> · En attente des autres <b></b>'+(pipeTallyN.stuck?' · Bloqués &gt; 15 j <b class="late"></b>':'');
     const bs=el.querySelectorAll('b'); bs[0].textContent=pipeTallyN.me; bs[1].textContent=pipeTallyN.others; if(bs[2]) bs[2].textContent=pipeTallyN.stuck; }
@@ -3214,12 +3214,19 @@
   // how many lines wait for the Excel files (or changed there), on the « Excel ⇄ » button
   function paintXsCount(){ const b=$('pipe-xs-btn'); if(!b || ON_PHONE) return; let n=0;
     try{ xsList().filter(o=>isExited(o) || stageIndex(o.stage)<stageIndex('onboarding')).forEach(o=>{ if(xsTodo(xsState('pipe',o)) || (xsBddApplies(o) && xsTodo(xsState('bdd',o)))) n++; }); }catch(e){ softFail('compteur Excel', e); }
-    b.textContent='Excel ⇄'+(n?' · '+n:''); b.classList.toggle('xs-pending', n>0); }
+    b.textContent='Excel ⇄'+(n?' · '+n:''); b.classList.toggle('xs-pending', n>0); pipeXsN=n; paintPipeMore(); }
+  // « ⋯ » of the pipeline bar: the lines waiting for the Excel files and the duplicates, added up on it (UX audit TD1)
+  let pipeXsN=0;
+  function paintPipeMore(){ const el=$('pipe-more-n'); if(!el) return; const dup=$('pipe-dup-btn'), xs=$('pipe-xs-btn');
+    const n=(xs && getComputedStyle(xs).display!=='none'?pipeXsN:0)+(dup && !dup.hidden?dupCount():0);
+    el.hidden=!n; el.textContent=n; $('pipe-more-btn').classList.toggle('on', pipeShowExited); }
   function renderPipelineInner(){
     if(normalizeOpps()) saveCrmLocalOnly();
     const board=$('pipeline-board');
     board.innerHTML=''; board.classList.remove('pipe-dash','pipe-meet');
     $('pipe-dash-toggle').setAttribute('aria-pressed', String(pipeDash)); $('pipe-dash-toggle').classList.toggle('on', pipeDash);
+    { const cols=!pipeDash && !pipeMeet && !pipeMap && !pipeList; $('pipe-cols-toggle').setAttribute('aria-pressed', String(cols)); $('pipe-cols-toggle').classList.toggle('on', cols); }
+    $('pipe-map-toggle').setAttribute('aria-pressed', String(pipeMap && !pipeDash && !pipeMeet)); $('pipe-map-toggle').classList.toggle('on', pipeMap && !pipeDash && !pipeMeet);
     $('pipe-meet-toggle').setAttribute('aria-pressed', String(pipeMeet)); $('pipe-meet-toggle').classList.toggle('on', pipeMeet);
     $('pipe-list-toggle').setAttribute('aria-pressed', String(pipeList && !pipeDash && !pipeMeet && !pipeMap)); $('pipe-list-toggle').classList.toggle('on', pipeList && !pipeDash && !pipeMeet && !pipeMap);
     board.classList.remove('pipe-list');
@@ -4859,9 +4866,9 @@
     el.hidden=!(ig+cg); if(!(ig+cg)) return;
     $('dup-banner-text').textContent='Doublons possibles : '+[ig?ig+' installation'+(ig>1?'s':'')+' saisie'+(ig>1?'s':'')+' deux fois':'', cg?cg+' société'+(cg>1?'s':'')+' écrite'+(cg>1?'s':'')+' de deux façons':''].filter(Boolean).join(', ')+'. Les totaux peuvent être faussés.'; }
   function paintDupBtn(){ const bar=document.querySelector('#tab-pipeline .quick-add-bar'); if(!bar || window.TODO_LITE) return; let b=$('pipe-dup-btn');
-    const n=dupCount(); if(!n){ if(b) b.hidden=true; return; }
-    if(!b){ b=document.createElement('button'); b.type='button'; b.id='pipe-dup-btn'; b.className='pipe-bar-btn pipe-dup-btn'; b.title='Même installation saisie deux fois, même société écrite de deux façons'; b.onclick=()=>openDupes(); bar.insertBefore(b, $('pipe-exited-toggle')); }
-    b.hidden=false; b.textContent='Doublons · '+n; }
+    const n=dupCount(); if(!n){ if(b) b.hidden=true; paintPipeMore(); return; }
+    if(!b){ b=document.createElement('button'); b.type='button'; b.id='pipe-dup-btn'; b.className='pipe-dup-btn'; b.title='Même installation saisie deux fois, même société écrite de deux façons'; b.onclick=()=>openDupes(); $('pipe-more-menu').insertBefore(b, $('pipe-exited-toggle')); }
+    b.hidden=false; b.textContent='Doublons · '+n; paintPipeMore(); }
   function openDupes(){
     let ov=$('dup-overlay'); if(ov) ov.remove();
     ov=document.createElement('div'); ov.id='dup-overlay'; ov.className='modal-overlay';
@@ -6121,6 +6128,14 @@
   $('prequal-save-btn').onclick=savePrequal;
   $('prequal-cancel-btn').onclick=closePrequalForm;
   $('pipe-exited-toggle').onclick=()=>{ pipeShowExited=!pipeShowExited; renderPipeline(); };
+  $('pipe-cols-toggle').onclick=()=>{ pipeDash=false; pipeMeet=false; pipeMap=false; pipeList=false; lsSet('pipe-list','0'); renderPipeline(); };
+  // « ⋯ »: opens under the button, closes on a choice, a click elsewhere or Escape
+  { const btn=$('pipe-more-btn'), menu=$('pipe-more-menu');
+    const close=()=>{ menu.hidden=true; btn.setAttribute('aria-expanded','false'); };
+    btn.onclick=e=>{ e.stopPropagation(); menu.hidden=!menu.hidden; btn.setAttribute('aria-expanded', String(!menu.hidden)); if(!menu.hidden){ const f=[...menu.querySelectorAll('button')].find(x=>x.offsetParent); if(f) f.focus(); } };
+    menu.addEventListener('click', e=>{ if(e.target.closest('button')) close(); });
+    document.addEventListener('click', e=>{ if(!menu.hidden && !e.target.closest('.pipe-more')) close(); });
+    document.addEventListener('keydown', e=>{ if(e.key==='Escape' && !menu.hidden){ e.stopPropagation(); close(); btn.focus(); } }, true); }
   $('pipe-dash-toggle').onclick=()=>{ pipeDash=!pipeDash; if(pipeDash){ pipeMeet=false; pipeMap=false; } renderPipeline(); };
   $('tasks-views-btn').onclick=e=>{ e.stopPropagation(); openViewsMenu('tasks', e.currentTarget); };
   $('pipe-views-btn').onclick=e=>{ e.stopPropagation(); openViewsMenu('pipeline', e.currentTarget); };
