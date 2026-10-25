@@ -39,13 +39,20 @@ window.TodoExcelSync=(function(){
   // writing, and keeps a journal of every cell; an older one is refused
   // the bridge published with this app (bridge/pont-excel.ps1 $Version; tests/bridge_test.py checks they match). Writing needs it:
   // 1.4 writes only in « Pipe Agrégation » / « BDD Agrégation », 1.7 adds new lines in a table with calculated columns
-  const BRIDGE_LATEST='1.9';
+  const BRIDGE_LATEST='1.10';
   const bridgeUpToDate=info=>{ const v=String(info&&info.version||'0').split('.').map(Number), l=BRIDGE_LATEST.split('.').map(Number); return v[0]>l[0] || (v[0]===l[0] && (v[1]||0)>=l[1]); };
-  async function xlSend(kind, list, rows){
+  // sent by packets of 8 lines (Excel takes a few seconds per line): no request runs long enough to be cut, and progress shows
+  const XL_PACKET=8;
+  async function xlSend(kind, list, rows, onProgress){
     if(!app.bridgeState.info || Date.now()-app.bridgeState.checkedAt>60000) await bridgeCheck();
     if(app.bridgeState.ok && !bridgeUpToDate(app.bridgeState.info)) throw new Error('Ton pont Excel n\u2019est pas à jour (version '+(app.bridgeState.info.version||'?')+', la '+BRIDGE_LATEST+' est disponible) : rien n\u2019a été envoyé. Dans Réglages → Pont Excel, télécharge pont-excel.ps1, remplace l\u2019ancien fichier et relance le pont.');
-    const res=await bridgeCall('POST','/'+kind+'/upsert',{ rows }, 30000);
-    const results=res.results||[], pending=[];
+    let res={}, results=[];
+    for(let k=0;k<rows.length;k+=XL_PACKET){
+      if(onProgress) onProgress(k, rows.length);
+      const r=await bridgeCall('POST','/'+kind+'/upsert',{ rows:rows.slice(k, k+XL_PACKET) }, 180000);
+      results=results.concat(r.results||[]); res={ ok:r.ok, backup:res.backup||r.backup, fileWasClosed:res.fileWasClosed||r.fileWasClosed };
+    }
+    const pending=[];
     results.forEach((r,i)=>{ const o=list[i]; xlRemember(kind, o, rows[i].values, r); if(r.ok && ((r.conflicts&&r.conflicts.length) || r.question)) pending.push({ o, r });
       if(r.ok && r.action!=='en attente'){ o.excelSent=Object.assign({}, o.excelSent||{}, { [kind]:{ at:Date.now(), h:xsHash(rows[i].values) } }); } });
     list.forEach(o=>{ o[kind==='pipe'?'pipeSentAt':'bddSentAt']=Date.now(); touchCrm(o); }); saveCrm();
@@ -211,7 +218,7 @@ window.TodoExcelSync=(function(){
     const label=btn?btn.textContent:'';
     if(btn){ btn.disabled=true; btn.textContent='Envoi…'; }
     try{
-      const { res, results, pending }=await xlSend(kind, list, list.map(o=>xlRowFor(kind, o, extra)));
+      const { res, results, pending }=await xlSend(kind, list, list.map(o=>xlRowFor(kind, o, extra)), (k,n)=>{ if(btn && n>XL_PACKET) btn.textContent='Envoi '+k+'/'+n+'…'; });
       const msg=xlSummary(kind, results, res);
       if(btn){ btn.textContent=pending.length?'À vérifier':'✓ Envoyé'; btn.title=msg; setTimeout(()=>{ btn.textContent=label; btn.disabled=false; },2500); }
       showBridgeMsg(msg, true);
@@ -223,9 +230,17 @@ window.TodoExcelSync=(function(){
   }
   // What was not written: cells changed by someone else (Garder / Remplacer / Fusionner) and questions
   // (duplicate lines, plant lost recently). « Garder » is the default everywhere.
-  let xrChoice={};
+  let xrChoice={}, xrShow={};
   function openXlReview(kind, pending){
-    const box=$('xl-review-body'); box.innerHTML=''; xrChoice={};
+    const box=$('xl-review-body'); box.innerHTML=''; xrChoice={}; xrShow={};
+    const nCells=pending.reduce((n,p)=>n+((p.r.conflicts||[]).length),0);
+    if(nCells>1){   // many cells: one click for all of them (each one can still be changed below)
+      const all=document.createElement('div'); all.className='xs-ask xr-all';
+      const q=document.createElement('span'); q.className='xs-q'; q.textContent='Pour les '+nCells+' cases :'; all.appendChild(q);
+      [['Garder l’appli partout',{ keep:'app' }],['Garder l’Excel partout (appli inchangée)',{ keep:'excel', align:false }]].forEach(([l,ch])=>{ const b=document.createElement('button'); b.type='button'; b.className='xs-choice'; b.textContent=l;
+        b.onclick=()=>Object.keys(xrShow).forEach(k=>xrShow[k](Object.assign({}, ch))); all.appendChild(b); });
+      box.appendChild(all);
+    }
     $('xl-review-title').textContent=(kind==='pipe'?'Pipe Excel':'Suivi Agrégation')+' : à vérifier';
     pending.forEach((p,idx)=>{
       const s=document.createElement('section'); s.className='xr-item';
@@ -254,7 +269,7 @@ window.TodoExcelSync=(function(){
           r.querySelector('b').textContent=c.header; r.querySelectorAll('.xr-v span')[0].textContent=c.excel; r.querySelectorAll('.xr-v span')[1].textContent=c.app;
           const ask=document.createElement('div'); ask.className='xs-ask'; ask.id='xr-'+idx+'-'+c.i; r.appendChild(ask); t.appendChild(r);
           const key=idx+'-'+c.i; xrChoice[key]={ keep:'excel', align:false };
-          const again=()=>xsAsk(ask, kind, p.o, c.i, { app:c.app, excel:c.excel }, ch=>{ xrChoice[key]=ch;
+          const again=()=>xsAsk(ask, kind, p.o, c.i, { app:c.app, excel:c.excel }, xrShow[key]=ch=>{ xrChoice[key]=ch;
             ask.innerHTML=''; const sp=document.createElement('span'); sp.className='xs-done';
             sp.textContent=ch.keep==='app'?'→ l’appli sera écrite dans l’Excel':ch.keep==='merge'?'→ les deux textes seront gardés':ch.align?'→ Excel gardé, appli mise à jour':'→ Excel gardé, appli inchangée';
             const ch2=document.createElement('button'); ch2.type='button'; ch2.className='pq-link'; ch2.textContent='changer'; ch2.onclick=again; ask.append(sp, ch2); }, c.comment);

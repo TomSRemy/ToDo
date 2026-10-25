@@ -2756,7 +2756,7 @@ Responsable technique
         h = {"Access-Control-Allow-Origin": "*", "Content-Type": "application/json"}
         if request.url.endswith("/status"):
             ok = request.headers.get("x-bridge-token") == "k1"
-            return route.fulfill(status=200, headers=h, body=json.dumps({"ok": True, "version": "1.9", "authorized": ok, "pipe": {"name": "Pipe.xlsx", "found": True}, "bdd": {"name": "Suivi.xlsx", "found": True}}))
+            return route.fulfill(status=200, headers=h, body=json.dumps({"ok": True, "version": "1.10", "authorized": ok, "pipe": {"name": "Pipe.xlsx", "found": True}, "bdd": {"name": "Suivi.xlsx", "found": True}}))
         sent.append((request.url.rsplit("/", 2)[-2], json.loads(request.post_data)))
         return route.fulfill(status=200, headers=h, body=json.dumps({"ok": True, "results": [{"ok": True, "action": "ajoutée", "row": 12}]}))
     inst = [{"id": "i1", "kind": "installation", "company": "SCEA", "producteur": "SCEA", "centrale": "Les Vignes", "title": "Les Vignes", "stage": "pricing_indicatif",
@@ -2790,7 +2790,7 @@ Responsable technique
         h = {"Access-Control-Allow-Origin": "*", "Content-Type": "application/json"}
         u = request.url
         if u.endswith("/status"):
-            return route.fulfill(status=200, headers=h, body=json.dumps({"ok": True, "version": "1.9", "authorized": True, "pipe": {"name": "Pipe.xlsx", "found": True}, "bdd": {"name": "Suivi.xlsx", "found": True}}))
+            return route.fulfill(status=200, headers=h, body=json.dumps({"ok": True, "version": "1.10", "authorized": True, "pipe": {"name": "Pipe.xlsx", "found": True}, "bdd": {"name": "Suivi.xlsx", "found": True}}))
         if u.endswith("/pipe/read"): return route.fulfill(status=200, headers=h, body=json.dumps({"ok": True, "sheets": {"Pipe fourniture": [["Pipe"], pipe_head, decoy], "Pipe agrégation": [["Pipe"], pipe_head, pipe_a]}}))   # another « Pipe … » sheet first: never the one read
         if u.endswith("/bdd/read"): return route.fulfill(status=200, headers=h, body=json.dumps({"ok": True, "sheets": {"BDD Agrégation": [bdd_head, bdd_a]}}))
         body = json.loads(request.post_data); xs_sent.append((u.rsplit("/", 2)[-2], body))
@@ -2830,7 +2830,7 @@ Responsable technique
             return route.fulfill(status=204, headers={"Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "*", "Access-Control-Allow-Methods": "*"})
         h = {"Access-Control-Allow-Origin": "*", "Content-Type": "application/json"}
         if request.url.endswith("/status"):
-            return route.fulfill(status=200, headers=h, body=json.dumps({"ok": True, "version": "1.9", "authorized": True, "pipe": {"name": "Pipe.xlsx", "found": True}, "bdd": {"name": "Suivi.xlsx", "found": True}}))
+            return route.fulfill(status=200, headers=h, body=json.dumps({"ok": True, "version": "1.10", "authorized": True, "pipe": {"name": "Pipe.xlsx", "found": True}, "bdd": {"name": "Suivi.xlsx", "found": True}}))
         body = json.loads(request.post_data); sent2.append(body)
         if len(sent2) == 1:
             res = {"ok": True, "action": "mise à jour", "row": 12, "key": "SCEA / Les Vignes", "cells": 2, "written": [3, 22], "mine": [0, 3, 22],
@@ -2851,6 +2851,7 @@ Responsable technique
           and "ouvre-le avant" in page.inner_text("#bridge-msg"), "shared Excel: changed cells shown, closed file reported")
     opts = [page.locator(f"#xr-0-{i} .xs-choice").count() for i in (30, 35)]
     check(opts == [2, 3] and page.locator("#xr-0-35 .xs-choice:has-text('fusionner')").count() == 1, f"shared Excel: « les deux (fusionner) » offered for comments only ({opts})")
+    check("Pour les 2 cases" in page.inner_text("#xl-review-body .xr-all"), "shared Excel: one click for every cell is offered")
     page.click("#xr-0-30 .xs-choice:has-text('l’Excel')")
     check("Mettre aussi l’appli à jour" in page.inner_text("#xr-0-30"), "shared Excel: keeping the Excel asks whether to update the app too")
     page.click("#xr-0-30 .xs-choice:text-is('Non')")
@@ -2880,7 +2881,7 @@ Responsable technique
     page.route("http://127.0.0.1:8765/**", old_bridge)
     page.goto(URL); page.click('[data-tab="pipeline"]'); page.click(".pipe-card:has-text('Les Vignes')")
     page.click("#opp-detail-actions >> text=Envoyer au Pipe Excel"); page.wait_for_timeout(600)
-    check(not posts and "pas à jour" in page.inner_text("#bridge-msg") and "1.9 est disponible" in page.inner_text("#bridge-msg"), f"an older bridge is refused: nothing sent, update asked ({page.inner_text('#bridge-msg')[:120]!r})")
+    check(not posts and "pas à jour" in page.inner_text("#bridge-msg") and "1.10 est disponible" in page.inner_text("#bridge-msg"), f"an older bridge is refused: nothing sent, update asked ({page.inner_text('#bridge-msg')[:120]!r})")
     page.close()
 
     # --- Réf. & data: clients grouped by company type, collapsed by default, search opens them
@@ -3100,7 +3101,7 @@ Responsable technique
         h = {"Access-Control-Allow-Origin": "*", "Content-Type": "application/json", "Access-Control-Allow-Headers": "*", "Access-Control-Allow-Methods": "*"}
         if request.method == "OPTIONS": return route.fulfill(status=204, headers=h)
         u = request.url
-        if u.endswith("/status"): return route.fulfill(status=200, headers=h, body=json.dumps({"ok": True, "version": "1.9", "authorized": True, "pipe": {"name": "Pipe.xlsx", "found": True}, "bdd": {"name": "Suivi.xlsx", "found": True}}))
+        if u.endswith("/status"): return route.fulfill(status=200, headers=h, body=json.dumps({"ok": True, "version": "1.10", "authorized": True, "pipe": {"name": "Pipe.xlsx", "found": True}, "bdd": {"name": "Suivi.xlsx", "found": True}}))
         if u.endswith("/pipe/read"): return route.fulfill(status=200, headers=h, body=json.dumps({"ok": True, "sheets": {"Pipe Agrégation": [ph, pa, pb]}}))
         if u.endswith("/bdd/read"): return route.fulfill(status=200, headers=h, body=json.dumps({"ok": True, "sheets": {"BDD Agrégation": [[""] * 91]}}))
         body = json.loads(request.post_data); sent3.append(body)

@@ -157,9 +157,10 @@ try:
     # 7b. checkbox columns (FALSE in every new line) do not make a line « not empty »; empty lines left at the end are removed
     call("POST", "/mock/seed/pipe", {"headers": H, "rows": [["SOLARIS", "Autre", "", "", "", "", "=x"], ["", "", False, "", "", "", "=x"], ["", "", False, "", "", "", "=x"], ["", "", False, "", "", "", "=x"]],
                                      "formulas": [7], "checkboxes": [3]})
-    r = send(row(["SOLARIS", "Toit Durand", None, 61]))["results"][0]
+    r = send(row(["SOLARIS", "Toit Durand", True, 61]))["results"][0]
     d = dump()
     check(r["ok"] and r["action"] == "ajoutée" and len(d) == 2 and d[1][1] == "Toit Durand", f"checkbox columns at FALSE: the line is added, empty lines left at the end removed ({len(d)} lines, {r.get('message', '')})")
+    check(d[1][2] == "True" and not r["conflicts"], f"a line just added: its FALSE checkbox takes the app's value, no question ({d[1][2]}, {r['conflicts']})")
     seed([["SOLARIS", "Autre", "", "", "", "", ""]])
     send(row(["SOLARIS", "Autre"]))
     check(len(dump()) == 1, "nothing to write: no line added")

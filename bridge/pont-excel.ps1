@@ -31,7 +31,7 @@
 param([int]$Port = 8765, [switch]$Reconfigurer, [switch]$Mock)
 
 $ErrorActionPreference = 'Stop'
-$Version = '1.9'
+$Version = '1.10'
 $Here = Split-Path -Parent $MyInvocation.MyCommand.Path
 $ConfigPath = Join-Path $Here 'pont-excel-config.json'
 # the app's addresses: GitHub Pages, and its own Cloudflare Pages address (an address given by hand: "origins" in pont-excel-config.json)
@@ -300,6 +300,9 @@ function Row-Still($a, $r, $keyCols, $keyVals) {
 function Upsert-Rows($kind, $rows) {
   $a = New-Adapter $kind
   $state = @{ backup = $null }
+  $xlApp = $null; $calc = $null
+  if (-not $Mock) { try { $xlApp = $a.book.wb.Application; $calc = $xlApp.Calculation; $xlApp.ScreenUpdating = $false; $xlApp.EnableEvents = $false; $xlApp.Calculation = -4135 } catch { } }
+  $restore = { if ($xlApp) { try { if ($null -ne $calc) { $xlApp.Calculation = $calc }; $xlApp.EnableEvents = $true; $xlApp.ScreenUpdating = $true } catch { } } }
   try {
     # empty lines left at the end of the table (by bridges before 1.9, which added a line and saved even when they wrote nothing): removed
     $n = & $a.RowCount $a; $last = $n
@@ -412,7 +415,7 @@ function Upsert-Rows($kind, $rows) {
         if (& $a.HasFormula $a $target $c) { continue }
         $e = & $a.Get $a $target $c
         $toWrite = $null
-        if (Is-Blank $e) { $toWrite = $v }
+        if ((Is-Blank $e) -or ($isNew -and (Is-EmptyCell $e))) { $toWrite = $v }   # a line just added: its FALSE checkboxes are Excel's, not someone's
         elseif (Same-Value $e $v) { [void]$mine.Add($i); continue }
         else {
           $f = [string](Get-Prop $force $i)
@@ -453,9 +456,10 @@ function Upsert-Rows($kind, $rows) {
       [void]$results.Add(@{ ok = $true; action = $action; row = (& $a.ExcelRow $a $target); cells = $written.Count; key = $keyText; note = $note; written = @($written); mine = @($mine); conflicts = @($conflicts) })
       Write-Info ("$($Kinds[$kind].label) : ligne $action (" + $keyText + ')' + $(if ($conflicts.Count) { ' — ' + $conflicts.Count + ' case(s) gardée(s)' } else { '' })) 'Green'
     }
+    & $restore
     if ($state.wrote) { & $a.Save $a }   # nothing written: the file is not saved (a line added then abandoned was already removed)
     return @{ ok = $true; results = $results; backup = $state.backup; fileWasClosed = [bool]$a.WasClosed }
-  } finally { & $a.Close $a }
+  } finally { & $restore; & $a.Close $a }
 }
 
 # ---------------- Reading (Parc) ----------------
