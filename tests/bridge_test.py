@@ -82,7 +82,8 @@ try:
     # 1. a new plant: added at the end
     seed([["SOLARIS", "Autre", "En attente", 50, "", "", "=x"]])
     r = send(row(["SOLARIS", "Toit Durand", "En préparation", 61, iso(TODAY), "", None]))["results"][0]
-    check(r["action"] == "ajoutée" and dump()[1][:4] == ["SOLARIS", "Toit Durand", "En préparation", "61"], "new plant: line added")
+    check(r["action"] == "ajoutée" and dump()[1][:4] == ["SOLARIS", "Toit Durand", "En préparation", "61"] and dump()[1][6] == "calculé",
+          f"new plant: line added, even though the table's calculated column filled the new line by itself ({r.get('message', '')})")
 
     # 2. filling an empty cell, nothing else moves
     seed([["SOLARIS", "Toit Durand", "En préparation", "", "", "Rappeler en mars", "=x"]])

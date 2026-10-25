@@ -31,7 +31,7 @@
 param([int]$Port = 8765, [switch]$Reconfigurer, [switch]$Mock)
 
 $ErrorActionPreference = 'Stop'
-$Version = '1.6'
+$Version = '1.7'
 $Here = Split-Path -Parent $MyInvocation.MyCommand.Path
 $ConfigPath = Join-Path $Here 'pont-excel-config.json'
 # the app's addresses: GitHub Pages, and its own Cloudflare Pages address (an address given by hand: "origins" in pont-excel-config.json)
@@ -152,7 +152,7 @@ function Find-Table($wb, $kind) {
   $k = $Kinds[$kind]
   $ws = $null
   foreach ($w in $wb.Worksheets) { if ((Norm $w.Name) -eq (Norm $k.sheet)) { $ws = $w; break } }
-  if (-not $ws) { throw ("Onglet « " + $k.sheet + " » introuvable dans " + $wb.Name + " : rien n'est écrit (le pont n'écrit que dans cet onglet).") }
+  if (-not $ws) { throw ("Onglet « " + $k.sheet + " » introuvable dans « " + $(if ($wb.Name) { $wb.Name } else { [IO.Path]::GetFileName([string]$Config.$kind) }) + " » : rien n'est écrit (le pont n'écrit que dans cet onglet).") }
   foreach ($lo in $ws.ListObjects) {
     $h = $lo.HeaderRowRange.Value2
     for ($c = 1; $c -le $lo.ListColumns.Count; $c++) { if ((Norm $h[1, $c]) -eq (Norm $k.header)) { return $lo } }
@@ -175,7 +175,10 @@ function New-ComAdapter($kind) {
   $a.BeforeWrite = { param($a) }
   $a.AddRow = { param($a) $null = $a.lo.ListRows.Add(); $a.lo.ListRows.Count }
   $a.ExcelRow = { param($a, $r) $a.lo.DataBodyRange.Row + $r - 1 }
-  $a.RowEmpty = { param($a, $r) $v = $a.lo.ListRows.Item($r).Range.Value2; if ($v -is [array]) { foreach ($x in $v) { if (-not (Is-Blank $x)) { return $false } }; return $true }; return (Is-Blank $v) }
+  # empty = every cell that is not a formula is blank (the table's calculated columns fill a new row by themselves)
+  $a.RowEmpty = { param($a, $r) $rg = $a.lo.ListRows.Item($r).Range; $v = $rg.Value2; $f = $rg.Formula
+    if ($v -is [array]) { $n = $v.GetLength(1); for ($c = 1; $c -le $n; $c++) { if (([string]$f[1, $c]).StartsWith('=')) { continue }; if (-not (Is-Blank $v[1, $c])) { return $false } }; return $true }
+    return ((Is-Blank $v) -or ([string]$f).StartsWith('=')) }
   $a.WasClosed = [bool]$book.opened
   $a.Backup = { param($a, $dir, $stamp) $n = [IO.Path]::GetFileNameWithoutExtension($a.book.wb.Name); $e = [IO.Path]::GetExtension($a.book.wb.Name); $p = Join-Path $dir ($n + "-" + $stamp + $e); $a.book.wb.SaveCopyAs($p); $p }
   $a.BackupPattern = { param($a) [IO.Path]::GetFileNameWithoutExtension($a.book.wb.Name) + "-*" + [IO.Path]::GetExtension($a.book.wb.Name) }
@@ -201,9 +204,9 @@ function New-MockAdapter($kind) {
   $a.Set = { param($a, $r, $c, $v) $a.t.rows[$r - 1][$c - 1] = $v }
   # test only: a colleague inserts a line at the top just before the bridge writes
   $a.BeforeWrite = { param($a) if ($a.t.shiftOnWrite) { $a.t.shiftOnWrite = $false; $a.t.rows.Insert(0, (New-Object object[] $a.t.headers.Count)) } }
-  $a.AddRow = { param($a) $null = $a.t.rows.Add((New-Object object[] $a.t.headers.Count)); $a.t.rows.Count }
+  $a.AddRow = { param($a) $line = New-Object object[] $a.t.headers.Count; foreach ($fc in $a.t.formulas.Keys) { $line[$fc - 1] = 'calculé' }; $null = $a.t.rows.Add($line); $a.t.rows.Count }   # like a calculated column
   $a.ExcelRow = { param($a, $r) $r + 1 }
-  $a.RowEmpty = { param($a, $r) foreach ($v in $a.t.rows[$r - 1]) { if (-not (Is-Blank $v)) { return $false } }; return $true }
+  $a.RowEmpty = { param($a, $r) $line = $a.t.rows[$r - 1]; for ($c = 1; $c -le $line.Count; $c++) { if ($a.t.formulas[$c]) { continue }; if (-not (Is-Blank $line[$c - 1])) { return $false } }; return $true }
   $a.WasClosed = [bool]$t.closed
   $a.Backup = { param($a, $dir, $stamp) $p = Join-Path $dir ("mock-" + $a.kind + "-" + $stamp + ".json"); (ConvertTo-Json -InputObject @($a.t.rows) -Depth 4 -Compress) | Set-Content -Path $p -Encoding UTF8; $p }
   $a.BackupPattern = { param($a) "mock-" + $a.kind + "-*.json" }
@@ -570,12 +573,19 @@ while ($true) {
     $req = Read-Request $stream
     if ($null -eq $req) { continue }
     $origin = $req.headers['origin']
-    try { $res = Handle $req }
-    catch {
-      $msg = $_.Exception.Message
-      if ($msg -match '0x800AC472|0x8001010A|RPC_E_CALL_REJECTED') { $msg = 'Excel est occupé (une cellule est peut-être en cours de saisie) : termine la saisie puis réessaie.' }
-      Write-Info ("Erreur : " + $msg) 'Red'
-      $res = @(500, @{ ok = $false; message = $msg })
+    $res = $null; $tries = 0
+    while ($null -eq $res) {
+      try { $res = Handle $req }
+      catch {
+        $msg = $_.Exception.Message
+        $busy = $msg -match '0x800AC472|0x8001010A|RPC_E_CALL_REJECTED|RPC_E_SERVERCALL_RETRYLATER'
+        $tries++
+        # Excel busy (a cell being typed, a dialog open): tried again for about 10 s before giving up
+        if ($busy -and $tries -lt 6) { Write-Info 'Excel est occupé, nouvel essai dans 2 s…' 'DarkGray'; Start-Sleep -Seconds 2; continue }
+        if ($busy) { $msg = 'Excel est occupé (une cellule en cours de saisie, ou une fenêtre de message ouverte dans Excel) : termine la saisie ou ferme la fenêtre, puis réessaie.' }
+        Write-Info ("Erreur : " + $msg) 'Red'
+        $res = @(500, @{ ok = $false; message = $msg })
+      }
     }
     Send-Response $stream $res[0] $res[1] $origin
   } catch { Write-Info ("Connexion interrompue : " + $_.Exception.Message) 'DarkGray' }
