@@ -284,9 +284,10 @@ with sync_playwright() as p:
     past = (datetime.datetime.now() - datetime.timedelta(minutes=5)).strftime("%Y-%m-%dT%H:%M")
     page, errors = new_page(browser, {"todo_todo-widget-tasks": json.dumps([task("r1", "Rappel test", reminder=past)])})
     page.add_init_script("window.__notifs=[]; window.Notification=function(t){ window.__notifs.push(t); }; Notification.permission='granted';")
-    page.goto(URL); page.wait_for_timeout(500)
+    page.goto(URL)
+    eventually(lambda: page.evaluate("window.__notifs.length") >= 1)   # the reminder check runs once the data is loaded
     first = page.evaluate("window.__notifs.length")
-    page.reload(); page.wait_for_timeout(500)
+    page.reload(); eventually(lambda: page.evaluate("!!(window.storage && document.querySelector('.tab.active'))")); page.wait_for_timeout(800)   # long enough for a reminder to fire if it were going to
     check(first == 1 and page.evaluate("window.__notifs.length") == 0, "reminder shown once, not again after reload")
     page.close()
 
