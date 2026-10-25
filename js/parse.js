@@ -254,6 +254,36 @@ window.TodoParse=(function(){
     while((m=re.exec(line))){ out.push({ num:pqFmtPhone(m[0]), at:m.index }); }
     return out;
   }
+  // a part of a signature that is a mail address or a phone number (read elsewhere)
+  function sigIsContactPart(p){
+    if(new RegExp(PQ_EMAIL_RE.source).test(p) || SIG_MAIL_LABEL.test(p) && new RegExp(PQ_EMAIL_RE.source).test(p)) return true;
+    return !!(sigPhones(p).length || (SIG_PHONE_LABEL.test(p) && /\d{2}/.test(p) && !/[a-z]{4,}/i.test(p.replace(SIG_PHONE_LABEL,''))));
+  }
+  // "Gérant BREIZH SOLAR": a role followed by an all-caps company → { role, company }
+  function sigRoleThenCompany(p){
+    const rc=new RegExp('^(.{3,40}?)\\s+((?:[A-Z0-9ÉÈÀÂÎÔÛÇ][A-Z0-9ÉÈÀÂÎÔÛÇ\'’&.-]+\\s*){1,5})$','u').exec(p);
+    return rc && SIG_ROLE.test(rc[1]) && !SIG_ROLE.test(rc[2]) && !/^(g[ée]n[ée]ral|technique|commercial|financier|adjoint|d[ée]l[ée]gu[ée]|administratif|op[ée]rationnel|marketing|juridique|rh)$/i.test(rc[2].trim()) ? { role:rc[1], company:rc[2].trim() } : null;
+  }
+  // what a part of a signature looks like: a legal form or a bank, a public body, all caps, the mail's own domain
+  function sigCompanyHints(p, stem){
+    const f=pqFold(p).replace(/[^a-z0-9]/g,'');
+    const letters=p.replace(/[^\p{L}]/gu,'');
+    return {
+      isLegal: new RegExp('\\b('+PQ_FORM+')\\b').test(p)||/cr[ée]dit agricole|caisse r[ée]gionale|caisse d.[ée]pargne|banque populaire|soci[ée]t[ée] g[ée]n[ée]rale|bnp/i.test(p),
+      isPublic: SIG_PUBLIC.test(p),
+      allCaps: letters.length>=4 && letters===letters.toUpperCase(),
+      domainHit: !!(stem && f.length>=4 && (f===stem || stem.includes(f) || f.includes(stem)))
+    };
+  }
+  // a role, or a company with its score, or neither
+  function sigRoleOrCompany(p, stem){
+    const h=sigCompanyHints(p, stem);
+    const isRole=SIG_ROLE.test(p) && !h.isLegal && !(h.isPublic && /^(mairie|commune|syndicat|communaut)/i.test(p));
+    if(isRole && !h.domainHit) return { role:true };
+    if(!(h.isLegal || h.isPublic || h.domainHit || h.allCaps)) return {};
+    return { score:(h.isLegal?4:0)+(h.domainHit?4:0)+(h.isPublic?3:0)+(h.allCaps?1:0)-(/^groupe?\b/i.test(p)?3:0) };
+  }
+
   function parseSignatureBlock(text, hint){
     hint=hint||{};
     const res={ prenom:'', nom:'', qualite:'', societe:'', mail:'', tel:'', tel2:'', adresse:'', site:'' };
@@ -285,27 +315,17 @@ window.TodoParse=(function(){
     });
     const names=[], roles=[], companies=[];
     parts.forEach(({p,li})=>{
-      if(new RegExp(PQ_EMAIL_RE.source).test(p) || SIG_MAIL_LABEL.test(p) && new RegExp(PQ_EMAIL_RE.source).test(p)) return;
-      if(sigPhones(p).length || (SIG_PHONE_LABEL.test(p) && /\d{2}/.test(p) && !/[a-z]{4,}/i.test(p.replace(SIG_PHONE_LABEL,'')))) return;
+      if(sigIsContactPart(p)) return;
       if(SIG_WEB.test(p)){ if(!res.site && !/linkedin/i.test(p)) res.site=p.replace(/^(web|site(?: web)?|w)\s*:?\s*/i,''); return; }
       if(SIG_ADDRESS.test(p) && !SIG_ROLE.test(p)){ res.adresse=(res.adresse?res.adresse+', ':'')+p; return; }
       if(p.split(' ').length>9) return;
       const ns=sigNameScore(p, tokens, stem);
       if(ns){ names.push({ p, li, score:ns }); return; }
-      // "Gérant BREIZH SOLAR": a role followed by an all-caps company
-      const rc=new RegExp('^(.{3,40}?)\\s+((?:[A-Z0-9ÉÈÀÂÎÔÛÇ][A-Z0-9ÉÈÀÂÎÔÛÇ\'’&.-]+\\s*){1,5})$','u').exec(p);
-      if(rc && SIG_ROLE.test(rc[1]) && !SIG_ROLE.test(rc[2]) && !/^(g[ée]n[ée]ral|technique|commercial|financier|adjoint|d[ée]l[ée]gu[ée]|administratif|op[ée]rationnel|marketing|juridique|rh)$/i.test(rc[2].trim())){ roles.push({ p:rc[1], li }); companies.push({ p:rc[2].trim(), li, score:3 }); return; }
-      const f=pqFold(p).replace(/[^a-z0-9]/g,'');
-      const isLegal=new RegExp('\\b('+PQ_FORM+')\\b').test(p)||/cr[ée]dit agricole|caisse r[ée]gionale|caisse d.[ée]pargne|banque populaire|soci[ée]t[ée] g[ée]n[ée]rale|bnp/i.test(p), isPublic=SIG_PUBLIC.test(p);
-      const letters=p.replace(/[^\p{L}]/gu,''), allCaps=letters.length>=4 && letters===letters.toUpperCase();
-      const domainHit=stem && f.length>=4 && (f===stem || stem.includes(f) || f.includes(stem));
-      const isRole=SIG_ROLE.test(p) && !isLegal && !(isPublic && /^(mairie|commune|syndicat|communaut)/i.test(p));
-      if(isRole && !domainHit){ roles.push({ p, li }); return; }
-      if(isLegal || isPublic || domainHit || allCaps){
-        let score=(isLegal?4:0)+(domainHit?4:0)+(isPublic?3:0)+(allCaps?1:0);
-        if(/^groupe?\b/i.test(p)) score-=3;
-        companies.push({ p, li, score });
-      }
+      const rc=sigRoleThenCompany(p);
+      if(rc){ roles.push({ p:rc.role, li }); companies.push({ p:rc.company, li, score:3 }); return; }
+      const k=sigRoleOrCompany(p, stem);
+      if(k.role) roles.push({ p, li });
+      else if(k.score!=null) companies.push({ p, li, score:k.score });
     });
     if(names.length){
       names.sort((a,b)=>b.score-a.score || a.li-b.li);
@@ -707,35 +727,47 @@ window.TodoParse=(function(){
   const xlRound=(n,d)=>String(Math.round(n*Math.pow(10,d))/Math.pow(10,d));
   function xlInstallType(v){ const f=pqFold(v); return /eol/.test(f)?'Eolien':/hydro/.test(f)?'Hydro':/biog|metha|cogen/.test(f)?'BIOGAZ':/pv|photo|solaire|ombri|toiture|\bsol\b|agrivolta|hangar/.test(f)?'PV':''; }
   function xlContrat(v){ const f=pqFold(v); return /s21/.test(f)?'AO S21 CR':/\baos\b|simplifi/.test(f)?'AOS CRE':/\boa\b|obligation/.test(f)?"Sortie d'OA / CR":/\bacc\b|autoconsommation/.test(f)?'Surplus ACC':/ppa/.test(f)?'PPA Spot':/\bao\b|cre|complement/.test(f)?'AO CRE CR':''; }
-  // one value of one plant, converted for the installation form
+  // one value of one plant, converted for the installation form: one small setter per kind of field (code audit: was a switch)
+  const xlDeptSet=(inst, d)=>{ if(d){ inst.dept=pqDeptLabel(d); inst.region=PQ_REGIONS[d[2]]; } };
+  const xlNature=v=>/au sol|\bsol\b/i.test(v)?'Centrale au sol':/toiture|hangar/i.test(v)?'Toiture':/ombri/i.test(v)?'Ombrière':null;
+  const XL_SET={
+    kwc(inst, v, lu, label){ const q=xlQty(v, lu); if(!q||isNaN(q.n)) return; const dcFirst=/\bdc\b|crete|installee|totale|kwc|mwc/.test(xlLabel(label)); if(inst.kwc && !dcFirst) return; inst.kwc=xlRound(/^m/.test(q.unit)?q.n*1000:q.n, 2); },
+    unit(inst, v, lu){ const q=xlQty(v, lu||'mw'); if(q&&!isNaN(q.n)) inst._unitKw=/^m/.test(q.unit)?q.n*1000:q.n; },
+    nbm(inst, v){ const n=parseFloat(v); if(n) inst._nb=n; },
+    productible(inst, v){ const n=typeof v==='number'?v:pqNum(String(v)); if(!n||isNaN(n)) return; inst.productible=String(Math.round(n<10?n*1000:n)); },
+    mwh(inst, v, lu, label, k){ const q=xlQty(v, lu||'mwh'); if(!q||isNaN(q.n)) return; const n=q.unit==='gwh'?q.n*1000:q.unit==='kwh'?q.n/1000:q.n; inst[k]=String(Math.round(n)); },
+    mesPrev(inst, v, lu, label, k){ const d=pqCellDate(v); if(d) inst[k]=d; },
+    injection(inst, v){ const d=pqCellDate(v); if(d) inst._inj=d; },
+    dept(inst, v){ xlDeptSet(inst, pqDeptFromText(String(v))); },
+    cp(inst, v){ inst.cp=typeof v==='number'?String(v).padStart(5,'0'):String(v).trim(); },
+    install(inst, v){ const t=xlInstallType(v); if(t) inst.install=t; const n=xlNature(v); if(n) inst._nature=n; },
+    contrat(inst, v){ const c=xlContrat(v); if(c) inst.contrat=c; },
+    commune(inst, v){ const s=String(v).trim(), m=/^(\d{5})\s+(.+)$/.exec(s); if(m){ inst.commune=m[2].trim(); if(!inst.cp) inst.cp=m[1]; } else inst.commune=s; }
+  };
+  XL_SET.p90=XL_SET.mwh; XL_SET.fin=XL_SET.mesPrev;
   function xlSet(inst, def, label, v){
     if(v===''||v==null) return;
-    const lu=xlUnit(label);
-    switch(def.k){
-      case 'kwc': { const q=xlQty(v, lu); if(!q||isNaN(q.n)) return; const dcFirst=/\bdc\b|crete|installee|totale|kwc|mwc/.test(xlLabel(label)); if(inst.kwc && !dcFirst) return; inst.kwc=xlRound(/^m/.test(q.unit)?q.n*1000:q.n, 2); return; }
-      case 'unit': { const q=xlQty(v, lu||'mw'); if(q&&!isNaN(q.n)) inst._unitKw=/^m/.test(q.unit)?q.n*1000:q.n; return; }
-      case 'nbm': { const n=parseFloat(v); if(n) inst._nb=n; return; }
-      case 'productible': { const n=typeof v==='number'?v:pqNum(String(v)); if(!n||isNaN(n)) return; inst.productible=String(Math.round(n<10?n*1000:n)); return; }
-      case 'mwh': case 'p90': { const q=xlQty(v, lu||'mwh'); if(!q||isNaN(q.n)) return; let n=q.n; if(q.unit==='gwh') n*=1000; if(q.unit==='kwh') n/=1000; inst[def.k]=String(Math.round(n)); return; }
-      case 'mesPrev': case 'fin': { const d=pqCellDate(v); if(d) inst[def.k]=d; return; }
-      case 'injection': { const d=pqCellDate(v); if(d) inst._inj=d; return; }
-      case 'dept': { const d=pqDeptFromText(String(v)); if(d){ inst.dept=pqDeptLabel(d); inst.region=PQ_REGIONS[d[2]]; } return; }
-      case 'cp': { const cp=typeof v==='number'?String(v).padStart(5,'0'):String(v).trim(); inst.cp=cp; return; }
-      case 'install': { const t=xlInstallType(v); if(t) inst.install=t; if(/au sol|\bsol\b/i.test(v)) inst._nature='Centrale au sol'; else if(/toiture|hangar/i.test(v)) inst._nature='Toiture'; else if(/ombri/i.test(v)) inst._nature='Ombrière'; return; }
-      case 'contrat': { const c=xlContrat(v); if(c) inst.contrat=c; return; }
-      case 'commune': { const s=String(v).trim(), m=/^(\d{5})\s+(.+)$/.exec(s); if(m){ inst.commune=m[2].trim(); if(!inst.cp) inst.cp=m[1]; } else inst.commune=s; return; }
-      default: inst[def.k]=String(v).trim();
-    }
+    const set=XL_SET[def.k];
+    if(set) set(inst, v, xlUnit(label), label, def.k); else inst[def.k]=String(v).trim();
+  }
+  // where the plant is: the department from the postal code or the address, the postal code from the address
+  function xlFinishPlace(inst){
+    if(!inst.dept && inst.cp) xlDeptSet(inst, pqDeptFromPostal(inst.cp));
+    if(!inst.dept && inst.adresse) xlDeptSet(inst, pqDeptFromText(inst.adresse));
+    if(!inst.cp && inst.adresse){ const m=/\b(\d{5})\b/.exec(inst.adresse); if(m) inst.cp=m[1]; }
+  }
+  // the first injection: the contract starts then, and it is the commissioning date when none was given
+  function xlFinishDates(inst){
+    if(!inst._inj) return;
+    if(!inst.debut){ const f=pqFullDate(inst._inj); inst.debut=f||inst._inj; }
+    if(!inst.mesPrev) inst.mesPrev=inst._inj;
   }
   function xlFinish(inst){
     if(!inst.kwc && inst._nb && inst._unitKw) inst.kwc=xlRound(inst._nb*inst._unitKw, 2);
-    if(!inst.dept && inst.cp){ const d=pqDeptFromPostal(inst.cp); if(d){ inst.dept=pqDeptLabel(d); inst.region=PQ_REGIONS[d[2]]; } }
-    if(!inst.dept && inst.adresse){ const d=pqDeptFromText(inst.adresse); if(d){ inst.dept=pqDeptLabel(d); inst.region=PQ_REGIONS[d[2]]; } }
-    if(!inst.cp && inst.adresse){ const m=/\b(\d{5})\b/.exec(inst.adresse); if(m) inst.cp=m[1]; }
+    xlFinishPlace(inst);
     if(!inst.install && (inst.kwc||'') && /kwc|mwc|crete/.test(inst._labels||'')) inst.install='PV';
     if(inst._nature) inst.particularites=inst._nature;
-    if(inst._inj && !inst.debut){ const f=pqFullDate(inst._inj); inst.debut=f||inst._inj; }   // the contract starts at the first injection
-    if(inst._inj && !inst.mesPrev) inst.mesPrev=inst._inj;
+    xlFinishDates(inst);
     if(!inst.centrale && inst.spv) inst.centrale=inst.spv;   // « Nom Installation » left empty: the SPV names the plant
     Object.keys(inst).forEach(k=>{ if(k.charAt(0)==='_') delete inst[k]; });
     return inst;

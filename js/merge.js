@@ -57,27 +57,10 @@ window.TodoMerge=(function(){
         const localChanged=lv!==bv, remoteChanged=rv!==bv;
         if(remoteChanged && !localChanged){ result[field]=remote[field]; return; }
         if(localChanged && !remoteChanged) return;
-        if(localChanged && remoteChanged && entityType==='note'){
-          // the post-it changes all the time on both devices: its lines are merged, never reported as a conflict
-          result[field]=field==='text'?mergeNoteLines(base[field], local[field], remote[field]):field.startsWith('pref_')?mergePrefValue(local[field], remote[field]):((remote.updatedAt||0)>(local.updatedAt||0)?remote[field]:local[field]);
-          return;
-        }
-        // logs only ever grow (calls, notes, steps), ticks are per step: both devices' entries are kept, not one of them
-        if(localChanged && remoteChanged && (field==='notesLog' || field==='stageLog') && Array.isArray(local[field]) && Array.isArray(remote[field])){
-          const seen=new Set(), all=[]; local[field].concat(remote[field]).forEach(e=>{ const k=JSON.stringify(e); if(!seen.has(k)){ seen.add(k); all.push(e); } });
-          result[field]=all.sort((x,y)=>((x&&x.at)||0)-((y&&y.at)||0)); return; }
-        if(localChanged && remoteChanged && field==='checks' && local[field] && remote[field] && typeof local[field]==='object' && typeof remote[field]==='object'){
-          const m={}; new Set([...Object.keys(remote[field]), ...Object.keys(local[field])]).forEach(k=>{ m[k]=Object.assign({}, remote[field][k]||{}, local[field][k]||{}); });
-          result[field]=m; return; }
-        // what the app keeps for itself (Excel sends, characteristics file, a date something happened): merged quietly, never a question
-        if(localChanged && remoteChanged && SILENT_MERGE.has(field)){
-          const l=local[field], r=remote[field], newer=(remote.updatedAt||0)>(local.updatedAt||0);
-          if(l && r && typeof l==='object' && typeof r==='object' && !Array.isArray(l) && !Array.isArray(r)) result[field]=newer?Object.assign({}, l, r):Object.assign({}, r, l);
-          else if(typeof l==='number' && typeof r==='number') result[field]=Math.max(l, r);
-          else result[field]=newer?r:l;
-          return; }
+        // changed on both sides: a known kind of field is merged by its rule (in this order), anything else is a conflict
+        for(const rule of BOTH_CHANGED){ const m=rule(entityType, field, local[field], remote[field], base[field], newerRemote(local, remote)); if(m){ result[field]=m.v; return; } }
         if(localChanged && remoteChanged){
-          const takeRemote=(remote.updatedAt||0) > (local.updatedAt||0);
+          const takeRemote=newerRemote(local, remote);
           result[field]=takeRemote?remote[field]:local[field];
           const when=t=>t?' (modifié le '+new Date(t).toLocaleDateString('fr-FR')+')':'';
           logConflict(entityType, result, field, local[field], remote[field], result[field], { a:'Sur cet appareil'+when(local.updatedAt), b:'Venu de ton autre appareil, par la synchro'+when(remote.updatedAt) });
@@ -88,6 +71,31 @@ window.TodoMerge=(function(){
     });
 
     return merged;
+  }
+  const newerRemote=(local, remote)=>(remote.updatedAt||0)>(local.updatedAt||0);
+  // a field changed on both devices since the last sync: { v: merged value }, or null when the rule does not apply
+  const BOTH_CHANGED=[
+    // the post-it changes all the time on both devices: its lines are merged, never reported as a conflict
+    (type, f, l, r, b, newer)=>type!=='note'?null:{ v: f==='text'?mergeNoteLines(b, l, r):f.startsWith('pref_')?mergePrefValue(l, r):(newer?r:l) },
+    // logs only ever grow (calls, notes, steps): both devices' entries are kept, in time order
+    (type, f, l, r)=>(f!=='notesLog' && f!=='stageLog') || !Array.isArray(l) || !Array.isArray(r)?null:{ v: mergeLogs(l, r) },
+    // ticks are per step: both devices' ticks are kept
+    (type, f, l, r)=>f!=='checks' || !l || !r || typeof l!=='object' || typeof r!=='object'?null:{ v: mergeChecks(l, r) },
+    // what the app keeps for itself (Excel sends, characteristics file, a date something happened): merged quietly, never a question
+    (type, f, l, r, b, newer)=>!SILENT_MERGE.has(f)?null:{ v: mergeSilent(l, r, newer) }
+  ];
+  function mergeLogs(l, r){
+    const seen=new Set(), all=[]; l.concat(r).forEach(e=>{ const k=JSON.stringify(e); if(!seen.has(k)){ seen.add(k); all.push(e); } });
+    return all.sort((x,y)=>((x&&x.at)||0)-((y&&y.at)||0));
+  }
+  function mergeChecks(l, r){
+    const m={}; new Set([...Object.keys(r), ...Object.keys(l)]).forEach(k=>{ m[k]=Object.assign({}, r[k]||{}, l[k]||{}); });
+    return m;
+  }
+  function mergeSilent(l, r, newer){
+    if(l && r && typeof l==='object' && typeof r==='object' && !Array.isArray(l) && !Array.isArray(r)) return newer?Object.assign({}, l, r):Object.assign({}, r, l);
+    if(typeof l==='number' && typeof r==='number') return Math.max(l, r);
+    return newer?r:l;
   }
   function stableStringify(o){
     if(o===null || typeof o!=='object') return JSON.stringify(o);
