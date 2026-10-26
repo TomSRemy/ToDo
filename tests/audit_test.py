@@ -30,10 +30,15 @@ def opp(i, company, centrale, stage, **kw):
 SEED = {
     "todo-widget-opportunities": [opp("o1", "Solaris Ouest", "Toit Est", "negociation"), opp("o2", "Watt Sud", "Hangar Nord", "offre_remise", dateOffre=""),
                                   opp("o3", "Vent du Nord", "Parc Nord", "kyc", install="Eolien"), opp("o4", "GAEC Test", "Toit Bas", "onboarding", stageLog=[{"stage": "onboarding", "at": now - 30 * DAY}]),
-                                  opp("o5", "Hélio Loire", "Ombrière Sud", "pricing_indicatif")],
+                                  opp("o5", "Hélio Loire", "Ombrière Sud", "pricing_indicatif"),
+                                  opp("o6", "Breizh Test", "Toit Neuf", "collecte", stageLog=[{"stage": "a_qualifier", "at": now - 30 * DAY}, {"stage": "collecte", "at": now - 2 * DAY}]),
+                                  opp("o7", "Nouvelle SAS", "Toit Frais", "a_qualifier", createdAt=now - DAY),
+                                  opp("o8", "Perdue SAS", "Toit Perdu", "perdu", lostAt=now - 3 * DAY, stageBeforeExit="offre_attente")],
     "todo-widget-contacts": [{"id": "p1", "firstName": "Claire", "lastName": "MARTIN", "company": "Solaris Ouest", "email": "claire@exemple.fr", "phone1": "06 12 34 56 00",
                               "role": "Gérante", "createdAt": 1, "updatedAt": 1, "deleted": False}],
     "todo-widget-companies": [{"id": "c1", "name": "Solaris Ouest", "type": "Producteur", "createdAt": 1, "updatedAt": 1, "deleted": False}],
+    "parc-data": {"fileName": "Suivi test.xlsx", "importedAt": now, "objectives": {"2026": 10, "2027": 20},
+                "items": [{"statut": "Gagné", "inst": "Signé 1", "prod": "Prod A", "dev": "Prod A", "kwc": 1000, "vols": {"2026": 4000, "2027": 5000}, "fin": "2040-01-01", "enr": "PV", "dept": "44"}]},
 }
 def seed_js(seed):
     return "if(!sessionStorage.getItem('s')){ for (const [k,v] of Object.entries(" + json.dumps({"todo_" + k: json.dumps(v) for k, v in seed.items()}) + ")) localStorage.setItem(k,v); sessionStorage.setItem('s','1'); }"
@@ -107,7 +112,16 @@ with sync_playwright() as p:
     row = page.locator(".meet-table tr", has_text="Hangar Nord").inner_text()
     check("Relancer" in row, f"meeting: the automatic follow-up is the next deadline ({row[:160]!r})")
     viz = page.inner_text("#pipeline-board")
+    ch = page.inner_text(".meet-changes")
+    check("Breizh Test — Toit Neuf : À qualifier → Collecte" in ch and "Nouveau : Nouvelle SAS" in ch and "Perdu : Perdue SAS" in ch, f"meeting: what changed since the last meeting, first ({ch[:200]!r})")
+    page.click(".meet-changes >> text=Réunion faite aujourd")
+    check(eventually(page, lambda: "0 dossier a avancé" in page.inner_text(".meet-changes")), "« Réunion faite aujourd'hui » starts the next comparison from now")
     check("hors onboarding" in viz and "pricing 25 %" in viz and "même étape > 15 j" in viz, "meeting: the scope, the weights of « probables » and the meaning of « bloquées » are written")
+    # 6b. dashboard: the GWh objective with the likely offers
+    page.click("#pipe-dash-toggle"); page.wait_for_timeout(400)
+    dash = page.inner_text("#pipeline-board")
+    check("Avec les offres probables" in dash and "% de l’objectif" in dash and "4 + " in dash and "/ 10 GWh" in dash, f"dashboard: signed + likely GWh against the objective ({dash[dash.find('Avec les offres'):dash.find('Avec les offres')+160]!r})")
+    page.click("#pipe-meet-toggle"); page.wait_for_timeout(300)
     # 7. units keep their case; wind in MW; KYC
     page.click("#pipe-list-toggle"); page.wait_for_timeout(300)
     heads = page.eval_on_selector_all("#pipeline-board .th-col, #pipeline-board th", "els=>els.map(e=>e.innerText)")

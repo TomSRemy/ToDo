@@ -4,7 +4,7 @@ window.TodoPresent=(function(){
   const api={};
   // everything this part uses from js/app.js, given once when the app has finished loading
   api.init=function(app){
-    const { $, meetCopyShort, MAP_PHASES, MEET_COLS, MEET_PHASES, MES_WEIGHTS, OPP_STAGES, PIPE_PHASES, WHO, WHO_COLORS, activeTasks, buildHistory, caractValue, daysInStage, escapeHtml, fmtKwc, fmtMwc, kwcNum, loadScript, meetBlockKey, meetBlockName, meetCopy, meetData, meetHiddenCols, meetPhasesOn, meetPick, meetPrint, meetTotal, meetVis, meetVisuals, meetXlsx, mesForecast, openOppDetail, openRequestDetail, oppName, oppStage, plainLinks, pqNum, prefsToNote, renderPipeline, stageLabel, stageTaskOf, toISO }=app;
+    const { $, meetCopyShort, meetChangesBlock, MAP_PHASES, MEET_COLS, MEET_PHASES, MES_WEIGHTS, OPP_STAGES, PIPE_PHASES, WHO, WHO_COLORS, activeTasks, buildHistory, caractValue, daysInStage, escapeHtml, fmtKwc, fmtMwc, kwcNum, loadScript, meetBlockKey, meetBlockName, meetCopy, meetData, meetHiddenCols, meetPhasesOn, meetPick, meetPrint, meetTotal, meetVis, meetVisuals, meetXlsx, mesForecast, openOppDetail, openRequestDetail, oppName, oppStage, plainLinks, pqNum, prefsToNote, renderPipeline, stageLabel, stageTaskOf, toISO }=app;
     let meetColsOpen=false;   // the « Colonnes ▾ » chips shown
   // ---------- « Présenter » : the meeting as a consultant's deck (pyramid principle): the answer on slide 1, then one message
   // per slide that details it — an action title (a sentence with a number), one exhibit, « À retenir », source and page; the deals in appendix ----------
@@ -213,6 +213,7 @@ window.TodoPresent=(function(){
       chips.appendChild(c); });
     board.appendChild(chips);
     if(!n){ const e=document.createElement('div'); e.className='today-empty'; e.textContent='Aucune installation dans ces phases.'; board.appendChild(e); return; }
+    board.appendChild(meetChangesBlock());   // what changed since the last meeting, first (backlog)
     board.appendChild(meetVisuals(groups));
     const wrap=document.createElement('div'); wrap.className='meet-scroll';
     const vis=meetVis(), ncol=vis.filter(Boolean).length;

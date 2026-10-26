@@ -3015,6 +3015,7 @@
       r.innerHTML='<span class="k"><b></b><span></span></span><span class="v"></span>'; r.querySelector('b').textContent=o.kind==='prequal'?o.company+' (pré-qualif)':oppName(o);
       r.querySelector('.k span').textContent=[o.kind==='prequal'?'':o.company, stageLabel(o.stage, o)].filter(Boolean).join(' · '); r.querySelector('.v').textContent=d+' j'; r.onclick=()=>openOppDetail(o.id); c3.appendChild(r); });
     // the tasks too: open, archived, done this week, by urgency, status, client and project
+    { const g=goalGwhCard(card, live); if(g) grid.appendChild(g); }
     { const c6=card('Tâches', null); const sp=document.createElement('div'); sp.className='pd-stats'; c6.appendChild(sp); renderStats(sp); }
   }
   // ----- List view: every installation in one sortable table (search, saved view and « Sorties » apply) -----
@@ -3063,6 +3064,35 @@
   // what the meeting counts, said under its figures (cold audit: 19 here, 20 on the dashboard, « probables » without weights)
   const MEET_SCOPE='Périmètre : les installations des phases choisies au-dessus, hors onboarding et hors affaires sorties (le Tableau de bord, lui, compte l\u2019onboarding). Probables : MWc × chance de signer selon l\u2019étape — '
     +[['pricing_indicatif','pricing'],['offre_attente','offre en attente'],['kyc','KYC'],['negociation','négociation'],['mise_signature','mise en signature'],['signature','signature']].map(([k,l])=>l+' '+Math.round(MES_WEIGHTS[k]*100)+' %').join(', ')+'.';
+  // Objective in GWh (backlog): signed volume of the Suivi + the pipeline's P50 weighted by the chance to sign, against the Suivi's objective,
+  // this year and next; and the deals that weigh most. A deal delivers from its start date (contract start, else commissioning, else now).
+  function pipeYearGwh(o, y){
+    const mwh=pqNum(String(o.mwh||''))||0; if(!mwh) return 0;
+    const st=pqToDate(o.debut||'')||pqToDate(o.mesEff||o.mesPrev||'')||new Date(), y0=new Date(+y,0,1), y1=new Date(+y+1,0,1);
+    const end=pqToDate(o.fin||'')||(o.duree?new Date(st.getFullYear()+(+o.duree||0), st.getMonth(), st.getDate()):y1);
+    const from=Math.max(st, y0), to=Math.min(end, y1); return to>from?mwh*(to-from)/(y1-y0)/1000:0;
+  }
+  function goalGwhCard(card, live){
+    if(!parcData || !parcData.items || !parcData.objectives) return null;
+    const cy=new Date().getFullYear(), yrs=[String(cy), String(cy+1)].filter(y=>parcData.objectives[y]);
+    if(!yrs.length) return null;
+    const won=parcData.items.filter(p=>p.statut==='Gagné'), deals=live.filter(o=>o.kind==='installation' && stageIndex(o.stage)<stageIndex('onboarding'));
+    const c=card('Objectif en GWh', 'Signé = volume du Suivi ; probable = P50 des dossiers en cours × chance de signer selon l\u2019étape, à partir de leur date de début (ou de mise en service).');
+    const lines=yrs.map(y=>{ const obj=parcData.objectives[y], signed=won.reduce((s,p)=>s+(p.vols[y]||0),0)/1000, prob=deals.reduce((s,o)=>s+pipeYearGwh(o,y)*(MES_WEIGHTS[o.stage]||0),0);
+      return { y, obj, signed, prob, pct:Math.round((signed+prob)/obj*100) }; });
+    const f=v=>(Math.round(v*10)/10).toLocaleString('fr-FR');
+    c.querySelector('h4').textContent='Avec les offres probables : '+lines.map(l=>l.pct+' % de l\u2019objectif '+l.y).join(', ');
+    lines.forEach(l=>{ const r=document.createElement('div'); r.className='pd-bar-row pd-goal-row'; r.innerHTML='<span class="pd-l"></span><span class="pd-bar"><span class="s"></span><span class="p"></span></span><span class="pd-v"></span>';
+      r.querySelector('.pd-l').textContent=l.y; const top=Math.max(l.obj, l.signed+l.prob);
+      r.querySelector('.s').style.width=(l.signed/top*100)+'%'; r.querySelector('.p').style.width=(l.prob/top*100)+'%';
+      r.querySelector('.pd-v').textContent=f(l.signed)+' + '+f(l.prob)+' / '+f(l.obj)+' GWh'; c.appendChild(r); });
+    const top=deals.map(o=>({ o, w:yrs.reduce((s,y)=>s+pipeYearGwh(o,y),0)*(MES_WEIGHTS[o.stage]||0) })).filter(x=>x.w>0).sort((a,b)=>b.w-a.w).slice(0,5);
+    if(top.length){ const p=document.createElement('p'); p.className='pd-hint'; p.textContent='Les dossiers qui pèsent le plus (GWh pondérés sur '+yrs.join(' et ')+') :'; c.appendChild(p);
+      top.forEach(x=>{ const r=document.createElement('button'); r.type='button'; r.className='tw-row'; r.innerHTML='<span class="k"><b></b><span></span></span><span class="v"></span>';
+        r.querySelector('b').textContent=oppName(x.o); r.querySelector('.k span').textContent=[x.o.company, stageLabel(x.o.stage, x.o)+' '+Math.round((MES_WEIGHTS[x.o.stage]||0)*100)+' %'].join(' · '); r.querySelector('.v').textContent=f(x.w)+' GWh';
+        r.onclick=()=>openOppDetail(x.o.id); c.appendChild(r); }); }
+    return c;
+  }
   // the key figures over the table (screen, mail, Excel): in play, likely, plants, production, stuck
   function meetFigures(groups){
     const list=groups.flatMap(g=>g.list), kw=list.reduce((x,o)=>x+kwcNum(o),0), mwh=list.reduce((x,o)=>x+(pqNum(String(o.mwh||''))||0),0);
@@ -3083,6 +3113,38 @@
     return [o.producteur||o.company||'', oppName(o), o.install==='Eolien'?'Éolien':(o.install||''), fmtKwc(o.kwc, o.install), mwh?Math.round(mwh).toLocaleString('fr-FR'):'',
       (o.dept||'').replace(/^(\S+)\s+-\s+.*$/,'$1'), o.mesEff?fr(o.mesEff)+' (effective)':fr(o.mesPrev), o.debut&&o.fin?fr(o.debut)+' → '+fr(o.fin):o.fin?'jusqu\u2019au '+fr(o.fin):o.debut?'dès '+fr(o.debut)+(o.duree?', '+o.duree+' ans':''):(o.duree?o.duree+' ans':''),
       o.contrat||'', s?stageLabel(o.stage, o)+(s.who!=='Com'?' ('+(WHO[s.who]||s.who)+')':''):'', next, o.charge||'', meetBlockName(o), (()=>{ const d=daysInStage(o); return d==null?'':d+' j'; })()];
+  }
+  // ---- « Depuis la dernière réunion » (backlog): what moved, what is new, what was lost, to open the meeting with ----
+  const meetLast=()=>{ try{ const v=+localStorage.getItem('meet-last'); return v>1e12?v:Date.now()-7*864e5; }catch(e){ return Date.now()-7*864e5; } };
+  function meetChanges(since){
+    const live=opportunities.filter(o=>!o.deleted && o.kind==='installation' && !o.mergedInto);
+    const moved=[], fresh=[], lost=[];
+    live.forEach(o=>{
+      if(isExited(o)){ if((o.lostAt||0)>since) lost.push(o); return; }
+      if((o.createdAt||0)>since){ fresh.push(o); return; }
+      const log=(o.stageLog||[]).filter(e=>e && e.at>1e12), after=log.filter(e=>e.at>since);
+      if(after.length){ const before=log.filter(e=>e.at<=since).pop(), to=after[after.length-1].stage, from=before?before.stage:null; if(from!==to) moved.push({ o, from, to }); }
+    });
+    return { moved:moved.sort((a,b)=>stageIndex(b.to)-stageIndex(a.to)), fresh, lost };
+  }
+  function meetChangesText(ch, since){
+    const day=new Date(since).toLocaleDateString('fr-FR'), L=['Depuis le '+day+' : '+[ch.moved.length+' dossier'+(ch.moved.length>1?'s ont':' a')+' avancé', ch.fresh.length+' nouveau'+(ch.fresh.length>1?'x':''), ch.lost.length+' perdu'+(ch.lost.length>1?'s':'')+' ou sorti'+(ch.lost.length>1?'s':'')].join(' · ')];
+    ch.moved.forEach(m=>L.push('• '+[m.o.company, oppName(m.o)].filter(Boolean).join(' — ')+' : '+(m.from?stageLabel(m.from, m.o)+' → ':'')+stageLabel(m.to, m.o)));
+    ch.fresh.forEach(o=>L.push('• Nouveau : '+[o.company, oppName(o)].filter(Boolean).join(' — ')+' ('+stageLabel(o.stage, o)+')'));
+    ch.lost.forEach(o=>L.push('• '+(o.stage==='perdu'?'Perdu':o.stage==='no_go'?'No go':'Sorti')+' : '+[o.company, oppName(o)].filter(Boolean).join(' — ')));
+    return L;
+  }
+  function meetChangesBlock(){
+    const since=meetLast(), ch=meetChanges(since), L=meetChangesText(ch, since);
+    const box=document.createElement('section'); box.className='meet-changes';
+    const h=document.createElement('div'); h.className='mc-head'; const b=document.createElement('b'); b.textContent=L[0]; h.appendChild(b);
+    const d=document.createElement('input'); d.type='date'; d.className='mc-date'; d.value=toISO(new Date(since)); d.title='Date de la dernière réunion'; d.setAttribute('aria-label','Date de la dernière réunion');
+    d.onchange=()=>{ const t=d.value?new Date(d.value+'T12:00:00').getTime():0; if(t>1e12){ lsSet('meet-last', String(t)); renderPipeline(); } };
+    const mk=document.createElement('button'); mk.type='button'; mk.className='pipe-bar-btn'; mk.textContent='Réunion faite aujourd\u2019hui'; mk.title='La prochaine fois, « depuis la dernière réunion » partira de maintenant';
+    mk.onclick=()=>{ lsSet('meet-last', String(Date.now())); notify('Noté : la prochaine réunion montrera ce qui a changé depuis aujourd\u2019hui'); renderPipeline(); };
+    h.append(d, mk); box.appendChild(h);
+    if(L.length>1){ const ul=document.createElement('ul'); L.slice(1, 13).forEach(x=>{ const li=document.createElement('li'); li.textContent=x.replace(/^• /,''); ul.appendChild(li); }); if(L.length>13){ const li=document.createElement('li'); li.className='mc-more'; li.textContent='et '+(L.length-13)+' de plus (dans « Copier en liste courte »)'; ul.appendChild(li); } box.appendChild(ul); }
+    return box;
   }
   let meetStuckOnly=false;   // « bloquées » clicked: only the deals at the same step for more than 15 days (cold audit: which ones?)
   function meetData(q){
@@ -3121,7 +3183,7 @@
   }
   // a short list, one line per installation: reads in Teams on a phone, where the 14-column table does not (cold audit)
   async function meetCopyShort(groups, btn){
-    const L=[meetTitle(), meetFigures(groups).map(([v,l])=>v+' '+l).join(' · ')];
+    const L=[meetTitle(), meetFigures(groups).map(([v,l])=>v+' '+l).join(' · '), ''].concat(meetChangesText(meetChanges(meetLast()), meetLast()));
     groups.filter(g=>g.rows.length).forEach(g=>{ L.push('', g.phase.label+' — '+meetTotal(g.kwc,g.mwh,g.rows.length));
       g.list.forEach((o,i)=>{ const r=g.rows[i]; L.push('• '+[[o.producteur||o.company, oppName(o)].filter(Boolean).join(' — '), fmtKwc(o.kwc, o.install), r[9], r[10]?'prochaine échéance '+r[10]:'', r[13]?'depuis '+r[13]:''].filter(Boolean).join(' · ')); }); });
     copyToClipboard(L.join('\n'), btn);
@@ -7338,7 +7400,7 @@
   });
   window.TodoOffers.init({ oppName, stageLabel, daysInStage, fmtKwc, fmtMwc, kwcNum, isExited, sameCo, openOppDetail, openRequestDetail, touchCrm, saveCrm, renderPipeline, askText, notify, copyToClipboard, pqIsoToFr, toISO, lsSet, fold:pqFold,
     get opportunities(){ return opportunities; }, get contacts(){ return contacts; } });
-  window.TodoPresent.init({ $, meetCopyShort, MAP_PHASES, MEET_COLS, MEET_PHASES, MES_WEIGHTS, OPP_STAGES, PIPE_PHASES, WHO, WHO_COLORS, activeTasks, buildHistory, caractValue, daysInStage, escapeHtml, fmtKwc, fmtMwc, kwcNum, loadScript, meetBlockKey, meetBlockName, meetCopy, meetData, meetHiddenCols, meetPhasesOn, meetPick, meetPrint, meetTotal, meetVis, meetVisuals, meetXlsx, mesForecast, openOppDetail, openRequestDetail, oppName, oppStage, plainLinks, pqNum, prefsToNote, renderPipeline, stageLabel, stageTaskOf, toISO });   // js/present.js
+  window.TodoPresent.init({ $, meetCopyShort, meetChangesBlock, MAP_PHASES, MEET_COLS, MEET_PHASES, MES_WEIGHTS, OPP_STAGES, PIPE_PHASES, WHO, WHO_COLORS, activeTasks, buildHistory, caractValue, daysInStage, escapeHtml, fmtKwc, fmtMwc, kwcNum, loadScript, meetBlockKey, meetBlockName, meetCopy, meetData, meetHiddenCols, meetPhasesOn, meetPick, meetPrint, meetTotal, meetVis, meetVisuals, meetXlsx, mesForecast, openOppDetail, openRequestDetail, oppName, oppStage, plainLinks, pqNum, prefsToNote, renderPipeline, stageLabel, stageTaskOf, toISO });   // js/present.js
   window.TodoPhone.init({ $, askConfirm, tell, contactDupKeys, ensureCompany, loadTesseract, openContactForm, parseSignatureText, pqFmtPhone, pqFold, renderContacts, saveCrm, toISO, touchCrm, get contacts(){ return contacts; } });   // js/phone.js
   window.TodoAI.init({ aiKey, $, CARACT_ROWS, caractKey, caractSet, caractValue, oppName, renderPipeline, saveCrm, touchCrm });   // js/ai.js
 })();
