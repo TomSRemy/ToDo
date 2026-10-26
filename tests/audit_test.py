@@ -29,7 +29,8 @@ def opp(i, company, centrale, stage, **kw):
     o.update(kw); return o
 SEED = {
     "todo-widget-opportunities": [opp("o1", "Solaris Ouest", "Toit Est", "negociation"), opp("o2", "Watt Sud", "Hangar Nord", "offre_remise", dateOffre=""),
-                                  opp("o3", "Vent du Nord", "Parc Nord", "kyc", install="Eolien"), opp("o4", "GAEC Test", "Toit Bas", "onboarding", stageLog=[{"stage": "onboarding", "at": now - 30 * DAY}])],
+                                  opp("o3", "Vent du Nord", "Parc Nord", "kyc", install="Eolien"), opp("o4", "GAEC Test", "Toit Bas", "onboarding", stageLog=[{"stage": "onboarding", "at": now - 30 * DAY}]),
+                                  opp("o5", "Hélio Loire", "Ombrière Sud", "pricing_indicatif")],
     "todo-widget-contacts": [{"id": "p1", "firstName": "Claire", "lastName": "MARTIN", "company": "Solaris Ouest", "email": "claire@exemple.fr", "phone1": "06 12 34 56 00",
                               "role": "Gérante", "createdAt": 1, "updatedAt": 1, "deleted": False}],
     "todo-widget-companies": [{"id": "c1", "name": "Solaris Ouest", "type": "Producteur", "createdAt": 1, "updatedAt": 1, "deleted": False}],
@@ -122,6 +123,20 @@ with sync_playwright() as p:
     page.locator(".meet-actions button", has_text="liste courte").click(); page.wait_for_timeout(300)
     short = page.evaluate("navigator.clipboard.readText()")
     check("• Watt Sud — Hangar Nord" in short and "\t" not in short and "prochaine échéance" in short, f"meeting: « Copier en liste courte », one line per installation ({short[:160]!r})")
+    # 7c. Offres: who has each deal, since when, the offer's version and price, the follow-ups ready
+    page.click("#pipe-offers-toggle"); page.wait_for_selector(".of-sec")
+    ofs = page.inner_text("#pipeline-board")
+    check("Chez Ops" in ofs and "À toi" in ofs and "Chez le producteur" in ofs and "Hangar Nord" in ofs, "offers view: the three « who has it » sections")
+    page.locator(".of-sec[data-k=client] tr", has_text="Hangar Nord").locator("button", has_text="offre").click()
+    page.wait_for_selector("#choice-overlay:not(.hidden) #choice-input"); page.fill("#choice-input", "52 €/MWh"); page.locator("#choice-btns button").first.click()
+    check(eventually(page, lambda: "Offre 1 · 52 €/MWh" in page.inner_text(".of-sec[data-k=client]")), "offers view: an offer is recorded with its version and price")
+    page.locator(".of-sec[data-k=client] tr", has_text="Hangar Nord").locator("button", has_text="offre").click()
+    page.wait_for_selector("#choice-overlay:not(.hidden) #choice-input"); page.fill("#choice-input", "49 €/MWh"); page.locator("#choice-btns button").first.click()
+    check(eventually(page, lambda: "Offre 2 · 49 €/MWh" in page.inner_text(".of-sec[data-k=client]")), "offers view: the next one is « Offre 2 »")
+    page.locator(".of-acts button", has_text="Copier le mail aux Ops").click(); page.wait_for_timeout(300)
+    om = page.evaluate("navigator.clipboard.readText()")
+    check("Hélio Loire — Ombrière Sud" in om and "il y a 20 jours" in om and "pricing indicatif" in om, f"offers view: one grouped mail to Ops with each request, its date and its delay ({om[:200]!r})")
+    page.click("#pipe-cols-toggle"); page.wait_for_timeout(200)
     # 8. a search with no result says so
     page.click("#pipe-cols-toggle"); page.wait_for_timeout(200)
     page.fill("#opp-search", "zzzz")

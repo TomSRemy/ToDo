@@ -2907,7 +2907,7 @@
 
 
   // ----- Board -----
-  let pipeShowExited=false, pipeDash=false, pipeMeet=false, pipeList=false, pipeMap=false; try{ pipeList=localStorage.getItem('pipe-list')==='1'; }catch(e){}
+  let pipeShowExited=false, pipeDash=false, pipeMeet=false, pipeList=false, pipeMap=false, pipeOffers=false; try{ pipeList=localStorage.getItem('pipe-list')==='1'; }catch(e){}
   // ---------- Pipeline dashboard: MWc by phase, time spent at each step, deals that drag ----------
   const kwcNum=o=>parseFloat(String(o.kwc||'').replace(/\s/g,'').replace(',','.'))||0;
   function stageDurations(){
@@ -3269,10 +3269,10 @@
     if(st.who==='Com') pipeTallyN.me++; else pipeTallyN.others++; const d=daysInStage(o); if(d!=null && d>15) pipeTallyN.stuck++; }
   function paintPipeSummary(){ try{ paintDupBtn(); paintDupBanner(); }catch(e){ softFail('bandeau doublons', e); } let el=$('pipe-summary'); const bar=document.querySelector('#tab-pipeline .quick-add-bar'); if(!bar) return;
     if(!el){ el=document.createElement('span'); el.id='pipe-summary'; el.className='pipe-summary'; const ref=$('pipe-bar-spacer'); bar.insertBefore(el, ref); }
-    const show=pipeTallyN.on && !pipeDash && !pipeMeet && !pipeList && !pipeMap; el.hidden=!show; if(!show) return;
+    const show=pipeTallyN.on && !pipeDash && !pipeMeet && !pipeList && !pipeMap && !pipeOffers; el.hidden=!show; if(!show) return;
     el.innerHTML='À moi <b></b> · <span class="lg">En attente des autres</span><span class="sm">Autres</span> <b></b>'+(pipeTallyN.stuck?' · <button type="button" class="pipe-stuck-btn" title="Voir lesquels (vue Réunion)">Bloqués<span class="lg"> &gt; 15 j</span> <b class="late"></b></button>':'');
     el.title='À moi : c\u2019est à toi d\u2019agir. Autres : Ops, Juridique, Direction ou le producteur. Bloqués : à la même étape depuis plus de 15 jours (onboarding compris).';
-    const sb=el.querySelector('.pipe-stuck-btn'); if(sb) sb.onclick=()=>{ pipeMeet=true; pipeDash=false; pipeMap=false; meetStuckOnly=true; renderPipeline(); };
+    const sb=el.querySelector('.pipe-stuck-btn'); if(sb) sb.onclick=()=>{ pipeOffers=false; pipeMeet=true; pipeDash=false; pipeMap=false; meetStuckOnly=true; renderPipeline(); };
     const bs=el.querySelectorAll('b'); bs[0].textContent=pipeTallyN.me; bs[1].textContent=pipeTallyN.others; if(bs[2]) bs[2].textContent=pipeTallyN.stuck; }
   // the card's « what's next »: the linked open task, else what the step asks; who has it and since when; its request
   function cardStepInfo(card, group, reqId){
@@ -3299,7 +3299,10 @@
   function renderPipelineInner(){
     if(normalizeOpps()) saveCrmLocalOnly();
     const board=$('pipeline-board');
-    board.innerHTML=''; board.classList.remove('pipe-dash','pipe-meet');
+    board.innerHTML=''; board.classList.remove('pipe-dash','pipe-meet','pipe-offers');
+    $('pipe-offers-toggle').setAttribute('aria-pressed', String(pipeOffers)); $('pipe-offers-toggle').classList.toggle('on', pipeOffers);
+    if(pipeOffers){ ['pipe-dash-toggle','pipe-cols-toggle','pipe-map-toggle','pipe-meet-toggle','pipe-list-toggle'].forEach(id=>{ $(id).setAttribute('aria-pressed','false'); $(id).classList.remove('on'); });
+      $('pipe-exited-toggle').classList.add('hidden'); window.TodoOffers.renderOffers(board, pqFold($('opp-search').value.trim())); return; }
     $('pipe-dash-toggle').setAttribute('aria-pressed', String(pipeDash)); $('pipe-dash-toggle').classList.toggle('on', pipeDash);
     { const cols=!pipeDash && !pipeMeet && !pipeMap && !pipeList; $('pipe-cols-toggle').setAttribute('aria-pressed', String(cols)); $('pipe-cols-toggle').classList.toggle('on', cols); }
     $('pipe-map-toggle').setAttribute('aria-pressed', String(pipeMap && !pipeDash && !pipeMeet)); $('pipe-map-toggle').classList.toggle('on', pipeMap && !pipeDash && !pipeMeet);
@@ -4933,7 +4936,7 @@
       if(!name && !window.TODO_LITE && o.kind==='installation'){ const l=document.createElement('button'); l.type='button'; l.className='sp-link'; l.textContent='Ajouter'; l.onclick=()=>{ closeOppDetail(); openOppForm({ editId:o.id }); }; b.appendChild(l); }
       if(!window.TODO_LITE){ const c=document.createElement('button'); c.type='button'; c.className='sp-call'; c.textContent='Mode appel'; c.title='Un écran pour l\u2019appel : ce qu\u2019il faut demander, tes notes, les chiffres repérés au vol'; c.onclick=()=>openCallMode(list, reopen); b.appendChild(c); } }
     { const kw=live.reduce((s2,x)=>s2+kwcNum(x),0), mwh=live.reduce((s2,x)=>s2+(pqNum(String(x.mwh||''))||0),0), b=box('Chiffres'); const g=document.createElement('div'); g.className='sp-figs';
-      [['Puissance',kw?fmtKwc(kw):'—'],['P50',mwh?Math.round(mwh).toLocaleString('fr-FR')+' MWh':'—'],['Contrat',[first.contrat, first.duree?first.duree+' ans':''].filter(Boolean).join(' · ')||'—']].forEach(([l,v])=>{ const c=document.createElement('div'); c.innerHTML='<span></span><b></b>'; c.firstChild.textContent=l; c.lastChild.textContent=v; g.appendChild(c); });
+      [['Puissance',kw?fmtKwc(kw):'—'],['P50',mwh?Math.round(mwh).toLocaleString('fr-FR')+' MWh':'—'],['Contrat',[first.contrat, first.duree?first.duree+' ans':''].filter(Boolean).join(' · ')||'—']].concat((()=>{ const f=live.flatMap(x=>x.offers||[]).sort((a,b)=>(b.n||0)-(a.n||0))[0]; return f?[['Offre '+f.n, [f.prix, f.at?pqIsoToFr(f.at):''].filter(Boolean).join(' · ')||'—']]:[]; })()).forEach(([l,v])=>{ const c=document.createElement('div'); c.innerHTML='<span></span><b></b>'; c.firstChild.textContent=l; c.lastChild.textContent=v; g.appendChild(c); });
       b.appendChild(g);
       // a soft check on the yield (cold audit: « 309 kWh/kWc » went to pricing unnoticed)
       if(kw && mwh && live.every(x=>/^PV$/i.test(x.install||'PV'))){ const y=Math.round(mwh*1000/kw); if(y<700 || y>1700){ const w=document.createElement('div'); w.className='sp-sub wait'; w.textContent='Productible '+y.toLocaleString('fr-FR')+' kWh/kWc : à vérifier (un PV en France fait d\u2019habitude 900 à 1 500).'; b.appendChild(w); } } }
@@ -6277,7 +6280,7 @@
   $('prequal-save-btn').onclick=savePrequal;
   $('prequal-cancel-btn').onclick=closePrequalForm;
   $('pipe-exited-toggle').onclick=()=>{ pipeShowExited=!pipeShowExited; renderPipeline(); };
-  $('pipe-cols-toggle').onclick=()=>{ pipeDash=false; pipeMeet=false; pipeMap=false; pipeList=false; lsSet('pipe-list','0'); renderPipeline(); };
+  $('pipe-cols-toggle').onclick=()=>{ pipeOffers=false; pipeDash=false; pipeMeet=false; pipeMap=false; pipeList=false; lsSet('pipe-list','0'); renderPipeline(); };
   // « ⋯ »: opens under the button, closes on a choice, a click elsewhere or Escape
   // small drop-down menus of a toolbar (Contacts: « Ajouter depuis… », « Exporter vers… ») — cold audit: 7 flat buttons
   document.querySelectorAll('.bar-menu').forEach(w=>{ const btn=w.querySelector('.bar-menu-btn'), menu=w.querySelector('.bar-menu-list');
@@ -6292,17 +6295,18 @@
     menu.addEventListener('click', e=>{ if(e.target.closest('button')) close(); });
     document.addEventListener('click', e=>{ if(!menu.hidden && !e.target.closest('.pipe-more')) close(); });
     document.addEventListener('keydown', e=>{ if(e.key==='Escape' && !menu.hidden){ e.stopPropagation(); close(); btn.focus(); } }, true); }
-  $('pipe-dash-toggle').onclick=()=>{ pipeDash=!pipeDash; if(pipeDash){ pipeMeet=false; pipeMap=false; } renderPipeline(); };
+  $('pipe-offers-toggle').onclick=()=>{ pipeOffers=!pipeOffers; renderPipeline(); };
+  $('pipe-dash-toggle').onclick=()=>{ pipeOffers=false; pipeDash=!pipeDash; if(pipeDash){ pipeMeet=false; pipeMap=false; } renderPipeline(); };
   $('tasks-views-btn').onclick=e=>{ e.stopPropagation(); openViewsMenu('tasks', e.currentTarget); };
   $('pipe-views-btn').onclick=e=>{ e.stopPropagation(); openViewsMenu('pipeline', e.currentTarget); };
-  $('pipe-meet-toggle').onclick=()=>{ pipeMeet=!pipeMeet; meetStuckOnly=false; if(pipeMeet){ pipeDash=false; pipeMap=false; } renderPipeline(); };
+  $('pipe-meet-toggle').onclick=()=>{ pipeOffers=false; pipeMeet=!pipeMeet; meetStuckOnly=false; if(pipeMeet){ pipeDash=false; pipeMap=false; } renderPipeline(); };
   $('pipe-xs-btn').onclick=()=>openExcelSync({ scope:'pipe' });
   if($('ai-section')) $('ai-section').hidden=!aiOn();
   { const st=()=>{ const k=aiKey(); $('ai-key-status').textContent=k?'Clé enregistrée (…'+k.slice(-4)+'). Vide le champ et enregistre pour l\u2019oublier.':'Pas de clé : copier-coller avec claude.ai.'; };
     if($('ai-key-save')){ $('ai-key-save').onclick=()=>{ const v=$('ai-key-input').value.trim(); try{ if(v) localStorage.setItem('ai-key', v); else localStorage.removeItem('ai-key'); }catch(e){} $('ai-key-input').value=''; st(); }; st(); } }
   if($('parc-xs-btn')){ $('parc-xs-btn').onclick=()=>openExcelSync({ scope:'parc' }); if(ON_PHONE) $('parc-xs-btn').hidden=true; }
-  $('pipe-map-toggle').onclick=()=>{ pipeMap=!pipeMap; pipeDash=false; pipeMeet=false; parcMapSel=null; parcMapView=null; renderPipeline(); };
-  $('pipe-list-toggle').onclick=()=>{ pipeMap=false; pipeList=!(pipeList && !pipeDash && !pipeMeet); pipeDash=false; pipeMeet=false; lsSet('pipe-list', pipeList?'1':'0'); renderPipeline(); };
+  $('pipe-map-toggle').onclick=()=>{ pipeOffers=false; pipeMap=!pipeMap; pipeDash=false; pipeMeet=false; parcMapSel=null; parcMapView=null; renderPipeline(); };
+  $('pipe-list-toggle').onclick=()=>{ pipeOffers=false; pipeMap=false; pipeList=!(pipeList && !pipeDash && !pipeMeet); pipeDash=false; pipeMeet=false; lsSet('pipe-list', pipeList?'1':'0'); renderPipeline(); };
   $('pq-save-btn').onclick=saveOpp;
   $('pq-next-btn').onclick=pqNext;
   $('pq-back-btn').onclick=()=>{ pqShowStep(1); pqStep1Render(); };
@@ -7332,6 +7336,8 @@
     todoNoteLinks: noteLinksForNetwork,
     todoNetworkInfo: networkInfo,
   });
+  window.TodoOffers.init({ oppName, stageLabel, daysInStage, fmtKwc, fmtMwc, kwcNum, isExited, sameCo, openOppDetail, openRequestDetail, touchCrm, saveCrm, renderPipeline, askText, notify, copyToClipboard, pqIsoToFr, toISO, lsSet, fold:pqFold,
+    get opportunities(){ return opportunities; }, get contacts(){ return contacts; } });
   window.TodoPresent.init({ $, meetCopyShort, MAP_PHASES, MEET_COLS, MEET_PHASES, MES_WEIGHTS, OPP_STAGES, PIPE_PHASES, WHO, WHO_COLORS, activeTasks, buildHistory, caractValue, daysInStage, escapeHtml, fmtKwc, fmtMwc, kwcNum, loadScript, meetBlockKey, meetBlockName, meetCopy, meetData, meetHiddenCols, meetPhasesOn, meetPick, meetPrint, meetTotal, meetVis, meetVisuals, meetXlsx, mesForecast, openOppDetail, openRequestDetail, oppName, oppStage, plainLinks, pqNum, prefsToNote, renderPipeline, stageLabel, stageTaskOf, toISO });   // js/present.js
   window.TodoPhone.init({ $, askConfirm, tell, contactDupKeys, ensureCompany, loadTesseract, openContactForm, parseSignatureText, pqFmtPhone, pqFold, renderContacts, saveCrm, toISO, touchCrm, get contacts(){ return contacts; } });   // js/phone.js
   window.TodoAI.init({ aiKey, $, CARACT_ROWS, caractKey, caractSet, caractValue, oppName, renderPipeline, saveCrm, touchCrm });   // js/ai.js
