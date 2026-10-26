@@ -116,11 +116,26 @@ with sync_playwright() as p:
     import re
     check("kYC" not in board and "KYC" in board, "« KYC » keeps its capitals")
     check(re.search(r"1,2 MW(?!c)", board) is not None, "a wind farm is in MW, not MWc")
+    # 7b. a short list to paste in Teams on a phone
+    page.context.grant_permissions(["clipboard-read", "clipboard-write"])
+    page.click("#pipe-meet-toggle"); page.wait_for_selector(".meet-table")
+    page.locator(".meet-actions button", has_text="liste courte").click(); page.wait_for_timeout(300)
+    short = page.evaluate("navigator.clipboard.readText()")
+    check("• Watt Sud — Hangar Nord" in short and "\t" not in short and "prochaine échéance" in short, f"meeting: « Copier en liste courte », one line per installation ({short[:160]!r})")
     # 8. a search with no result says so
+    page.click("#pipe-cols-toggle"); page.wait_for_timeout(200)
     page.fill("#opp-search", "zzzz")
     check(eventually(page, lambda: "Rien pour « zzzz »" in page.inner_text("#pipeline-board")), "pipeline search with no result: a message and a way out")
     page.click("#pipeline-board .pipe-noresult button")
     check(eventually(page, lambda: page.input_value("#opp-search") == ""), "« Effacer la recherche » clears it")
+    # 8b. a task being typed survives a reload
+    page.click('[data-tab="tasks"]'); page.click("#quick-add-more"); page.fill("#f-title", "Rappeler Hélio Loire"); page.fill("#f-description", "pour le RDV 2"); page.wait_for_timeout(700)
+    page.goto(URL); page.wait_for_selector(".tab.active")
+    check(eventually(page, lambda: "Une tâche en cours de saisie" in page.inner_text("#app-toast")), "after a reload: the task being typed is offered back")
+    page.click("#app-toast button")
+    check(eventually(page, lambda: page.input_value("#f-title") == "Rappeler Hélio Loire" and page.input_value("#f-description") == "pour le RDV 2"), "the typed task is back in the form")
+    page.click("#cancel-task"); page.wait_for_timeout(200)
+    check(page.evaluate("localStorage.getItem('draft-task')") is None, "cancelling the form drops the draft")
     check(not errors, f"no page errors ({errors})"); page.context.close()
 
     # 9. a phone opening the usual address gets the phone version; ?full keeps the complete one

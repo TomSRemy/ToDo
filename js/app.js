@@ -3119,6 +3119,13 @@
     try{ await navigator.clipboard.write([new ClipboardItem({ 'text/html':new Blob([html],{ type:'text/html' }), 'text/plain':new Blob([text],{ type:'text/plain' }) })]); flashBtn(btn,'✓ Copié'); }
     catch(e){ copyToClipboard(text, btn); }
   }
+  // a short list, one line per installation: reads in Teams on a phone, where the 14-column table does not (cold audit)
+  async function meetCopyShort(groups, btn){
+    const L=[meetTitle(), meetFigures(groups).map(([v,l])=>v+' '+l).join(' · ')];
+    groups.filter(g=>g.rows.length).forEach(g=>{ L.push('', g.phase.label+' — '+meetTotal(g.kwc,g.mwh,g.rows.length));
+      g.list.forEach((o,i)=>{ const r=g.rows[i]; L.push('• '+[[o.producteur||o.company, oppName(o)].filter(Boolean).join(' — '), fmtKwc(o.kwc, o.install), r[9], r[10]?'prochaine échéance '+r[10]:'', r[13]?'depuis '+r[13]:''].filter(Boolean).join(' · ')); }); });
+    copyToClipboard(L.join('\n'), btn);
+  }
   function flashBtn(btn, txt){ if(!btn) return; const l=btn.textContent; btn.textContent=txt; setTimeout(()=>{ btn.textContent=l; },1600); }
   async function meetXlsx(groups, btn){
     try{
@@ -3612,6 +3619,7 @@
     $('pq-overlay').classList.remove('hidden');
     if(editing){ pqShowStep(2); pqRender(); setTimeout(()=>{ const el=$('pq-form').querySelector('input'); if(el) el.focus({preventScroll:true}); },0); }
     else { pqShowStep(1); pqStep1Render(); setTimeout(()=>$(opts.company?'pq-next-btn':'pq1-company').focus({preventScroll:true}),0); }
+    setTimeout(offerOppDraft, 0);
   }
   function pqShowStep(n){
     pqState.step=n;
@@ -3755,7 +3763,21 @@
     pqShowStep(2); pqRender();
     setTimeout(()=>$('pq-mail').focus({preventScroll:true}),0);
   }
-  function closeOppForm(){ $('pq-overlay').classList.add('hidden'); pqState=null; }
+  function closeOppForm(){ $('pq-overlay').classList.add('hidden'); pqState=null; draftDrop('opp'); }
+  // A draft of what is being typed, kept on this device: a reload or a closed tab no longer loses it (cold audit). No browser pop-up.
+  function draftPut(kind, data){ lsSet('draft-'+kind, JSON.stringify(Object.assign({ at:Date.now() }, data))); }
+  function draftGet(kind){ try{ const d=JSON.parse(localStorage.getItem('draft-'+kind)||'null'); return d && Date.now()-d.at<7*864e5?d:null; }catch(e){ return null; } }
+  function draftDrop(kind){ try{ localStorage.removeItem('draft-'+kind); }catch(e){} }
+  { let tm=null; const keep=()=>{ clearTimeout(tm); tm=setTimeout(()=>{ const st=pqState; if(!st || st.step!==2) return;
+      const filled=Object.values(st.shared).some(v=>v!==''&&v!=null&&v!==false) || st.installs.some(i=>Object.keys(i).some(k=>k!=='_oppId' && i[k]!=='' && i[k]!=null)); if(!filled) return;
+      draftPut('opp', { editId:st.editId||null, shared:st.shared, installs:st.installs }); }, 400); };
+    $('pq-overlay').addEventListener('input', keep); $('pq-overlay').addEventListener('change', keep); }
+  function offerOppDraft(){
+    const d=draftGet('opp'), st=pqState; if(!d || !st || (d.editId||null)!==(st.editId||null)) return;
+    notify('Une saisie du '+new Date(d.at).toLocaleString('fr-FR',{ day:'numeric', month:'short', hour:'2-digit', minute:'2-digit' })+' n\u2019a pas été enregistrée', { label:'La reprendre', fn:()=>{ if(pqState!==st) return;
+      Object.assign(st.shared, d.shared||{}); if(Array.isArray(d.installs) && d.installs.length) st.installs=d.installs; Object.keys(st.shared).forEach(k=>{ if(st.shared[k]!==''&&st.shared[k]!=null) st.touched.add('s.'+k); });
+      pqShowStep(2); pqRender(); } });
+  }
   function pqFieldHtml(f, scope, v, auto){
     const id='pq-'+scope+'-'+f.k;
     const data=' data-k="'+f.k+'" data-s="'+scope+'"';
@@ -5662,6 +5684,7 @@
     render(); renderLists();
   }
   function resetAddForm(){
+    draftDrop('task');
     ['f-title','f-description','f-due','f-reminder','f-link','f-recur-start','f-recur-end'].forEach(id=>$(id).value='');
     clientInput.value=''; projectInput.value=''; clientDot.style.background='var(--bd)'; projectDot.style.background='var(--bd)';
     $('f-urgency').value='moyenne'; $('f-status').value='a_faire'; $('f-recur-freq').value='hebdo';
@@ -7261,7 +7284,17 @@
     $('sync-token-exp').value=syncConfig.tokenExpires||'';
     if(location.hash==='#sync' && !window.TODO_LITE) openSyncSettings();
     else openFromAddress();
+    restoreTaskDraft();
   });
+  // the task being typed in the add form, kept through a reload (cold audit)
+  const TASK_DRAFT_IDS=['f-title','f-description','f-due','f-link'];
+  { let tm=null; $('add-section').addEventListener('input', ()=>{ clearTimeout(tm); tm=setTimeout(()=>{ if(!addSection.classList.contains('open')) return; const v={}; TASK_DRAFT_IDS.forEach(id=>{ v[id]=$(id).value; }); v.client=clientInput.value; v.project=projectInput.value;
+    if(v['f-title'].trim()||v['f-description'].trim()) draftPut('task', { v }); else draftDrop('task'); }, 400); }); }
+  function restoreTaskDraft(){
+    const d=draftGet('task'); if(!d || !d.v || window.TODO_WIDGET) return;
+    TASK_DRAFT_IDS.forEach(id=>{ if(d.v[id]!=null) $(id).value=d.v[id]; }); clientInput.value=d.v.client||''; projectInput.value=d.v.project||''; addSection.classList.add('open');
+    notify('Une tâche en cours de saisie a été gardée : « '+(d.v['f-title']||'sans titre').slice(0,40)+' »', { label:'La voir', fn:()=>{ gsTab('tasks'); setTimeout(()=>$('f-title').focus(), 50); } });
+  }
   // an address opened from a link: #pipeline (a tab) or #fiche/<id> (an installation sheet) — UX audit TD5
   function openFromAddress(){
     const h=decodeURIComponent(location.hash.slice(1)); if(!h || window.TODO_WIDGET) return;
@@ -7299,7 +7332,7 @@
     todoNoteLinks: noteLinksForNetwork,
     todoNetworkInfo: networkInfo,
   });
-  window.TodoPresent.init({ $, MAP_PHASES, MEET_COLS, MEET_PHASES, MES_WEIGHTS, OPP_STAGES, PIPE_PHASES, WHO, WHO_COLORS, activeTasks, buildHistory, caractValue, daysInStage, escapeHtml, fmtKwc, fmtMwc, kwcNum, loadScript, meetBlockKey, meetBlockName, meetCopy, meetData, meetHiddenCols, meetPhasesOn, meetPick, meetPrint, meetTotal, meetVis, meetVisuals, meetXlsx, mesForecast, openOppDetail, openRequestDetail, oppName, oppStage, plainLinks, pqNum, prefsToNote, renderPipeline, stageLabel, stageTaskOf, toISO });   // js/present.js
+  window.TodoPresent.init({ $, meetCopyShort, MAP_PHASES, MEET_COLS, MEET_PHASES, MES_WEIGHTS, OPP_STAGES, PIPE_PHASES, WHO, WHO_COLORS, activeTasks, buildHistory, caractValue, daysInStage, escapeHtml, fmtKwc, fmtMwc, kwcNum, loadScript, meetBlockKey, meetBlockName, meetCopy, meetData, meetHiddenCols, meetPhasesOn, meetPick, meetPrint, meetTotal, meetVis, meetVisuals, meetXlsx, mesForecast, openOppDetail, openRequestDetail, oppName, oppStage, plainLinks, pqNum, prefsToNote, renderPipeline, stageLabel, stageTaskOf, toISO });   // js/present.js
   window.TodoPhone.init({ $, askConfirm, tell, contactDupKeys, ensureCompany, loadTesseract, openContactForm, parseSignatureText, pqFmtPhone, pqFold, renderContacts, saveCrm, toISO, touchCrm, get contacts(){ return contacts; } });   // js/phone.js
   window.TodoAI.init({ aiKey, $, CARACT_ROWS, caractKey, caractSet, caractValue, oppName, renderPipeline, saveCrm, touchCrm });   // js/ai.js
 })();
