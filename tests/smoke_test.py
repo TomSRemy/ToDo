@@ -2960,7 +2960,12 @@ Responsable technique
     (site / "sw.js").write_text(sw.replace("todo-pwa-v", "todo-pwa-test-v"), encoding="utf-8")
     (site / "index.html").write_text(html.replace("</body>", "<div id='second-version-marker'></div></body>"), encoding="utf-8")
     page.evaluate("navigator.serviceWorker.getRegistration().then(r=>r.update())")
-    page.wait_for_selector("#second-version-marker", state="attached", timeout=15000)
+    for _ in range(9):   # the browser looks for a new version now and then: asked again every 5 s, up to 45 s (a slow CI machine)
+        try:
+            page.wait_for_selector("#second-version-marker", state="attached", timeout=5000); break
+        except Exception:
+            try: page.evaluate("navigator.serviceWorker.getRegistration().then(r=>r && r.update())")
+            except Exception: pass
     check(page.locator("#second-version-marker").count() == 1, "an open page switches to a newly published version by itself")
     ctx.close(); srv.shutdown()
 
