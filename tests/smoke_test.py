@@ -2781,8 +2781,8 @@ Responsable technique
     xs_sent = []
     pipe_head = [""] * 37; pipe_head[6] = "Nom Producteur"; pipe_head[19] = "Nom Centrale"; pipe_head[35] = "Commentaires"
     pipe_a = [None] * 37; pipe_a[6] = "SCEA"; pipe_a[19] = "Les Vignes"; pipe_a[35] = "Vu au salon (Marie)"
-    bdd_head = [""] * 91; bdd_head[6] = "Nom_prod"; bdd_head[33] = "Nom_Installation_prod"; bdd_head[24] = "Statut"
-    bdd_a = [None] * 91; bdd_a[6] = "SCEA"; bdd_a[33] = "Les Vignes"; bdd_a[24] = "Gagné"
+    bdd_head = [""] * 91; bdd_head[6] = "Développeur"; bdd_head[31] = "Nom_prod"; bdd_head[33] = "Nom_Installation_prod"; bdd_head[24] = "Statut"
+    bdd_a = [None] * 91; bdd_a[6] = "Groupe développeur X"; bdd_a[31] = "SCEA"; bdd_a[33] = "Les Vignes"; bdd_a[24] = "Gagné"
     decoy = list(pipe_a); decoy[19] = "Leurre"   # same columns, another plant: if the app read it, « Les Vignes » would look absent from the Pipe
     def xs_bridge(route, request):
         if request.method == "OPTIONS":
@@ -2808,11 +2808,10 @@ Responsable technique
     check("avant le pricing" in xs, "excel ⇄ app: the Suivi only from the pricing on")
     # each difference: « Garder l'appli » or « Garder l'Excel », then « Mettre aussi l'appli à jour ? »
     diff = "#xs-overlay .xs-diff:has-text('Commentaires')"
-    check(page.locator(diff + " .xs-choice").all_inner_texts() == ["l’appli « vide »", "l’Excel « Vu au salon (Marie) »"], f"excel ⇄ app: a difference asks which to keep ({page.locator(diff + ' .xs-choice').all_inner_texts()})")
-    page.click(diff + " .xs-choice:has-text('l’Excel')")
-    check("Mettre aussi l’appli à jour" in page.inner_text(diff), "excel ⇄ app: keeping the Excel asks whether to update the app too")
-    page.click(diff + " .xs-choice:text-is('Oui')")
-    check(eventually(lambda: next(o for o in stored(page, "todo-widget-opportunities") if o["id"] == "xa").get("commentaires") == "Vu au salon (Marie)", 3000), "excel ⇄ app: « Oui » puts the Excel's value in the app")
+    # (the app has no comment here: no « keep the app's empty value », which the bridge would never write — take it, or ignore)
+    check(page.locator(diff + " .xs-choice").all_inner_texts() == ["reprendre « Vu au salon (Marie) » dans l’appli", "ignorer"], f"excel ⇄ app: the app has nothing here: take the Excel's value or ignore ({page.locator(diff + ' .xs-choice').all_inner_texts()})")
+    page.click(diff + " .xs-choice:has-text('reprendre')")
+    check(eventually(lambda: next(o for o in stored(page, "todo-widget-opportunities") if o["id"] == "xa").get("commentaires") == "Vu au salon (Marie)", 3000), "excel ⇄ app: « reprendre » puts the Excel's value in the app")
     page.click("#xs-overlay .xs-diff:has-text('Statut') .xs-choice:has-text('l’Excel')"); page.click("#xs-overlay .xs-diff:has-text('Statut') .xs-choice:text-is('Oui')")
     check(eventually(lambda: next(o for o in stored(page, "todo-widget-opportunities") if o["id"] == "xa").get("stage") == "onboarding", 3000), "excel ⇄ app: « Gagné » kept from the Suivi, app aligned: the deal moves to Onboarding")
     page.click("#xs-overlay .xs-send[data-k=pipe]"); page.wait_for_timeout(400)
@@ -2881,7 +2880,7 @@ Responsable technique
     page.route("http://127.0.0.1:8765/**", old_bridge)
     page.goto(URL); page.click('[data-tab="pipeline"]'); page.click(".pipe-card:has-text('Les Vignes')")
     page.click("#opp-detail-actions >> text=Envoyer au Pipe Excel"); page.wait_for_timeout(600)
-    check(not posts and "pas à jour" in page.inner_text("#bridge-msg") and "1.11 est disponible" in page.inner_text("#bridge-msg"), f"an older bridge is refused: nothing sent, update asked ({page.inner_text('#bridge-msg')[:120]!r})")
+    check(not posts and "pas à jour" in page.inner_text("#bridge-msg") and "1.12 est disponible" in page.inner_text("#bridge-msg"), f"an older bridge is refused: nothing sent, update asked ({page.inner_text('#bridge-msg')[:120]!r})")
     page.close()
 
     # --- Réf. & data: clients grouped by company type, collapsed by default, search opens them
@@ -3123,6 +3122,32 @@ Responsable technique
     check(eventually(lambda: page.locator(rowB).count() == 0) and yb()["commentaires"] == "Note appli B" and "Note Excel B" in json.dumps(yb().get("excelKeep")),
           "excel ⇄ panel: « Garder l'Excel » + « Non »: the app unchanged, the question not asked again for that value")
     check(not errors, f"excel ⇄ panel: no page errors ({errors})")
+    page.close()
+
+    # --- Sending many lines: packets of 8; a packet that fails keeps what the earlier ones wrote (remembered, and said)
+    posts4 = []
+    def bridge4(route, request):
+        h = {"Access-Control-Allow-Origin": "*", "Content-Type": "application/json", "Access-Control-Allow-Headers": "*", "Access-Control-Allow-Methods": "*"}
+        if request.method == "OPTIONS": return route.fulfill(status=204, headers=h)
+        if request.url.endswith("/status"): return route.fulfill(status=200, headers=h, body=json.dumps({"ok": True, "version": "1.11", "authorized": True, "pipe": {"name": "P.xlsx", "found": True}, "bdd": {"name": "S.xlsx", "found": True}}))
+        if request.url.endswith("/read"):
+            hd = [""] * 37; hd[6] = "Nom Producteur"; hd[19] = "Nom Centrale"; bh = [""] * 91; bh[31] = "Nom_prod"; bh[33] = "Nom_Installation_prod"
+            return route.fulfill(status=200, headers=h, body=json.dumps({"ok": True, "sheets": {"Pipe Agrégation": [hd]} if "/pipe/" in request.url else {"BDD Agrégation": [bh]}}))
+        body = json.loads(request.post_data); posts4.append(len(body["rows"]))
+        if len(posts4) == 2: return route.fulfill(status=500, headers=h, body=json.dumps({"ok": False, "message": "Pont arrêté"}))
+        return route.fulfill(status=200, headers=h, body=json.dumps({"ok": True, "results": [{"ok": True, "action": "ajoutée", "row": 10 + i, "written": [6], "mine": [6, 19], "conflicts": []} for i in range(len(body["rows"]))]}))
+    i4 = [{"id": "p%02d" % i, "kind": "installation", "company": "LOT", "producteur": "LOT", "centrale": "Toit %02d" % i, "title": "Toit %02d" % i, "stage": "collecte", "requestId": "rq4",
+           "createdAt": 1, "updatedAt": 1, "deleted": False} for i in range(10)] + [{"id": "rq4", "kind": "request", "company": "LOT", "label": "Lot 4", "stage": "collecte", "createdAt": 1, "updatedAt": 1, "deleted": False}]
+    page, errors = new_page(browser, {"todo_todo-widget-opportunities": json.dumps(i4), "todo_bridge-config": json.dumps({"port": 8765, "token": "k1"})}, viewport={"width": 1400, "height": 900})
+    page.route("http://127.0.0.1:8765/**", bridge4)
+    page.goto(URL); page.click('[data-tab="pipeline"]'); page.click("#pipe-more-btn"); page.click("#pipe-xs-btn")
+    page.wait_for_selector("#xs-overlay .xs-send[data-k=pipe]:not([disabled])", timeout=8000)
+    page.click("#xs-overlay .xs-send[data-k=pipe]")
+    check(eventually(lambda: len(posts4) == 2) and posts4 == [8, 2], f"many lines: sent by packets of 8 ({posts4})")
+    sent_ok = lambda: [o["id"] for o in stored(page, "todo-widget-opportunities") if (o.get("excelSent") or {}).get("pipe")]
+    check(eventually(lambda: len(sent_ok()) == 8), f"a failed packet: the 8 lines written before are remembered as sent ({len(sent_ok())})")
+    check(eventually(lambda: "Envoi arrêté après 8 lignes sur 10" in (page.evaluate("(document.getElementById('bridge-msg')||{}).textContent") or "")), "a failed packet: the message says how far it went")
+    check(not errors, f"packets: no page errors ({errors})")
     page.close()
 
     browser.close()

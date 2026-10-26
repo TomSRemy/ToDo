@@ -108,4 +108,6 @@ python tests/csp_test.py          # l'appli sous les règles de sécurité de _h
 python tests/mail_accuracy.py --all --min 0.95
 python tests/extraction_accuracy.py --all --min 0.95
 python tests/bridge_test.py       # le pont (PowerShell requis)
+python tests/bridge_e2e.py        # l'appli et le vrai pont ensemble (tableau en mémoire)
+python tests/bridge_backtest.py   # des centaines de jours de travail simulés sur des tableaux de la forme des vrais
 ```

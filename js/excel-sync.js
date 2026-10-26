@@ -39,23 +39,26 @@ window.TodoExcelSync=(function(){
   // writing, and keeps a journal of every cell; an older one is refused
   // the bridge published with this app (bridge/pont-excel.ps1 $Version; tests/bridge_test.py checks they match). Writing needs it:
   // 1.4 writes only in « Pipe Agrégation » / « BDD Agrégation », 1.7 adds new lines in a table with calculated columns
-  const BRIDGE_LATEST='1.11';
-  const bridgeUpToDate=info=>{ const v=String(info&&info.version||'0').split('.').map(Number), l=BRIDGE_LATEST.split('.').map(Number); return v[0]>l[0] || (v[0]===l[0] && (v[1]||0)>=l[1]); };
+  const BRIDGE_LATEST='1.12', BRIDGE_MIN='1.11';   // writing needs BRIDGE_MIN; a newer one is only offered
+  const verAtLeast=(info, want)=>{ const v=String(info&&info.version||'0').split('.').map(Number), l=want.split('.').map(Number); return v[0]>l[0] || (v[0]===l[0] && (v[1]||0)>=l[1]); };
+  const bridgeUpToDate=info=>verAtLeast(info, BRIDGE_MIN), bridgeLatest=info=>verAtLeast(info, BRIDGE_LATEST);
   // sent by packets of 8 lines (Excel takes a few seconds per line): no request runs long enough to be cut, and progress shows
   const XL_PACKET=8;
   async function xlSend(kind, list, rows, onProgress){
     if(!app.bridgeState.info || Date.now()-app.bridgeState.checkedAt>60000) await bridgeCheck();
     if(app.bridgeState.ok && !bridgeUpToDate(app.bridgeState.info)) throw new Error('Ton pont Excel n\u2019est pas à jour (version '+(app.bridgeState.info.version||'?')+', la '+BRIDGE_LATEST+' est disponible) : rien n\u2019a été envoyé. Dans Réglages → Pont Excel, télécharge pont-excel.ps1, remplace l\u2019ancien fichier et relance le pont.');
     let res={}, results=[];
+    const pending=[];
+    // each packet is remembered as soon as it is written: if a later one fails (bridge closed…), what was written is known
+    const remember=(from, part)=>{ part.forEach((r,j)=>{ const i=from+j, o=list[i]; xlRemember(kind, o, rows[i].values, r); if(r.ok && ((r.conflicts&&r.conflicts.length) || r.question)) pending.push({ o, r });
+      if(r.ok && r.action!=='en attente'){ o.excelSent=Object.assign({}, o.excelSent||{}, { [kind]:{ at:Date.now(), h:xsHash(rows[i].values) } }); o[kind==='pipe'?'pipeSentAt':'bddSentAt']=Date.now(); touchCrm(o); } }); saveCrm(); };
     for(let k=0;k<rows.length;k+=XL_PACKET){
       if(onProgress) onProgress(k, rows.length);
-      const r=await bridgeCall('POST','/'+kind+'/upsert',{ rows:rows.slice(k, k+XL_PACKET) }, 180000);
-      results=results.concat(r.results||[]); res={ ok:r.ok, backup:res.backup||r.backup, fileWasClosed:res.fileWasClosed||r.fileWasClosed };
+      let r;
+      try{ r=await bridgeCall('POST','/'+kind+'/upsert',{ rows:rows.slice(k, k+XL_PACKET) }, 180000); }
+      catch(e){ if(k>0) e.message='Envoi arrêté après '+k+' ligne'+(k>1?'s':'')+' sur '+rows.length+' (déjà écrites et notées) : '+e.message; throw e; }
+      remember(k, r.results||[]); results=results.concat(r.results||[]); res={ ok:r.ok, backup:res.backup||r.backup, fileWasClosed:res.fileWasClosed||r.fileWasClosed };
     }
-    const pending=[];
-    results.forEach((r,i)=>{ const o=list[i]; xlRemember(kind, o, rows[i].values, r); if(r.ok && ((r.conflicts&&r.conflicts.length) || r.question)) pending.push({ o, r });
-      if(r.ok && r.action!=='en attente'){ o.excelSent=Object.assign({}, o.excelSent||{}, { [kind]:{ at:Date.now(), h:xsHash(rows[i].values) } }); } });
-    list.forEach(o=>{ o[kind==='pipe'?'pipeSentAt':'bddSentAt']=Date.now(); touchCrm(o); }); saveCrm();
     return { res, results, pending };
   }
   // ---------- Excel ⇄ appli : what was sent to the Pipe and to the Suivi (BDD), what changed since on either side ----------
@@ -66,7 +69,8 @@ window.TodoExcelSync=(function(){
   const xsCellText=(v, dateish)=>{ if(v==null) return ''; if(typeof v==='number' && dateish && v>20000 && v<80000){ const d=new Date(Math.round((v-25569)*86400000)); return pqPad(d.getUTCDate())+'/'+pqPad(d.getUTCMonth()+1)+'/'+d.getUTCFullYear(); }
     if(typeof v==='number') return String(Math.round(v*1000)/1000).replace('.',','); if(typeof v==='boolean') return v?'VRAI':'FAUX'; return String(v).trim(); };
   let xsRead={ pipe:null, bdd:null };   // last reading of each file through the bridge: { at, rows: Map(key → row), off }
-  const XS_KEYS={ pipe:{ header:'Nom Producteur', a:6, b:19, sheet:/^\s*pipe\s+agr[eé]gation\s*$/i }, bdd:{ header:'Nom_prod', a:6, b:33, sheet:/^\s*bdd\s+agr[eé]gation\s*$/i } };   // that sheet only, never another « Pipe … » one
+  // a / b: the two key columns (0 = column A): Pipe G « Nom Producteur » + T « Nom Centrale »; Suivi AF « Nom_prod » + AH « Nom_Installation_prod »
+  const XS_KEYS={ pipe:{ header:'Nom Producteur', a:6, b:19, sheet:/^\s*pipe\s+agr[eé]gation\s*$/i }, bdd:{ header:'Nom_prod', a:31, b:33, sheet:/^\s*bdd\s+agr[eé]gation\s*$/i } };   // that sheet only, never another « Pipe … » one
   const xsAppValues=(kind,o)=>kind==='pipe'?PQ_FIELDS.reduce((row,f,i)=>{ row[xsColIdx(f.col)]=pipeCells(o)[i]; return row; }, []):bddCells(o);
   const xsKey=(kind, vals)=>xsNorm(vals[XS_KEYS[kind].a])+'|'+xsNorm(vals[XS_KEYS[kind].b]);
   async function xsReadFile(kind){
@@ -126,8 +130,14 @@ window.TodoExcelSync=(function(){
   function xsAsk(box, kind, o, vi, d, done, canMerge){
     box.innerHTML=''; const q=document.createElement('span'); q.className='xs-q'; box.appendChild(q);
     const btn=(label, cls, fn)=>{ const b=document.createElement('button'); b.type='button'; b.className='xs-choice'+(cls?' '+cls:''); b.textContent=label; b.onclick=fn; box.appendChild(b); return b; };
+    // the app has nothing here: the bridge never empties a cell, so « keep the app » would do nothing — take it, or leave it
+    if(!d.app){ const al=xsAlignAction(kind, o, vi, d.excel);
+      q.textContent='L’appli n’a rien ici :';
+      if(al) btn('reprendre « '+(d.excel||'')+' » dans l’appli', 'yes', ()=>done({ keep:'excel', align:true, run:al.run }));
+      btn('ignorer', '', ()=>done({ keep:'excel', align:false }));
+      return; }
     q.textContent='Garder :';
-    btn('l’appli « '+(d.app||'vide')+' »', '', ()=>done({ keep:'app' }));
+    btn('l’appli « '+d.app+' »', '', ()=>done({ keep:'app' }));
     btn('l’Excel « '+(d.excel||'vide')+' »', '', ()=>{
       const al=xsAlignAction(kind, o, vi, d.excel);
       if(!al){ done({ keep:'excel', align:false }); return; }
@@ -318,7 +328,7 @@ window.TodoExcelSync=(function(){
     if(!ON_PHONE) actions.appendChild(oppActionBtn(list.length>1?'Envoyer au Pipe Excel ('+list.length+')':'Envoyer au Pipe Excel', e=>sendToExcel('pipe', list, e.target)));
     if(!ON_PHONE && list.some(o=>o.goDate || stageIndex(o.stage)>=stageIndex('pricing_indicatif'))) actions.appendChild(oppActionBtn(list.length>1?'Envoyer à la BDD Excel ('+list.length+')':'Envoyer à la BDD Excel', e=>sendToExcel('bdd', list.filter(o=>o.goDate || stageIndex(o.stage)>=stageIndex('pricing_indicatif')), e.target)));
   }
-    Object.assign(api, { bridgeUpToDate, xsTodo, xsBddApplies, BRIDGE_LATEST });
+    Object.assign(api, { bridgeUpToDate, bridgeLatest, xsTodo, xsBddApplies, BRIDGE_LATEST });
   };
   return api;
 })();

@@ -25,3 +25,5 @@ jobs:
       - run: python tests/mail_accuracy.py --all --min 0.95
       - run: python tests/extraction_accuracy.py --all --min 0.95
       - run: python tests/bridge_test.py   # PowerShell is preinstalled on the runner
+      - run: python tests/bridge_e2e.py    # the app and the real bridge (in-memory table) together
+      - run: python tests/bridge_backtest.py --days 30   # random days of work on tables shaped like the real files

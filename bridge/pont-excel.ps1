@@ -31,7 +31,7 @@
 param([int]$Port = 8765, [switch]$Reconfigurer, [switch]$Mock)
 
 $ErrorActionPreference = 'Stop'
-$Version = '1.11'
+$Version = '1.12'
 $Here = Split-Path -Parent $MyInvocation.MyCommand.Path
 # the settings (the two files, the key) live in the Windows profile, not next to the script: a new download, in any folder,
 # finds them again (no new key to copy into the app). An older settings file next to the script is taken over once.
@@ -213,7 +213,7 @@ function New-MockAdapter($kind) {
   $a.RowCount = { param($a) $a.t.rows.Count }
   $a.Get = { param($a, $r, $c) $a.t.rows[$r - 1][$c - 1] }
   $a.Column = { param($a, $c) $n = $a.t.rows.Count; $out = New-Object object[] ($n + 1); for ($r = 1; $r -le $n; $r++) { $out[$r] = $a.t.rows[$r - 1][$c - 1] }; ,$out }
-  $a.HasFormula = { param($a, $r, $c) [bool]$a.t.formulas[$c] }
+  $a.HasFormula = { param($a, $r, $c) [bool]$a.t.formulas[$c] -or (([string]$a.t.rows[$r - 1][$c - 1]).StartsWith('=')) }
   $a.Set = { param($a, $r, $c, $v) $a.t.rows[$r - 1][$c - 1] = $v }
   # test only: a colleague inserts a line at the top just before the bridge writes
   $a.BeforeWrite = { param($a) if ($a.t.shiftOnWrite) { $a.t.shiftOnWrite = $false; $a.t.rows.Insert(0, (New-Object object[] $a.t.headers.Count)) } }
@@ -221,7 +221,7 @@ function New-MockAdapter($kind) {
   $a.DeleteRow = { param($a, $r) $a.t.rows.RemoveAt($r - 1) }
   $a.DeleteRows = { param($a, $first, $count) $a.t.rows.RemoveRange($first - 1, $count) }
   $a.ExcelRow = { param($a, $r) $r + 1 }
-  $a.RowEmpty = { param($a, $r) $line = $a.t.rows[$r - 1]; for ($c = 1; $c -le $line.Count; $c++) { if ($a.t.formulas[$c]) { continue }; if (-not (Is-EmptyCell $line[$c - 1])) { return $false } }; return $true }
+  $a.RowEmpty = { param($a, $r) $line = $a.t.rows[$r - 1]; for ($c = 1; $c -le $line.Count; $c++) { if ($a.t.formulas[$c] -or ([string]$line[$c - 1]).StartsWith('=')) { continue }; if (-not (Is-EmptyCell $line[$c - 1])) { return $false } }; return $true }
   $a.WasClosed = [bool]$t.closed
   $a.Backup = { param($a, $dir, $stamp) $p = Join-Path $dir ("mock-" + $a.kind + "-" + $stamp + ".json"); (ConvertTo-Json -InputObject @($a.t.rows) -Depth 4 -Compress) | Set-Content -Path $p -Encoding UTF8; $p }
   $a.BackupPattern = { param($a) "mock-" + $a.kind + "-*.json" }
@@ -452,9 +452,9 @@ function Upsert-Rows($kind, $rows) {
         Write-Journal $a $kind $target $c $keyText $old $toWrite $(if (Is-Blank $old) { 'case vide remplie' } elseif ($f -eq 'replace') { 'Remplacer (choisi dans l''app)' } elseif ($f -eq 'merge') { 'Fusionner (choisi dans l''app)' } else { 'valeur écrite par l''app, inchangée depuis' })
         [void]$written.Add($i); [void]$mine.Add($i)
       }
-      # a line added then abandoned is removed — only if the line at that place is still empty (a colleague's insertion may have
-      # pushed it down: then nothing is removed here, the empty line goes with the end-of-table clean-up next time)
-      if ($moved -and $addedNow -and $written.Count -eq 0) { try { if (& $a.RowEmpty $a $target) { & $a.DeleteRow $a $target } } catch { } }
+      # a line added then abandoned is removed. It was added at the END of the table: a colleague's insertion higher up only pushes
+      # it down, so the last line is the one to look at — removed only if it is empty (never someone's line)
+      if ($moved -and $addedNow -and $written.Count -eq 0) { try { $lastRow = & $a.RowCount $a; if ($lastRow -ge 1 -and (& $a.RowEmpty $a $lastRow)) { & $a.DeleteRow $a $lastRow } } catch { } }
       if ($written.Count -gt 0) { $state.wrote = $true }
       if ($moved) {
         [void]$results.Add(@{ ok = $false; key = $keyText; message = ($(if ($written.Count) { "Le tableau a bougé pendant l'écriture (tri ou insertion par un collègue) : arrêt après " + $written.Count + " case(s), notées dans le journal. Renvoie l'affaire." } else { "Le tableau a bougé (tri ou insertion par un collègue) : rien n'a été écrit sur cette ligne. Renvoie l'affaire." }) + $(if ($why) { ' (' + $why + ')' } else { '' })); written = @($written); mine = @($mine) })
@@ -562,6 +562,18 @@ function Handle($req) {
     $t.shiftOnWrite = [bool]$data.shiftOnWrite
     $t.checkboxes = @($data.checkboxes | ForEach-Object { [int]$_ })
     return @(200, @{ ok = $true })
+  }
+  if ($Mock -and $req.method -eq 'POST' -and $req.path -match '^/mock/edit/(pipe|bdd)$') {
+    $t = $script:mockTables[$Matches[1]]; $d = $req.body | ConvertFrom-Json
+    switch ([string]$d.op) {
+      'set' { $t.rows[[int]$d.row - 1][[int]$d.col - 1] = $d.value }
+      'insert' { $line = New-Object object[] $t.headers.Count; $vals = @($d.values); for ($i = 0; $i -lt $vals.Count -and $i -lt $line.Count; $i++) { $line[$i] = $vals[$i] }; $t.rows.Insert([int]$d.at - 1, $line) }
+      'delete' { $t.rows.RemoveAt([int]$d.row - 1) }
+      'shift' { $t.shiftOnWrite = $true }   # a colleague will insert a line at the top during the next write
+      'unshift' { $t.shiftOnWrite = $false }
+      'sort' { $c = [int]$d.col - 1; $sorted = @($t.rows | Sort-Object -Property @{ Expression = { [string]$_[$c] }; Descending = [bool]$d.desc }); $t.rows.Clear(); foreach ($r in $sorted) { [void]$t.rows.Add($r) } }
+    }
+    return @(200, @{ ok = $true; count = $t.rows.Count; shiftArmed = [bool]$t.shiftOnWrite })
   }
   if ($Mock -and $req.method -eq 'GET' -and $req.path -match '^/mock/dump/(pipe|bdd)$') {
     $t = $script:mockTables[$Matches[1]]
