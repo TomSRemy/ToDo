@@ -104,6 +104,7 @@ flowchart LR
 ```
 pip install playwright openpyxl && python -m playwright install chromium
 python tests/smoke_test.py        # l'appli, de bout en bout
+python tests/audit_test.py        # les corrections de l'audit « à froid » (accueil, totaux, corbeille, téléphone…)
 python tests/csp_test.py          # l'appli sous les règles de sécurité de _headers
 python tests/mail_accuracy.py --all --min 0.95
 python tests/extraction_accuracy.py --all --min 0.95

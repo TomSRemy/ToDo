@@ -31,7 +31,7 @@ window.TodoMarket=(function(){
       const days=[].concat(prev && prev.zones && prev.zones.FR || [], cur && cur.zones && cur.zones.FR || []).filter(x=>x && x.d).sort((a,b)=>a.d.localeCompare(b.d));
       const lastDay=days.filter(x=>Math.abs((x.avg||0)-fr.today)<0.06).pop()||days[days.length-1]||null;
       const out={ at:Date.now(), updated:prices.updated,
-        spot:{ day:lastDay?lastDay.d:'', avg:fr.today, vs:fr.vsYday, min:fr.min, minH:fr.minHour, max:fr.max, maxH:fr.maxHour, neg:fr.negHours||0, peak:lastDay?lastDay.peakAvg:null, off:lastDay?lastDay.offAvg:null, ren:lastDay?lastDay.renPct:null, q:(fr.hourly||[]).slice(0,96) },
+        spot:{ day:lastDay?lastDay.d:'', avg:fr.today, vs:fr.vsYday, min:fr.min, minH:fr.minHour, max:fr.max, maxH:fr.maxHour, neg:fr.negHours||0, peak:lastDay?lastDay.peakAvg:null, off:lastDay?lastDay.offAvg:null, ren:lastDay?lastDay.renPct:null, q:(fr.hourly||[]).slice(0,100) },
         days:days.slice(-30).map(x=>({ d:x.d, avg:x.avg, neg:x.negH||0 })),
         zones:MK_ZONES.map(([c,n])=>{ const z=(prices.zones||[]).find(x=>x.code===c); return z?{ c, n, avg:z.today, vs:z.vsYday, neg:z.negHours||0 }:null; }).filter(Boolean) };
       if(m0 && m0.official){ const o=m0.official, rows=[];
@@ -78,7 +78,9 @@ window.TodoMarket=(function(){
     const line=q.map((v,i)=>(i?'L':'M')+x(i).toFixed(1)+' '+y(v).toFixed(1)).join(' ');
     return '<svg class="mk-svg" viewBox="0 0 '+W+' '+H+'" role="img" aria-label="Prix au quart d’heure">'
       +ticks.map(t=>'<line x1="'+pl+'" x2="'+(W-pr)+'" y1="'+y(t)+'" y2="'+y(t)+'" class="mk-grid'+(t===0?' zero':'')+'"/><text x="'+(pl-6)+'" y="'+(y(t)+3.5)+'" class="mk-ax" text-anchor="end">'+t+'</text>').join('')
-      +[0,6,12,18,24].map(h=>'<text x="'+x(Math.min(q.length-1,h*4))+'" y="'+(H-6)+'" class="mk-ax" text-anchor="middle">'+h+' h</text>').join('')
+      // a 25-hour (or 23-hour) day: local hours shift by one after 3 h (cold audit: the hour change was not marked)
+      +[0,6,12,18,24].map(h=>{ const shift=q.length===100 && h>=3?4:q.length===92 && h>=3?-4:0; return '<text x="'+x(Math.min(q.length-1,h*4+shift))+'" y="'+(H-6)+'" class="mk-ax" text-anchor="middle">'+h+' h</text>'; }).join('')
+      +(q.length===100||q.length===92?'<text x="'+(W-pr)+'" y="'+(pt+10)+'" class="mk-ax" text-anchor="end">journée de '+(q.length/4)+' h (changement d\u2019heure)</text>':'')
       +'<path d="'+line+' L'+x(q.length-1)+' '+y(lo)+' L'+x(0)+' '+y(lo)+' Z" class="mk-area"/><path d="'+line+'" class="mk-line"/>'
       +q.map((v,i)=>v<0?'<circle cx="'+x(i)+'" cy="'+y(v)+'" r="2.2" class="mk-neg"/>':'').join('')+'</svg>';
   }
@@ -153,13 +155,14 @@ window.TodoMarket=(function(){
     if(!m){ root.insertAdjacentHTML('beforeend', '<div class="mk-load">Hors ligne, et aucun chiffre gardé pour l’instant.</div>'); return; }
     const s=m.spot, src=t=>'<p class="mk-src">Source : '+e(t)+'. Jours de livraison, heure de Paris.</p>';
     const card=(k,v,sub,cls)=>'<div class="mk-kpi'+(cls?' '+cls:'')+'"><span class="mk-k">'+e(k)+'</span><b>'+v+'</b><span class="mk-sub">'+sub+'</span></div>';
+    const zeroH=(s.q||[]).filter(v=>v!=null && v<=0).length/4;   // cold audit: « 0 h négative » on a day with 7 h at 0 €
     const last30=m.days||[], avg30=last30.length?last30.reduce((t,d)=>t+d.avg,0)/last30.length:null, neg30=last30.reduce((t,d)=>t+d.neg,0);
     let h='<p class="mk-off">Hors ligne : derniers chiffres lus le '+e(new Date(m.at).toLocaleString('fr-FR',{ day:'numeric', month:'short', hour:'2-digit', minute:'2-digit' }))+(s.day?' (spot du '+e(mkDay(s.day))+')':'')+'.</p>';
     h+='<div class="mk-kpis">'
       +card('Spot France', mkNum(s.avg)+'<small> €/MWh</small>', s.vs!=null?'<i class="'+(s.vs>0?'up':'down')+'">'+(s.vs>0?'▲ +':'▼ ')+mkNum(s.vs)+'</i> vs la veille':'moyenne du jour')
       +card('Pointe / hors pointe', mkNum(s.peak,0)+' <small>/</small> '+mkNum(s.off,0), 'pointe 8 h – 20 h, jours ouvrés')
       +card('Min · max', mkNum(s.min,0)+' <small>→</small> '+mkNum(s.max,0), 'à '+e(s.minH||'—')+' et à '+e(s.maxH||'—'))
-      +card('Heures à prix négatif', mkNum(s.neg,1)+'<small> h</small>', mkNum(neg30,1)+' h sur 30 jours', s.neg?'warn':'')
+      +card('Heures à prix négatif', mkNum(s.neg,1)+'<small> h</small>', (zeroH>s.neg?mkNum(zeroH,1)+' h à 0 € ou moins ce jour · ':'')+mkNum(neg30,1)+' h négatives sur 30 jours', s.neg||zeroH?'warn':'')
       +card('Moyenne 30 jours', mkNum(avg30)+'<small> €/MWh</small>', s.ren!=null?'renouvelables '+mkNum(s.ren,0)+' % du mix le '+e(pqIsoToFr(s.day)):'')
       +'</div>';
     h+='<div class="mk-grid2"><section class="mk-card"><h3>Prix au quart d’heure · '+e(s.day?pqIsoToFr(s.day):'')+'</h3>'+mkDayChart(s.q)+src(MK_SRC.spot)+'</section>'

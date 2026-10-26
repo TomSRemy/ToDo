@@ -634,7 +634,8 @@
   function parcImported(next){
     if(parcData && parcHash(parcData)===parcHash(next)) next.importedAt=parcData.importedAt||next.importedAt;
     const isNew=!parcData || (next.importedAt||0)!==(parcData.importedAt||0);
-    parcData=next; saveParc(); ensureRenewalTasks(); renderParc();
+    parcData=next; saveParc(); const nRenew=ensureRenewalTasks(); renderParc();
+    if(nRenew) notify('Contrats qui finissent bientôt : '+nRenew+(nRenew>1?' tâches « Renouveler » ajoutées':' tâche « Renouveler » ajoutée')+' dans Tâches', { label:'Voir', fn:()=>gsTab('tasks') });   // cold audit: they appeared silently
     if(isNew) syncPushParc();
   }
 
@@ -707,7 +708,7 @@
     const rgb=h=>[1,3,5].map(i=>parseInt(h.slice(i,i+2),16)), lum=c=>{ const f=v=>{ v/=255; return v<=0.03928?v/12.92:Math.pow((v+0.055)/1.055,2.4); }; return 0.2126*f(c[0])+0.7152*f(c[1])+0.0722*f(c[2]); };
     if(!/^#[0-9a-f]{6}$/i.test(hex||'')) return hex;
     const bg=lum([20,25,34]); let c=rgb(hex);
-    for(let i=0;i<10 && (lum(c)+0.05)/(bg+0.05)<4.5;i++) c=c.map(v=>Math.round(v+(255-v)*0.15));
+    for(let i=0;i<12 && (lum(c)+0.05)/(bg+0.05)<5;i++) c=c.map(v=>Math.round(v+(255-v)*0.15));
     return '#'+c.map(v=>v.toString(16).padStart(2,'0')).join('');
   }
   const clientColor=n=>{
@@ -790,7 +791,7 @@
     const span=document.createElement('span');
     span.className='meta-tag'+(shape==='flag'?' flag':'');
     const rgb=hexToRgb(hex);
-    span.style.color=hex;
+    span.style.color=readableOnDark(hex);   // cold audit: coloured chips at 3.4:1 (WCAG 1.4.3)
     span.style.background='rgba('+rgb.r+','+rgb.g+','+rgb.b+',.16)';
     span.style.border='1px solid rgba('+rgb.r+','+rgb.g+','+rgb.b+',.4)';
     if(shape==='flag'){ span.style.borderLeft='3px solid '+hex; }
@@ -801,7 +802,7 @@
   function makeSolidTag(label, hex, onClick){
     const span=document.createElement('span');
     span.className='meta-tag solid';
-    span.style.background=hex; span.style.color='#04070C';
+    span.style.background=readableOnDark(hex); span.style.color='#04070C';   // a light enough fill for dark text at 4.5:1
     span.textContent=label;
     if(onClick) span.onclick=onClick;
     return span;
@@ -1058,7 +1059,7 @@
     const dateTag=document.createElement('span');
     dateTag.className='meta-date-compact task-date-tag'+(st?' '+st:'');
     dateTag.style.cursor='pointer';
-    dateTag.title='Cliquer pour changer la deadline';
+    dateTag.title='Échéance (cliquer pour changer)';
     dateTag.textContent=t.due ? fmtDateShort(t.due) : '+ Date';
     dateTag.onclick=e=>openSnoozePopover(e, t.id);
     grid.appendChild(dateTag);
@@ -1104,7 +1105,7 @@
       '<input type="url" class="e-link" placeholder="Mail" value="'+escapeHtml(t.link||'')+'"></div>'+
       '<div class="subtasks-edit"></div>'+
       '<button class="add-subtask-btn" type="button">+ sous-tâche</button>'+
-      '<div class="edit-btn-row"><button class="edit-cancel" type="button">Annuler</button><button class="edit-save" type="button">Enregistrer</button></div>';
+      '<div class="edit-btn-row"><button class="edit-del ghost-btn danger-btn" type="button">Supprimer</button><button class="edit-cancel" type="button">Annuler</button><button class="edit-save" type="button">Enregistrer</button></div>';
     row.appendChild(f);
     quickDates(f.querySelector('.e-due'));
 
@@ -1128,6 +1129,7 @@
     f.querySelector('.add-subtask-btn').onclick=()=>{ localSubs.push({text:'',done:false}); renderSubs(); stWrap.querySelector('.subtask-edit-row:last-child input').focus(); };
 
     f.querySelector('.edit-cancel').onclick=()=>{ editingId=null; render(); };
+    f.querySelector('.edit-del').onclick=()=>deleteTask(t.id);   // cold audit: deleting a task could not be found outside the archive
     f.querySelector('.edit-save').onclick=()=>{
       t.title=f.querySelector('.e-title').value.trim()||t.title;
       t.description=f.querySelector('.e-desc').value.trim();
@@ -1407,8 +1409,12 @@
 
     list.innerHTML='';
     renderTodayWatch(weekTasks);
+    // an empty app: say what it is and where to start (cold audit: « TASKS · 0 / Rien d'urgent » left newcomers lost)
+    if(!tasks.some(t=>!t.deleted) && !opportunities.some(o=>!o.deleted) && !contacts.some(c=>!c.deleted)){ statsRow.innerHTML=''; list.appendChild(welcomeBlock()); return; }
     if(overdueTasks.length===0 && todayTasks.length===0){
-      const e=document.createElement('div'); e.className='today-empty'; e.textContent="Rien d'urgent aujourd'hui.";
+      const e=document.createElement('div'); e.className='today-empty';
+      const nx=sortedTasks(open.filter(t=>t.due && dueStatus(t.due)!=='overdue')).sort((a,b)=>a.due.localeCompare(b.due))[0];
+      e.textContent='Rien en retard ni dû aujourd\u2019hui.'+(nx?' Prochaine échéance : '+plainLinks(nx.title)+', '+new Date(nx.due+'T00:00:00').toLocaleDateString('fr-FR',{ weekday:'long', day:'numeric', month:'long' })+'.':'');
       list.appendChild(e);
       return;
     }
@@ -1422,6 +1428,20 @@
     }
   }
 
+  function welcomeBlock(){
+    const w=document.createElement('div'); w.className='welcome'; w.id='welcome';
+    w.innerHTML='<h2>Bienvenue dans ToDo Agrégation</h2><p>Ici : tes tâches du jour, tes affaires par étape (de la prise de contact à la mise en service) et ton portefeuille signé, au même endroit. Tout reste dans ce navigateur tant que tu n\u2019actives pas la synchro.</p>'
+      +(syncConfig.enabled?'':'<p class="welcome-other">Tu utilises déjà l\u2019outil sur un autre appareil ? Tes données y sont restées : active la synchro (Réglages › Synchro GitHub) pour les retrouver ici.</p>')
+      +'<ol class="welcome-steps"></ol>';
+    const ol=w.querySelector('ol');
+    const step=(label, hint, fn)=>{ const li=document.createElement('li'); const b=document.createElement('button'); b.type='button'; b.textContent=label; b.onclick=fn; const s=document.createElement('span'); s.textContent=hint; li.append(b, s); ol.appendChild(li); };
+    step('Ajouter ma première tâche', 'un appel, une relance, un document à envoyer', ()=>{ gsTab('tasks'); setTimeout(()=>$('quick-add-input').focus(), 50); });
+    if(!window.TODO_LITE) step('Créer ma première affaire', 'une installation à suivre, étape par étape', ()=>openOppForm());
+    if(!window.TODO_LITE) step('Charger le Suivi Agrégation', 'le fichier Excel des contrats signés (lu, jamais modifié)', ()=>gsTab('parc'));
+    if(!syncConfig.enabled && !window.TODO_LITE) step('Activer la synchro', 'pour retrouver tes données sur ton téléphone ou un autre ordinateur', ()=>openSyncSettings());
+    const h=document.createElement('button'); h.type='button'; h.className='welcome-help'; h.textContent='Lire le mode d\u2019emploi'; h.onclick=()=>$('help-btn').click(); w.appendChild(h);
+    return w;
+  }
   // Below the day's tasks: the next 7 days, deals that stopped moving, contracts ending soon
   const STALL_DAYS=15, ENDING_MONTHS=3;
   function lastMove(o){ const log=o.stageLog||[]; return Math.max(o.updatedAt||0, log.length?log[log.length-1].at:0); }
@@ -1440,9 +1460,9 @@
     const now=Date.now();
     const stalled=opportunities.filter(o=>!o.deleted && (o.kind==='installation'||o.kind==='prequal') && !isExited(o) && o.stage!=='converti' && o.stage!=='actif' && lastMove(o)>1e12 && now-lastMove(o)>=STALL_DAYS*864e5)
       .sort((a,b)=>lastMove(a)-lastMove(b));
-    block('Pipeline : sans mouvement depuis '+STALL_DAYS+' jours', stalled.length, stalled.slice(0,8).map(o=>{ const d=Math.floor((now-lastMove(o))/864e5);
+    block('Affaires sans nouvelles depuis plus de '+STALL_DAYS+' jours', stalled.length, stalled.slice(0,8).map(o=>{ const d=Math.floor((now-lastMove(o))/864e5);
       return row(o.kind==='prequal'?o.company+' (pré-qualif)':oppName(o), [o.kind==='prequal'?'':o.company, stageLabel(o.stage, o)].filter(Boolean).join(' · '), d+' j', ()=>{ gsTab('pipeline'); setTimeout(()=>openOppDetail(o.id),30); }, d>=30?'late':''); }),
-      'Aucune étape ni modification depuis. Relance, avance ou classe-les.');
+      'Ni changement d\u2019étape ni modification : nombre de jours sans nouvelles. Relance, fais avancer ou classe.');
     if(parcData===null) loadParc();
     if(parcData){
       const today=toISO(new Date()), lim=new Date(); lim.setMonth(lim.getMonth()+ENDING_MONTHS); const limIso=toISO(lim);
@@ -1770,6 +1790,23 @@
   }
 
   let archiveFilter='toutes';
+  // deals and contacts marked deleted (never really erased): listed in Archive › Corbeille, put back in one click
+  function trashedRecords(){
+    const out=[];
+    opportunities.filter(o=>o.deleted && (o.kind==='installation' || o.kind==='request' || o.kind==='prequal') && !o.mergedInto).forEach(o=>out.push({ at:o.updatedAt||0, kind:o.kind==='request'?'Demande':o.kind==='prequal'?'Pré-qualif':'Installation', label:[o.company, o.kind==='installation'?oppName(o):(o.label||'')].filter(Boolean).join(' — '),
+      restore:()=>{ o.deleted=false; touchCrm(o); saveCrm(); renderPipeline(); } }));
+    contacts.filter(c=>c.deleted && !c.mergedInto).forEach(c=>out.push({ at:c.updatedAt||0, kind:'Contact', label:[[c.firstName,c.lastName].filter(Boolean).join(' '), c.company].filter(Boolean).join(' — '),
+      restore:()=>{ c.deleted=false; touchCrm(c); saveCrm(); renderContacts(); } }));
+    return out.sort((a,b)=>b.at-a.at).slice(0,200);
+  }
+  // a short message at the bottom, with an optional action (« Annuler ») — cold audit: nothing confirmed a move or a deletion
+  function notify(msg, action){
+    let el=$('app-toast');
+    if(!el){ el=document.createElement('div'); el.id='app-toast'; el.className='app-toast'; el.setAttribute('role','status'); document.body.appendChild(el); }
+    el.innerHTML=''; const s=document.createElement('span'); s.textContent=msg; el.appendChild(s);
+    if(action){ const b=document.createElement('button'); b.type='button'; b.textContent=action.label; b.onclick=()=>{ el.classList.remove('show'); action.fn(); }; el.appendChild(b); }
+    el.classList.add('show'); clearTimeout(el._t); el._t=setTimeout(()=>el.classList.remove('show'), action?10000:4000);
+  }
   function renderArchive(){
     // drawn when it is shown (the tab click draws it again): validating a task stays quick with a long archive
     if($('tab-archive').classList.contains('hidden'))return;
@@ -1783,6 +1820,12 @@
     if(archiveFilter==='critique') arch=arch.filter(t=>t.urgency==='critique');
     else if(archiveFilter==='haute') arch=arch.filter(t=>t.urgency==='haute'||t.urgency==='critique');
     if(q) arch=arch.filter(t=>(t.title+' '+(t.client||'')+' '+(t.project||'')).toLowerCase().includes(q));
+    // the bin also keeps the deals and contacts deleted on this device (cold audit: « rien n'est perdu » was true for tasks only)
+    if(inTrash){ const gone=trashedRecords().filter(r=>!q || r.label.toLowerCase().includes(q));
+      if(gone.length){ const h=document.createElement('div'); h.className='trash-head'; h.textContent='Affaires et contacts supprimés · '+gone.length; list.appendChild(h);
+        gone.forEach(r=>{ const row=document.createElement('div'); row.className='trash-row'; const s=document.createElement('span'); s.textContent=r.label; const sub=document.createElement('span'); sub.className='trash-sub'; sub.textContent=r.kind+(r.at?' · supprimé le '+new Date(r.at).toLocaleDateString('fr-FR'):'');
+          const b=document.createElement('button'); b.type='button'; b.className='ghost-btn'; b.textContent='Remettre'; b.onclick=()=>{ r.restore(); renderArchive(); }; row.append(s, sub, b); list.appendChild(row); });
+        if(!arch.length) return; } }
     if(!arch.length){ const e=document.createElement('div'); e.className='empty-state'; e.textContent=q?'Aucun résultat.':(inTrash?'Corbeille vide.':'Aucune tâche archivée.'); list.appendChild(e); return; }
     let n=1;
     arch.forEach(t=>list.appendChild(buildArchiveRow(t, n++, inTrash)));
@@ -2454,7 +2497,7 @@
     const av=document.createElement('div'); av.className='contact-avatar'; av.style.cursor='pointer';
     av.title='Voir la fiche (copier email/téléphone)';
     const hex=c.company?clientColor(c.company):'#6B7480';
-    av.style.background=hex+'26'; av.style.color=hex;
+    av.style.background=hex+'26'; av.style.color=readableOnDark(hex);
     av.textContent=initials(c.firstName,c.lastName);
     av.onclick=e=>{ e.stopPropagation(); if(expandedContacts.has(c.id)) expandedContacts.delete(c.id); else expandedContacts.add(c.id); renderContacts(); };
     row.appendChild(av);
@@ -2478,7 +2521,7 @@
     if(c.company){
       const pill=document.createElement('span'); pill.className='contact-company-pill'; pill.textContent=c.company; pill.dataset.peek='co:'+c.company;
       const chex=clientColor(c.company);
-      pill.style.color=chex; pill.style.background=chex+'16';
+      pill.style.color=readableOnDark(chex); pill.style.background=chex+'16';
       companyCell.appendChild(pill);
     }
     row.appendChild(companyCell);
@@ -2524,7 +2567,8 @@
     row.ondblclick=()=>openContactForm(c);
     const del=document.createElement('button'); del.className='del-btn'; del.title='Supprimer';
     del.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="width:14px;height:14px;"><path d="M18 6L6 18M6 6l12 12"/></svg>';
-    del.onclick=async ()=>{ if(await askConfirm('Supprimer ce contact ?', 'Supprimer')){ c.deleted=true; touchCrm(c); saveCrm(); renderContacts(); } };
+    del.onclick=async ()=>{ if(await askConfirm('Supprimer ce contact ? (récupérable ensuite dans Archive → Corbeille)', 'Supprimer')){ c.deleted=true; touchCrm(c); saveCrm(); renderContacts();
+      notify('Contact « '+[c.firstName,c.lastName].filter(Boolean).join(' ')+' » supprimé', { label:'Annuler', fn:()=>{ c.deleted=false; touchCrm(c); saveCrm(); renderContacts(); } }); } };
     actions.appendChild(del);
     row.appendChild(actions);
 
@@ -2637,7 +2681,8 @@
     links.appendChild(netBtn);
     const delLink=document.createElement('button'); delLink.type='button'; delLink.textContent='Supprimer';
     delLink.className='contact-detail-edit-link danger-btn';
-    delLink.onclick=async ()=>{ if(await askConfirm('Supprimer ce contact ?', 'Supprimer')){ c.deleted=true; touchCrm(c); saveCrm(); renderContacts(); } };
+    delLink.onclick=async ()=>{ if(await askConfirm('Supprimer ce contact ? (récupérable ensuite dans Archive → Corbeille)', 'Supprimer')){ c.deleted=true; touchCrm(c); saveCrm(); renderContacts();
+      notify('Contact « '+[c.firstName,c.lastName].filter(Boolean).join(' ')+' » supprimé', { label:'Annuler', fn:()=>{ c.deleted=false; touchCrm(c); saveCrm(); renderContacts(); } }); } };
     links.appendChild(delLink);
     card.appendChild(links);
 
@@ -2913,7 +2958,7 @@
       const cMw=live.filter(o=>o.kind==='installation' && oppPhase(o)==='contrat').reduce((s,o)=>s+kwcNum(o),0)/1000;
       const f1=n=>(Math.round(n*10)/10).toLocaleString('fr-FR');
       const g=document.createElement('section'); g.className='pd-goal';
-      g.innerHTML='<div class="pd-goal-h"><b>Objectif '+year+'</b><label><input type="text" inputmode="decimal" class="pd-goal-in" aria-label="Objectif de l\u2019année en MWc signés" placeholder="à fixer"> MWc signés</label></div>'
+      g.innerHTML='<div class="pd-goal-h"><b>Objectif '+year+'</b><label>Objectif de l\u2019année : <input type="text" inputmode="decimal" class="pd-goal-in" aria-label="Objectif de l\u2019année en MWc signés" placeholder="ex. 50"> MWc signés</label></div>'
         +'<div class="pd-goal-bar"><span class="s"></span><span class="c"></span></div><div class="pd-goal-t"></div>';
       const inp=g.querySelector('input'); inp.value=goal?f1(goal):'';
       const top=Math.max(goal, sMw+cMw, .001);
@@ -2925,13 +2970,15 @@
       inp.addEventListener('change', ()=>{ const v=parseFloat(inp.value.replace(/\s/g,'').replace(',','.')); if(v>0) goals[year]=v; else delete goals[year];
         lsSet('pipe-goals', JSON.stringify(goals)); if(window.todoSettingsChanged) window.todoSettingsChanged(); renderPipeline(); });
       board.appendChild(g); }
-    { const wb=document.createElement('button'); wb.type='button'; wb.className='pipe-bar-btn pd-week'; wb.textContent='Résumé de la semaine à copier'; wb.title='Signés, offres, avancées, nouveaux dossiers, appels, bloqués : prêt à coller dans un mail ou Teams'; wb.onclick=()=>openWeek('this'); board.appendChild(wb); }
+    { const wb=document.createElement('button'); wb.type='button'; wb.className='pipe-bar-btn pd-week'; wb.textContent='Copier le résumé de la semaine (mail ou Teams)'; wb.title='Signés, offres, avancées, nouveaux dossiers, appels, bloqués : prêt à coller dans un mail ou Teams'; wb.onclick=()=>openWeek('this'); board.appendChild(wb); }
     const grid=document.createElement('div'); grid.className='pd-grid'; board.appendChild(grid);
     const card=(title,hint)=>{ const c=document.createElement('section'); c.className='pd-card'; const h=document.createElement('h4'); h.textContent=title; c.appendChild(h); if(hint){ const p=document.createElement('p'); p.className='pd-hint'; p.textContent=hint; c.appendChild(p); } grid.appendChild(c); return c; };
     // MWc by phase, bars to one scale
     const ph=PIPE_PHASES.filter(p=>p.key!=='prequal' && p.key!=='actif').map(p=>{ const l=live.filter(o=>oppPhase(o)===p.key); return { label:p.label, n:l.length, kwc:l.reduce((s,o)=>s+kwcNum(o),0) }; });
     const maxK=Math.max(1,...ph.map(p=>p.kwc));
-    const c1=card('MWc par phase','Dossiers en cours, hors pré-qualifications ; puissance renseignée sur la fiche.');
+    const c1=card('MWc par phase','MWc par phase · dossiers en cours, onboarding compris, hors pré-qualifications ; puissance renseignée sur la fiche.');
+    { const tot=ph.reduce((s,p)=>s+p.kwc,0), big=ph.slice().sort((a,b)=>b.kwc-a.kwc)[0];   // the title says the point (cold audit)
+      if(big && big.kwc && tot) c1.querySelector('h4').textContent=big.label+' : '+fmtMwc(big.kwc)+', '+Math.round(big.kwc/tot*100)+' % du pipeline ('+fmtMwc(tot)+')'; }
     ph.forEach(p=>{ const r=document.createElement('div'); r.className='pd-bar-row'; r.innerHTML='<span class="pd-l"></span><span class="pd-bar"><span></span></span><span class="pd-v"></span>';
       r.querySelector('.pd-l').textContent=p.label; r.querySelector('.pd-bar span').style.width=(p.kwc?Math.max(2,p.kwc/maxK*100):0)+'%'; r.querySelector('.pd-v').textContent=(p.kwc?fmtMwc(p.kwc):'—')+' · '+p.n; c1.appendChild(r); });
     // time at each step
@@ -2942,6 +2989,8 @@
       const r=document.createElement('div'); r.className='pd-trow'+(avg>=30?' slow':''); r.innerHTML='<span></span><b></b><span class="m"></span>';
       r.firstChild.textContent=s.label; r.querySelector('b').textContent=Math.round(avg)+' j'; r.querySelector('.m').textContent=v.length+' dossier'+(v.length>1?'s':'')+' · max '+Math.round(mx)+' j'; t.appendChild(r); });
     if(t.children.length) c2.appendChild(t);
+    { const slow=OPP_STAGES.map(s=>{ const v=per[s.key]; return v && v.length?{ s, avg:v.reduce((a,x)=>a+x.d,0)/v.length, n:v.length }:null; }).filter(Boolean).sort((a,b)=>b.avg-a.avg)[0];
+      if(slow) c2.querySelector('h4').textContent='Étape la plus lente : '+slow.s.label+', '+Math.round(slow.avg)+' j en moyenne ('+slow.n+' dossier'+(slow.n>1?'s':'')+')'; }
     // who holds the deals now: me, Ops, the legal team, the producer, the management — and how long they wait there
     { const by={}; live.filter(o=>o.kind==='installation' && o.stage!=='actif').forEach(o=>{ const st=oppStage(o.stage); if(!st) return; const w=st.who==='SC'?'Ops':st.who; (by[w]=by[w]||[]).push(o); });
       const order=['Com','Ops','Jur','Client','Dir'].filter(w=>by[w]);
@@ -2952,14 +3001,16 @@
         const ch=r.querySelector('.who-chip'); ch.classList.add('who-'+w.toLowerCase()); ch.textContent=WHO[w]||w;
         r.querySelector('.pd-bar span').style.width=Math.max(4,l.length/maxN*100)+'%';
         r.querySelector('.pd-v').textContent=l.length+' · '+fmtMwc(l.reduce((x,o)=>x+kwcNum(o),0))+(avg!=null?' · '+avg+' j en moy.':'')+(late?' · '+late+' > 15 j':'');
-        if(late) r.classList.add('late'); c4.appendChild(r); }); }
+        if(late) r.classList.add('late'); c4.appendChild(r); });
+      if(order.length){ const all=order.reduce((s,w)=>s+by[w].length,0), lead=order.slice().sort((a,b)=>by[b].length-by[a].length)[0];
+        c4.querySelector('h4').textContent=(lead==='Com'?'C\u2019est à toi d\u2019agir':'C\u2019est '+({ Ops:'à Ops', Jur:'au Juridique', Client:'au producteur', Dir:'à la Direction' }[lead]||'à '+lead)+' d\u2019agir')+' sur '+by[lead].length+' dossier'+(by[lead].length>1?'s':'')+' sur '+all; } }
     // commissioning to come, by quarter: what is in play and what is likely (weighted by how far the deal is)
     { const f=mesForecast(live), W=MES_WEIGHTS;
       const c5=card('Mises en service à venir', f.tot?'MWc par trimestre selon la date de mise en service de la fiche. Barre claire : en jeu ; foncée : probable (pondéré par l\u2019étape : '+Object.entries({ 'qualification':W.qualif_en_cours, 'pricing':W.pricing_indicatif, 'offre en attente':W.offre_attente, 'KYC':W.kyc, 'signature':W.signature }).map(([l,v])=>l+' '+Math.round(v*100)+' %').join(', ')+', signé 100 %).':'Aucune date de mise en service dans les deux ans sur les dossiers en cours.');
       if(f.tot){ c5.appendChild(f.chart); const t2=document.createElement('p'); t2.className='pd-hint'; t2.textContent=f.text; c5.appendChild(t2); } }
     // deals that drag
     const now=Date.now(), stalled=live.filter(o=>o.stage!=='actif' && lastMove(o)>1e12 && now-lastMove(o)>=STALL_DAYS*864e5).sort((a,b)=>lastMove(a)-lastMove(b));
-    const c3=card('Dossiers qui traînent', stalled.length?'Sans étape ni modification depuis '+STALL_DAYS+' jours ou plus.':'Aucun dossier sans mouvement depuis '+STALL_DAYS+' jours.');
+    const c3=card('Dossiers qui traînent', stalled.length?'Sans nouvelles (ni étape ni modification) depuis '+STALL_DAYS+' jours ou plus : jours sans nouvelles.':'Aucun dossier sans nouvelles depuis '+STALL_DAYS+' jours.');
     stalled.slice(0,10).forEach(o=>{ const d=Math.floor((now-lastMove(o))/864e5); const r=document.createElement('button'); r.type='button'; r.className='tw-row'+(d>=30?' late':'');
       r.innerHTML='<span class="k"><b></b><span></span></span><span class="v"></span>'; r.querySelector('b').textContent=o.kind==='prequal'?o.company+' (pré-qualif)':oppName(o);
       r.querySelector('.k span').textContent=[o.kind==='prequal'?'':o.company, stageLabel(o.stage, o)].filter(Boolean).join(' · '); r.querySelector('.v').textContent=d+' j'; r.onclick=()=>openOppDetail(o.id); c3.appendChild(r); });
@@ -2968,10 +3019,10 @@
   }
   // ----- List view: every installation in one sortable table (search, saved view and « Sorties » apply) -----
   const PL_COLS=[
-    ['company','Producteur',o=>o.company||''],['bloc','Bloc',o=>{ const r=o.requestId&&opportunities.find(x=>x.id===o.requestId); return r&&!r.deleted?(r.label||requestInstalls(r.id).length+' inst.'):''; }],
+    ['company','Producteur',o=>o.company||''],['bloc','Lot',o=>{ const r=o.requestId&&opportunities.find(x=>x.id===o.requestId); return r&&!r.deleted?(r.label||requestInstalls(r.id).length+' inst.'):''; }],
     ['name','Installation',o=>oppName(o)],['stage','Étape',o=>stageIndex(o.stage)],['kwc','Puissance',o=>kwcNum(o)],['mwh','P50 (MWh/an)',o=>pqNum(String(o.mwh||''))||0],
-    ['mes','MES',o=>{ const d=pqToDate(o.mesEff||o.mesPrev); return d?d.getTime():9e15; }],['contrat','Contrat',o=>o.contrat||''],['dept','Dépt',o=>o.dept||''],
-    ['charge','Chargé',o=>o.charge||''],['upd','Modifiée',o=>lastMove(o)]];
+    ['mes','Mise en service',o=>{ const d=pqToDate(o.mesEff||o.mesPrev); return d?d.getTime():9e15; }],['contrat','Mécanisme',o=>o.contrat||''],['dept','Département',o=>o.dept||''],
+    ['charge','Chargé d\u2019affaires',o=>o.charge||''],['upd','Modifiée',o=>lastMove(o)]];
   function renderPipeList(board, q){
     board.classList.add('pipe-list');
     let sort={ k:'stage', dir:-1 }; try{ const v=JSON.parse(localStorage.getItem('pipe-list-sort')||'null'); if(v && PL_COLS.some(c=>c[0]===v.k)) sort=v; }catch(e){}
@@ -2982,7 +3033,12 @@
     rows.sort((a,b)=>{ const x=val(a), y=val(b); const c=typeof x==='number'&&typeof y==='number'?x-y:String(x).localeCompare(String(y),'fr',{ numeric:true }); return c*sort.dir || (a.company||'').localeCompare(b.company||'','fr') || oppName(a).localeCompare(oppName(b),'fr',{ numeric:true }); });
     const kw=rows.reduce((t,o)=>t+kwcNum(o),0), mwh=rows.reduce((t,o)=>t+(pqNum(String(o.mwh||''))||0),0);
     const head=document.createElement('div'); head.className='pl-head';
-    head.textContent=rows.length+' installation'+(rows.length>1?'s':'')+(kw?' · '+fmtKwc(kw):'')+(mwh?' · '+Math.round(mwh).toLocaleString('fr-FR')+' MWh/an':'');
+    head.textContent=rows.length+' installation'+(rows.length>1?'s':'')+(kw?' · '+fmtMwc(kw):'')+(mwh?' · '+Math.round(mwh).toLocaleString('fr-FR')+' MWh/an':'');
+    { const x=document.createElement('button'); x.type='button'; x.className='pipe-bar-btn pl-xlsx'; x.textContent='Excel'; x.title='Télécharger cette liste en .xlsx (avec le tri et la recherche en cours)';   // cold audit: the list had no export
+      x.onclick=async ()=>{ try{ await loadXlsxLib(); const aoa=[PL_COLS.map(c=>c[0]==='kwc'?'Puissance (kWc)':c[1])].concat(rows.map(o=>PL_COLS.map(c=>{ const v=c[2](o); return c[0]==='stage'?stageLabel(o.stage, o):c[0]==='kwc'?(kwcNum(o)||''):c[0]==='mes'?(o.mesEff||o.mesPrev||''):c[0]==='upd'?(o.updatedAt?new Date(o.updatedAt).toLocaleDateString('fr-FR'):''):(v===0?'':v); })));
+          const ws=XLSX.utils.aoa_to_sheet(aoa), wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'Pipeline'); const d=new Date(); XLSX.writeFile(wb, String(d.getFullYear()).slice(2)+pqPad(d.getMonth()+1)+pqPad(d.getDate())+'_Pipeline - liste.xlsx'); flashBtn(x,'✓ Fichier créé'); }
+        catch(e){ flashBtn(x,'Échec : '+(e.message||e)); } };
+      head.appendChild(x); }
     board.appendChild(head);
     const wrap=document.createElement('div'); wrap.className='pl-wrap';
     const t=document.createElement('table'); t.className='pl-table';
@@ -2993,8 +3049,8 @@
     const thead=document.createElement('thead'); thead.appendChild(th); t.appendChild(thead);
     const tb=document.createElement('tbody');
     rows.forEach(o=>{ const tr=document.createElement('tr'); tr.dataset.id=o.id; if(isExited(o)) tr.className='out';
-      const cells=[o.company||'', PL_COLS[1][2](o), oppName(o), null, fmtKwc(o.kwc), o.mwh?Math.round(pqNum(String(o.mwh))||0).toLocaleString('fr-FR'):'', o.mesEff||o.mesPrev||'', o.contrat||'', (o.dept||'').replace(/\s+-\s+.*/,''), o.charge||'', (()=>{ const t0=lastMove(o); return t0>1e12?new Date(t0).toLocaleDateString('fr-FR'):''; })()];
-      cells.forEach((v,i)=>{ const td=document.createElement('td'); if(i===3) td.appendChild(stageChip(o)); else td.textContent=v; if(i===0){ td.style.color=clientColor(o.company); if(o.company) td.dataset.peek='co:'+o.company; } if(i===2) td.className='pl-name'; if(i===4||i===5) td.className='pl-num'; tr.appendChild(td); });
+      const cells=[o.company||'', PL_COLS[1][2](o), oppName(o), null, fmtKwc(o.kwc, o.install), o.mwh?Math.round(pqNum(String(o.mwh))||0).toLocaleString('fr-FR'):'', o.mesEff||o.mesPrev||'', o.contrat||'', (o.dept||'').replace(/\s+-\s+.*/,''), o.charge||'', (()=>{ const t0=lastMove(o); return t0>1e12?new Date(t0).toLocaleDateString('fr-FR'):''; })()];
+      cells.forEach((v,i)=>{ const td=document.createElement('td'); if(i===3) td.appendChild(stageChip(o)); else td.textContent=v; if(i===0){ td.style.color=readableOnDark(clientColor(o.company)||''); if(o.company) td.dataset.peek='co:'+o.company; } if(i===2) td.className='pl-name'; if(i===4||i===5) td.className='pl-num'; tr.appendChild(td); });
       tr.onclick=()=>openOppDetail(o.id); tb.appendChild(tr); });
     t.appendChild(tb); wrap.appendChild(t); board.appendChild(wrap);
     if(!rows.length){ const e=document.createElement('p'); e.className='modal-hint'; e.textContent='Aucune installation'+(q?' pour cette recherche':'')+'.'; board.appendChild(e); }
@@ -3004,30 +3060,36 @@
   function meetHiddenCols(){ try{ const v=JSON.parse(localStorage.getItem('pipe-meet-cols')||'[]'); return Array.isArray(v)?v:[]; }catch(e){ return []; } }
   const meetVis=()=>{ const h=meetHiddenCols(); return MEET_COLS.map((c,i)=>i<2 || !h.includes(c)); };
   const meetPick=(arr, vis)=>arr.filter((_,i)=>vis[i]);
+  // what the meeting counts, said under its figures (cold audit: 19 here, 20 on the dashboard, « probables » without weights)
+  const MEET_SCOPE='Périmètre : les installations des phases choisies au-dessus, hors onboarding et hors affaires sorties (le Tableau de bord, lui, compte l\u2019onboarding). Probables : MWc × chance de signer selon l\u2019étape — '
+    +[['pricing_indicatif','pricing'],['offre_attente','offre en attente'],['kyc','KYC'],['negociation','négociation'],['mise_signature','mise en signature'],['signature','signature']].map(([k,l])=>l+' '+Math.round(MES_WEIGHTS[k]*100)+' %').join(', ')+'.';
   // the key figures over the table (screen, mail, Excel): in play, likely, plants, production, stuck
   function meetFigures(groups){
     const list=groups.flatMap(g=>g.list), kw=list.reduce((x,o)=>x+kwcNum(o),0), mwh=list.reduce((x,o)=>x+(pqNum(String(o.mwh||''))||0),0);
     const likely=list.reduce((x,o)=>x+kwcNum(o)*(MES_WEIGHTS[o.stage]||0),0), stuck=list.filter(o=>{ const d=daysInStage(o); return d!=null && d>15; }).length;
-    return [[fmtMwc(kw),'en jeu'],[fmtMwc(likely),'probables (pondéré par l\u2019étape)'],[String(list.length),'installation'+(list.length>1?'s':'')],[mwh?(mwh>=1000?(Math.round(mwh/100)/10).toLocaleString('fr-FR')+' GWh':Math.round(mwh).toLocaleString('fr-FR')+' MWh'):'—','par an (P50)'],[String(stuck),'bloquée'+(stuck>1?'s':'')+' > 15 j']];
+    return [[fmtMwc(kw),'en jeu'],[fmtMwc(likely),'probables (pondéré par l\u2019étape)'],[String(list.length),'installation'+(list.length>1?'s':'')],[mwh?(mwh>=1000?(Math.round(mwh/100)/10).toLocaleString('fr-FR')+' GWh':Math.round(mwh).toLocaleString('fr-FR')+' MWh'):'—','par an (P50)'],[String(stuck),'bloquée'+(stuck>1?'s':'')+' (même étape > 15 j)']];
   }
   function meetPhasesOn(){ try{ const v=JSON.parse(localStorage.getItem('pipe-meet-phases')||'null'); if(Array.isArray(v) && v.length) return v; }catch(e){} return MEET_PHASES.map(p=>p.key); }
-  const MEET_COLS=['Producteur','Centrale','Techno','Puissance','P50 (MWh/an)','Dépt','MES','Contrat','Mécanisme','Étape','Prochaine échéance','Chargé','Lot / demande','Depuis'];
+  const MEET_COLS=['Producteur','Centrale','Techno','Puissance','P50 (MWh/an)','Dépt','MES','Dates du contrat','Mécanisme','Étape','Prochaine échéance','Chargé','Lot / demande','Depuis'];
   // the block an installation belongs to in the meeting view: same request, same lot, same step
   const meetBlockKey=o=>o.requestId?o.requestId+'|'+(o.lot||'')+'|'+o.stage:'o'+o.id;
   const meetBlockName=o=>{ if(o.lot) return o.lot; const r=o.requestId && opportunities.find(x=>x.id===o.requestId); return r && !r.deleted?(r.label||'Demande de '+requestInstalls(r.id).length+' installations'):''; };
   function meetRow(o){
     const fr=v=>/^\d{4}-\d{2}-\d{2}$/.test(v||'')?pqIsoToFr(v):(v||'');
-    const s=oppStage(o.stage), task=o.taskId?tasks.find(t=>t.id===o.taskId && !t.done && t.status!=='termine'):null;
+    const s=oppStage(o.stage), task=(o.taskId?tasks.find(t=>t.id===o.taskId && !t.done && !t.deleted && !t.archived && t.status!=='termine'):null)
+      || activeTasks().filter(t=>t.due && (t.opportunityId===o.id || (o.requestId && t.opportunityId===o.requestId))).sort((a,b)=>a.due.localeCompare(b.due))[0];   // the auto follow-ups are linked by the deal, not by o.taskId (cold audit)
     const next=[o.relance?fr(o.relance):'', task&&task.due?pqIsoToFr(task.due)+' · '+task.title.replace(/\s+—.*$/,''):''].filter(Boolean)[0]||'';
     const mwh=pqNum(String(o.mwh||''));
-    return [o.producteur||o.company||'', oppName(o), o.install==='Eolien'?'Éolien':(o.install||''), fmtKwc(o.kwc), mwh?Math.round(mwh).toLocaleString('fr-FR'):'',
+    return [o.producteur||o.company||'', oppName(o), o.install==='Eolien'?'Éolien':(o.install||''), fmtKwc(o.kwc, o.install), mwh?Math.round(mwh).toLocaleString('fr-FR'):'',
       (o.dept||'').replace(/^(\S+)\s+-\s+.*$/,'$1'), o.mesEff?fr(o.mesEff)+' (effective)':fr(o.mesPrev), o.debut&&o.fin?fr(o.debut)+' → '+fr(o.fin):o.fin?'jusqu\u2019au '+fr(o.fin):o.debut?'dès '+fr(o.debut)+(o.duree?', '+o.duree+' ans':''):(o.duree?o.duree+' ans':''),
       o.contrat||'', s?stageLabel(o.stage, o)+(s.who!=='Com'?' ('+(WHO[s.who]||s.who)+')':''):'', next, o.charge||'', meetBlockName(o), (()=>{ const d=daysInStage(o); return d==null?'':d+' j'; })()];
   }
+  let meetStuckOnly=false;   // « bloquées » clicked: only the deals at the same step for more than 15 days (cold audit: which ones?)
   function meetData(q){
     const on=meetPhasesOn();
     const vp=savedViewState.pipeline && savedViewState.pipeline.pred;
     const live=opportunities.filter(o=>!o.deleted && o.kind==='installation' && !isExited(o))
+      .filter(o=>!meetStuckOnly || (daysInStage(o)||0)>15)
       .filter(o=>!q || pqFold([o.company,o.producteur,o.centrale,o.title,o.dept].join(' ')).includes(q))
       .filter(o=>!vp || vp(o));
     return MEET_PHASES.filter(p=>on.includes(p.key)).map(p=>{
@@ -3039,7 +3101,7 @@
       return { phase:p, list, rows:list.map(meetRow), kwc, mwh };
     });
   }
-  const meetTotal=(kwc,mwh,n)=>[n+' installation'+(n>1?'s':''), kwc?fmtKwc(kwc):'', mwh?(mwh>=1000?(Math.round(mwh/100)/10).toLocaleString('fr-FR')+' GWh/an':Math.round(mwh).toLocaleString('fr-FR')+' MWh/an'):''].filter(Boolean).join(' · ');
+  const meetTotal=(kwc,mwh,n)=>[n+' installation'+(n>1?'s':''), kwc?fmtMwc(kwc):'', mwh?(mwh>=1000?(Math.round(mwh/100)/10).toLocaleString('fr-FR')+' GWh/an':Math.round(mwh).toLocaleString('fr-FR')+' MWh/an'):''].filter(Boolean).join(' · ');
   function meetTitle(){ return 'Pipe agrégation · ce qui arrive · '+new Date().toLocaleDateString('fr-FR',{ day:'numeric', month:'long', year:'numeric' }); }
   // the same table as HTML with inline styles (pasted into Outlook / Teams, or printed)
   function meetHtml(groups){
@@ -3082,9 +3144,12 @@
     const likely=list.reduce((x,o)=>x+kwcNum(o)*(MES_WEIGHTS[o.stage]||0),0), stuck=list.filter(o=>{ const d=daysInStage(o); return d!=null && d>15; }).length;
     const box=document.createElement('div'); box.className='meet-viz';
     const kp=document.createElement('div'); kp.className='meet-kpis';
-    [[fmtMwc(kw),'en jeu'],[fmtMwc(likely),'probables (pondéré par l’étape)'],[list.length,'installation'+(list.length>1?'s':'')],[mwh?(mwh>=1000?(Math.round(mwh/100)/10).toLocaleString('fr-FR')+' GWh':Math.round(mwh).toLocaleString('fr-FR')+' MWh'):'—','par an (P50)'],[stuck,'bloquée'+(stuck>1?'s':'')+' > 15 j']]
-      .forEach(([v,l],i)=>{ const d=document.createElement('div'); d.className='meet-kpi'+(i===4 && stuck?' warn':''); d.innerHTML='<b></b><span></span>'; d.firstChild.textContent=v; d.lastChild.textContent=l; kp.appendChild(d); });
+    [[fmtMwc(kw),'en jeu'],[fmtMwc(likely),'probables (pondéré par l’étape)'],[list.length,'installation'+(list.length>1?'s':'')],[mwh?(mwh>=1000?(Math.round(mwh/100)/10).toLocaleString('fr-FR')+' GWh':Math.round(mwh).toLocaleString('fr-FR')+' MWh'):'—','par an (P50)'],[stuck,'bloquée'+(stuck>1?'s':'')+' (même étape > 15 j)']]
+      .forEach(([v,l],i)=>{ const d=document.createElement(i===4?'button':'div'); d.className='meet-kpi'+(i===4 && (stuck||meetStuckOnly)?' warn':'')+(i===4?' meet-kpi-btn'+(meetStuckOnly?' on':''):''); d.innerHTML='<b></b><span></span>'; d.firstChild.textContent=v; d.lastChild.textContent=l;
+        if(i===4){ d.type='button'; d.title=meetStuckOnly?'Tout réafficher':'Ne montrer que celles-ci'; d.setAttribute('aria-pressed', String(meetStuckOnly)); d.onclick=()=>{ meetStuckOnly=!meetStuckOnly; renderPipeline(); }; if(meetStuckOnly) d.lastChild.textContent=l+' · tout réafficher'; }
+        kp.appendChild(d); });
     box.appendChild(kp);
+    { const n=document.createElement('p'); n.className='meet-scope'; n.textContent=MEET_SCOPE; box.appendChild(n); }
     const cards=document.createElement('div'); cards.className='meet-cards'; box.appendChild(cards);
     const card=t=>{ const c=document.createElement('section'); c.className='meet-card'; const h=document.createElement('h4'); h.textContent=t; c.appendChild(h); cards.appendChild(c); return c; };
     // MWc by step, coloured by phase; a click goes to that part of the table
@@ -3198,17 +3263,19 @@
   function paintPipeSummary(){ try{ paintDupBtn(); paintDupBanner(); }catch(e){ softFail('bandeau doublons', e); } let el=$('pipe-summary'); const bar=document.querySelector('#tab-pipeline .quick-add-bar'); if(!bar) return;
     if(!el){ el=document.createElement('span'); el.id='pipe-summary'; el.className='pipe-summary'; const ref=$('pipe-bar-spacer'); bar.insertBefore(el, ref); }
     const show=pipeTallyN.on && !pipeDash && !pipeMeet && !pipeList && !pipeMap; el.hidden=!show; if(!show) return;
-    el.innerHTML='À moi <b></b> · <span class="lg">En attente des autres</span><span class="sm">Autres</span> <b></b>'+(pipeTallyN.stuck?' · Bloqués<span class="lg"> &gt; 15 j</span> <b class="late"></b>':'');
+    el.innerHTML='À moi <b></b> · <span class="lg">En attente des autres</span><span class="sm">Autres</span> <b></b>'+(pipeTallyN.stuck?' · <button type="button" class="pipe-stuck-btn" title="Voir lesquels (vue Réunion)">Bloqués<span class="lg"> &gt; 15 j</span> <b class="late"></b></button>':'');
+    el.title='À moi : c\u2019est à toi d\u2019agir. Autres : Ops, Juridique, Direction ou le producteur. Bloqués : à la même étape depuis plus de 15 jours (onboarding compris).';
+    const sb=el.querySelector('.pipe-stuck-btn'); if(sb) sb.onclick=()=>{ pipeMeet=true; pipeDash=false; pipeMap=false; meetStuckOnly=true; renderPipeline(); };
     const bs=el.querySelectorAll('b'); bs[0].textContent=pipeTallyN.me; bs[1].textContent=pipeTallyN.others; if(bs[2]) bs[2].textContent=pipeTallyN.stuck; }
   // the card's « what's next »: the linked open task, else what the step asks; who has it and since when; its request
   function cardStepInfo(card, group, reqId){
     const o=group[0], st=oppStage(o.stage); if(!st || isExited(o)) return;
     const ids=new Set(group.map(x=>x.id).concat(reqId?[reqId]:[]));
     const tk=activeTasks().filter(t=>t.opportunityId && ids.has(t.opportunityId)).sort((a,b)=>(a.due||'9').localeCompare(b.due||'9'))[0];
-    const nx=document.createElement('div'); nx.className='pipe-next'; const what=(tk && plainLinks(tk.title||'').replace(/\s+—\s+.*$/,'').trim())||stageTaskOf(st, o); nx.textContent='→ '+(st.who!=='Com' && (!tk || tk.status==='en_attente')?'En attente '+(st.who==='Ops'?'d\u2019Ops':st.who==='Jur'?'du Juridique':st.who==='Client'?'du producteur':'de la Direction')+' : '+what.charAt(0).toLowerCase()+what.slice(1):what); card.appendChild(nx);
+    const nx=document.createElement('div'); nx.className='pipe-next'; const what=(tk && plainLinks(tk.title||'').replace(/\s+—\s+.*$/,'').trim())||stageTaskOf(st, o); nx.textContent='→ '+(st.who!=='Com' && (!tk || tk.status==='en_attente')?'En attente '+(st.who==='Ops'?'d\u2019Ops':st.who==='Jur'?'du Juridique':st.who==='Client'?'du producteur':'de la Direction')+' : '+(/^[A-Z]{2}/.test(what)?what:what.charAt(0).toLowerCase()+what.slice(1)):what); card.appendChild(nx);
     const m=document.createElement('div'); m.className='pipe-who-row';
     const w=document.createElement('span'); w.className='who-chip who-'+String(st.who).toLowerCase(); w.textContent=WHO[st.who]||st.who; m.appendChild(w);
-    const d=daysInStage(o); if(d!=null){ const sp=document.createElement('span'); sp.className='pipe-days'+(d>15?' late':''); sp.textContent=d===0?'aujourd’hui':'depuis '+d+' j'; m.appendChild(sp); }
+    const d=daysInStage(o); if(d!=null){ const sp=document.createElement('span'); sp.className='pipe-days'+(d>15?' late':''); sp.textContent=d===0?'à l’étape depuis aujourd’hui':'à l’étape depuis '+d+' j'; sp.title='Jours passés à cette étape'; m.appendChild(sp); }
     card.appendChild(m);
     if(o.requestId){ const all=requestInstalls(o.requestId).filter(x=>!isExited(x)); if(all.length>group.length){ const req=opportunities.find(x=>x.id===o.requestId)||{};
       const a=document.createElement('button'); a.type='button'; a.className='pipe-origin'; a.textContent='↳ demande '+(req.label||req.company||'')+' · '+all.length+' install.'; a.onclick=e=>{ e.stopPropagation(); openRequestDetail(o.requestId); }; card.appendChild(a); } }
@@ -3221,7 +3288,7 @@
   let pipeXsN=0;
   function paintPipeMore(){ const el=$('pipe-more-n'); if(!el) return; const dup=$('pipe-dup-btn'), xs=$('pipe-xs-btn');
     const n=(xs && getComputedStyle(xs).display!=='none'?pipeXsN:0)+(dup && !dup.hidden?dupCount():0);
-    el.hidden=!n; el.textContent=n; $('pipe-more-btn').classList.toggle('on', pipeShowExited); }
+    el.hidden=!n; el.textContent=n; el.title=n+' à vérifier : envois Excel ⇄ et doublons possibles'; $('pipe-more-btn').setAttribute('aria-label','Plus d\u2019actions'+(n?' ('+n+' à vérifier)':'')); $('pipe-more-btn').classList.toggle('on', pipeShowExited); }
   function renderPipelineInner(){
     if(normalizeOpps()) saveCrmLocalOnly();
     const board=$('pipeline-board');
@@ -3246,6 +3313,8 @@
       .filter(o=>!q || pqFold([o.company,o.centrale,o.title,o.prenom,o.nom,o.dept].join(' ')).includes(q))
       .filter(o=>!vp || vp(o));
     const live=items.filter(o=>!isExited(o)), exited=items.filter(isExited);
+    if(q && !items.length){ const e=document.createElement('div'); e.className='pipe-noresult'; e.innerHTML='<p></p><button type="button" class="ghost-btn">Effacer la recherche</button>';   // cold audit: an empty board said nothing
+      e.querySelector('p').textContent='Rien pour « '+$('opp-search').value.trim()+' ». Essaie un nom de producteur, de centrale, de contact ou un département.'; e.querySelector('button').onclick=()=>$('opp-search-clear').click(); board.appendChild(e); }
     $('pipe-exited-toggle').textContent=pipeShowExited?'Masquer les sorties':('Sorties ('+exited.length+')');
     pipeTallyReset();
     PIPE_PHASES.filter(ph=>ph.key!=='actif').forEach(ph=>{   // in service lives in the Portefeuille (backlog decision 14)
@@ -3364,7 +3433,7 @@
   function dropRequest(reqId, heirId){
     const req=opportunities.find(o=>o.id===reqId); if(!req) return;
     tasks.filter(t=>t.opportunityId===reqId).forEach(t=>{ t.opportunityId=heirId; touch(t); }); saveTasks();
-    req.deleted=true; touchCrm(req);
+    req.deleted=true; req.mergedInto=heirId||'ungrouped'; touchCrm(req);   // not a deletion: kept out of the bin
   }
   async function ungroupRequest(reqId){
     const list=requestInstalls(reqId); if(!list.length) return false;
@@ -3382,7 +3451,7 @@
     const m=document.createElement('div'); m.className='drop-menu'; m.setAttribute('role','menu');
     const h=document.createElement('div'); h.className='drop-menu-h'; h.textContent=(list.length>1?list.length+' installations':oppName(list[0]))+' → quelle étape ?'; m.appendChild(h);
     steps.forEach(st=>{ const b=document.createElement('button'); b.type='button'; b.setAttribute('role','menuitem'); b.dataset.stage=st.key;
-      b.innerHTML='<span></span>'+(st.who!=='Com'?'<em>'+st.who+'</em>':''); b.firstChild.textContent=st.label; if(list.every(o=>o.stage===st.key)) b.classList.add('on');
+      b.innerHTML='<span></span>'+(st.who!=='Com'?'<em>'+(WHO[st.who]||st.who)+'</em>':''); b.firstChild.textContent=st.label; if(list.every(o=>o.stage===st.key)) b.classList.add('on');
       b.onclick=()=>{ m.remove(); apply(st.key); }; m.appendChild(b); });
     if(target){ const g=document.createElement('button'); g.type='button'; g.className='drop-menu-group'; g.setAttribute('role','menuitem'); g.textContent='Grouper avec « '+oppName(target[0])+(target.length>1?' » (+'+(target.length-1)+')':' »'); g.onclick=()=>{ m.remove(); groupInto(list, target); }; m.appendChild(g); }
     document.body.appendChild(m);
@@ -3395,10 +3464,11 @@
     const s=oppStage(o.stage);
     const chip=document.createElement('span'); chip.className='pipe-chip'+(isExited(o)?' out':'');
     chip.textContent=stageLabel(o.stage, o);
-    if(s && s.who && s.who!=='Com'){ const w=document.createElement('span'); w.className='pipe-who'; w.textContent=s.who; chip.appendChild(w); }
+    if(s && s.who && s.who!=='Com'){ const w=document.createElement('span'); w.className='pipe-who'; w.textContent=WHO[s.who]||s.who; chip.appendChild(w); }
     return chip;
   }
-  function fmtKwc(v){ const n=parseFloat(String(v||'').replace(',','.')); if(!n) return ''; return n>=1000?(Math.round(n/10)/100).toLocaleString('fr-FR')+' MWc':Math.round(n).toLocaleString('fr-FR')+' kWc'; }
+  function fmtKwc(v, inst){ const n=parseFloat(String(v||'').replace(',','.')); if(!n) return ''; const c=inst && !/PV/i.test(inst)?'':'c';   // « c » (crête) for solar only: a wind farm is in MW
+    return n>=1000?(Math.round(n/10)/100).toLocaleString('fr-FR')+' MW'+c:Math.round(n).toLocaleString('fr-FR')+' kW'+c; }
   // ---------- Pipeline ↔ Suivi Agrégation: is this deal in the workbook, with the status its stage expects? ----------
   // From « Demande de prix » on, a deal belongs in the Suivi (En préparation → En attente → Gagné). Matched on the plant's
   // name (exact, or one inside the other), producer/client as a tie-break. Nothing shown while the Suivi is not loaded.
@@ -3442,7 +3512,7 @@
       const t=document.createElement('div'); t.className='pipe-card-title'; t.textContent=oppName(o); card.appendChild(t);
       const meta=document.createElement('div'); meta.className='pipe-card-meta';
       meta.appendChild(stageChip(o));
-      const k=fmtKwc(o.kwc); if(k){ const s=document.createElement('span'); s.textContent=k; meta.appendChild(s); }
+      const k=fmtKwc(o.kwc, o.install); if(k){ const s=document.createElement('span'); s.textContent=k; meta.appendChild(s); }
       const sb=suiviBadge(o); if(sb) meta.appendChild(sb);
       card.appendChild(meta);
       if(o.kind==='installation') cardStepInfo(card, [o], null);
@@ -3486,9 +3556,9 @@
     let open=group.length<=REQ_FOLD_AT; try{ const v=JSON.parse(localStorage.getItem('pipe-req-open')||'{}')[foldKey]; if(v!=null) open=v; }catch(err){}
     group.forEach((o,i)=>{
       const r=document.createElement('div'); r.className='pipe-req-line'; if(!open) r.hidden=true;
-      const n=document.createElement('span'); n.className='pipe-req-name'; n.textContent=oppName(o); n.title=[oppName(o), fmtKwc(o.kwc), stageLabel(o.stage, o)].filter(Boolean).join(' · ');
+      const n=document.createElement('span'); n.className='pipe-req-name'; n.textContent=oppName(o); n.title=[oppName(o), fmtKwc(o.kwc, o.install), stageLabel(o.stage, o)].filter(Boolean).join(' · ');
       r.appendChild(n);
-      if(same){ const k=document.createElement('span'); k.className='pipe-req-kwc'; k.textContent=fmtKwc(o.kwc); r.appendChild(k); } else r.appendChild(stageChip(o));
+      if(same){ const k=document.createElement('span'); k.className='pipe-req-kwc'; k.textContent=fmtKwc(o.kwc, o.install); r.appendChild(k); } else r.appendChild(stageChip(o));
       r.onclick=ev=>{ ev.stopPropagation(); openOppDetail(o.id); };
       card.appendChild(r);
     });
@@ -3725,7 +3795,7 @@
     }
     // the round « → toutes » sits inside the field, on its right
     const box=toAll?'<div class="pq-in pq-in-'+f.type+'">'+input+toAll+'</div>':input;
-    return '<div class="pq-f'+(f.wide?' wide':'')+(auto?' auto':'')+(empty?' empty':'')+'"><label for="'+id+'">'+escapeHtml(f.label)+' <span class="pq-col">'+f.col+'</span></label>'+box+extra+'</div>';
+    return '<div class="pq-f'+(f.wide?' wide':'')+(auto?' auto':'')+(empty?' empty':'')+'"><label for="'+id+'"'+(PQ_HINTS[f.k]?' title="'+escapeHtml(PQ_HINTS[f.k])+'"':'')+'>'+escapeHtml(f.label)+(PQ_HINTS[f.k]?' <span class="pq-hint" aria-hidden="true">?</span>':'')+' <span class="pq-col" title="Colonne '+f.col+' du Pipe Excel">col. '+f.col+'</span></label>'+box+extra+'</div>';
   }
   // ---------- Contract dates: start + duration → end, start + end → duration, end + duration → start ----------
   // « mars 2027 » / « 2027 » become dd/mm/yyyy; a computed date shows in green and can still be typed over.
@@ -4284,7 +4354,7 @@
       box.appendChild(buildStepPanel(scopeList, { scope:many?sc:null, reopen:()=>openOppDetail(o.id) }));
       if(!window.TODO_LITE) box.appendChild(sheetSection('Notes express', 'colle ou tape tes notes : les chiffres sont repérés, un clic pour remplir la fiche', false, buildQuickNotes(scopeList, { onFill:()=>openOppDetail(o.id), onKeep:()=>openOppDetail(o.id) })));
       const sheet=buildInstallSheet(o);
-      box.appendChild(sheetSection('Détails de la centrale', [o.install, o.contrat, fmtKwc(o.kwc)].filter(Boolean).join(' · '), stageIndex(o.stage)<=stageIndex('qualif_en_cours') || isExited(o), sheet));
+      box.appendChild(sheetSection('Détails de la centrale', [o.install, o.contrat, fmtKwc(o.kwc, o.install)].filter(Boolean).join(' · '), stageIndex(o.stage)<=stageIndex('qualif_en_cours') || isExited(o), sheet));
       const cmp=buildRequestCompare(siblings.length>1?siblings:[o], o.id);   // every line of the « Caractéristiques Centrales » file, to fill in place
       if(!o.requestId){ const fr=document.createElement('div'), pm=appendPricingMail(fr, { company:o.company }, [o]);   // a plant on its own has its pricing mail too, first at the pricing steps
         if(pm.mailNow){ box.append(...fr.childNodes); box.appendChild(cmp); } else { box.appendChild(cmp); box.append(...fr.childNodes); } }
@@ -4304,7 +4374,8 @@
     }
     actions.appendChild(oppActionBtn('Voir dans le réseau', ()=>{ closeOppDetail(); openInNetwork('op:'+o.id); }, 'ghost-btn opp-net-btn lite-keep'));
     { const mb=mentionsBlock('op:'+o.id); if(mb) $('opp-detail-body').appendChild(mb); }
-    actions.appendChild(oppActionBtn('Supprimer', async ()=>{ if(!await askConfirm('Supprimer cette fiche du pipeline ?', 'Supprimer')) return; o.deleted=true; touchCrm(o); saveCrm(); closeOppDetail(); renderPipeline(); }, 'ghost-btn danger-btn'));
+    actions.appendChild(oppActionBtn('Supprimer', async ()=>{ if(!await askConfirm('Supprimer cette fiche du pipeline ? (récupérable ensuite dans Archive → Corbeille)', 'Supprimer')) return; o.deleted=true; touchCrm(o); saveCrm(); closeOppDetail(); renderPipeline();
+      notify('Fiche « '+oppName(o)+' » supprimée', { label:'Annuler', fn:()=>{ o.deleted=false; touchCrm(o); saveCrm(); renderPipeline(); } }); }, 'ghost-btn danger-btn'));
     actions.appendChild(oppActionBtn('Fermer', closeOppDetail, 'ghost-btn lite-keep'));
     foldActions($('opp-detail-actions')); $('opp-detail-overlay').classList.remove('hidden'); if(toTop) sheetToTop();
   }
@@ -4313,6 +4384,11 @@
   function closeOppDetail(){ $('opp-detail-overlay').classList.add('hidden'); viewingOppId=null; }
   // Installation sheet: every column of the Pipe / BDD, grouped; empty values shown as "—" so gaps are visible.
   // ---------- Installations of one pricing request: tabs to go from one to the other, and a table to check them side by side ----------
+  // the trade words of the form, explained on hover (cold audit: MES, CR, P50… never defined; « Nom Producteur G » read as a bug)
+  const PQ_HINTS={ mesPrev:'MES : mise en service prévue de la centrale', mesEff:'MES : mise en service réelle', cr1:'CR : compte rendu du RDV 1 envoyé', cr2:'CR2 : compte rendu du RDV 2 envoyé',
+    mwh:'P50 : production annuelle attendue une année sur deux (MWh par an)', kwc:'Puissance crête en kWc (solaire) ou kW (éolien, hydraulique)', contrat:'Le mécanisme : complément de rémunération (CR, AO CRE), sortie d\u2019obligation d\u2019achat (OA), PPA…',
+    qualite:'La fonction du contact (gérant, associé…)', marche:'Le marché visé (spot, PPA…)', ca:'Dossier lié au Crédit Agricole', qualification:'Coché quand le dossier est qualifié (Go)', new:'Coché pour un nouveau producteur',
+    charge:'Le chargé d\u2019affaires qui suit le dossier (initiales)', stade:'Calculé par l\u2019appli d\u2019après l\u2019étape' };
   const pqFieldLabel=k=>{ const f=PQ_FIELDS.find(x=>x.k===k)||PQ_EXTRA_FIELDS.find(x=>x.k===k); return f?f.label:k; };
   // short description of an installation for its line: power · volume · commissioning · technology
   function instLineInfo(x){
@@ -4447,7 +4523,7 @@
     const wrap=document.createElement('div'); wrap.className='os';
     // key figures
     const facts=document.createElement('div'); facts.className='os-facts';
-    [['Puissance',fmtKwc(o.kwc)],['Volume annuel',mwh(o.mwh)],['Mise en service',o.mesEff?o.mesEff+' (effective)':o.mesPrev],['Lieu',o.commune?o.commune+' ('+(o.cp||(o.dept||'').split(' ')[0])+')':(o.dept||'')]]
+    [['Puissance',fmtKwc(o.kwc, o.install)],['Volume annuel',mwh(o.mwh)],['Mise en service',o.mesEff?o.mesEff+' (effective)':o.mesPrev],['Lieu',o.commune?o.commune+' ('+(o.cp||(o.dept||'').split(' ')[0])+')':(o.dept||'')]]
       .forEach(([l,v])=>{ const d=document.createElement('div'); d.className='os-fact'+(v?'':' empty'); d.innerHTML='<span></span><b></b>'; d.firstChild.textContent=l; d.lastChild.textContent=v||'à compléter'; facts.appendChild(d); });
     wrap.appendChild(facts);
     const grid=document.createElement('div'); grid.className='os-grid'; wrap.appendChild(grid);
@@ -4580,7 +4656,7 @@
         const eng=list.length && list.every(isEngageant), mixed=!eng && list.some(isEngageant);
         const lbl=st.key==='pricing_indicatif'?(eng?'Pricing engageant':mixed?'Pricing indicatif / engageant':st.label):st.key==='pricing_ferme' && eng?'Pricing ferme · inclus':st.label;
         if(st.key==='pricing_ferme' && eng && !n) row.classList.add('skipped');
-        row.innerHTML='<span class="ost-mark">'+(cls==='done'?'✓':cls==='current'?'●':'')+'</span><span class="ost-l">'+escapeHtml(lbl)+'</span><span class="ost-m">'+(st.who!=='Com'?'<span class="ost-who">'+st.who+'</span>':'')+(list.length>1&&n?'<b class="ost-n">'+n+'</b>':'')+'</span>';
+        row.innerHTML='<span class="ost-mark">'+(cls==='done'?'✓':cls==='current'?'●':'')+'</span><span class="ost-l">'+escapeHtml(lbl)+'</span><span class="ost-m">'+(st.who!=='Com'?'<span class="ost-who">'+(WHO[st.who]||st.who)+'</span>':'')+(list.length>1&&n?'<b class="ost-n">'+n+'</b>':'')+'</span>';
         row.title=list.length>1?'Placer les '+list.length+' installations à cette étape':'Placer l\u2019installation à cette étape';
         row.onclick=async()=>{ if(list.every(x=>x.stage===st.key)) return;
           // one step forward: at once; several steps at a time, or back: asked first (a click on the wrong line is easy)
@@ -4611,6 +4687,12 @@
   // the deal moves on (accepted, refused, any other step) → that task disappears alone if it was not done.
   // A request's installations share one task, which goes once none of them is waiting any more.
   const RELANCE_DAYS=7;
+  // counted from the day the offer left when the sheet knows it (cold audit: 7 days after the offer, not after the click), never before tomorrow
+  function relanceDue(o){
+    const sent=pqToDate(o.dateOffre||''); if(!sent) return pqAddDays(RELANCE_DAYS);
+    const fromSent=new Date(sent.getTime()+RELANCE_DAYS*864e5), tomorrow=new Date(Date.now()+864e5);
+    return toISO(fromSent>tomorrow?fromSent:tomorrow);
+  }
   function relanceOnMove(o, key){
     if(!o || o.kind!=='installation' || o.stage===key) return;
     const req=o.requestId && opportunities.find(x=>x.id===o.requestId && !x.deleted), target=req||o;
@@ -4618,7 +4700,8 @@
     if(key==='offre_attente'){
       if(open()) return;
       const sibs=req?requestInstalls(req.id).filter(x=>!isExited(x)):[o];
-      const t=createTask({ title:'Relancer le producteur sur l\u2019offre — '+(sibs.length>1?sibs.length+' installations':oppName(o)), client:o.company||'', due:pqAddDays(RELANCE_DAYS), urgency:'moyenne', status:'a_faire',
+      const due=relanceDue(o);
+      const t=createTask({ title:'Relancer le producteur sur l\u2019offre — '+(sibs.length>1?sibs.length+' installations':oppName(o)), client:o.company||'', due, urgency:'moyenne', status:'a_faire',
         description:'Créée seule quand l\u2019offre est partie ; elle disparaît seule quand le dossier avance.' });
       t.opportunityId=target.id; t.autoRelance=true; t.stageLabel=oppStage('offre_attente').label; touch(t); saveTasks(); render();
     } else if(o.stage==='offre_attente'){
@@ -4659,7 +4742,7 @@
     const same=moves.every(m=>m.key===moves[0].key && m.o.stage===o.stage);
     const label=moves.length>1?moves.length+' installations ('+o.company+')':'« '+o.company+' — '+oppName(o)+' »';
     $('stage-advance-text').textContent=same
-      ? label+' : passer de « '+stageLabel(o.stage, o)+' » à « '+next.label+' »'+(next.who!=='Com'?' (porté par '+(WHO[next.who]||next.who)+', la tâche sera « en attente »)':'')+' ?'
+      ? label+' : passer de « '+stageLabel(o.stage, o)+' » à « '+next.label+' »'+(next.who!=='Com' && moves[0].key!=='offre_attente'?' (c\u2019est alors à '+(WHO[next.who]||next.who)+' d\u2019agir : la tâche sera « en attente »)':'')+' ?'
       : label+' : chaque installation passe à son étape suivante ('+moves.map(m=>oppName(m.o)+' → '+oppStage(m.key).label).join(', ')+') ?';
     $('stage-advance-nogo').classList.toggle('hidden', !moves.every(m=>m.o.stage==='qualif_en_cours'));
     $('stage-create-task').checked=true; $('stage-due').value=next.who!=='Com'?pqAddDays(7):''; $('stage-urgency').value='moyenne'; $('stage-due-row').style.display='flex';
@@ -4689,6 +4772,8 @@
       });
     }
     const back=closeStageAdvance(); saveCrm(); render(); renderPipeline();
+    { const k=moves[0].key, rel=k==='offre_attente'?tasks.find(t=>!t.deleted && !t.archived && t.autoRelance && list.some(o=>t.opportunityId===o.id || t.opportunityId===o.requestId)):null;
+      notify((moves.length>1?moves.length+' installations passées':'Passée')+' à « '+stageLabel(k, list[0])+' »'+(rel && rel.due?' · relance créée pour le '+pqIsoToFr(rel.due):'')); }
     if(moves.some(m=>m.key==='pricing_indicatif')){ const reqId=list[0].requestId; if(reqId) openRequestDetail(reqId, list.map(x=>x.id)); else openOppDetail(list[0].id); }
     else if(back) back();   // started from a sheet: back to it, on the new step
   }
@@ -4704,7 +4789,7 @@
   // ----- Pricing requests (several installations, one mail) -----
   // « Maintenant » : what the current step asks for, with the dates that matter at that step
   // ---------- « Étape en cours » : the step, who has it and since when, its checklist, one button to move on ----------
-  const WHO={ Com:'À moi', Ops:'Ops', Jur:'Juridique', Client:'Client', Dir:'Direction' };
+  const WHO={ Com:'À moi', Ops:'Ops', Jur:'Juridique', Client:'Producteur', Dir:'Direction' };   // in full on chips and sheets (cold audit: « Jur », « Dir », « Client »)
   function daysInStage(o){ const log=(o.stageLog||[]).filter(e=>e && e.stage===o.stage && e.at>1e12); const t=log.length?log[log.length-1].at:(o.updatedAt>1e12?o.updatedAt:0); return t?Math.max(0,Math.floor((Date.now()-t)/864e5)):null; }
   const reqMissing=list=>list.reduce((s,x)=>s+CARACT_ROWS.filter(l=>REQ_NEEDED.has(caractKey(l)) && caractValue(x,l)==='').length,0);
   // each step's checklist. auto: known by the app (ticked by itself) · date: a date of the sheet, typed right there
@@ -4788,9 +4873,9 @@
           ul.appendChild(row); });
         main.appendChild(ul);
         const left=items.filter(i=>!i.done).length;
-        if(left){ const n=document.createElement('div'); n.className='sp-note'; n.textContent=left+' point'+(left>1?'s restent':' reste')+' à cocher — le bouton marche quand même.'; main.appendChild(n); } } }
-    // one button to move on, the way out next to it
-    if(!window.TODO_LITE){
+        if(left){ const n=document.createElement('div'); n.className='sp-note'; n.textContent=left+' point'+(left>1?'s restent':' reste')+' à cocher : conseillé, pas obligatoire pour passer à la suite.'; main.appendChild(n); } } }
+    // one button to move on, the way out next to it (on the phone version too: cold audit, the boss could not move a deal on)
+    {
       const row=document.createElement('div'); row.className='sp-actions';
       const btn=(label, cls, fn)=>{ const b=document.createElement('button'); b.type='button'; b.className=cls; b.textContent=label; b.onclick=fn; row.appendChild(b); return b; };
       const nextKey=nextStageKey(first), next=nextKey?oppStage(nextKey):null;
@@ -4812,14 +4897,24 @@
       if(tk){ const m=document.createElement('div'); m.className='sp-sub'+(tk.status==='en_attente'?' wait':''); m.textContent=[tk.status==='en_attente'?'En attente':'', tk.due?'pour le '+pqIsoToFr(tk.due):''].filter(Boolean).join(' · '); b.appendChild(m);
         b.classList.add('click'); b.onclick=()=>{ closeOppDetail(); openTaskEverywhere(tk.id); }; } }
     { const o=first, mail=(o.mail||'').toLowerCase(), crm=mail && contacts.find(c=>!c.deleted && (c.email||'').toLowerCase()===mail);
-      const name=[o.prenom,(o.nom||'')].filter(Boolean).join(' ')||(crm?[crm.firstName,crm.lastName].filter(Boolean).join(' '):''), tel=o.tel||(crm?crm.phone1:''), role=o.qualite||(crm&&crm.role)||'';
-      const b=box('Contact'); const d=document.createElement('div'); d.className='sp-big'; d.textContent=[name, role].filter(Boolean).join(' · ')||'Aucun contact sur la fiche'; b.appendChild(d);
+      let name=[o.prenom,(o.nom||'')].filter(Boolean).join(' ')||(crm?[crm.firstName,crm.lastName].filter(Boolean).join(' '):''), tel=o.tel||(crm?crm.phone1:''), role=o.qualite||(crm&&crm.role)||'', mailShown=mail;
+      // no contact on the sheet: the company's own contact (cold audit: « Aucun contact » while the company has one)
+      const co=o.producteur||o.company||'', mate=!name && co?contacts.find(c=>!c.deleted && c.company && sameCo(c.company, co)):null;
+      if(mate){ name=[mate.firstName,mate.lastName].filter(Boolean).join(' '); role=mate.role||''; tel=mate.phone1||''; mailShown=(mate.email||'').toLowerCase(); }
+      const b=box('Contact'); const d=document.createElement('div'); d.className='sp-big'; d.textContent=[name, role].filter(Boolean).join(' · ')||'Pas encore de contact'; b.appendChild(d);
+      if(mate){ const s=document.createElement('div'); s.className='sp-sub'; s.textContent='contact de '+mate.company; b.appendChild(s); }
       if(tel){ const a=document.createElement('a'); a.className='os-link'; a.href='tel:'+tel.replace(/[^\d+]/g,''); a.textContent=tel; b.appendChild(a); }
-      if(mail){ const a=document.createElement('a'); a.className='os-link'; a.href='mailto:'+mail; a.textContent=mail; b.appendChild(a); }
+      if(mailShown){ const a=document.createElement('a'); a.className='os-link'; a.href='mailto:'+mailShown; a.textContent=mailShown; b.appendChild(a); }
+      if(mate && !window.TODO_LITE){ const l=document.createElement('button'); l.type='button'; l.className='sp-link'; l.textContent='Lier à la fiche'; l.title='Écrire ce contact sur la fiche (et dans le Pipe Excel)';
+        l.onclick=()=>{ list.filter(x=>!x.deleted && !x.nom && !x.mail).forEach(x=>{ x.prenom=mate.firstName||''; x.nom=mate.lastName||''; x.mail=mate.email||''; x.tel=mate.phone1||''; x.qualite=mate.role||''; touchCrm(x); }); saveCrm(); reopen(); };
+        b.appendChild(l); }
+      if(!name && !window.TODO_LITE && o.kind==='installation'){ const l=document.createElement('button'); l.type='button'; l.className='sp-link'; l.textContent='Ajouter'; l.onclick=()=>{ closeOppDetail(); openOppForm({ editId:o.id }); }; b.appendChild(l); }
       if(!window.TODO_LITE){ const c=document.createElement('button'); c.type='button'; c.className='sp-call'; c.textContent='Mode appel'; c.title='Un écran pour l\u2019appel : ce qu\u2019il faut demander, tes notes, les chiffres repérés au vol'; c.onclick=()=>openCallMode(list, reopen); b.appendChild(c); } }
     { const kw=live.reduce((s2,x)=>s2+kwcNum(x),0), mwh=live.reduce((s2,x)=>s2+(pqNum(String(x.mwh||''))||0),0), b=box('Chiffres'); const g=document.createElement('div'); g.className='sp-figs';
       [['Puissance',kw?fmtKwc(kw):'—'],['P50',mwh?Math.round(mwh).toLocaleString('fr-FR')+' MWh':'—'],['Contrat',[first.contrat, first.duree?first.duree+' ans':''].filter(Boolean).join(' · ')||'—']].forEach(([l,v])=>{ const c=document.createElement('div'); c.innerHTML='<span></span><b></b>'; c.firstChild.textContent=l; c.lastChild.textContent=v; g.appendChild(c); });
-      b.appendChild(g); }
+      b.appendChild(g);
+      // a soft check on the yield (cold audit: « 309 kWh/kWc » went to pricing unnoticed)
+      if(kw && mwh && live.every(x=>/^PV$/i.test(x.install||'PV'))){ const y=Math.round(mwh*1000/kw); if(y<700 || y>1700){ const w=document.createElement('div'); w.className='sp-sub wait'; w.textContent='Productible '+y.toLocaleString('fr-FR')+' kWh/kWc : à vérifier (un PV en France fait d\u2019habitude 900 à 1 500).'; b.appendChild(w); } } }
     return wrap;
   }
   // a folded section of the sheet (open when the step needs it)
@@ -4858,7 +4953,7 @@
       if((x.notesLog||[]).length) keep.notesLog=(keep.notesLog||[]).concat(x.notesLog).sort((a,b)=>a.at-b.at);
       if(x.createdAt && (!keep.createdAt || x.createdAt<keep.createdAt)) keep.createdAt=x.createdAt;
       tasks.forEach(t=>{ if(t.opportunityId===x.id){ t.opportunityId=keep.id; touch(t); } });
-      x.deleted=true; touchCrm(x); });
+      x.deleted=true; x.mergedInto=keep.id; touchCrm(x); });
     touchCrm(keep); saveTasks(); saveCrm(); renderPipeline(); render();
   }
   // duplicates are serious (MWc counted twice, two lines in the Pipe): a banner at the top of every page while there are some (backlog decision 10)
@@ -4893,7 +4988,7 @@
       if(ig.length){ const h=document.createElement('h4'); h.className='dup-h'; h.textContent='Installations saisies deux fois · '+ig.length; body.appendChild(h);
         ig.forEach((g,gi)=>{ const sec=document.createElement('section'); sec.className='dup-group';
           g.forEach((o,i)=>{ const l=document.createElement('label'); l.className='dup-row'; l.innerHTML='<input type="radio" name="dupi'+gi+'"><b></b><span></span>'; l.querySelector('input').checked=i===0; l.querySelector('input').value=o.id;
-            l.querySelector('b').textContent=(o.company||'')+' — '+oppName(o); l.querySelector('span').textContent=[stageLabel(o.stage, o), fmtKwc(o.kwc), mwhText(o.mwh), o.createdAt>1e12?'créée le '+new Date(o.createdAt).toLocaleDateString('fr-FR'):''].filter(Boolean).join(' · ');
+            l.querySelector('b').textContent=(o.company||'')+' — '+oppName(o); l.querySelector('span').textContent=[stageLabel(o.stage, o), fmtKwc(o.kwc, o.install), mwhText(o.mwh), o.createdAt>1e12?'créée le '+new Date(o.createdAt).toLocaleDateString('fr-FR'):''].filter(Boolean).join(' · ');
             sec.appendChild(l); });
           const acts=document.createElement('div'); acts.className='dup-acts';
           const m=document.createElement('button'); m.type='button'; m.className='dup-merge'; m.textContent='Garder celle cochée, fusionner';
@@ -5011,7 +5106,7 @@
       card.appendChild(sel);
     }
     const lots=[...new Set(all.map(o=>o.lot).filter(Boolean))];
-    box.appendChild(sheetSection('Installations', all.length+' installation'+(all.length>1?'s':'')+(lots.length?' · '+lots.length+' lot'+(lots.length>1?'s':''):'')+' · '+all.slice(0,3).map(o=>oppName(o)+(o.kwc?' '+fmtKwc(o.kwc):'')).join(' · ')+(all.length>3?'…':''), all.length<=6, card));
+    box.appendChild(sheetSection('Installations', all.length+' installation'+(all.length>1?'s':'')+(lots.length?' · '+lots.length+' lot'+(lots.length>1?'s':''):'')+' · '+all.slice(0,3).map(o=>oppName(o)+(o.kwc?' '+fmtKwc(o.kwc, o.install):'')).join(' · ')+(all.length>3?'…':''), all.length<=6, card));
     // the characteristics file and the pricing mail (open when the step needs them), the history
     const mailFrag=document.createElement('div'), pm=appendPricingMail(mailFrag, req, list), mailNow=pm.mailNow, cmp=list.length?buildRequestCompare(list, null):null;
     if(mailNow){ box.append(...mailFrag.childNodes); if(cmp) box.appendChild(cmp); } else { if(cmp) box.appendChild(cmp); box.append(...mailFrag.childNodes); }
@@ -5377,7 +5472,7 @@
 
   function makeManageChip(name,hex,count,onDelete,onRename){
     const chip=document.createElement('span'); chip.className='manage-chip';
-    chip.style.color=hex; chip.style.background=hex+'22'; chip.style.border='1px solid '+hex+'55';
+    chip.style.color=readableOnDark(hex); chip.style.background=hex+'22'; chip.style.border='1px solid '+hex+'55';
     const label=document.createElement('span'); label.textContent=name; chip.appendChild(label);
     if(count){ const c=document.createElement('span'); c.className='chip-count'; c.textContent=count; chip.appendChild(c); }
     const editBtn=document.createElement('button'); editBtn.title='Renommer';
@@ -5480,7 +5575,7 @@
     if(badge){
       if(!open.length){ badge.classList.add('hidden'); } else { badge.classList.remove('hidden'); badge.textContent=open.length; badge.classList.toggle('overdue',open.some(t=>dueStatus(t.due)==='overdue')); }
     }
-    if(headStats) headStats.textContent=open.length;
+    if(headStats) headStats.textContent=open.length+' tâche'+(open.length>1?'s':'')+' ouverte'+(open.length>1?'s':'');
   }
 
   // monthly: the same day of the month, kept even after a shorter month (31 jan → 28/29 feb → 31 mar)
@@ -5499,9 +5594,10 @@
       let nd=nextRecurDate(base,t.recur.freq,t.recur.day);
       if(base<today){ let guard=0; while(nd<=today && guard++<400) nd=nextRecurDate(nd,t.recur.freq,t.recur.day); }   // done late: the next one comes after today
       const within=!t.recur.until || nd<=t.recur.until;
-      if(within){ t.due=nd; if(t.subtasks) t.subtasks.forEach(s=>s.done=false); t.status='a_faire'; touch(t); saveTasks(); render(); return; }
+      if(within){ t.due=nd; if(t.subtasks) t.subtasks.forEach(s=>s.done=false); t.status='a_faire'; touch(t); saveTasks(); render(); notify('Fait · prochaine fois le '+pqIsoToFr(nd)); return; }
     }
     t.archived=true; t.archivedAt=Date.now(); touch(t); saveTasks(); render(); renderArchive();
+    notify('Tâche validée (rangée dans Archive)', { label:'Annuler', fn:()=>restoreTask(id) });
     if(typeof maybeOfferStageAdvance==='function') maybeOfferStageAdvance(t);
   }
   function untrashTask(id){ const t=tasks.find(x=>x.id===id); if(t){ t.deleted=false; touch(t); saveTasks(); render(); renderArchive(); } }
@@ -5515,6 +5611,7 @@
     t.deleted=true; touch(t);
     if(selectedTaskId===id)selectedTaskId=null; if(editingId===id)editingId=null;
     saveTasks(); render(); renderArchive();
+    notify('Tâche supprimée', { label:'Annuler', fn:()=>untrashTask(id) });
   }
 
   function findExistingCI(list, name){
@@ -6159,6 +6256,13 @@
   $('pipe-exited-toggle').onclick=()=>{ pipeShowExited=!pipeShowExited; renderPipeline(); };
   $('pipe-cols-toggle').onclick=()=>{ pipeDash=false; pipeMeet=false; pipeMap=false; pipeList=false; lsSet('pipe-list','0'); renderPipeline(); };
   // « ⋯ »: opens under the button, closes on a choice, a click elsewhere or Escape
+  // small drop-down menus of a toolbar (Contacts: « Ajouter depuis… », « Exporter vers… ») — cold audit: 7 flat buttons
+  document.querySelectorAll('.bar-menu').forEach(w=>{ const btn=w.querySelector('.bar-menu-btn'), menu=w.querySelector('.bar-menu-list');
+    const close=()=>{ menu.hidden=true; btn.setAttribute('aria-expanded','false'); };
+    btn.addEventListener('click', e=>{ e.stopPropagation(); const open=menu.hidden; document.querySelectorAll('.bar-menu-list').forEach(m=>{ m.hidden=true; }); menu.hidden=!open; btn.setAttribute('aria-expanded', String(open)); });
+    menu.addEventListener('click', e=>{ if(e.target.closest('button')) close(); });
+    document.addEventListener('click', e=>{ if(!menu.hidden && !w.contains(e.target)) close(); });
+    document.addEventListener('keydown', e=>{ if(e.key==='Escape' && !menu.hidden){ e.stopPropagation(); close(); btn.focus(); } }, true); });
   { const btn=$('pipe-more-btn'), menu=$('pipe-more-menu');
     const close=()=>{ menu.hidden=true; btn.setAttribute('aria-expanded','false'); };
     btn.onclick=e=>{ e.stopPropagation(); menu.hidden=!menu.hidden; btn.setAttribute('aria-expanded', String(!menu.hidden)); if(!menu.hidden){ const f=[...menu.querySelectorAll('button')].find(x=>x.offsetParent); if(f) f.focus(); } };
@@ -6168,7 +6272,7 @@
   $('pipe-dash-toggle').onclick=()=>{ pipeDash=!pipeDash; if(pipeDash){ pipeMeet=false; pipeMap=false; } renderPipeline(); };
   $('tasks-views-btn').onclick=e=>{ e.stopPropagation(); openViewsMenu('tasks', e.currentTarget); };
   $('pipe-views-btn').onclick=e=>{ e.stopPropagation(); openViewsMenu('pipeline', e.currentTarget); };
-  $('pipe-meet-toggle').onclick=()=>{ pipeMeet=!pipeMeet; if(pipeMeet){ pipeDash=false; pipeMap=false; } renderPipeline(); };
+  $('pipe-meet-toggle').onclick=()=>{ pipeMeet=!pipeMeet; meetStuckOnly=false; if(pipeMeet){ pipeDash=false; pipeMap=false; } renderPipeline(); };
   $('pipe-xs-btn').onclick=()=>openExcelSync({ scope:'pipe' });
   if($('ai-section')) $('ai-section').hidden=!aiOn();
   { const st=()=>{ const k=aiKey(); $('ai-key-status').textContent=k?'Clé enregistrée (…'+k.slice(-4)+'). Vide le champ et enregistre pour l\u2019oublier.':'Pas de clé : copier-coller avec claude.ai.'; };
@@ -6597,7 +6701,7 @@
       if(el.dataset.kbd) return; el.dataset.kbd='1';
       if(!el.hasAttribute('tabindex')) el.tabIndex=0;
       const check=el.classList.contains('task-check')||el.classList.contains('st-check');
-      el.setAttribute('role', check?'checkbox':'button');
+      el.setAttribute('role', check?'checkbox':el.querySelector('button, a[href], input')?'group':'button');   // no button inside a button (WCAG 4.1.2)
       if(check) el.setAttribute('aria-checked', el.classList.contains('on')?'true':'false');
       if(el.classList.contains('co-star')){ const i=[...el.parentNode.children].indexOf(el)+1; el.setAttribute('aria-label', i+' étoile'+(i>1?'s':'')); }
       const lab=el.getAttribute('aria-label')||el.title||el.textContent.trim().replace(/\s+/g,' ').slice(0,90); if(lab) el.setAttribute('aria-label', lab);
@@ -6752,7 +6856,7 @@
     live.filter(o=>o.kind==='request').forEach(r=>{ const n=live.filter(o=>o.requestId===r.id).length; if(!n) return;
       link(node('rq:'+r.id, 'request', 'Demande · '+(r.company||''), n+' installation'+(n>1?'s':''), ()=>{ gsTab('pipeline'); setTimeout(()=>openRequestDetail(r.id),30); }), coId(r.company)); });
     live.filter(o=>o.kind!=='request' && o.stage!=='converti').forEach(o=>{
-      const pre=o.kind==='prequal', id=node('op:'+o.id, pre?'prequal':'installation', pre?o.company+' (pré-qualif)':oppName(o), [o.company, stageLabel(o.stage, o), fmtKwc(o.kwc)].filter(Boolean).join(' · '), ()=>{ gsTab('pipeline'); setTimeout(()=>openOppDetail(o.id),30); });
+      const pre=o.kind==='prequal', id=node('op:'+o.id, pre?'prequal':'installation', pre?o.company+' (pré-qualif)':oppName(o), [o.company, stageLabel(o.stage, o), fmtKwc(o.kwc, o.install)].filter(Boolean).join(' · '), ()=>{ gsTab('pipeline'); setTimeout(()=>openOppDetail(o.id),30); });
       link(id, coId(o.company)); if(o.producteur && pqFold(o.producteur)!==pqFold(o.company)) link(id, coId(o.producteur));
       if(o.requestId && seen.has('rq:'+o.requestId)) link(id, 'rq:'+o.requestId);
       if(o.mail && byMail.has(String(o.mail).toLowerCase())) link(id, byMail.get(String(o.mail).toLowerCase()));
@@ -6832,7 +6936,7 @@
     const inNext=new Set(next.map(x=>x.id).filter(Boolean));
     section(colL,'À venir',next.map(x=>x.r),'Rien de daté pour ce client.');
     section(colL,'Contacts',cts.map(c=>row([c.firstName,c.lastName].filter(Boolean).join(' ')||'(sans nom)',[c.role,c.email].filter(Boolean).join(' · '),c.phone1||c.phone2||'',()=>openContactEverywhere(c.id))),'Aucun contact.');
-    section(colL,'Pipeline',live.map(o=>row(oppName(o),stageLabel(o.stage, o)+(o.dept?' · '+o.dept:''),fmtKwc(o.kwc),()=>{ gsTab('pipeline'); setTimeout(()=>openOppDetail(o.id),30); })),'Aucune opportunité en cours.'+(gone?' ('+gone+' terminée'+(gone>1?'s':'')+')':''));
+    section(colL,'Pipeline',live.map(o=>row(oppName(o),stageLabel(o.stage, o)+(o.dept?' · '+o.dept:''),fmtKwc(o.kwc, o.install),()=>{ gsTab('pipeline'); setTimeout(()=>openOppDetail(o.id),30); })),'Aucune opportunité en cours.'+(gone?' ('+gone+' terminée'+(gone>1?'s':'')+')':''));
     section(colR,'Portefeuille',parc.slice().sort((a,b)=>(a.statut==='Gagné'?0:1)-(b.statut==='Gagné'?0:1)||(a.fin||'9').localeCompare(b.fin||'9')).slice(0,8)
       .map(p=>row(p.inst||p.prod||'(sans nom)',[p.statut,p.fin?'fin '+pqIsoToFr(p.fin):''].filter(Boolean).join(' · '),p.kwc?fmtKwc(p.kwc):'',()=>openParcItem(p))),
       parcData?'Aucun contrat dans le Suivi Agrégation.':'Charge le Suivi Agrégation dans Portefeuille pour voir les contrats.');
@@ -6922,7 +7026,7 @@
     if(k==='co:'){ const d=peekLines('co:'+label); return d?d.L:[]; }
     if(k==='ct:'||k==='op:'){ const d=peekLines(id); return d?d.L.filter(x=>!(k==='op:' && !x[0] && x===d.L[0])):[]; }
     if(k==='rq:'){ const l=opportunities.filter(o=>!o.deleted && o.requestId===v && o.kind==='installation'), kw=l.reduce((s,o)=>s+kwcNum(o),0), st=[...new Set(l.map(o=>stageLabel(o.stage, o)))];
-      return [['Installations', l.length+(kw?' · '+(Math.round(kw/100)/10).toLocaleString('fr-FR')+' MWc':'')], ['Étape', st.join(', ')]].concat(l.slice(0,5).map((o,i)=>[i?'':'Centrales', oppName(o)+(o.kwc?' · '+fmtKwc(o.kwc):'')])); }
+      return [['Installations', l.length+(kw?' · '+(Math.round(kw/100)/10).toLocaleString('fr-FR')+' MWc':'')], ['Étape', st.join(', ')]].concat(l.slice(0,5).map((o,i)=>[i?'':'Centrales', oppName(o)+(o.kwc?' · '+fmtKwc(o.kwc, o.install):'')])); }
     if(k==='tk:'){ const t=tasks.find(x=>x.id===v); if(!t) return []; const L=[];
       if(t.client) L.push(['Client', t.client]); L.push(['Statut', (STATUS_META[t.status]||{}).label||t.status||'']); if(t.urgency) L.push(['Urgence', t.urgency]);
       if(t.due) L.push(['Échéance', pqIsoToFr(t.due)]); if(t.description) L.push(['Détail', plainLinks(t.description).slice(0,120)]); return L; }
@@ -6952,7 +7056,7 @@
     const co=top(allCompanyNames().filter(n=>hit(n)).map(n=>{ const nC=activeContacts().filter(c=>c.company===n).length, nO=activeOpportunities().filter(o=>o.company===n).length;
       return { ic:'S', title:n, sub:[nC?nC+' contact'+(nC>1?'s':''):'', nO?nO+' opportunité'+(nO>1?'s':''):''].filter(Boolean).join(' · ')||'Société', go:()=>openCompany(n) }; }),5);
     if(co.length) groups.push(['Sociétés',co]);
-    const op=top(opportunities.filter(o=>!o.deleted && o.kind!=='request' && hit(oppName(o),o.company,o.producteur,o.dept,o.commune,o.cp,o.spv,o.siret,o.charge,reqLabelOf(o),codeAffaire(o))).map(o=>({ ic:'P', title:oppName(o), sub:[o.company, stageLabel(o.stage, o)].filter(Boolean).join(' · '), right:fmtKwc(o.kwc), go:()=>{ gsTab('pipeline'); setTimeout(()=>openOppDetail(o.id),30); } })),6);
+    const op=top(opportunities.filter(o=>!o.deleted && o.kind!=='request' && hit(oppName(o),o.company,o.producteur,o.dept,o.commune,o.cp,o.spv,o.siret,o.charge,reqLabelOf(o),codeAffaire(o))).map(o=>({ ic:'P', title:oppName(o), sub:[o.company, stageLabel(o.stage, o)].filter(Boolean).join(' · '), right:fmtKwc(o.kwc, o.install), go:()=>{ gsTab('pipeline'); setTimeout(()=>openOppDetail(o.id),30); } })),6);
     if(op.length) groups.push(['Pipeline',op]);
     // a block named by hand (« Lot toitures »): the request itself
     const rq=opportunities.filter(r=>!r.deleted && r.kind==='request' && r.label && hit(r.label, r.company)).slice(0,3).map(r=>({ ic:'▦', title:r.company+' · '+r.label, sub:requestInstalls(r.id).length+' installations', go:()=>{ gsTab('pipeline'); setTimeout(()=>openRequestDetail(r.id),30); } }));
@@ -7165,6 +7269,17 @@
     if(m){ if(opportunities.some(o=>o.id===m[1] && !o.deleted)){ gsTab('pipeline'); openOppDetail(m[1]); } return; }
     const t=document.querySelector('.tab[data-tab="'+h+'"]'); if(t) t.click();
   }
+  // an address typed or a link followed while the app is open (cold audit: #parc pasted in the open tab did nothing)
+  let hashByHistory=false;   // Back / Forward (and the app's own history steps) fire popstate first: those are handled there
+  window.addEventListener('popstate', e=>{ if(e.state && e.state.todo){ hashByHistory=true; setTimeout(()=>{ hashByHistory=false; }, 0); } });   // a typed address comes with no state
+  window.addEventListener('hashchange', ()=>{
+    if(hashByHistory) return;
+    const h=decodeURIComponent(location.hash.slice(1)); if(!h || window.TODO_WIDGET) return;
+    const m=/^fiche\/(.+)$/.exec(h), cur=document.querySelector('.tab.active');
+    if(m ? viewingOppId===m[1] : (cur && cur.dataset.tab===h)) return;
+    if(m && !$('opp-detail-overlay').classList.contains('hidden')) closeOppDetail();
+    openFromAddress();
+  });
   // ---------- What other files (js/network.js, the note), the tests and the console call in this one, in one place (code audit C12) ----------
   Object.assign(window, {
     todoSettingsChanged: prefsToNote,

@@ -401,8 +401,8 @@ with sync_playwright() as p:
     page.click("#quick-add-input"); page.keyboard.type("?")
     check(not page.is_visible("#guide-overlay") and page.input_value("#quick-add-input") == "?", "« ? » typed in a field stays a character")
     page.fill("#quick-add-input", "")
-    page.click('[data-tab="contacts"]'); page.click("#sig-paste-btn"); page.keyboard.press("Escape")
-    page.click("#vcf-btn"); page.wait_for_timeout(100); page.keyboard.press("Escape")
+    page.click('[data-tab="contacts"]'); page.click("#contacts-in-btn"); page.click("#sig-paste-btn"); page.keyboard.press("Escape")
+    page.click("#contacts-out-btn"); page.click("#vcf-btn"); page.wait_for_timeout(100); page.keyboard.press("Escape")
     check(not page.is_visible("#sig-paste-overlay") and not page.is_visible("#vcf-overlay"), "Escape closes the small windows (signature, contacts to the phone)")
     page.keyboard.press("Control+f")
     check(page.evaluate("document.activeElement.id") == "contact-search", "Ctrl+F: the search of the tab on screen (Contacts)")
@@ -494,7 +494,7 @@ with sync_playwright() as p:
     page, errors = new_page(browser, viewport={"width": 1100, "height": 720})
     page.goto(URL); page.click('[data-tab="tasks"]')
     check(page.is_visible("#postit"), "small screen: the note is open")
-    page.click("text=Tâche complète")
+    page.click("text=Tâche détaillée")
     sb, nb = page.locator("#submit-task").bounding_box(), page.locator("#postit").bounding_box()
     check(page.is_visible("#postit") and sb["x"] + sb["width"] <= nb["x"], f"small screen: the note stays in view, « Ajouter » makes room beside it ({sb}, {nb})")
     page.fill("#f-title", "Depuis le formulaire"); page.click("#submit-task")
@@ -986,7 +986,7 @@ with sync_playwright() as p:
     page, errors = new_page(browser, ph_seed, viewport={"width": 390, "height": 800}, is_mobile=True, has_touch=True,
                             user_agent="Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1")
     page.route("http://127.0.0.1:8765/**", lambda r: (calls.append(r.request.url), r.fulfill(status=200, body="{}")))
-    page.goto(URL); page.wait_for_timeout(500)
+    page.goto(URL + "?full"); page.wait_for_timeout(500)   # ?full: the complete version on a phone (a phone gets the phone version by default)
     page.click('[data-tab="pipeline"]'); page.click(".pipe-card:has-text('Toit')")
     acts = page.inner_text("#opp-detail-actions")
     check("Envoyer" not in acts and not calls, f"bridge: no « send to Excel » on a phone, not even on the full version, and no call to the bridge ({calls})")
@@ -1520,7 +1520,7 @@ with sync_playwright() as p:
                  "email": "j@alpha.fr", "phone1": "0612345678", "phone2": "", "relevance": 4, "comment": "", "createdAt": 1, "updatedAt": 1, "deleted": False}]
     page, errors = new_page(browser, {"todo_todo-widget-contacts": json.dumps(contacts)},
                             viewport={"width": 390, "height": 844}, is_mobile=True, has_touch=True)
-    page.goto(URL)
+    page.goto(URL + "?full")
     check(not page.is_visible("#postit"), "post-it minimised by default on phone")
     page.tap('[data-tab="contacts"]')
     check(page.evaluate("document.documentElement.scrollWidth") <= 390, "contacts fit the phone screen")
@@ -1699,7 +1699,7 @@ with sync_playwright() as p:
 
     # --- Contacts: « Coller une signature » pre-fills the contact form
     page, errors = new_page(browser)
-    page.goto(URL); page.click('[data-tab="contacts"]'); page.click("#sig-paste-btn")
+    page.goto(URL); page.click('[data-tab="contacts"]'); page.click("#contacts-in-btn"); page.click("#sig-paste-btn")
     page.fill("#sig-paste-text", "M. Jean DUPONT\nPrésident\nSAS SOLAIRE DU MIDI\nTél : 04 67 11 22 33 - Mob. : 06 12 34 56 78\njean.dupont@solairedumidi.fr")
     page.click("#sig-paste-analyze")
     got = [page.input_value(s_) for s_ in ("#ct-first", "#ct-last", "#ct-role", "#ct-company", "#ct-email", "#ct-phone1", "#ct-phone2")]
@@ -2417,7 +2417,7 @@ with sync_playwright() as p:
     # on an iPhone the address book can't be read: the app first says how to export it as a file
     page.evaluate("Object.defineProperty(navigator, 'userAgent', { get:()=>'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X)' })")
     page.evaluate("window.__dlg.said=[]"); dialog_once(page, accept=False)
-    page.click("#vcf-import-btn"); page.wait_for_timeout(150); said = page.evaluate("window.__dlg.said")
+    page.click("#contacts-in-btn"); page.click("#vcf-import-btn"); page.wait_for_timeout(150); said = page.evaluate("window.__dlg.said")
     check(said and "Exporter" in said[0] and ".vcf" in said[0], f"phone import on iPhone: how to export the contacts first ({said})")
     page.set_input_files("#card-scan-input", files=[{"name": "carte.jpg", "mimeType": "image/jpeg", "buffer": b"fake"}])
     check(eventually(lambda: page.input_value("#ct-first") == "Claire" and page.input_value("#ct-email") == "claire.dubois@helio-ouest.fr" and "Directrice" in page.input_value("#ct-role"), 3000),
@@ -2688,13 +2688,13 @@ Responsable technique
     renew = [t for t in stored(page, "todo-widget-tasks") if t["id"].startswith("renew_")]
     check(lost and lost[0]["stage"] == "perdu" and renew[0].get("archived") and "Non renouvelé" in page.inner_text(".parc-due"),
           "parc: « Non renouvelé » records the renewal as lost and closes its renewal task")
-    page.click('[data-tab="contacts"]'); page.click("#vcf-btn")
+    page.click('[data-tab="contacts"]'); page.click("#contacts-out-btn"); page.click("#vcf-btn")
     check(page.inner_text("#vcf-new") == "1", "vcf: duplicates inside the app count once")
     with page.expect_download() as dl:
         page.click("#vcf-go")
     card = pathlib.Path(dl.value.path()).read_text()
     check(card.count("BEGIN:VCARD") == 1 and "TEL;TYPE=CELL:0611223344" in card and "anne@urba.fr" in card, "vcf: merged card keeps phone and email")
-    page.click("#vcf-close"); page.click("#vcf-btn")
+    page.click("#vcf-close"); page.click("#contacts-out-btn"); page.click("#vcf-btn")
     check(page.inner_text("#vcf-new") == "0", "vcf: a second export only sends new contacts")
     check(not errors, f"no page errors ({errors})")
     page.close()

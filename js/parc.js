@@ -113,13 +113,13 @@ window.TodoParc=(function(){
     const kpis=document.createElement('div'); kpis.className='parc-kpis';
     const kpi=(num,label,sub,cls)=>{ const k=document.createElement('div'); k.className='stat-card'; k.innerHTML='<div class="stat-card-num'+(cls?' '+cls:'')+'">'+escapeHtml(num)+'</div><div class="stat-card-label">'+escapeHtml(label)+'</div>'+(sub?'<div class="parc-kpi-sub">'+escapeHtml(sub)+'</div>':''); kpis.appendChild(k); };
     kpi(fmtGwh(volY), 'Volume agrégé '+yLabel, obj?Math.round(volY/1000/obj*100)+' % de l\u2019objectif ('+obj.toLocaleString('fr-FR')+' GWh)':'', 'accent');
-    kpi(String(active.length), 'Contrats actifs '+yLabel, fmtMwc(active.reduce((s,p)=>s+p.kwc,0)));
+    kpi(String(active.length), 'Contrats avec du volume en '+yLabel, fmtMwc(active.reduce((s,p)=>s+p.kwc,0)));
     kpi(String(soon.length), 'Fins de contrat < '+renewMonths()+' mois', won.filter(p=>p.renouv==='A renouveler').length+' marqués « A renouveler »', soon.length?'crit':'');
     kpi(String(pending.length), 'Offres en attente', fmtMwc(pending.reduce((s,p)=>s+p.kwc,0)));
     body.appendChild(kpis);
     const KPI_KEYS=['vol','active','soon','pending'];
     const KPI_SETS={ vol:active, active:active, soon, pending };
-    const KPI_LABELS={ vol:'Contrats du volume '+yLabel, active:'Contrats actifs '+yLabel, soon:'Fins de contrat < '+renewMonths()+' mois', pending:'Offres en attente' };
+    const KPI_LABELS={ vol:'Contrats du volume '+yLabel, active:'Contrats avec du volume en '+yLabel, soon:'Fins de contrat < '+renewMonths()+' mois', pending:'Offres en attente' };
     app.parcKpiSet=app.parcKpi?KPI_SETS[app.parcKpi]:null; app.parcKpiLabel=app.parcKpi?KPI_LABELS[app.parcKpi]:'';
     kpis.querySelectorAll('.stat-card').forEach((c,i)=>{
       c.dataset.kpi=String(i); c.classList.add('clickable'); c.classList.toggle('on', app.parcKpi===KPI_KEYS[i]);
@@ -136,7 +136,7 @@ window.TodoParc=(function(){
       const c=t.closest && t.closest('.stat-card'); if(!c) return null;
       const i=+c.dataset.kpi;
       if(i===0){ const by={}; active.forEach(p=>{ by[p.cadre||'Autre']=(by[p.cadre||'Autre']||0)+volOf(p); }); return '<b>Volume '+yLabel+'</b>'+PARC_CADRES.filter(k=>by[k]).map(k=>tipRow(PARC_COLORS[k],k,fmtGwh(by[k]))).join('')+(obj?tipRow('','Objectif',obj.toLocaleString('fr-FR')+' GWh'):''); }
-      if(i===1){ const by={}; active.forEach(p=>{ const k=mapTech(p.enr); (by[k]=by[k]||{ n:0, kwc:0 }); by[k].n++; by[k].kwc+=p.kwc; }); return '<b>Contrats actifs '+yLabel+'</b>'+MAP_TECHS.filter(([k])=>by[k]).map(([k,l,col])=>tipRow(col,l,by[k].n+' · '+fmtMwc(by[k].kwc))).join(''); }
+      if(i===1){ const by={}; active.forEach(p=>{ const k=mapTech(p.enr); (by[k]=by[k]||{ n:0, kwc:0 }); by[k].n++; by[k].kwc+=p.kwc; }); return '<b>Contrats avec du volume en '+yLabel+'</b>'+MAP_TECHS.filter(([k])=>by[k]).map(([k,l,col])=>tipRow(col,l,by[k].n+' · '+fmtMwc(by[k].kwc))).join(''); }
       if(i===2){ return '<b>Fins de contrat</b>'+(soon.length?soon.slice().sort((a,b)=>a.fin.localeCompare(b.fin)).slice(0,6).map(p=>tipRow('',p.inst||p.prod,pqIsoToFr(p.fin))).join('')+(soon.length>6?'<span class="muted">+ '+(soon.length-6)+' autres</span>':''):'<span class="muted">Aucune</span>'); }
       if(i===3){ return '<b>Offres en attente</b>'+(pending.length?pending.slice().sort((a,b)=>b.kwc-a.kwc).slice(0,6).map(p=>tipRow('',p.inst||p.prod,p.kwc?fmtKwc(p.kwc):'')).join('')+(pending.length>6?'<span class="muted">+ '+(pending.length-6)+' autres</span>':''):'<span class="muted">Aucune</span>'); }
       return null;
@@ -148,7 +148,7 @@ window.TodoParc=(function(){
     const two=document.createElement('div'); two.className='parc-two';
     const byDev={}; active.forEach(p=>{ byDev[p.dev]=(byDev[p.dev]||0)+volOf(p); });
     two.appendChild(parcBars('Par développeur · '+yLabel, Object.entries(byDev).sort((a,b)=>b[1]-a[1]).slice(0,12), v=>fmtGwh(v)+' · '+Math.round(v/volY*100)+' %',
-      (k,v)=>{ const list=active.filter(p=>p.dev===k); return '<b>'+escapeHtml(k)+'</b>'+tipRow('', 'Volume '+yLabel, fmtGwh(v)+' · '+Math.round(v/volY*100)+' %')+tipRow('', 'Contrats actifs', String(list.length))+tipRow('', 'Puissance', fmtMwc(list.reduce((s,p)=>s+p.kwc,0)))+'<span class="muted">'+escapeHtml(list.slice(0,4).map(p=>p.inst||p.prod).join(', ')+(list.length>4?'…':''))+'</span>'; }));
+      (k,v)=>{ const list=active.filter(p=>p.dev===k); return '<b>'+escapeHtml(k)+'</b>'+tipRow('', 'Volume '+yLabel, fmtGwh(v)+' · '+Math.round(v/volY*100)+' %')+tipRow('', 'Contrats avec volume', String(list.length))+tipRow('', 'Puissance', fmtMwc(list.reduce((s,p)=>s+p.kwc,0)))+'<span class="muted">'+escapeHtml(list.slice(0,4).map(p=>p.inst||p.prod).join(', ')+(list.length>4?'…':''))+'</span>'; }));
     const byReg={}; won.filter(p=>!p.fin || p.fin>=today).forEach(p=>{ const k=p.siteRegion||p.region||'Non renseignée'; byReg[k]=(byReg[k]||0)+p.kwc; });
     const regTotal=Object.values(byReg).reduce((s,v)=>s+v,0)||1;
     two.appendChild(parcBars('Par région des centrales · puissance en portefeuille', Object.entries(byReg).sort((a,b)=>b[1]-a[1]), v=>fmtMwc(v),
@@ -199,6 +199,10 @@ window.TodoParc=(function(){
     const years=parcYearsShown();
     if(!years.length){ wrap.innerHTML+='<p class="parc-muted">Pas de volume renseigné.</p>'; return wrap; }
     const totals=years.map(y=>{ const t={}; PARC_CADRES.forEach(c=>{ t[c]=won.filter(p=>(p.cadre||'Autre')===c).reduce((s,p)=>s+(p.vols[y]||0),0)/1000; }); return t; });
+    { // the title says the figure to keep (cold audit: chart titles named a topic, never the conclusion)
+      const cy=String(new Date().getFullYear()), ci=years.indexOf(cy), sum=i=>PARC_CADRES.reduce((s,c)=>s+totals[i][c],0), f=v=>(Math.round(v*10)/10).toLocaleString('fr-FR');
+      if(ci>=0){ const o=app.parcData.objectives[cy], nx=ci+1<years.length?sum(ci+1):null;
+        wrap.querySelector('.parc-h').textContent=f(sum(ci))+' GWh agrégés en '+cy+(o?' ('+Math.round(sum(ci)/o*100)+' % de l\u2019objectif)':'')+(nx!=null?' ; '+f(nx)+' GWh déjà signés pour '+years[ci+1]:'')+' · volume par année, contrats gagnés'; } }
     const max=Math.max(1,...years.map((y,i)=>Math.max(PARC_CADRES.reduce((s,c)=>s+totals[i][c],0), app.parcData.objectives[y]||0)));
     const step=max>500?200:max>200?100:max>100?50:max>40?20:10, top=Math.ceil(max/step)*step;
     const W=640, H=220, L=40, B=24, T=10, bw=(W-L-10)/years.length;
@@ -406,7 +410,7 @@ window.TodoParc=(function(){
       const back=document.createElement('button'); back.type='button'; back.className='map-back'; back.textContent='← Toute la France'; back.onclick=()=>{ app.parcMapSel=null; app.parcMapView=null; mapRerender(); };
       side.appendChild(back);
       top.innerHTML='<div class="map-eyebrow">'+escapeHtml(dep[1])+' · '+app.parcMapSel+'</div>';
-    } else top.innerHTML='<div class="map-eyebrow">'+escapeHtml(app.parcKpiSet?app.parcKpiLabel:({ won:'Portefeuille signé', pending:'Offres en attente', pipe:'Pipeline' })[app.parcMapLayer])+'</div>';
+    } else top.innerHTML='<div class="map-eyebrow">'+escapeHtml(app.parcKpiSet?app.parcKpiLabel:({ won:'Contrats en cours au '+new Date().toLocaleDateString('fr-FR'), pending:'Offres en attente ou en préparation', pipe:'Pipeline en cours' })[app.parcMapLayer])+'</div>';
     top.innerHTML+='<div class="map-big">'+escapeHtml(fmtMwc(total))+'</div><div class="map-sub">'+scope.length+' installation'+(scope.length>1?'s':'')+'</div>';
     side.appendChild(top);
     const mix=KEYS.map(([k,l,c])=>{ const list=scope.filter(p=>p.tech===k); return { k, l, c, n:list.length, kwc:list.reduce((x,p)=>x+p.kwc,0) }; }).filter(m=>m.n);

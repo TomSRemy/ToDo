@@ -3,7 +3,12 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Todo</title>
+<title>ToDo Agrégation · tâches et affaires</title>
+<meta name="description" content="Le suivi des affaires d'agrégation : tâches du jour, pipeline par étape, portefeuille signé et point marché, au même endroit.">
+<meta name="robots" content="noindex">
+<meta property="og:title" content="ToDo Agrégation">
+<meta property="og:description" content="Tâches du jour, pipeline par étape, portefeuille signé et point marché, au même endroit.">
+<meta property="og:image" content="icons/icon-512.png">
 <link rel="manifest" href="manifest.json" id="app-manifest">
 <script src="js/boot.js"></script>
 <meta name="theme-color" content="#0A0D12">
@@ -28,18 +33,18 @@
   </nav>
   <nav class="app-sidebar">
     <div class="app-sidebar-head">
-      <h1><span class="sidebar-label-text">Tasks</span></h1>
+      <h1><span class="sidebar-label-text">ToDo Agrégation</span></h1>
       <span class="head-stats" id="head-stats">0</span>
     </div>
 
     <div class="tabs">
-      <span class="tab active" data-tab="today" title="Aujourd'hui"><svg class="tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg><span class="sidebar-label-text">Aujourd'hui</span><span class="tab-badge" id="today-badge"></span></span>
-      <span class="tab" data-tab="tasks" title="Tâches"><svg class="tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg><span class="sidebar-label-text">Tâches</span></span>
-      <span class="tab" data-tab="inbox" title="Boîte mail"><svg class="tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg><span class="sidebar-label-text">Boîte mail</span><span class="tab-badge" id="inbox-badge"></span></span>
-      <span class="tab" data-tab="archive" title="Archive"><svg class="tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="21 8 21 21 3 21 3 8"/><rect x="1" y="3" width="22" height="5"/><line x1="10" y1="12" x2="14" y2="12"/></svg><span class="sidebar-label-text">Archive</span></span>
-      <span class="tab" data-tab="contacts" title="Contacts"><svg class="tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg><span class="sidebar-label-text">Contacts</span><span class="tab-badge" id="contacts-badge"></span></span>
-      <span class="tab" data-tab="pipeline" title="Pipeline"><svg class="tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="22" x2="4" y2="15"/><line x1="4" y1="11" x2="4" y2="2"/><line x1="12" y1="22" x2="12" y2="13"/><line x1="12" y1="9" x2="12" y2="2"/><line x1="20" y1="22" x2="20" y2="17"/><line x1="20" y1="13" x2="20" y2="2"/><circle cx="4" cy="13" r="2"/><circle cx="12" cy="11" r="2"/><circle cx="20" cy="15" r="2"/></svg><span class="sidebar-label-text">Pipeline</span></span>
-      <span class="tab" data-tab="parc" title="Portefeuille"><svg class="tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="12" width="4" height="9"/><rect x="10" y="7" width="4" height="14"/><rect x="17" y="3" width="4" height="18"/></svg><span class="sidebar-label-text">Portefeuille</span></span>
+      <span class="tab active" data-tab="today" title="Aujourd'hui : en retard, dû aujourd'hui et cette semaine"><svg class="tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg><span class="sidebar-label-text">Aujourd'hui</span><span class="tab-badge" id="today-badge"></span></span>
+      <span class="tab" data-tab="tasks" title="Tâches : toutes, à trier par client, projet ou date"><svg class="tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg><span class="sidebar-label-text">Tâches</span></span>
+      <span class="tab" data-tab="inbox" title="Boîte mail : les mails marqués dans Outlook, à transformer en tâche ou en contact"><svg class="tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg><span class="sidebar-label-text">Boîte mail</span><span class="tab-badge" id="inbox-badge"></span></span>
+      <span class="tab" data-tab="archive" title="Archive : tâches faites, et la corbeille"><svg class="tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="21 8 21 21 3 21 3 8"/><rect x="1" y="3" width="22" height="5"/><line x1="10" y1="12" x2="14" y2="12"/></svg><span class="sidebar-label-text">Archive</span></span>
+      <span class="tab" data-tab="contacts" title="Contacts : les personnes et leurs sociétés"><svg class="tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg><span class="sidebar-label-text">Contacts</span><span class="tab-badge" id="contacts-badge"></span></span>
+      <span class="tab" data-tab="pipeline" title="Pipeline : chaque installation, de la prise de contact à la mise en service"><svg class="tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="22" x2="4" y2="15"/><line x1="4" y1="11" x2="4" y2="2"/><line x1="12" y1="22" x2="12" y2="13"/><line x1="12" y1="9" x2="12" y2="2"/><line x1="20" y1="22" x2="20" y2="17"/><line x1="20" y1="13" x2="20" y2="2"/><circle cx="4" cy="13" r="2"/><circle cx="12" cy="11" r="2"/><circle cx="20" cy="15" r="2"/></svg><span class="sidebar-label-text">Pipeline</span></span>
+      <span class="tab" data-tab="parc" title="Portefeuille : les contrats signés, lus dans le Suivi Agrégation"><svg class="tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="12" width="4" height="9"/><rect x="10" y="7" width="4" height="14"/><rect x="17" y="3" width="4" height="18"/></svg><span class="sidebar-label-text">Portefeuille</span></span>
       <span class="tab" data-tab="network" title="Réseau : toutes les connexions"><svg class="tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="5" cy="6" r="2.5"/><circle cx="19" cy="5" r="2.5"/><circle cx="12" cy="13" r="2.5"/><circle cx="5" cy="19" r="2.5"/><circle cx="19" cy="19" r="2.5"/><path d="M7 7.2l3.2 4.2M17 6.6l-3.4 4.6M10.2 14.6L6.8 17.6M13.8 14.6l3.4 3"/></svg><span class="sidebar-label-text">Réseau</span></span>
       <span class="tab" data-tab="market" title="Marché : prix spot, M0, captures"><svg class="tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 17 9 11 13 15 21 7"/><polyline points="15 7 21 7 21 13"/></svg><span class="sidebar-label-text">Marché</span></span>
       <span class="tab" data-tab="lists" title="Réglages : clients, projets, synchro, pont Excel, sauvegarde"><svg class="tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg><span class="sidebar-label-text">Réglages</span><span class="tab-badge" id="conflicts-badge"></span></span>
@@ -74,7 +79,7 @@
   </div>
   <div class="dup-banner" id="dup-banner" role="status" hidden><span id="dup-banner-text"></span><button type="button" id="dup-banner-btn">Vérifier et fusionner</button><button type="button" id="dup-banner-later" class="dup-later">Me le rappeler demain</button></div>
   <div class="tab-panel" id="tab-today">
-    <div class="lite-banner" id="lite-sync-banner" hidden>Synchro GitHub pas encore activée sur ce téléphone : active-la une fois dans la <a href="index.html#sync">version complète</a> (onglet Réglages), puis reviens ici.</div>
+    <div class="lite-banner" id="lite-sync-banner" hidden>Synchro GitHub pas encore activée sur ce téléphone : active-la une fois dans la <a href="index.html?full#sync">version complète</a> (onglet Réglages), puis reviens ici.</div>
     <div id="today-stats-row"></div>
     <div class="table-header">
       <span></span><span></span>
@@ -83,12 +88,13 @@
     </div>
     <div id="today-list"></div>
     <div id="today-watch" class="today-watch"></div>
+    <p class="lite-full-link"><a href="index.html?full">Version complète</a> (pour un ordinateur ou une tablette)</p>
   </div>
 
   <div class="tab-panel hidden" id="tab-tasks">
     <div class="quick-add-bar">
       <input type="text" id="quick-add-input" placeholder="Ajouter une tâche… (Entrée)">
-      <button id="quick-add-more" type="button">Tâche complète</button>
+      <button id="quick-add-more" type="button">Tâche détaillée…</button>
       <div class="search-box">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
         <input type="text" id="search-input" placeholder="Rechercher">
@@ -251,16 +257,22 @@
         <input type="text" id="contact-search" placeholder="Rechercher un contact ou une société">
         <button id="contact-search-clear"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
       </div>
-      <button id="contact-add-btn" type="button" class="primary-btn">Nouveau contact</button>
-      <button id="vcf-btn" type="button" class="pipe-bar-btn">Vers le téléphone</button>
-      <button id="vcf-import-btn" type="button" class="pipe-bar-btn" title="Importer les contacts du téléphone (fichier .vcf, ou le répertoire sur Android) ; ceux déjà connus ne reçoivent que leurs cases vides">Depuis le téléphone</button>
-      <button id="card-scan-btn" type="button" class="pipe-bar-btn" title="Photographier une carte de visite : le texte est lu sur l’appareil et le contact pré-rempli">Carte de visite</button>
+      <button id="contact-add-btn" type="button" class="primary-btn">+ Nouveau contact</button>
+      <span class="bar-menu"><button id="contacts-in-btn" type="button" class="pipe-bar-btn bar-menu-btn" aria-haspopup="true" aria-expanded="false">Ajouter depuis… ▾</button>
+        <span class="bar-menu-list" hidden>
+          <button id="card-scan-btn" type="button" title="Photographier une carte de visite : le texte est lu sur l’appareil et le contact pré-rempli">Une carte de visite (photo)</button>
+          <button id="sig-paste-btn" type="button">Une signature de mail (coller)</button>
+          <button id="vcf-import-btn" type="button" title="Importer les contacts du téléphone (fichier .vcf, ou le répertoire sur Android) ; ceux déjà connus ne reçoivent que leurs cases vides">Le répertoire du téléphone</button>
+          <button id="contact-import-btn" type="button">Un fichier Excel</button>
+        </span></span>
+      <span class="bar-menu"><button id="contacts-out-btn" type="button" class="pipe-bar-btn bar-menu-btn" aria-haspopup="true" aria-expanded="false">Exporter vers… ▾</button>
+        <span class="bar-menu-list" hidden>
+          <button id="vcf-btn" type="button">Le téléphone (.vcf)</button>
+          <button id="contact-export-btn" type="button">Un fichier Excel</button>
+        </span></span>
       <input type="file" id="vcf-import-input" accept=".vcf,text/vcard,text/x-vcard" class="hidden">
       <input type="file" id="card-scan-input" accept="image/*" capture="environment" class="hidden">
       <span id="card-scan-status" class="card-scan-status" hidden></span>
-      <button id="sig-paste-btn" type="button">Coller une signature</button>
-      <button id="contact-import-btn" type="button">Importer Excel</button>
-      <button id="contact-export-btn" type="button">Exporter Excel</button>
       <input type="file" id="contact-import-input" accept=".xlsx,.xls,.csv" class="hidden">
     </div>
     <div class="top-toolbar">
@@ -393,7 +405,7 @@
             <li><b>Liens</b> : tape <kbd>[[</kbd> dans une tâche, la note ou un commentaire de contact pour citer un contact, une société ou une installation. Le nom devient cliquable, et sa fiche affiche « Mentionné dans ».</li>
             <li><b>Vues</b> (bouton « Vues » dans Tâches et Pipeline) : des filtres prêts (en retard, en attente des autres, offres en attente depuis 15 jours, dossiers sans tâche…) et les tiens, à enregistrer.</li>
             <li><b>Réseau</b> : toutes les connexions entre sociétés, contacts, installations, tâches, RDV et contrats. Clic = détails, double-clic = la fiche ; « Voir dans le réseau » depuis une fiche montre son voisinage. Les noms s'affichent au survol (le point et ses voisins). Survole un filtre pour mettre ce type en avant, ◎ pour le garder ; « Tous les acteurs » filtre par type de société ; Maj + glisser (ou « Sélection ») entoure plusieurs points, qu'on déplace ensemble ; « Vue d'ensemble » (ou Échap) remet tout à zéro. Glisse un point pour l'isoler : ses liens suivent et il reste là où tu le poses ; « Libérer les points » remet la disposition automatique.</li>
-            <li><b>Archive</b> : tâches validées et corbeille (rien n'est perdu).</li>
+            <li><b>Archive</b> : tâches validées, et la corbeille : tâches, affaires et contacts supprimés, à remettre en un clic (rien n'est perdu).</li>
           </ul>
           <h4 id="guide-keys">Raccourcis</h4>
           <ul>
@@ -468,7 +480,7 @@
           <h4>Sur le téléphone</h4>
           <ul>
             <li><b>Réseau</b> aussi sur le téléphone (barre du bas) : pincer pour zoomer, toucher un point pour ses liens, deux fois pour sa fiche.</li>
-            <li>Ouvre l'adresse de l'appli suivie de <b>/mobile.html</b> (par exemple <b>todo-tom.pages.dev/mobile.html</b>) puis « Sur l'écran d'accueil ». Version allégée : Aujourd'hui, Tâches, Contacts, Portefeuille, Pipeline (lecture) et la note.</li>
+            <li>Sur un téléphone, l'adresse habituelle de l'appli ouvre directement la version téléphone ; « Version complète », en bas de l'écran Aujourd'hui, ouvre l'autre. Puis « Sur l'écran d'accueil » pour l'installer. Version allégée : Aujourd'hui, Tâches, Contacts, Portefeuille, Pipeline (consulter et faire avancer) et la note.</li>
             <li>Mêmes données que l'ordinateur dès que la synchro est activée sur le téléphone (une fois, dans la version complète, onglet Réglages).</li>
             <li>Pour changer l'icône après une mise à jour : retirer l'app de l'écran d'accueil puis la rajouter.</li>
           </ul>
@@ -692,9 +704,9 @@
       <h2>Synchronisation multi-appareils</h2>
       <p class="list-hint">À configurer une fois par appareil. Une fois activée, toutes les tâches (pas seulement celles d'Outlook) se synchronisent via ton repo GitHub. ⚠️ Utilise un repo <strong>privé</strong> : les données (dont les contacts/CRM) y sont stockées en clair.</p>
       <div style="display:flex; flex-direction:column; gap:8px;">
-        <input type="text" id="sync-owner" placeholder="Ton pseudo GitHub">
-        <input type="text" id="sync-repo" placeholder="Nom du repo (ex: ToDo)">
-        <input type="password" id="sync-token" placeholder="Token GitHub (fine-grained, Contents read/write)">
+        <input type="text" id="sync-owner" placeholder="Ton nom d'utilisateur GitHub" aria-label="Nom d'utilisateur GitHub">
+        <input type="text" id="sync-repo" placeholder="Nom du dépôt privé de tes données (ex. todo-data)" aria-label="Nom du dépôt privé des données">
+        <input type="password" id="sync-token" placeholder="Clé d'accès GitHub (fine-grained, droit Contents : lecture et écriture)" aria-label="Clé d'accès GitHub">
         <label class="sync-exp-row" for="sync-token-exp"><span>Le jeton expire le <span class="muted">(optionnel : pour être prévenu 15 jours avant)</span></span><input type="date" id="sync-token-exp"></label>
         <a class="sync-token-link" href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener">Créer ou renouveler un jeton sur GitHub ↗</a>
         <button class="data-btn" id="sync-save-btn" style="width:100%;">Activer la synchro sur cet appareil</button>

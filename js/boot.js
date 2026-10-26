@@ -1,6 +1,9 @@
 // Start-up: phone version (?lite) and widget (?widget) switches, read before anything else (kept out of the page so the page can forbid inline scripts)
   // Phone version: index.html?lite (or mobile.html) — same data and sync, fewer features.
-  window.TODO_LITE=/[?&]lite\b/.test(location.search);
+  // A phone opening the usual address gets the phone version too (cold audit: the boss opened the desktop layout from a Teams link);
+  // ?full keeps the complete version on a phone.
+  const narrowTouch=!/[?&](full|widget)\b/.test(location.search) && window.matchMedia && matchMedia('(max-width: 700px) and (pointer: coarse)').matches;
+  window.TODO_LITE=/[?&]lite\b/.test(location.search) || narrowTouch;
   if(window.TODO_LITE){ document.getElementById('app-manifest').href='manifest-lite.json'; document.documentElement.classList.add('lite'); }
   // Widget: index.html?widget (widget.html redirects here) — a bubble and a small task panel, same code and data as the app;
   // ?widget&pip is the same panel inside the always-on-top mini window (Chrome/Edge).

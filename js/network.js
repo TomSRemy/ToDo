@@ -20,6 +20,7 @@
     const savePins=()=>{ try{ localStorage.setItem('network-pins', JSON.stringify(Object.fromEntries(pins))); }catch(e){} if(window.todoSettingsChanged) window.todoSettingsChanged(); paintPins(); };
     root.innerHTML='<div class="nw-bar"><div class="nw-search"><input type="text" placeholder="Trouver dans le réseau…" aria-label="Trouver dans le réseau"></div><div class="nw-types"></div>'
       +'<select class="nw-actor" aria-label="Type d’acteur" hidden></select><label class="nw-local" title="Choisis d’abord un point : seuls lui et ce qui y est relié restent affichés"><input type="checkbox" disabled> Seulement ses liens</label><button type="button" class="nw-selmode" aria-pressed="false" title="Glisser pour entourer plusieurs points (ou Maj + glisser)">Sélection</button><button type="button" class="nw-fit" title="Tout réafficher et voir l’ensemble (Échap)">Vue d’ensemble</button></div>'
+      +'<p class="nw-explain">Chaque point est une société, un contact, une installation, une tâche… ; un trait relie deux points liés. Clique un point pour voir ses liens, deux fois pour ouvrir sa fiche.</p>'
       +'<div class="nw-stage"><canvas role="img" aria-label="Graphe des connexions. Utilise la recherche pour trouver un élément : ses liens s’affichent dans le panneau."></canvas><div class="nw-tip" hidden></div><div class="nw-side" hidden></div><button type="button" class="nw-unpin" hidden>Libérer les points</button><div class="nw-hint">'+(window.matchMedia && matchMedia('(pointer:coarse)').matches?'Pincer : zoom · glisser : déplacer · toucher : détails · toucher deux fois : la fiche · glisser un point : il reste où tu le poses':'Molette : zoom · glisser : déplacer · clic : détails · double-clic : ouvrir la fiche · glisser un point : il reste où tu le poses')+'</div></div>';
     const canvas=root.querySelector('canvas'), ctx=canvas.getContext('2d'), stage=root.querySelector('.nw-stage'), tip=root.querySelector('.nw-tip'), side=root.querySelector('.nw-side');
     const search=root.querySelector('.nw-search input'), typesBox=root.querySelector('.nw-types'), localBox=root.querySelector('.nw-local input'), unpinBtn=root.querySelector('.nw-unpin'), selBtn=root.querySelector('.nw-selmode'), actorSel=root.querySelector('.nw-actor');
@@ -81,13 +82,13 @@
     function paintTypes(){
       const count={}; nodes.forEach(n=>{ count[n.type]=(count[n.type]||0)+1; });
       typesBox.innerHTML='';
-      Object.keys(TYPES).filter(t=>count[t]).forEach(t=>{ const b=document.createElement('button'); b.type='button'; b.className='nw-type'+(hidden.has(t)?' off':''); b.setAttribute('aria-pressed', String(!hidden.has(t)));
+      Object.keys(TYPES).filter(t=>count[t]).forEach(t=>{ const b=document.createElement('span'); b.className='nw-type'+(hidden.has(t)?' off':'');   // two buttons side by side, not one inside the other (WCAG 4.1.2)
         if(typeFocus===t) b.classList.add('lit');
-        b.innerHTML='<i style="background:'+TYPES[t].color+'"></i>'+esc(TYPES[t].label)+' <span>'+count[t]+'</span><em class="nw-lit" role="button" tabindex="0" title="Mettre en avant seulement ce type" aria-label="Mettre en avant les '+esc(TYPES[t].label)+'">◎</em>';
+        b.innerHTML='<button type="button" class="nw-type-main" aria-pressed="'+String(!hidden.has(t))+'"><i style="background:'+TYPES[t].color+'"></i>'+esc(TYPES[t].label)+' <span>'+count[t]+'</span></button><button type="button" class="nw-lit" title="Mettre en avant seulement ce type" aria-label="Mettre en avant les '+esc(TYPES[t].label)+'">◎</button>';
         b.onmouseenter=()=>{ if(!hidden.has(t)){ typeHover=t; kick(); } }; b.onmouseleave=()=>{ typeHover=null; kick(); };
         const lb=b.querySelector('.nw-lit'), litToggle=e=>{ e.stopPropagation(); e.preventDefault(); typeFocus=typeFocus===t?null:t; if(typeFocus && hidden.has(t)){ hidden.delete(t); try{ localStorage.setItem('network-hidden', JSON.stringify([...hidden])); }catch(err){} } paintTypes(); kick(); };
-        lb.onclick=litToggle; lb.onkeydown=e=>{ if(e.key==='Enter'||e.key===' ') litToggle(e); };
-        b.onclick=()=>{ if(typeFocus===t) typeFocus=null; hidden.has(t)?hidden.delete(t):hidden.add(t); try{ localStorage.setItem('network-hidden', JSON.stringify([...hidden])); }catch(e){} if(window.todoSettingsChanged) window.todoSettingsChanged(); paintTypes(); alpha=Math.max(alpha,.5); kick(); };
+        lb.onclick=litToggle;
+        b.querySelector('.nw-type-main').onclick=()=>{ if(typeFocus===t) typeFocus=null; hidden.has(t)?hidden.delete(t):hidden.add(t); try{ localStorage.setItem('network-hidden', JSON.stringify([...hidden])); }catch(e){} if(window.todoSettingsChanged) window.todoSettingsChanged(); paintTypes(); alpha=Math.max(alpha,.5); kick(); };
         typesBox.appendChild(b); });
     }
     // ---- physics: springs on the links, repulsion between all visible nodes (grid-bucketed), a gentle pull to the centre
@@ -126,6 +127,7 @@
       ctx.strokeStyle=near||lit?'rgba(140,160,180,.09)':'rgba(140,160,180,.16)'; ctx.stroke(pNorm);
       if(near){ ctx.strokeStyle='rgba(20,211,169,.75)'; ctx.stroke(pOn); } else if(lit){ ctx.strokeStyle='rgba(140,160,180,.32)'; ctx.stroke(pOn); }
       // nodes: one path per colour and brightness
+      const rest=[], restMin=(()=>{ const ds=nodes.filter(m=>m.type==='company').map(m=>(adj.get(m.id)||[]).length).sort((a,b)=>b-a); return ds.length>20?Math.max(1,ds[19]):0; })();
       const groups=new Map(), labels=[], litCount=lit?nodes.filter(n=>n.type===lit && ok(n)).length:0;
       nodes.forEach(n=>{ if(!ok(n)) return; const [x,y]=toScreen(n.p.x,n.p.y), r=n.r*Math.max(.6,Math.min(1.6,view.k)); if(x<-30||y<-30||x>W+30||y>H+30) return;
         // at rest everything is softly greyed; what is pointed (and its links), searched or put forward lights up in its colour
@@ -133,13 +135,17 @@
         let g=groups.get(key); if(!g){ g=new Path2D(); groups.set(key,g); } g.moveTo(x+r,y); g.arc(x,y,r,0,Math.PI*2);
         // names only on demand: the point under the mouse (or selected) and its neighbours, search results, the kind put forward
         const showLabel=(near && near.has(n.id)) || (matches && matches.has(n.id)) || (lit===n.type && (litCount<=40 || view.k>1.3));
-        if(showLabel && !dim) labels.push([n,x,y,r]); });
+        if(showLabel && !dim) labels.push([n,x,y,r]);
+        // at rest, the main companies are named (cold audit: no point had a name until hovered)
+        else if(!near && !matches && !lit && (n.type==='company' || n.type==='project') && ((adj.get(n.id)||[]).length>=restMin || view.k>1.4)) rest.push([n,x,y,r]); });
       groups.forEach((p,key)=>{ ctx.fillStyle=key; ctx.fill(p); });
       ctx.globalAlpha=1;
       if(pins.size){ ctx.strokeStyle='rgba(232,238,245,.55)'; ctx.lineWidth=1; ctx.setLineDash([2,2]); nodes.forEach(n=>{ if(!pins.has(n.id) || !ok(n)) return; const [x,y]=toScreen(n.p.x,n.p.y), r=n.r*Math.max(.6,Math.min(1.6,view.k))+3; ctx.beginPath(); ctx.arc(x,y,r,0,Math.PI*2); ctx.stroke(); }); ctx.setLineDash([]); }
       if(multi.size){ ctx.strokeStyle='#fff'; ctx.lineWidth=1.5; multi.forEach(id=>{ const n=byId.get(id); if(!n || !ok(n)) return; const [x,y]=toScreen(n.p.x,n.p.y), r=n.r*Math.max(.6,Math.min(1.6,view.k))+1; ctx.beginPath(); ctx.arc(x,y,r,0,Math.PI*2); ctx.stroke(); }); ctx.lineWidth=1; }
       if(boxSel){ const x=Math.min(boxSel.sx,boxSel.ex), y=Math.min(boxSel.sy,boxSel.ey); ctx.fillStyle='rgba(20,211,169,.08)'; ctx.strokeStyle='rgba(20,211,169,.8)'; ctx.setLineDash([4,3]); ctx.fillRect(x,y,Math.abs(boxSel.ex-boxSel.sx),Math.abs(boxSel.ey-boxSel.sy)); ctx.strokeRect(x,y,Math.abs(boxSel.ex-boxSel.sx),Math.abs(boxSel.ey-boxSel.sy)); ctx.setLineDash([]); }
       if(selected && !multi.size && ok(selected)){ const [x,y]=toScreen(selected.p.x,selected.p.y), r=selected.r*Math.max(.6,Math.min(1.6,view.k)); ctx.strokeStyle='#fff'; ctx.lineWidth=2; ctx.beginPath(); ctx.arc(x,y,r,0,Math.PI*2); ctx.stroke(); ctx.lineWidth=1; }
+      ctx.fillStyle='rgba(174,182,194,.85)'; ctx.font='11px system-ui, sans-serif';
+      rest.forEach(([n,x,y,r])=>{ ctx.fillText(n.label.length>24?n.label.slice(0,23)+'…':n.label, x+r+3, y+4); });
       ctx.fillStyle='rgba(232,238,245,.92)';
       labels.forEach(([n,x,y,r])=>{ ctx.font=(n.type==='company'||n.type==='project'?'600 ':'')+'11px system-ui, sans-serif'; ctx.fillText(n.label.length>34?n.label.slice(0,33)+'…':n.label, x+r+3, y+4); });
     }
