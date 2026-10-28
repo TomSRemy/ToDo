@@ -3513,6 +3513,7 @@
     if(v!=='y') return false;
     list.forEach(o=>{ o.requestId=null; touchCrm(o); }); dropRequest(reqId, list[0].id); saveCrm(); renderPipeline(); return true;
   }
+  function notifyMoveBack(head){ const b=lastBackMove; notify(head+(b?(b.closed.length?' · tâche fermée : « '+b.closed[0].replace(/\s+—.*$/,'')+' »':'')+' · à faire : « '+b.back.replace(/\s+—.*$/,'')+' »':'')); }
   // one installation's step, chosen among all the steps (sheet of a request or a lot)
   function stagePickMenu(o, x, y, reopen){
     document.querySelectorAll('.drop-menu').forEach(m=>m.remove());
@@ -3520,7 +3521,7 @@
     const h=document.createElement('div'); h.className='drop-menu-h'; h.textContent=oppName(o)+' seule → quelle étape ?'; m.appendChild(h);
     OPP_STAGES.forEach(st=>{ const b=document.createElement('button'); b.type='button'; b.setAttribute('role','menuitem'); b.dataset.stage=st.key;
       b.innerHTML='<span></span>'+(st.who!=='Com'?'<em>'+(WHO[st.who]||st.who)+'</em>':''); b.firstChild.textContent=st.label; if(o.stage===st.key) b.classList.add('on');
-      b.onclick=()=>{ m.remove(); if(st.key===o.stage) return; if(stageIndex(st.key)<stageIndex(o.stage)){ setOppStage(o, st.key); saveCrm(); renderPipeline(); reopen(); notify(oppName(o)+' revenue à « '+stageLabel(st.key, o)+' »'); }
+      b.onclick=()=>{ m.remove(); if(st.key===o.stage) return; if(stageIndex(st.key)<stageIndex(o.stage)){ setOppStage(o, st.key); saveCrm(); renderPipeline(); reopen(); notifyMoveBack(oppName(o)+' revenue à « '+stageLabel(st.key, o)+' »'); }
         else { closeOppDetail(); offerStageAdvance([o], st.key, reopen); } }; m.appendChild(b); });
     document.body.appendChild(m);
     const r=m.getBoundingClientRect(); m.style.left=Math.max(8, Math.min(innerWidth-r.width-8, x))+'px'; m.style.top=Math.max(8, Math.min(innerHeight-r.height-8, y))+'px';
@@ -4783,7 +4784,25 @@
     if(prev>=0 && prev<stageIndex('kyc') && next>=stageIndex('kyc')) celebrate(next>stageIndex('signature')?'signed':'won', [o]);
     else if(prev>=0 && prev<=stageIndex('signature') && next>stageIndex('signature')) celebrate('signed', [o]);
     relanceOnMove(o, key);
+    lastBackMove=prev>=0 && next>=0 && next<prev?tasksOnMoveBack(o, key):null;
     o.stage=key; touchCrm(o); saveCrm(); renderPipeline();
+  }
+  // Back to an earlier step: the open task of the step left is closed, the task of the step returned to comes back
+  // (the one done before if any, else a new one) — asked 28/10. The automatic follow-up has its own rule (relanceOnMove).
+  let lastBackMove=null;
+  function tasksOnMoveBack(o, key){
+    const from=oppStage(o.stage), to=oppStage(key); if(!from || !to) return null;
+    const ids=[o.id, o.requestId].filter(Boolean), mine=t=>!t.deleted && ids.includes(t.opportunityId);
+    const sharedStill=t=>t.opportunityId===o.requestId && requestInstalls(o.requestId).some(x=>x.id!==o.id && !isExited(x) && x.stage===o.stage);   // the request's task stays while another plant is still at that step
+    const closed=tasks.filter(t=>mine(t) && !t.archived && !t.autoRelance && t.stageLabel===from.label && !sharedStill(t));
+    closed.forEach(t=>{ t.archived=true; t.archivedAt=Date.now(); t.closedByMoveBack=true; touch(t); });
+    let back=tasks.find(t=>mine(t) && !t.archived && t.stageLabel===to.label);
+    if(!back){ back=tasks.filter(t=>mine(t) && t.archived && t.stageLabel===to.label).sort((a,b)=>(b.archivedAt||0)-(a.archivedAt||0))[0];
+      if(back){ back.archived=false; back.archivedAt=null; back.status=to.who!=='Com'?'en_attente':'a_faire'; touch(back); } }
+    if(!back){ back=createTask({ title:stageTaskOf(to, o)+' — '+oppName(o), client:o.company||'', due:'', urgency:'moyenne', status:to.who!=='Com'?'en_attente':'a_faire', description:to.who!=='Com'?'À suivre : étape portée par '+(WHO[to.who]||to.who)+'.':'' });
+      back.opportunityId=o.id; back.stageLabel=to.label; touch(back); }
+    saveTasks(); render(); renderArchive();
+    return { closed:closed.map(t=>plainLinks(t.title)), back:plainLinks(back.title) };
   }
   // Backlog decision 3: the offer goes out → « Relancer le producteur » is created alone, due in 7 days;
   // the deal moves on (accepted, refused, any other step) → that task disappears alone if it was not done.

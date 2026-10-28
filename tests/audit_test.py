@@ -178,6 +178,15 @@ with sync_playwright() as p:
     st = {o["id"]: o["stage"] for o in json.loads(page.evaluate("window.storage.peek('todo-widget-opportunities')")) if o["id"].startswith("L")}
     check(st == {"L0": "pricing_indicatif", "L1": "offre_remise", "L2": "pricing_indicatif"}, f"lot: one plant moves on alone, the others stay ({st})")
     check(eventually(page, lambda: page.is_visible("#opp-detail-overlay") and "Lot" in page.inner_text("#opp-detail-title")), "lot: back on the lot's sheet afterwards")
+    # back to the earlier step: the task of the step left is closed, the one of the step returned to is there again
+    tk = lambda: [x for x in json.loads(page.evaluate("window.storage.peek('todo-widget-tasks')") or "[]") if x.get("opportunityId") == "L1" and not x.get("deleted")]
+    remettre = [x for x in tk() if x.get("stageLabel") == "Offre à remettre" and not x.get("archived")]
+    check(len(remettre) == 1, f"moving on created the step's task ({[x['title'] for x in tk()]})")
+    page.locator(".req-inst", has_text="Toit L1").locator(".req-inst-stage").click()
+    page.locator(".drop-menu-all button", has_text="Pricing indicatif").click()
+    check(eventually(page, lambda: [x["archived"] for x in tk() if x.get("stageLabel") == "Offre à remettre"] == [True]), "moving back closes the task of the step left")
+    check(eventually(page, lambda: any(x.get("stageLabel") == "Pricing indicatif" and not x.get("archived") for x in tk())), "moving back puts the task of the step returned to")
+    check("tâche fermée" in page.inner_text("#app-toast") and "à faire" in page.inner_text("#app-toast"), f"…and says so ({page.inner_text('#app-toast')!r})")
     check(not errors, f"no page errors ({errors})"); page.context.close()
 
     # 9. a phone opening the usual address gets the phone version; ?full keeps the complete one
