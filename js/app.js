@@ -3513,6 +3513,21 @@
     if(v!=='y') return false;
     list.forEach(o=>{ o.requestId=null; touchCrm(o); }); dropRequest(reqId, list[0].id); saveCrm(); renderPipeline(); return true;
   }
+  // one installation's step, chosen among all the steps (sheet of a request or a lot)
+  function stagePickMenu(o, x, y, reopen){
+    document.querySelectorAll('.drop-menu').forEach(m=>m.remove());
+    const m=document.createElement('div'); m.className='drop-menu drop-menu-all'; m.setAttribute('role','menu');
+    const h=document.createElement('div'); h.className='drop-menu-h'; h.textContent=oppName(o)+' seule → quelle étape ?'; m.appendChild(h);
+    OPP_STAGES.forEach(st=>{ const b=document.createElement('button'); b.type='button'; b.setAttribute('role','menuitem'); b.dataset.stage=st.key;
+      b.innerHTML='<span></span>'+(st.who!=='Com'?'<em>'+(WHO[st.who]||st.who)+'</em>':''); b.firstChild.textContent=st.label; if(o.stage===st.key) b.classList.add('on');
+      b.onclick=()=>{ m.remove(); if(st.key===o.stage) return; if(stageIndex(st.key)<stageIndex(o.stage)){ setOppStage(o, st.key); saveCrm(); renderPipeline(); reopen(); notify(oppName(o)+' revenue à « '+stageLabel(st.key, o)+' »'); }
+        else { closeOppDetail(); offerStageAdvance([o], st.key, reopen); } }; m.appendChild(b); });
+    document.body.appendChild(m);
+    const r=m.getBoundingClientRect(); m.style.left=Math.max(8, Math.min(innerWidth-r.width-8, x))+'px'; m.style.top=Math.max(8, Math.min(innerHeight-r.height-8, y))+'px';
+    (m.querySelector('button.on')||m.querySelector('button')).focus();
+    const close=ev=>{ if(ev.type==='keydown' && ev.key!=='Escape') return; if(ev.type==='mousedown' && m.contains(ev.target)) return; if(ev.type==='keydown') ev.stopPropagation(); m.remove(); document.removeEventListener('mousedown', close, true); document.removeEventListener('keydown', close, true); };
+    document.addEventListener('keydown', close, true); setTimeout(()=>document.addEventListener('mousedown', close, true), 0);
+  }
   function pipeDropMenu(list, phase, x, y, target){
     const steps=OPP_STAGES.filter(st=>st.phase===phase); if(!steps.length) return;
     // forward: the same window as « Étape suivante » (task to create, task to close); back: at once
@@ -5154,6 +5169,7 @@
     const box=$('opp-detail-body'); box.innerHTML='';
     const live=list.filter(o=>!isExited(o));
     // the progress bar and « Étape en cours », for this block
+    if(live.length>1){ const h=document.createElement('p'); h.className='req-stage-hint'; h.textContent='Cette frise change l\u2019étape des '+live.length+' installations ensemble. Pour une seule, clique son étape dans la liste plus bas.'; box.appendChild(h); }
     if(live.length) box.appendChild(buildStageTrack(live, key=>{ live.forEach(o=>{ if(o.stage!==key) setOppStage(o, key); }); reopen(); }));
     box.appendChild(buildStepPanel(list, { reopen }));
     if(!window.TODO_LITE) box.appendChild(sheetSection('Notes express', 'colle ou tape tes notes : les chiffres sont repérés, un clic pour remplir la fiche', false, buildQuickNotes(list, { onFill:reopen, onKeep:reopen })));
@@ -5167,7 +5183,11 @@
       const nb=document.createElement('button'); nb.type='button'; nb.className='req-inst-name'; nb.innerHTML='<b></b><span></span>'; nb.querySelector('b').textContent=oppName(o); nb.querySelector('span').textContent=instLineInfo(o);
       nb.onclick=()=>openOppDetail(o.id); r.appendChild(nb);
       if(o.lot){ const lc=document.createElement('span'); lc.className='req-lot'; lc.textContent=o.lot; r.appendChild(lc); }
-      r.appendChild(stageChip(o));
+      // each installation's own step, changed here alone (a lot's plants do not always move together)
+      if(isExited(o)) r.appendChild(stageChip(o));
+      else { const sb=document.createElement('button'); sb.type='button'; sb.className='req-inst-stage'; sb.title='Changer l\u2019étape de cette installation seulement'; sb.setAttribute('aria-label','Étape de '+oppName(o)+' : '+stageLabel(o.stage, o)+' (changer)');
+        sb.appendChild(stageChip(o)); sb.insertAdjacentHTML('beforeend','<span class="req-inst-caret" aria-hidden="true">▾</span>');
+        sb.onclick=e=>{ e.stopPropagation(); const rc=sb.getBoundingClientRect(); stagePickMenu(o, rc.left, rc.bottom+4, reopen); }; r.appendChild(sb); }
       const ed=document.createElement('button'); ed.type='button'; ed.className='req-inst-ed'; ed.title='Modifier'; ed.setAttribute('aria-label','Modifier '+oppName(o));
       ed.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>';
       ed.onclick=()=>{ closeOppDetail(); openOppForm({ editId:o.id }); }; r.appendChild(ed);

@@ -167,6 +167,19 @@ with sync_playwright() as p:
     check(page.evaluate("localStorage.getItem('draft-task')") is None, "cancelling the form drops the draft")
     check(not errors, f"no page errors ({errors})"); page.context.close()
 
+    # 8c. a lot: each plant's step changed on its own from the lot's sheet
+    lot = [{"id": "rq9", "kind": "request", "company": "Lot SAS", "label": "Lot Essai", "stage": "pricing_indicatif", "createdAt": 1, "updatedAt": 1, "deleted": False}] + \
+          [opp("L%d" % k, "Lot SAS", "Toit L%d" % k, "pricing_indicatif", requestId="rq9") for k in range(3)]
+    page, errors = new_page(b, {"todo-widget-opportunities": lot}, viewport={"width": 1400, "height": 900})
+    page.goto(URL + "#pipeline"); page.wait_for_selector(".pipe-req-card")
+    page.locator(".pipe-req-card", has_text="Lot").first.click(); page.wait_for_selector(".req-inst-stage")
+    page.locator(".req-inst", has_text="Toit L1").locator(".req-inst-stage").click()
+    page.locator(".drop-menu-all button", has_text="Offre à remettre").click(); page.click("#stage-advance-confirm")
+    st = {o["id"]: o["stage"] for o in json.loads(page.evaluate("window.storage.peek('todo-widget-opportunities')")) if o["id"].startswith("L")}
+    check(st == {"L0": "pricing_indicatif", "L1": "offre_remise", "L2": "pricing_indicatif"}, f"lot: one plant moves on alone, the others stay ({st})")
+    check(eventually(page, lambda: page.is_visible("#opp-detail-overlay") and "Lot" in page.inner_text("#opp-detail-title")), "lot: back on the lot's sheet afterwards")
+    check(not errors, f"no page errors ({errors})"); page.context.close()
+
     # 9. a phone opening the usual address gets the phone version; ?full keeps the complete one
     phone = dict(viewport={"width": 375, "height": 812}, is_mobile=True, has_touch=True)
     page, errors = new_page(b, SEED, **phone)
