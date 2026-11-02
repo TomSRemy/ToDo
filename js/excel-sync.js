@@ -162,7 +162,9 @@ window.TodoExcelSync=(function(){
   }
   // Writes what « choices » (and « aligns », for the ones kept from the Excel) say for this installation's diffs — the
   // single row's « Appliquer » and the bulk « Tout garder … » buttons (a lot, or everything shown) both go through this.
-  async function xsApplyRow(kind, o, diffs, choices, aligns){
+  // Returns whether it actually sent (false only when sendToExcel failed, e.g. the file is locked elsewhere) — a bulk
+  // loop uses this to stop rather than fail the same way on every installation left after the one that failed.
+  async function xsApplyRow(kind, o, diffs, choices, aligns, errPrefix){
     const force={}, seen={};
     diffs.forEach(d=>{ const vi=xsViOf(kind, d), ch=choices[vi];
       if(ch==='appli'){
@@ -176,7 +178,8 @@ window.TodoExcelSync=(function(){
         if(aligns[vi]){ const al=xsAlignAction(kind, o, vi, d.excel); if(al) al.run(); }
       } });
     // sendToExcel re-reads the file and repaints the panel itself ; nothing left to do when it sends
-    if(Object.keys(force).length) await sendToExcel(kind, [o], null, { force, seen }); else { renderPipeline(); saveCrm(); paintExcelSync(); }
+    if(Object.keys(force).length) return await sendToExcel(kind, [o], null, { force, seen }, errPrefix);
+    renderPipeline(); saveCrm(); paintExcelSync(); return true;
   }
   // the diverging cells for a set of rows, as { kind, o, diffs } — a lot's rows, or everything currently shown
   function xsConflictTargets(rowList){
@@ -186,17 +189,21 @@ window.TodoExcelSync=(function(){
   // one policy (« excel » or « appli ») for every cell of every target : a lot sent together for pricing often moves the
   // same way on every plant, so this decides it once instead of installation by installation
   async function xsApplyBulk(targets, policy){
-    // each xsApplyRow (via sendToExcel, or directly when nothing is sent) already re-reads and repaints on its own
-    for(const tg of targets){
+    // each xsApplyRow (via sendToExcel, or directly when nothing is sent) already re-reads and repaints on its own ;
+    // stop at the first one that fails to send (file locked, unreachable…) instead of failing the same way on every
+    // installation after it
+    for(let i=0;i<targets.length;i++){ const tg=targets[i];
       const choices={}, aligns={}; tg.diffs.forEach(d=>{ const vi=xsViOf(tg.kind, d); choices[vi]=policy; aligns[vi]=true; });
-      await xsApplyRow(tg.kind, tg.o, tg.diffs, choices, aligns);
+      const prefix=i>0?('Arrêté après '+i+' installation'+(i>1?'s':'')+' sur '+targets.length+' : '):'';
+      if(!(await xsApplyRow(tg.kind, tg.o, tg.diffs, choices, aligns, prefix))) break;
     }
   }
   // the lot grid : each cell can be decided on its own (not one policy for everything), key = kind|vi|installation id
   async function xsApplyLotGrid(targets, cellChoice){
-    for(const tg of targets){
+    for(let i=0;i<targets.length;i++){ const tg=targets[i];
       const choices={}, aligns={}; tg.diffs.forEach(d=>{ const vi=xsViOf(tg.kind, d); choices[vi]=cellChoice[tg.kind+'|'+vi+'|'+tg.o.id]||'excel'; aligns[vi]=true; });
-      await xsApplyRow(tg.kind, tg.o, tg.diffs, choices, aligns);
+      const prefix=i>0?('Arrêté après '+i+' installation'+(i>1?'s':'')+' sur '+targets.length+' : '):'';
+      if(!(await xsApplyRow(tg.kind, tg.o, tg.diffs, choices, aligns, prefix))) break;
     }
   }
   // Several fields changed by someone else on the same installation : one table, columns = fields (like the Excel header
@@ -389,8 +396,10 @@ window.TodoExcelSync=(function(){
     return card;
   }
   let xsShownNow=[];   // what paintExcelSync last drew, for the « Tout garder … » buttons (read at click time)
-  async function sendToExcel(kind, list, btn, extra){
-    if(ON_PHONE) return;
+  // Returns whether it actually sent : a bulk loop (a lot, « Tout garder … ») stops at the first installation this
+  // returns false for (the file is locked or unreachable), instead of failing the same way on every one after it.
+  async function sendToExcel(kind, list, btn, extra, errPrefix){
+    if(ON_PHONE) return true;
     const label=btn?btn.textContent:'';
     if(btn){ btn.disabled=true; btn.textContent='Envoi…'; }
     try{
@@ -407,9 +416,11 @@ window.TodoExcelSync=(function(){
       const ov=$('xs-overlay');
       if(ov && !ov.classList.contains('hidden')) paintExcelSync();
       else if(pending.length>questions.length) await openExcelSync({ noRead:true });   // a plain conflict, panel not open : show it there rather than nowhere
+      return true;
     }catch(e){
       if(btn){ btn.textContent=label; btn.disabled=false; }
-      showBridgeMsg(e.message, false);
+      showBridgeMsg((errPrefix||'')+e.message, false);
+      return false;
     }
   }
   // Which row is meant : several open lines share this plant's name (duplicate), the open line carries another

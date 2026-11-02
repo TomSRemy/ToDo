@@ -2938,6 +2938,47 @@ Responsable technique
     check(not errors, f"lot grid: no page errors ({errors})")
     page.close()
 
+    # --- Excel ⇄ panel, a lot : a locked file stops the bulk action after the installation that failed, instead of
+    # failing the same way on every one left in the lot
+    pipe_head6 = [""] * 37; pipe_head6[6] = "Nom Producteur"; pipe_head6[19] = "Nom Centrale"; pipe_head6[35] = "Commentaires"
+    def lock_row(prod, centrale, note):
+        r = [None] * 37; r[6] = prod; r[19] = centrale; r[35] = note
+        return r
+    sheet6 = {"Pipe Agrégation": [pipe_head6, lock_row("GAEC", "Toit 1", "Note Excel 1"), lock_row("GAEC", "Toit 2", "Note Excel 2"), lock_row("GAEC", "Toit 3", "Note Excel 3")]}
+    sent6 = []
+    def bridge6(route, request):
+        h = {"Access-Control-Allow-Origin": "*", "Content-Type": "application/json", "Access-Control-Allow-Headers": "*", "Access-Control-Allow-Methods": "*"}
+        if request.method == "OPTIONS":
+            return route.fulfill(status=204, headers=h)
+        if request.url.endswith("/status"):
+            return route.fulfill(status=200, headers=h, body=json.dumps({"ok": True, "version": "1.14", "authorized": True, "pipe": {"name": "Pipe.xlsx", "found": True}, "bdd": {"name": "Suivi.xlsx", "found": True}}))
+        if request.url.endswith("/pipe/read"):
+            return route.fulfill(status=200, headers=h, body=json.dumps({"ok": True, "sheets": sheet6}))
+        if request.url.endswith("/bdd/read"):
+            return route.fulfill(status=200, headers=h, body=json.dumps({"ok": True, "sheets": {"BDD Agrégation": [[""] * 91]}}))
+        body = json.loads(request.post_data); sent6.append(body)
+        if len(sent6) == 2:
+            return route.fulfill(status=500, headers=h, body=json.dumps({"ok": False, "message": "« Pipe.xlsx » est ouvert dans un Excel que le pont ne peut pas rejoindre."}))
+        return route.fulfill(status=200, headers=h, body=json.dumps({"ok": True, "results": [{"ok": True, "action": "mise à jour", "row": 2, "written": [35], "mine": [35], "conflicts": []} for _ in body["rows"]]}))
+    inst6 = [{"id": i, "kind": "installation", "company": "GAEC", "producteur": "GAEC", "centrale": c, "title": c, "stage": "collecte",
+              "commentaires": "Note appli " + c[-1], "pipeSentAt": 1, "requestId": "lockreq",
+              "createdAt": 1, "updatedAt": 1, "deleted": False} for i, c in (("lt1", "Toit 1"), ("lt2", "Toit 2"), ("lt3", "Toit 3"))]
+    inst6.append({"id": "lockreq", "kind": "request", "company": "GAEC", "label": "Lot verrouillé", "stage": "collecte", "createdAt": 1, "updatedAt": 1, "deleted": False})
+    page, errors = new_page(browser, {"todo_todo-widget-opportunities": json.dumps(inst6), "todo_bridge-config": json.dumps({"port": 8765, "token": "k1"})}, viewport={"width": 1400, "height": 900})
+    page.route("http://127.0.0.1:8765/**", bridge6)
+    page.goto(URL); page.click('[data-tab="pipeline"]'); page.click("#pipe-more-btn"); page.click("#pipe-xs-btn")
+    page.wait_for_function("document.querySelector('#xs-overlay .xs-info').textContent.includes('relu le')", timeout=8000)
+    page.click("#xs-overlay .xl-head")
+    page.click("#xs-overlay .xl-colhead")
+    page.click("#xs-overlay .xl-foot button")
+    check(eventually(lambda: len(sent6) == 2, 4000), f"locked file: stops right after the failing installation ({len(sent6)})")
+    page.wait_for_timeout(300)
+    check(len(sent6) == 2, f"locked file: no straggler request for the third installation ({len(sent6)})")
+    msg6 = page.inner_text("#bridge-msg")
+    check("Arrêté après 1 installation sur 3" in msg6 and "ouvert dans un Excel" in msg6, f"locked file: the toast says how far it got and why ({msg6!r})")
+    check(not errors, f"locked file: no page errors ({errors})")
+    page.close()
+
     # --- Réf. & data: clients grouped by company type, collapsed by default, search opens them
     cos = [{"id": f"co{i}", "name": n, "type": t, "whatTheyDo": "", "marketScope": [], "website": "", "createdAt": 1, "updatedAt": 1, "deleted": False}
            for i, (n, t) in enumerate([("Alpha", "Fournisseur"), ("Beta", "Client"), ("Gamma", "Client"), ("Delta", "")])]
