@@ -31,7 +31,7 @@
 param([int]$Port = 8765, [switch]$Reconfigurer, [switch]$Mock)
 
 $ErrorActionPreference = 'Stop'
-$Version = '1.13'
+$Version = '1.14'
 $Here = Split-Path -Parent $MyInvocation.MyCommand.Path
 # the settings (the two files, the key) live in the Windows profile, not next to the script: a new download, in any folder,
 # finds them again (no new key to copy into the app). An older settings file next to the script is taken over once.
@@ -52,6 +52,8 @@ $Kinds = @{
 }
 
 function Write-Info($msg, $color = 'Gray') { Write-Host ('[' + (Get-Date -Format 'HH:mm:ss') + '] ' + $msg) -ForegroundColor $color }
+# a formula that returns a literal text : the reliable way to write a string Excel would otherwise try to parse
+function Quote-Formula($s) { '="' + (([string]$s) -replace '"', '""' -replace "`r?`n", '" & CHAR(10) & "') + '"' }
 function Norm($s) {
   if ($null -eq $s) { return '' }
   $t = ([string]$s).Normalize([Text.NormalizationForm]::FormD)
@@ -184,13 +186,17 @@ function New-ComAdapter($kind) {
   # ("Le cast spécifié n'est pas valide") ; writing the same value as a formula is unaffected, so every
   # type falls back to it rather than only numbers and booleans
   $a.Set = { param($a, $r, $c, $v) $cell = (& $a.Cell $a $r $c); $b = $(if ($v -is [psobject]) { $v.PSObject.BaseObject } else { $v })
+    # a text starting with = + - @ is read by Excel as a formula, not as the text itself (a producer's or plant's name can
+    # start with « = », by mistake or by nature) : written straight as a formula, it turns a key cell into an error.
+    # Writing it as a formula that returns the literal text keeps the text, whichever way it was going to be written.
+    if ($b -is [string] -and $b.Length -gt 0 -and '=+-@'.IndexOf($b[0]) -ge 0) { $cell.Formula = Quote-Formula $b; return }
     try { if ($b -is [datetime]) { $cell.Value = $b } else { $cell.Value2 = $b } }
     catch {
       try {
         if ($b -is [double] -or $b -is [int]) { $cell.Formula = ([double]$b).ToString([Globalization.CultureInfo]::InvariantCulture) }
         elseif ($b -is [bool]) { $cell.Formula = $(if ($b) { 'TRUE' } else { 'FALSE' }) }
         elseif ($b -is [datetime]) { $cell.Formula = '=DATE(' + $b.Year + ',' + $b.Month + ',' + $b.Day + ')' }
-        else { $cell.Formula = '="' + (([string]$b) -replace '"', '""' -replace "`r?`n", '" & CHAR(10) & "') + '"' }
+        else { $cell.Formula = Quote-Formula $b }
       } catch { $cell.Value = $b }   # a cell the formula bar won't accept (e.g. over Excel's 255-character formula-text limit) : last resort
     } }
   $a.BeforeWrite = { param($a) }
