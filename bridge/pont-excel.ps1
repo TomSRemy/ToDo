@@ -21,7 +21,8 @@
    - juste avant chaque écriture, la ligne est relue : si le tableau a bougé (tri, insertion par un collègue),
      rien n'est écrit sur cette ligne ;
    - une ligne n'est réutilisée que si elle est entièrement vide ;
-   - avant la première écriture, une copie du fichier est gardée dans « Sauvegardes pont » (les 3 dernières),
+   - avant la première écriture du jour, une copie du fichier est gardée dans « Sauvegardes pont » (une par jour,
+     les 3 derniers jours, même si le pont est utilisé plusieurs fois le même jour) ;
      et chaque case écrite est notée dans « Sauvegardes pont/journal-pont.csv » avec son ancienne valeur (jamais effacé).
 
   Lancement : double-clic sur « Lancer-pont-excel.bat ». Au premier lancement, choisir les deux fichiers Excel
@@ -31,7 +32,7 @@
 param([int]$Port = 8765, [switch]$Reconfigurer, [switch]$Mock)
 
 $ErrorActionPreference = 'Stop'
-$Version = '1.16'
+$Version = '1.17'
 $Here = Split-Path -Parent $MyInvocation.MyCommand.Path
 # the settings (the two files, the key) live in the Windows profile, not next to the script: a new download, in any folder,
 # finds them again (no new key to copy into the app). An older settings file next to the script is taken over once.
@@ -276,7 +277,7 @@ function New-Adapter($kind) { if ($Mock) { return New-MockAdapter $kind } else {
 $ClosedStatus = @('perdu', 'abandonne', 'nogo', 'resilie')
 $RecentDays = 183
 $BackupDir = Join-Path $Here 'Sauvegardes pont'
-$KeepBackups = 3
+$KeepBackups = 3   # en jours, pas en nombre de fichiers : plusieurs envois le même jour ne comptent que pour un seul jour
 function Is-Blank($v) { return ($null -eq $v -or ([string]$v).Trim() -eq '') }
 # a cell of a new line counts as empty when blank or FALSE (an unticked checkbox: Excel fills checkbox columns by itself)
 function Is-EmptyCell($v) { return ((Is-Blank $v) -or ($v -is [bool] -and -not $v)) }
@@ -326,8 +327,18 @@ function Get-Prop($o, $name) { if ($null -eq $o) { return $null }; $p = $o.PSObj
 function Ensure-Backup($a, $state) {
   if ($state.backup) { return }
   if (-not (Test-Path $BackupDir)) { $null = New-Item -ItemType Directory -Path $BackupDir }
-  $state.backup = [IO.Path]::GetFileName((& $a.Backup $a $BackupDir (Get-Date -Format 'yyyyMMdd-HHmmss')))
-  Get-ChildItem -Path $BackupDir -Filter (& $a.BackupPattern $a) | Sort-Object LastWriteTime -Descending | Select-Object -Skip $KeepBackups | Remove-Item -Force -ErrorAction SilentlyContinue
+  $pattern = & $a.BackupPattern $a
+  $stamp = Get-Date -Format 'yyyyMMdd-HHmmss'; $today = $stamp.Substring(0, 8)
+  # a snapshot for today already exists (an earlier send today) : no need for another one, so a handful of quick
+  # sends in the same day never crowd out yesterday's or the day before's snapshot
+  $sameDay = Get-ChildItem -Path $BackupDir -Filter $pattern -ErrorAction SilentlyContinue | Where-Object { $_.BaseName -match "-$today-\d{6}$" }
+  if ($sameDay) { $state.backup = $sameDay[0].Name; return }
+  $state.backup = [IO.Path]::GetFileName((& $a.Backup $a $BackupDir $stamp))
+  # one snapshot kept per calendar day, the last $KeepBackups days : group by the date in the filename, not by file count
+  $byDay = Get-ChildItem -Path $BackupDir -Filter $pattern -ErrorAction SilentlyContinue |
+    ForEach-Object { if ($_.BaseName -match '-(\d{8})-\d{6}$') { [pscustomobject]@{ file = $_; day = $Matches[1] } } } |
+    Group-Object day
+  $byDay | Sort-Object Name -Descending | Select-Object -Skip $KeepBackups | ForEach-Object { foreach ($x in $_.Group) { Remove-Item $x.file.FullName -Force -ErrorAction SilentlyContinue } }
 }
 $JournalPath = Join-Path $BackupDir 'journal-pont.csv'
 function Csv-Field($v) { '"' + ((Show-Value $v) -replace '"', '""' -replace "`r?`n", ' / ') + '"' }
