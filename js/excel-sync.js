@@ -320,6 +320,17 @@ window.TodoExcelSync=(function(){
             gb.textContent=(policy==='excel'?'Tout Excel':'Tout appli')+' ('+n+')';
             gb.onclick=async()=>{ gb.disabled=true; const t2=gb.textContent; gb.textContent='Envoi…'; await xsApplyBulk(targets, policy); gb.disabled=false; gb.textContent=t2; };
             gtd.appendChild(gb); }); }
+          // more than one kind of change in the lot : harmonise just that one field across the lot, column by column
+          const byCol=new Map();
+          targets.forEach(tg=>tg.diffs.forEach(d=>{ const key=tg.kind+'|'+d.col.label; if(!byCol.has(key)) byCol.set(key, { kind:tg.kind, label:d.col.label, items:[] }); byCol.get(key).items.push({ o:tg.o, d }); }));
+          if(byCol.size>1) byCol.forEach(col=>{
+            const line=document.createElement('div'); line.className='xs-group-col';
+            const lb=document.createElement('span'); lb.textContent=col.label+(col.kind==='bdd'?' (Suivi)':'')+' · '+col.items.length; line.appendChild(lb);
+            ['excel','appli'].forEach(policy=>{ const cb=document.createElement('button'); cb.type='button'; cb.className='pq-link xs-group-col-bulk';
+              cb.textContent=policy==='excel'?'Excel':'Appli';
+              cb.onclick=async()=>{ cb.disabled=true; const t3=cb.textContent; cb.textContent='…'; await xsApplyBulk(col.items.map(it=>({ kind:col.kind, o:it.o, diffs:[it.d] })), policy); cb.disabled=false; cb.textContent=t3; };
+              line.appendChild(cb); });
+            gtd.appendChild(line); });
           gtr.appendChild(gtd); tb.appendChild(gtr);
         }
         members.forEach(row);
