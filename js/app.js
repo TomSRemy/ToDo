@@ -5524,7 +5524,7 @@
       +(window.TodoExcelSync.bridgeLatest(s.info)?' · pont v'+s.info.version:bridgeUpToDate(s.info)?' · pont v'+s.info.version+' (la '+window.TodoExcelSync.BRIDGE_LATEST+' est disponible, plus sûre : télécharge pont-excel.ps1 ci-dessus quand tu veux)':' · ⚠ ton pont est en version '+(s.info.version||'?')+', la '+window.TodoExcelSync.BRIDGE_LATEST+' est disponible : télécharge pont-excel.ps1 ci-dessus, remplace l\u2019ancien fichier et relance le pont');
     el.className='bridge-status '+(bridgeUpToDate(s.info)?'on':'off');
   }
-  window.TodoExcelSync.init({ $, ON_PHONE, PQ_FIELDS, bddCells, bridgeCall, bridgeCheck, bridgeConfigured, cellToText, importParcFromBridge, isExited, openOppDetail, oppActionBtn, oppName, pipeCells, pqFold, pqPad, relanceOnMove, renderPipeline, saveCrm, setOppStage, softFail, stageIndex, stageLabel, suiviState, touchCrm, get bridgeState(){ return bridgeState; }, set bridgeState(v){ bridgeState=v; }, get opportunities(){ return opportunities; }, set opportunities(v){ opportunities=v; } });   // Envoi vers les Excel partagés et Excel ⇄ appli — js/excel-sync.js
+  window.TodoExcelSync.init({ $, ON_PHONE, PQ_FIELDS, bddCells, bridgeCall, bridgeCheck, bridgeConfigured, cellToText, codeAffaire, importParcFromBridge, isExited, openOppDetail, oppActionBtn, oppName, pipeCells, pqFold, pqPad, relanceOnMove, renderPipeline, saveCrm, setOppStage, softFail, stageIndex, stageLabel, suiviState, touchCrm, get bridgeState(){ return bridgeState; }, set bridgeState(v){ bridgeState=v; }, get opportunities(){ return opportunities; }, set opportunities(v){ opportunities=v; } });   // Envoi vers les Excel partagés et Excel ⇄ appli — js/excel-sync.js
   function renderLists(){
     renderStorageGauge();
     renderClientList();

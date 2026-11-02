@@ -69,18 +69,23 @@ window.TodoExcelSync=(function(){
   const xsCellText=(v, dateish)=>{ if(v==null) return ''; if(typeof v==='number' && dateish && v>20000 && v<80000){ const d=new Date(Math.round((v-25569)*86400000)); return pqPad(d.getUTCDate())+'/'+pqPad(d.getUTCMonth()+1)+'/'+d.getUTCFullYear(); }
     if(typeof v==='number') return String(Math.round(v*1000)/1000).replace('.',','); if(typeof v==='boolean') return v?'VRAI':'FAUX'; return String(v).trim(); };
   let xsRead={ pipe:null, bdd:null };   // last reading of each file through the bridge: { at, rows: Map(key → row), off }
+  let xsReadError={ pipe:null, bdd:null };   // the last read's failure, kept until the next try succeeds or fails again —
+  // shown right in the panel (not just a toast that disappears) so a tab renamed or missing in the Excel doesn't go unnoticed
   // a / b: the two key columns (0 = column A): Pipe G « Nom Producteur » + T « Nom Centrale »; Suivi AF « Nom_prod » + AH « Nom_Installation_prod »
   const XS_KEYS={ pipe:{ header:'Nom Producteur', a:6, b:19, sheet:/^\s*pipe\s+agr[eé]gation\s*$/i }, bdd:{ header:'Nom_prod', a:31, b:33, sheet:/^\s*bdd\s+agr[eé]gation\s*$/i } };   // that sheet only, never another « Pipe … » one
   const xsAppValues=(kind,o)=>kind==='pipe'?PQ_FIELDS.reduce((row,f,i)=>{ row[xsColIdx(f.col)]=pipeCells(o)[i]; return row; }, []):bddCells(o);
   const xsKey=(kind, vals)=>xsNorm(vals[XS_KEYS[kind].a])+'|'+xsNorm(vals[XS_KEYS[kind].b]);
   async function xsReadFile(kind){
-    const res=await bridgeCall('GET','/'+kind+'/read',null,60000), sheets=res.sheets||{};
-    const name=Object.keys(sheets).find(n=>XS_KEYS[kind].sheet.test(n)); if(!name) throw new Error('Onglet introuvable dans le fichier '+(kind==='pipe'?'Pipe':'BDD'));
-    const rows=sheets[name]||[], K=XS_KEYS[kind];
-    const hi=rows.findIndex((r,i)=>i<20 && (r||[]).some(c=>xsNorm(c)===xsNorm(K.header))); if(hi<0) throw new Error('En-tête « '+K.header+' » introuvable');
-    const off=rows[hi].findIndex(c=>xsNorm(c)===xsNorm(K.header))-K.a, map=new Map();
-    rows.slice(hi+1).forEach((r,i)=>{ if(!r) return; const vals=[]; r.forEach((c,j)=>{ vals[j-off]=c; }); const k=xsKey(kind, vals); if(k!=='|') map.set(k, { vals, line:hi+2+i }); });
-    xsRead[kind]={ at:Date.now(), rows:map, name };
+    try{
+      const res=await bridgeCall('GET','/'+kind+'/read',null,60000), sheets=res.sheets||{};
+      const name=Object.keys(sheets).find(n=>XS_KEYS[kind].sheet.test(n)); if(!name) throw new Error('Onglet introuvable dans le fichier '+(kind==='pipe'?'Pipe':'BDD')+' (renommé ou déplacé ?)');
+      const rows=sheets[name]||[], K=XS_KEYS[kind];
+      const hi=rows.findIndex((r,i)=>i<20 && (r||[]).some(c=>xsNorm(c)===xsNorm(K.header))); if(hi<0) throw new Error('En-tête « '+K.header+' » introuvable');
+      const off=rows[hi].findIndex(c=>xsNorm(c)===xsNorm(K.header))-K.a, map=new Map();
+      rows.slice(hi+1).forEach((r,i)=>{ if(!r) return; const vals=[]; r.forEach((c,j)=>{ vals[j-off]=c; }); const k=xsKey(kind, vals); if(k!=='|') map.set(k, { vals, line:hi+2+i }); });
+      xsRead[kind]={ at:Date.now(), rows:map, name };
+      xsReadError[kind]=null;
+    }catch(e){ xsReadError[kind]=e.message; throw e; }
   }
   // where an installation stands for one file
   function xsState(kind, o){
@@ -142,7 +147,7 @@ window.TodoExcelSync=(function(){
     let ov=$('xs-overlay');
     if(!ov){ ov=document.createElement('div'); ov.id='xs-overlay'; ov.className='modal-overlay';
       ov.innerHTML='<div class="modal-box wide xs-box" role="dialog" aria-labelledby="xs-title"><div class="xs-head"><h3 id="xs-title">Excel ⇄ appli</h3><div class="xs-filter"><button type="button" data-f="todo" class="on">À traiter</button><button type="button" data-f="all">Tout</button></div><button type="button" class="modal-x xs-x" aria-label="Fermer">×</button></div>'
-        +'<p class="modal-hint xs-info"></p><div class="xs-tools"><button type="button" class="xs-read">Relire les Excel</button><button type="button" class="xs-send" data-k="pipe"></button><button type="button" class="xs-send" data-k="bdd"></button><span class="xs-bulk-group"><button type="button" class="xs-bulk" data-p="excel">Tout garder Excel</button><button type="button" class="xs-bulk" data-p="appli">Tout garder appli</button></span></div><div class="xs-body"></div></div>';
+        +'<p class="modal-hint xs-info"></p><p class="xs-read-err" hidden></p><div class="xs-tools"><button type="button" class="xs-read">Relire les Excel</button><button type="button" class="xs-send" data-k="pipe"></button><button type="button" class="xs-send" data-k="bdd"></button><span class="xs-bulk-group"><button type="button" class="xs-bulk" data-p="excel">Tout garder Excel</button><button type="button" class="xs-bulk" data-p="appli">Tout garder appli</button></span></div><div class="xs-body"></div></div>';
       document.body.appendChild(ov); const close=()=>ov.classList.add('hidden');
       ov.addEventListener('click', e=>{ if(e.target===ov) close(); }); ov.querySelector('.xs-x').onclick=close;
       ov.querySelectorAll('.xs-filter button').forEach(b=>b.onclick=()=>{ ov.querySelectorAll('.xs-filter button').forEach(x=>x.classList.toggle('on', x===b)); paintExcelSync(); });
@@ -178,14 +183,7 @@ window.TodoExcelSync=(function(){
       } });
     return Object.keys(force).length ? { force, seen } : null;
   }
-  // The single row's own « Appliquer ». Returns whether it actually sent (false only when sendToExcel failed, e.g.
-  // the file is locked elsewhere).
-  async function xsApplyRow(kind, o, diffs, choices, aligns){
-    const plan=xsBuildRowPlan(kind, o, diffs, choices, aligns);
-    // sendToExcel re-reads the file and repaints the panel itself ; nothing left to do when it sends
-    if(plan) return await sendToExcel(kind, [o], null, plan);
-    renderPipeline(); saveCrm(); paintExcelSync(); return true;
-  }
+  const xsIsCommentCol=label=>/commentaire|remarque|observation|particularit/i.test(label||'');
   // the diverging cells for a set of rows, as { kind, o, diffs } — a lot's rows, or everything currently shown
   function xsConflictTargets(rowList){
     const out=[]; (rowList||[]).forEach(r=>{ if(r.pDiffs.length) out.push({ kind:'pipe', o:r.o, diffs:r.pDiffs }); if(r.bDiffs.length) out.push({ kind:'bdd', o:r.o, diffs:r.bDiffs }); });
@@ -216,72 +214,16 @@ window.TodoExcelSync=(function(){
       return { kind:tg.kind, o:tg.o, plan:xsBuildRowPlan(tg.kind, tg.o, tg.diffs, choices, aligns) }; });
     await xsSendPlans(plans);
   }
-  // Several fields changed by someone else on the same installation : one table, columns = fields (like the Excel header
-  // row), the Excel row above the appli row — click a cell to keep it, click « Excel »/« Appli » to keep the whole row,
-  // then one « Appliquer » sends every field kept from the appli in a single request.
-  const xsIsCommentCol=label=>/commentaire|remarque|observation|particularit/i.test(label||'');
-  function xsDiffTable(td, kind, o, diffs){
-    if(!diffs.length) return;
-    const choices={}, aligns={}; diffs.forEach(d=>{ const vi=xsViOf(kind, d); choices[vi]='excel'; aligns[vi]=true; });   // default: nothing sent, the Excel's value is kept and brought into the fiche (sauf décoché)
-    const wrap=document.createElement('div'); wrap.className='xc-wrap';
-    const table=document.createElement('table'); table.className='xc-table';
-    const headRow=document.createElement('tr'); headRow.appendChild(document.createElement('th'));
-    diffs.forEach(d=>{ const th=document.createElement('th'); th.textContent=d.col.label;
-      if(xsIsCommentCol(d.col.label)){ const vi=xsViOf(kind, d), mb=document.createElement('button'); mb.type='button'; mb.className='xc-merge'; mb.textContent='fusionner';
-        mb.onclick=()=>{ choices[vi]=choices[vi]==='merge'?'excel':'merge'; refresh(); }; th.appendChild(document.createElement('br')); th.appendChild(mb); }
-      headRow.appendChild(th); });
-    const thead=document.createElement('thead'); thead.appendChild(headRow); table.appendChild(thead);
-    const tbody=document.createElement('tbody'); table.appendChild(tbody);
-    const mkRow=(side, label)=>{
-      const tr=document.createElement('tr');
-      const rowBtn=document.createElement('button'); rowBtn.type='button'; rowBtn.className='xc-rowsel'; rowBtn.innerHTML='<span class="dot"></span>'+label;
-      const th=document.createElement('th'); th.appendChild(rowBtn); tr.appendChild(th);
-      diffs.forEach(d=>{ const vi=xsViOf(kind, d), td2=document.createElement('td'), b=document.createElement('button');
-        b.type='button'; b.className='xc-cell'; b.textContent=(side==='excel'?d.excel:d.app)||'vide';
-        b.onclick=()=>{ choices[vi]=side; refresh(); };
-        td2.appendChild(b); tr.appendChild(td2); });
-      rowBtn.onclick=()=>{ diffs.forEach(d=>{ choices[xsViOf(kind, d)]=side; }); refresh(); };
-      return tr;
-    };
-    const rowExcel=mkRow('excel', 'Excel'), rowApp=mkRow('appli', 'Appli');
-    tbody.append(rowExcel, rowApp); wrap.appendChild(table); td.appendChild(wrap);
-    const alignBox=document.createElement('div'); alignBox.className='xc-aligns'; td.appendChild(alignBox);
-    const foot=document.createElement('div'); foot.className='xc-foot';
-    const summary=document.createElement('span'); foot.appendChild(summary);
-    const apply=document.createElement('button'); apply.type='button'; apply.className='pq-link xc-apply'; apply.textContent='Appliquer'; foot.appendChild(apply);
-    td.appendChild(foot);
-    const refresh=()=>{
-      diffs.forEach((d,i)=>{ const vi=xsViOf(kind, d), sel=choices[vi];
-        const ec=rowExcel.children[i+1].firstChild, ac=rowApp.children[i+1].firstChild;
-        ec.classList.toggle('sel', sel==='excel'); ac.classList.toggle('sel', sel==='appli');
-        ec.classList.toggle('merged', sel==='merge'); ac.classList.toggle('merged', sel==='merge');
-        const mb=headRow.children[i+1].querySelector('.xc-merge'); if(mb) mb.classList.toggle('on', sel==='merge'); });
-      rowExcel.firstChild.firstChild.classList.toggle('on', diffs.every(d=>choices[xsViOf(kind, d)]==='excel'));
-      rowApp.firstChild.firstChild.classList.toggle('on', diffs.every(d=>choices[xsViOf(kind, d)]==='appli'));
-      // kept from the Excel, and the Excel's value also fits a field on the fiche (a stage, a status) : offer to bring it in too
-      alignBox.innerHTML='';
-      diffs.forEach(d=>{ const vi=xsViOf(kind, d); if(choices[vi]!=='excel') return;
-        const al=xsAlignAction(kind, o, vi, d.excel); if(!al) return;
-        const lab=document.createElement('label'); lab.className='xc-align';
-        const cb=document.createElement('input'); cb.type='checkbox'; cb.checked=!!aligns[vi]; cb.onchange=()=>{ aligns[vi]=cb.checked; };
-        lab.append(cb, document.createTextNode(' aussi : '+al.label));
-        alignBox.appendChild(lab); });
-      const nApp=Object.values(choices).filter(v=>v==='appli'||v==='merge').length;
-      summary.textContent=nApp?nApp+' case'+(nApp>1?'s':'')+' à écrire dans Excel':'rien à écrire dans Excel';
-    };
-    refresh();
-    apply.onclick=async()=>{
-      apply.disabled=true; apply.textContent='Envoi…';
-      await xsApplyRow(kind, o, diffs, choices, aligns);
-    };
-  }
   function paintExcelSync(){
     const ov=$('xs-overlay'); if(!ov || ov.classList.contains('hidden')) return;
     const all=ov.querySelector('.xs-filter .on').dataset.f==='all', body=ov.querySelector('.xs-body'); body.innerHTML='';
-    const fmtD=t=>t>1e12?new Date(t).toLocaleDateString('fr-FR'):'';
     ov.querySelector('.xs-info').textContent=bridgeConfigured()
-      ? 'Pipe '+(xsRead.pipe?'relu le '+fmtD(xsRead.pipe.at)+' à '+new Date(xsRead.pipe.at).toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'}):'pas encore relu')+' · Suivi '+(xsRead.bdd?'relu':'pas encore relu')+'. Envoyer ne remplace jamais une case modifiée par un collègue : elle te sera demandée.'
+      ? 'Pipe '+(xsRead.pipe?'relu le '+new Date(xsRead.pipe.at).toLocaleDateString('fr-FR')+' à '+new Date(xsRead.pipe.at).toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'}):'pas encore relu')+' · Suivi '+(xsRead.bdd?'relu':'pas encore relu')+'. Envoyer ne remplace jamais une case modifiée par un collègue : elle te sera demandée.'
       : 'Pont Excel non connecté sur cet ordinateur : la colonne « appli » dit ce qui a été envoyé ; le Suivi est relu depuis le Portefeuille (fichier chargé). Le pont se règle dans Réglages.';
+    // a failed read stays shown here (not just a toast that disappears) until the next read succeeds : impossible to
+    // miss that the Pipe or Suivi couldn't be read (a renamed tab, a moved file…), unlike a transient message
+    const errs=['pipe','bdd'].filter(k=>xsReadError[k]).map(k=>(k==='pipe'?'Pipe':'Suivi')+' : '+xsReadError[k]);
+    const errEl=ov.querySelector('.xs-read-err'); errEl.hidden=!errs.length; errEl.textContent=errs.join(' · ');
     ov.querySelectorAll('.xs-scope button').forEach(b=>b.classList.toggle('on', b.dataset.s===xsScope));
     const rows=xsList().filter(xsInScope).map(o=>{ const p=xsState('pipe',o), b=xsBddApplies(o)?xsState('bdd',o):null;
       return { o, p, b, pDiffs:p.diffs.filter(d=>d.byExcel), bDiffs:b?b.diffs.filter(d=>d.byExcel):[] }; });
@@ -293,55 +235,47 @@ window.TodoExcelSync=(function(){
     const nConflictCells=xsConflictTargets(shown).reduce((s,tg)=>s+tg.diffs.length, 0);
     ov.querySelectorAll('.xs-bulk').forEach(b=>{ b.textContent=(b.dataset.p==='excel'?'Tout garder Excel':'Tout garder appli')+' ('+nConflictCells+')'; b.disabled=!nConflictCells || !bridgeConfigured(); b.title=bridgeConfigured()?'':'Pont Excel non connecté'; });
     if(!shown.length){ body.innerHTML='<p class="xs-empty">✓ Tout est à jour'+(xsRead.pipe?'':' côté appli (relis les Excel pour vérifier le contenu des fichiers)')+'.</p>'; return; }
-    const cell=(kind, o, st, diffs)=>{
-      const td=document.createElement('td'); if(!st){ td.innerHTML='<span class="xs-na">pas encore (avant le pricing)</span>'; return td; }
-      const tag=(cls,txt)=>{ const s=document.createElement('span'); s.className='xs-tag '+cls; s.textContent=txt; td.appendChild(s); };
-      if(st.app==='jamais') tag('warn','Pas envoyé');
-      else if(st.app==='modif') tag('warn','Modifié dans l’appli depuis l’envoi'+(fmtD(st.sentAt)?' du '+fmtD(st.sentAt):''));
-      else tag('ok','Envoyé'+(fmtD(st.sentAt)?' le '+fmtD(st.sentAt):''));
-      if(st.excel==='absent' && st.app!=='jamais') tag('bad','Absent du fichier');
-      if(st.excel==='statut') tag('info','Statut Suivi : '+(st.statut||'?'));
-      if(st.line) { const l=document.createElement('span'); l.className='xs-line'; l.textContent='ligne '+st.line; td.appendChild(l); }
-      xsDiffTable(td, kind, o, diffs);
-      if(st.excel==='statut'){ const a=xsStatutAction(o, st.statut); if(a){ const b=document.createElement('button'); b.type='button'; b.className='pq-link'; b.textContent=a.label; b.onclick=()=>{ a.run(); renderPipeline(); paintExcelSync(); }; td.appendChild(b); } }
-      if(xsTodo(st) && !diffs.length && bridgeConfigured()){ const b=document.createElement('button'); b.type='button'; b.className='pq-link xs-one'; b.textContent='Envoyer'; b.onclick=async()=>{ await sendToExcel(kind,[o],b); try{ await xsReadFile(kind); }catch(e){ softFail('relecture de l’Excel', e); } paintExcelSync(); }; td.appendChild(b); }
-      return td; };
-    const soloRow=(tb,{o,p,b,pDiffs,bDiffs})=>{ const tr=document.createElement('tr');
-      const n=document.createElement('td'); n.className='xs-name'; n.innerHTML='<b></b><span></span>'; n.firstChild.textContent=oppName(o); n.lastChild.textContent=[o.company, stageLabel(o.stage, o)].filter(Boolean).join(' · ');
-      n.onclick=()=>{ $('xs-overlay').classList.add('hidden'); openOppDetail(o.id); };
-      tr.append(n, cell('pipe', o, p, pDiffs), cell('bdd', o, b, bDiffs)); tb.appendChild(tr); };
-    // installations sent together for one pricing request (o.requestId) : a lot, folded by default like a directory
-    const lotIds=new Set(), lots=[], solo=[];
+    // installations sent together for one pricing request (o.requestId) share one card ; a lone installation gets
+    // the same card, for just itself — one single design, whatever the size
+    const groupIds=new Set(), groups=[];
     shown.forEach(r=>{ const rid=r.o.requestId;
-      if(rid){ if(lotIds.has(rid)) return; lotIds.add(rid);
+      if(rid){ if(groupIds.has(rid)) return; groupIds.add(rid);
         const members=shown.filter(x=>x.o.requestId===rid);
-        if(members.length>1) lots.push({ rid, members }); else solo.push(members[0]); }
-      else solo.push(r); });
-    if(lots.length){ const lw=document.createElement('div'); lw.className='xl-lots'; lots.forEach(({rid,members})=>lw.appendChild(xlLotCard(rid, members))); body.appendChild(lw); }
-    if(solo.length){
-      if(lots.length){ const h=document.createElement('div'); h.className='xs-solo-head'; h.textContent='Hors lot'; body.appendChild(h); }
-      const t=document.createElement('table'); t.className='xs-table';
-      t.innerHTML='<thead><tr><th>Installation</th><th>Pipe Excel</th><th>Suivi (BDD)</th></tr></thead>';
-      const tb=document.createElement('tbody');
-      solo.forEach(r=>soloRow(tb, r));
-      t.appendChild(tb); body.appendChild(t);
-    }
+        groups.push({ rid:members.length>1?rid:null, members }); }
+      else groups.push({ rid:null, members:[r] }); });
+    const lw=document.createElement('div'); lw.className='xl-lots';
+    groups.forEach(({rid,members})=>lw.appendChild(xlLotCard(rid, members)));
+    body.appendChild(lw);
   }
-  // A lot, folded by default : its name, how many cases need a decision, two quick buttons for the whole lot.
-  // Opened, a dense grid — columns are the fields that diverge anywhere in the lot, rows are its installations ;
-  // a column header decides that field for the whole lot, a row name decides that whole installation, a cell just itself.
+  // A card, folded by default : its name, how many cases need a decision, two quick buttons for the whole group.
+  // Opened, a dense grid — columns are the fields that diverge anywhere in the group, rows are its installations ;
+  // a column header decides that field for the whole group, a row name decides that whole installation, a cell just
+  // itself. A lone installation (rid null) gets the very same card, for its one row — a pricing lot and a single
+  // installation are the same idea at a different size, not two different things to learn.
   function xlLotCard(rid, members){
-    const req=app.opportunities.find(x=>x.id===rid), label=(req && !req.deleted && req.label) || ('Lot de '+members.length+' installations');
-    const targets=xsConflictTargets(members), nCells=targets.reduce((s,tg)=>s+tg.diffs.length, 0);
-    const card=document.createElement('div'); card.className='xl-lot';
+    const card=document.createElement('div'); card.className='xl-lot'; card.dataset.rid=rid||('solo-'+members[0].o.id);
     const head=document.createElement('div'); head.className='xl-head';
     head.innerHTML='<span class="xl-chev">▶</span><div class="xl-name"><b></b><span></span></div><div class="xl-meta"></div>';
-    head.querySelector('.xl-name b').textContent=label;
-    head.querySelector('.xl-name span').textContent=members.length+' installation'+(members.length>1?'s':'');
+    const req=rid && app.opportunities.find(x=>x.id===rid);
+    if(req && !req.deleted && req.label){ head.querySelector('.xl-name b').textContent=req.label; head.querySelector('.xl-name span').textContent=members.length+' installation'+(members.length>1?'s':''); }
+    else if(members.length>1){ head.querySelector('.xl-name b').textContent='Lot de '+members.length+' installations'; head.querySelector('.xl-name span').textContent=''; }
+    else { const o=members[0].o; head.querySelector('.xl-name b').textContent=o.producteur||o.company||'(sans nom)'; head.querySelector('.xl-name span').textContent=codeAffaire(o); }
     const meta=head.querySelector('.xl-meta');
-    const tag=document.createElement('span'); tag.className='xl-tag '+(nCells?'todo':'ok'); tag.textContent=nCells?nCells+' case'+(nCells>1?'s':''):'à jour'; meta.appendChild(tag);
+    const targets=xsConflictTargets(members), nCells=targets.reduce((s,tg)=>s+tg.diffs.length, 0);
+    const needsSend=members.filter(m=>(xsTodo(m.p)&&!m.pDiffs.length) || (m.b&&xsTodo(m.b)&&!m.bDiffs.length)).length;
+    const tag=document.createElement('span'); tag.className='xl-tag '+(nCells?'todo':needsSend?'warn':'ok');
+    tag.textContent=nCells?nCells+' case'+(nCells>1?'s':''):needsSend?(needsSend>1?needsSend+' pas envoyées':'pas envoyé'):'à jour';
+    meta.appendChild(tag);
     card.appendChild(head);
-    if(!nCells) return card;   // nothing to decide : the tag alone says so, no need to open it
+    if(!nCells){
+      if(needsSend && bridgeConfigured()){ const sb=document.createElement('button'); sb.type='button'; sb.className='pq-link'; sb.textContent='Envoyer';
+        sb.onclick=async e=>{ e.stopPropagation(); sb.disabled=true; const t=sb.textContent; sb.textContent='Envoi…';
+          for(const kind of ['pipe','bdd']){ const list=members.filter(m=>{ const st=kind==='pipe'?m.p:m.b, diffs=kind==='pipe'?m.pDiffs:m.bDiffs; return st && xsTodo(st) && !diffs.length; }).map(m=>m.o);
+            if(list.length) await sendToExcel(kind, list, null); }
+          sb.disabled=false; sb.textContent=t; };
+        meta.appendChild(sb); }
+      return card;
+    }
 
     const quick=document.createElement('div'); quick.className='xl-quick';
     [['excel','Tout Excel'],['appli','Tout appli']].forEach(([policy,lbl])=>{ const qb=document.createElement('button'); qb.type='button'; qb.textContent=lbl;
@@ -352,23 +286,23 @@ window.TodoExcelSync=(function(){
     const byCol=new Map();
     targets.forEach(tg=>tg.diffs.forEach(d=>{ const key=tg.kind+'|'+d.col.label; if(!byCol.has(key)) byCol.set(key, { kind:tg.kind, label:d.col.label, items:[] }); byCol.get(key).items.push({ o:tg.o, d }); }));
     const cols=[...byCol.values()];
-    const cellChoice={};   // key kind|vi|installation id -> 'excel'|'appli'
+    const cellChoice={};   // key kind|vi|installation id -> 'excel'|'appli'|'merge'
     cols.forEach(col=>col.items.forEach(it=>{ cellChoice[col.kind+'|'+xsViOf(col.kind, it.d)+'|'+it.o.id]='excel'; }));
 
     const wrap=document.createElement('div'); wrap.className='xl-grid-wrap';
     const table=document.createElement('table'); table.className='xl-grid';
     const thead=document.createElement('thead'); const htr=document.createElement('tr'); htr.appendChild(document.createElement('th'));
     const colBtns=[];
-    cols.forEach(col=>{ const th=document.createElement('th'); const cb=document.createElement('button'); cb.type='button'; cb.className='xl-colhead'; cb.dataset.side='excel';
-      cb.innerHTML='<b></b><small></small>'; cb.querySelector('b').textContent=col.label+(col.kind==='bdd'?' (Suivi)':''); cb.querySelector('small').textContent=col.items.length+' installation'+(col.items.length>1?'s':'');
+    cols.forEach(col=>{ const th=document.createElement('th'); const cb=document.createElement('button'); cb.type='button'; cb.className='xl-colhead'; cb.dataset.side='excel'; cb.dataset.comment=xsIsCommentCol(col.label)?'1':'';
+      cb.innerHTML='<b></b><small></small>'; cb.querySelector('b').textContent=col.label+(col.kind==='bdd'?' (Suivi)':''); cb.querySelector('small').textContent=col.items.length+' installation'+(col.items.length>1?'s':'')+(cb.dataset.comment?' · clic : fusionner':'');
       th.appendChild(cb); htr.appendChild(th); colBtns.push(cb); });
     thead.appendChild(htr); table.appendChild(thead);
     const tbody=document.createElement('tbody'); table.appendChild(tbody);
-    const cellBtns=[];   // { kind, vi, oid, excelBtn, appliBtn }
+    const cellBtns=[];   // { key, bE, bA }
     members.forEach(m=>{
-      const tr=document.createElement('tr');
+      const tr=document.createElement('tr'); tr.dataset.oid=m.o.id;
       const rh=document.createElement('th'); const rb=document.createElement('button'); rb.type='button'; rb.className='xl-rowhead'; rb.dataset.side='excel';
-      rb.innerHTML='<b></b>'; rb.querySelector('b').textContent=oppName(m.o); rh.appendChild(rb); tr.appendChild(rh);
+      rb.innerHTML='<b></b><small></small>'; rb.querySelector('b').textContent=m.o.producteur||m.o.company||'(sans nom)'; rb.querySelector('small').textContent=codeAffaire(m.o); rh.appendChild(rb); tr.appendChild(rh);
       const rowCellKeys=[];
       cols.forEach(col=>{
         const td=document.createElement('td'); const item=col.items.find(it=>it.o.id===m.o.id);
@@ -386,8 +320,11 @@ window.TodoExcelSync=(function(){
     });
     wrap.appendChild(table); card.appendChild(wrap);
 
+    // a comment column cycles Excel → Appli → Fusionner (both texts, one after the other) → Excel ; any other field
+    // just alternates Excel/Appli for the whole column
     colBtns.forEach((cb,i)=>{ const col=cols[i];
-      cb.onclick=()=>{ const next=cb.dataset.side==='excel'?'appli':'excel'; cb.dataset.side=next;
+      cb.onclick=()=>{ const order=cb.dataset.comment?['excel','appli','merge']:['excel','appli'];
+        const next=order[(order.indexOf(cb.dataset.side)+1)%order.length]; cb.dataset.side=next;
         col.items.forEach(it=>{ cellChoice[col.kind+'|'+xsViOf(col.kind, it.d)+'|'+it.o.id]=next; }); refresh(); }; });
 
     const foot=document.createElement('div'); foot.className='xl-foot';
@@ -396,8 +333,10 @@ window.TodoExcelSync=(function(){
     card.appendChild(foot);
 
     const refresh=()=>{
-      cellBtns.forEach(({key,bE,bA})=>{ const side=cellChoice[key]; bE.classList.toggle('sel', side==='excel'); bA.classList.toggle('sel', side==='appli'); });
-      const nApp=Object.values(cellChoice).filter(v=>v==='appli').length;
+      cellBtns.forEach(({key,bE,bA})=>{ const side=cellChoice[key];
+        bE.classList.toggle('sel', side==='excel'); bA.classList.toggle('sel', side==='appli');
+        bE.classList.toggle('merged', side==='merge'); bA.classList.toggle('merged', side==='merge'); });
+      const nApp=Object.values(cellChoice).filter(v=>v==='appli'||v==='merge').length;
       summary.textContent=nApp?nApp+' case'+(nApp>1?'s':'')+' à écrire dans Excel':'rien à écrire dans Excel';
       apply.textContent='Appliquer ('+members.length+' installation'+(members.length>1?'s':'')+')';
     };

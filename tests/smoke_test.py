@@ -2803,20 +2803,19 @@ Responsable technique
     page.goto(URL); page.click('[data-tab="pipeline"]'); page.click("#pipe-more-btn"); page.click("#pipe-xs-btn")
     page.wait_for_function("document.querySelector('#xs-overlay .xs-info').textContent.includes('relu le')", timeout=8000)
     xs = page.inner_text("#xs-overlay .xs-body")
-    check("Le Pré" in xs and "Pas envoyé" in xs, "excel ⇄ app: an installation never sent is listed")
-    check("commentaires" in xs.lower() and "Vu au salon (Marie)" in xs and "ligne 3" in xs, f"excel ⇄ app: a cell changed in the Pipe by a colleague is shown, with its line ({xs[:300]!r})")
-    check("avant le pricing" in xs, "excel ⇄ app: the Suivi only from the pricing on")
-    # each difference: a table, Excel's row above the appli's ; a cell click keeps it, « Appliquer » sends what was kept from the appli
-    pipeTbl = "#xs-overlay tr:has-text('Les Vignes') td:has-text('Commentaires')"
-    # the app has nothing here: the « appli » cell reads « vide » — clicking it takes the Excel's value instead
-    page.click(pipeTbl + " .xc-cell:text-is('vide')")
-    page.click(pipeTbl + " .xc-apply")
+    check("Le Pré" in xs and "pas envoyé" in xs.lower(), "excel ⇄ app: an installation never sent is listed")
+    card = "#xs-overlay .xl-lot[data-rid='solo-xa']"
+    page.click(card + " .xl-head")
+    txt = page.inner_text(card + " .xl-grid")
+    check("commentaires" in txt.lower() and "Vu au salon (Marie)" in txt, f"excel ⇄ app: a cell changed in the Pipe by a colleague is shown ({txt[:300]!r})")
+    check("pas envoyé" in page.inner_text("#xs-overlay .xl-lot[data-rid='solo-xb'] .xl-tag").lower(), "excel ⇄ app: « Le Pré » gets its own card too, tagged « pas envoyé » (nothing to decide, just to send)")
+    # the appli has nothing for Commentaires : the « appli » cell reads « vide » — taking it puts the Excel's value in the app
+    row = card + " .xl-grid tbody tr[data-oid='xa']"
+    page.click(row + " .xl-cell:has-text('vide') button:has-text('Appli')")
+    # Statut (« Gagné ») is left on the default « Excel » : with no opt-out box any more, it also moves the deal along
+    page.click(card + " .xl-foot button")
     check(eventually(lambda: next(o for o in stored(page, "todo-widget-opportunities") if o["id"] == "xa").get("commentaires") == "Vu au salon (Marie)", 3000), "excel ⇄ app: taking the Excel's « vide » cell puts its value in the app")
-    bddTbl = "#xs-overlay tr:has-text('Les Vignes') td:has-text('Statut')"
-    # left as the default (« Excel », « aussi » ticked by default) : the status also moves the pipeline along
-    check(page.is_checked(bddTbl + " .xc-align:has-text('onboarding') input"), "excel ⇄ app: « aussi » is ticked by default")
-    page.click(bddTbl + " .xc-apply")
-    check(eventually(lambda: next(o for o in stored(page, "todo-widget-opportunities") if o["id"] == "xa").get("stage") == "onboarding", 3000), "excel ⇄ app: « Gagné » kept from the Suivi, « aussi » ticked by default: the deal moves to Onboarding")
+    check(eventually(lambda: next(o for o in stored(page, "todo-widget-opportunities") if o["id"] == "xa").get("stage") == "onboarding", 3000), "excel ⇄ app: « Gagné » kept by default from the Suivi also moves the deal to Onboarding")
     page.click("#xs-overlay .xs-send[data-k=pipe]"); page.wait_for_timeout(400)
     sent_ids = [r["values"][19] for k, b in xs_sent if k == "pipe" for r in b["rows"]]
     check("Le Pré" in sent_ids, f"excel ⇄ app: « Envoyer au Pipe » sends what is pending ({sent_ids})")
@@ -2855,14 +2854,17 @@ Responsable technique
     page.wait_for_selector("#xs-overlay:not(.hidden)", timeout=5000)   # no separate popup : the conflict opens the same panel
     first = sent2[0]["rows"][0]
     check(len(first["values"]) == 37 and first["prev"] is None and "ouvre-le avant" in page.inner_text("#bridge-msg"), "shared Excel: closed file reported")
-    pipeTbl = "#xs-overlay tr:has-text('Les Vignes') td:has-text('Stade')"
-    page.wait_for_selector(pipeTbl + " .xc-cell", timeout=5000)
-    txt = page.inner_text(pipeTbl)
-    check("Perdu" in txt and "Vu au salon (Marie)" in txt, f"shared Excel: both changed cells shown in the one table, re-read from the file ({txt!r})")
-    check(page.locator(pipeTbl + " .xc-merge").count() == 1, f"shared Excel: \u00ab fusionner \u00bb offered for the comment column only ({page.locator(pipeTbl + ' .xc-merge').count()})")
-    page.click(pipeTbl + " .xc-align:has-text('Perdu') input")   # Excel kept for Stade (the default), « aussi » unticked
-    page.click(pipeTbl + " .xc-merge")   # merge the two comments
-    page.click(pipeTbl + " .xc-apply")
+    card = "#xs-overlay .xl-lot[data-rid='solo-i1']"
+    page.wait_for_selector(card, timeout=5000)
+    page.click(card + " .xl-head")
+    txt = page.inner_text(card + " .xl-grid")
+    check("Perdu" in txt and "Vu au salon (Marie)" in txt, f"shared Excel: both changed cells shown in the one card\'s grid, re-read from the file ({txt!r})")
+    comment_col = card + " .xl-colhead:has-text('Commentaires')"
+    check(page.get_attribute(comment_col, "data-comment") == "1", "shared Excel: the comment column is flagged for merging, unlike Stade")
+    # Stade stays on the default « Excel » ; Commentaires cycles Excel → Appli → Fusionner (two clicks)
+    page.click(comment_col); page.click(comment_col)
+    check(page.locator(card + " .xl-cell button.merged").count() == 2, "shared Excel: two clicks on the comment column reach « fusionner »")
+    page.click(card + " .xl-foot button")
     page.wait_for_timeout(300)
     second = sent2[1]["rows"][0] if len(sent2) > 1 else {}
     o = stored(page, "todo-widget-opportunities")[0]
@@ -2925,7 +2927,7 @@ Responsable technique
     check("3 cases" in page.inner_text("#xs-overlay .xl-tag"), f"lot grid: the tag shows the pending count ({page.inner_text('#xs-overlay .xl-tag')!r})")
     page.click("#xs-overlay .xl-head")
     check(page.locator("#xs-overlay .xl-colhead").count() == 2, "lot grid: two distinct columns (Stade affects A/B, Commentaires affects C)")
-    row_c = "#xs-overlay .xl-grid tr:has(.xl-rowhead:has-text('C'))"
+    row_c = "#xs-overlay .xl-grid tr[data-oid='lc']"
     page.click(row_c + " .xl-rowhead")
     check(page.locator(row_c + " .xl-cell button.sel:has-text('Appli')").count() == 1, "lot grid: a row name toggles just that installation's own cell")
     page.click(row_c + " .xl-rowhead")
@@ -3218,22 +3220,22 @@ Responsable technique
     page, errors = new_page(browser, {"todo_todo-widget-opportunities": json.dumps(i3), "todo_bridge-config": json.dumps({"port": 8765, "token": "k1"})}, viewport={"width": 1400, "height": 900})
     page.route("http://127.0.0.1:8765/**", bridge3)
     page.goto(URL); page.click('[data-tab="pipeline"]'); page.click("#pipe-more-btn"); page.click("#pipe-xs-btn")
-    rowA = "#xs-overlay tr:has-text('Toit A') td:has-text('Commentaires')"; rowB = "#xs-overlay tr:has-text('Toit B') td:has-text('Commentaires')"
-    page.wait_for_selector(rowA + " .xc-cell", timeout=8000)
-    page.click(rowA + " .xc-cell:text-is('Note appli A')")   # select the appli's value for this column
-    page.click(rowA + " .xc-apply")
+    rowA = "#xs-overlay .xl-lot[data-rid='solo-ya']"; rowB = "#xs-overlay .xl-lot[data-rid='solo-yb']"
+    page.wait_for_selector(rowA + " .xl-head", timeout=8000)
+    page.click(rowA + " .xl-head")
+    page.click(rowA + " .xl-cell button:has-text('Note appli A')")   # select the appli's value for this column
+    page.click(rowA + " .xl-foot button")
     check(eventually(lambda: len(sent3) == 1), f"excel ⇄ panel: « Appliquer » with the appli's value selected sends it ({page.evaluate("(document.getElementById('bridge-msg')||{}).textContent")})")
     r = sent3[0]["rows"][0] if sent3 else {}
     vi = str(r.get("values", [None] * 40).index("Note appli A")) if "Note appli A" in r.get("values", []) else "?"
     check(r.get("force") == {vi: "replace"} and r.get("seen") == {vi: "Note Excel A"}, f"excel ⇄ panel: the app's value replaces the cell only if it still holds the one shown ({r.get('force')}, {r.get('seen')})")
-    # row B: left on the default (« Excel »), the « aussi : la fiche prend … » box unticked (it is ticked by default), then Appliquer
-    page.wait_for_selector(rowB + " .xc-apply", timeout=8000)
-    check(page.is_checked(rowB + " .xc-align input"), "excel ⇄ panel: « aussi » is ticked by default too")
-    page.click(rowB + " .xc-align input")
-    page.click(rowB + " .xc-apply")
+    # row B: left on the default (« Excel ») — with no opt-out box any more, keeping the Excel also brings it into the fiche
+    page.wait_for_selector(rowB + " .xl-head", timeout=8000)
+    page.click(rowB + " .xl-head")
+    page.click(rowB + " .xl-foot button")
     yb = lambda: next(o for o in stored(page, "todo-widget-opportunities") if o["id"] == "yb")
-    check(eventually(lambda: page.locator(rowB).count() == 0) and yb()["commentaires"] == "Note appli B" and "Note Excel B" in json.dumps(yb().get("excelKeep")),
-          "excel ⇄ panel: « Garder l'Excel » + « Non »: the app unchanged, the question not asked again for that value")
+    check(eventually(lambda: yb().get("commentaires") == "Note Excel B") and "Note Excel B" in json.dumps(yb().get("excelKeep")),
+          "excel ⇄ panel: « Garder l’Excel » (the default) also updates the fiche, and the value isn’t asked again")
     check(not errors, f"excel ⇄ panel: no page errors ({errors})")
     page.close()
 
