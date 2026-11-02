@@ -2931,20 +2931,24 @@ Responsable technique
     page.click(row_c + " .xl-rowhead")
     page.click("#xs-overlay .xl-colhead:has-text('Stade')")   # the whole column at once : only A and B have this diff
     page.click("#xs-overlay .xl-foot button")
-    check(eventually(lambda: len(sent5) == 2, 4000), f"lot grid: only the installations with the toggled column's diff are sent ({len(sent5)})")
-    vals5 = sorted(r["rows"][0]["seen"]["30"] for r in sent5)
-    check(vals5 == ["Offre envoyée", "Offre envoyée"] and all(r["rows"][0]["values"][19] != "C" for r in sent5),
+    check(eventually(lambda: len(sent5) == 1, 4000), f"lot grid: the toggled column sent as a single request, not one per installation ({len(sent5)})")
+    rows5 = sent5[0]["rows"] if sent5 else []
+    check(len(rows5) == 2, f"lot grid: only the installations with the toggled column's diff are in it ({len(rows5)})")
+    vals5 = sorted(r["seen"]["30"] for r in rows5)
+    check(vals5 == ["Offre envoyée", "Offre envoyée"] and all(r["values"][19] != "C" for r in rows5),
           f"lot grid: C (only a Commentaires diff) untouched by the Stade column's toggle ({vals5})")
     check(not errors, f"lot grid: no page errors ({errors})")
     page.close()
 
-    # --- Excel ⇄ panel, a lot : a locked file stops the bulk action after the installation that failed, instead of
-    # failing the same way on every one left in the lot
+    # --- Excel ⇄ panel, a lot : a locked file stops the bulk action after the packet that failed (packets of 8
+    # Excel rows), instead of failing the same way on every packet after it ; what an earlier packet already wrote
+    # is kept, not resent
+    names6 = ["Toit %02d" % i for i in range(10)]
     pipe_head6 = [""] * 37; pipe_head6[6] = "Nom Producteur"; pipe_head6[19] = "Nom Centrale"; pipe_head6[35] = "Commentaires"
-    def lock_row(prod, centrale, note):
-        r = [None] * 37; r[6] = prod; r[19] = centrale; r[35] = note
+    def lock_row(centrale, note):
+        r = [None] * 37; r[6] = "GAEC"; r[19] = centrale; r[35] = note
         return r
-    sheet6 = {"Pipe Agrégation": [pipe_head6, lock_row("GAEC", "Toit 1", "Note Excel 1"), lock_row("GAEC", "Toit 2", "Note Excel 2"), lock_row("GAEC", "Toit 3", "Note Excel 3")]}
+    sheet6 = {"Pipe Agr\u00e9gation": [pipe_head6] + [lock_row(c, "Note Excel " + c) for c in names6]}
     sent6 = []
     def bridge6(route, request):
         h = {"Access-Control-Allow-Origin": "*", "Content-Type": "application/json", "Access-Control-Allow-Headers": "*", "Access-Control-Allow-Methods": "*"}
@@ -2955,15 +2959,15 @@ Responsable technique
         if request.url.endswith("/pipe/read"):
             return route.fulfill(status=200, headers=h, body=json.dumps({"ok": True, "sheets": sheet6}))
         if request.url.endswith("/bdd/read"):
-            return route.fulfill(status=200, headers=h, body=json.dumps({"ok": True, "sheets": {"BDD Agrégation": [[""] * 91]}}))
+            return route.fulfill(status=200, headers=h, body=json.dumps({"ok": True, "sheets": {"BDD Agr\u00e9gation": [[""] * 91]}}))
         body = json.loads(request.post_data); sent6.append(body)
-        if len(sent6) == 2:
-            return route.fulfill(status=500, headers=h, body=json.dumps({"ok": False, "message": "« Pipe.xlsx » est ouvert dans un Excel que le pont ne peut pas rejoindre."}))
-        return route.fulfill(status=200, headers=h, body=json.dumps({"ok": True, "results": [{"ok": True, "action": "mise à jour", "row": 2, "written": [35], "mine": [35], "conflicts": []} for _ in body["rows"]]}))
-    inst6 = [{"id": i, "kind": "installation", "company": "GAEC", "producteur": "GAEC", "centrale": c, "title": c, "stage": "collecte",
-              "commentaires": "Note appli " + c[-1], "pipeSentAt": 1, "requestId": "lockreq",
-              "createdAt": 1, "updatedAt": 1, "deleted": False} for i, c in (("lt1", "Toit 1"), ("lt2", "Toit 2"), ("lt3", "Toit 3"))]
-    inst6.append({"id": "lockreq", "kind": "request", "company": "GAEC", "label": "Lot verrouillé", "stage": "collecte", "createdAt": 1, "updatedAt": 1, "deleted": False})
+        if len(sent6) == 2:   # the second packet (installations 9-10) hits a locked file
+            return route.fulfill(status=500, headers=h, body=json.dumps({"ok": False, "message": "\u00ab Pipe.xlsx \u00bb est ouvert dans un Excel que le pont ne peut pas rejoindre."}))
+        return route.fulfill(status=200, headers=h, body=json.dumps({"ok": True, "results": [{"ok": True, "action": "mise \u00e0 jour", "row": 2, "written": [35], "mine": [35], "conflicts": []} for _ in body["rows"]]}))
+    inst6 = [{"id": "lt%d" % i, "kind": "installation", "company": "GAEC", "producteur": "GAEC", "centrale": c, "title": c, "stage": "collecte",
+              "commentaires": "Note appli " + c, "pipeSentAt": 1, "requestId": "lockreq",
+              "createdAt": 1, "updatedAt": 1, "deleted": False} for i, c in enumerate(names6)]
+    inst6.append({"id": "lockreq", "kind": "request", "company": "GAEC", "label": "Lot verrouill\u00e9", "stage": "collecte", "createdAt": 1, "updatedAt": 1, "deleted": False})
     page, errors = new_page(browser, {"todo_todo-widget-opportunities": json.dumps(inst6), "todo_bridge-config": json.dumps({"port": 8765, "token": "k1"})}, viewport={"width": 1400, "height": 900})
     page.route("http://127.0.0.1:8765/**", bridge6)
     page.goto(URL); page.click('[data-tab="pipeline"]'); page.click("#pipe-more-btn"); page.click("#pipe-xs-btn")
@@ -2971,11 +2975,14 @@ Responsable technique
     page.click("#xs-overlay .xl-head")
     page.click("#xs-overlay .xl-colhead")
     page.click("#xs-overlay .xl-foot button")
-    check(eventually(lambda: len(sent6) == 2, 4000), f"locked file: stops right after the failing installation ({len(sent6)})")
+    check(eventually(lambda: len(sent6) == 2, 4000), f"locked file: two packets attempted (8 + 2), not one per installation ({len(sent6)})")
     page.wait_for_timeout(300)
-    check(len(sent6) == 2, f"locked file: no straggler request for the third installation ({len(sent6)})")
+    check(len(sent6) == 2, f"locked file: no further packets retried ({len(sent6)})")
+    check(len(sent6[0]["rows"]) == 8 and len(sent6[1]["rows"]) == 2, f"locked file: packets of 8 ({[len(s['rows']) for s in sent6]})")
     msg6 = page.inner_text("#bridge-msg")
-    check("Arrêté après 1 installation sur 3" in msg6 and "ouvert dans un Excel" in msg6, f"locked file: the toast says how far it got and why ({msg6!r})")
+    check("Envoi arr\u00eat\u00e9 apr\u00e8s 8 lignes sur 10" in msg6 and "ouvert dans un Excel" in msg6, f"locked file: the toast says how far it got and why ({msg6!r})")
+    sent_ok6 = lambda: [o["id"] for o in stored(page, "todo-widget-opportunities") if (o.get("excelSent") or {}).get("pipe")]
+    check(eventually(lambda: len(sent_ok6()) == 8, 4000), f"locked file: the 8 installations the first packet wrote are remembered as sent ({len(sent_ok6())})")
     check(not errors, f"locked file: no page errors ({errors})")
     page.close()
 

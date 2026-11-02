@@ -160,11 +160,10 @@ window.TodoExcelSync=(function(){
     ov.classList.remove('hidden'); paintExcelSync();
     if(bridgeConfigured() && !(opts&&opts.noRead) && (!xsRead.pipe || Date.now()-xsRead.pipe.at>120000)){ try{ await xsReadFile('pipe'); await xsReadFile('bdd'); }catch(e){ softFail('relecture des Excel', e); } paintExcelSync(); }
   }
-  // Writes what « choices » (and « aligns », for the ones kept from the Excel) say for this installation's diffs — the
-  // single row's « Appliquer » and the bulk « Tout garder … » buttons (a lot, or everything shown) both go through this.
-  // Returns whether it actually sent (false only when sendToExcel failed, e.g. the file is locked elsewhere) — a bulk
-  // loop uses this to stop rather than fail the same way on every installation left after the one that failed.
-  async function xsApplyRow(kind, o, diffs, choices, aligns, errPrefix){
+  // What « choices » (and « aligns », for the ones kept from the Excel) say for this installation's diffs : the local
+  // effects (keeping a value, aligning the fiche) happen right away, with no network call. What still needs writing
+  // into the Excel comes back as { force, seen } ( null when there is nothing to write).
+  function xsBuildRowPlan(kind, o, diffs, choices, aligns){
     const force={}, seen={};
     diffs.forEach(d=>{ const vi=xsViOf(kind, d), ch=choices[vi];
       if(ch==='appli'){
@@ -177,8 +176,14 @@ window.TodoExcelSync=(function(){
         xsKeep(kind, o, vi, d.excel);
         if(aligns[vi]){ const al=xsAlignAction(kind, o, vi, d.excel); if(al) al.run(); }
       } });
+    return Object.keys(force).length ? { force, seen } : null;
+  }
+  // The single row's own « Appliquer ». Returns whether it actually sent (false only when sendToExcel failed, e.g.
+  // the file is locked elsewhere).
+  async function xsApplyRow(kind, o, diffs, choices, aligns){
+    const plan=xsBuildRowPlan(kind, o, diffs, choices, aligns);
     // sendToExcel re-reads the file and repaints the panel itself ; nothing left to do when it sends
-    if(Object.keys(force).length) return await sendToExcel(kind, [o], null, { force, seen }, errPrefix);
+    if(plan) return await sendToExcel(kind, [o], null, plan);
     renderPipeline(); saveCrm(); paintExcelSync(); return true;
   }
   // the diverging cells for a set of rows, as { kind, o, diffs } — a lot's rows, or everything currently shown
@@ -186,25 +191,30 @@ window.TodoExcelSync=(function(){
     const out=[]; (rowList||[]).forEach(r=>{ if(r.pDiffs.length) out.push({ kind:'pipe', o:r.o, diffs:r.pDiffs }); if(r.bDiffs.length) out.push({ kind:'bdd', o:r.o, diffs:r.bDiffs }); });
     return out;
   }
+  // Every target's plan is built first (its local effects happen right away, with no network call), then every
+  // installation that still needs writing is sent together, Pipe and Suivi each as their own request (packets of 8) :
+  // the bridge opens the Excel file once per packet instead of once per installation, so it isn't kept busy — and
+  // isn't closed to opening it yourself — for the whole bulk action.
+  async function xsSendPlans(plans){   // plans : [{ kind, o, plan }]
+    let sentAny=false;
+    for(const kind of ['pipe','bdd']){
+      const items=plans.filter(p=>p.kind===kind && p.plan);
+      if(items.length){ sentAny=true; await sendToExcel(kind, items.map(p=>p.o), null, items.map(p=>p.plan)); }
+    }
+    if(!sentAny){ renderPipeline(); saveCrm(); paintExcelSync(); }
+  }
   // one policy (« excel » or « appli ») for every cell of every target : a lot sent together for pricing often moves the
   // same way on every plant, so this decides it once instead of installation by installation
   async function xsApplyBulk(targets, policy){
-    // each xsApplyRow (via sendToExcel, or directly when nothing is sent) already re-reads and repaints on its own ;
-    // stop at the first one that fails to send (file locked, unreachable…) instead of failing the same way on every
-    // installation after it
-    for(let i=0;i<targets.length;i++){ const tg=targets[i];
-      const choices={}, aligns={}; tg.diffs.forEach(d=>{ const vi=xsViOf(tg.kind, d); choices[vi]=policy; aligns[vi]=true; });
-      const prefix=i>0?('Arrêté après '+i+' installation'+(i>1?'s':'')+' sur '+targets.length+' : '):'';
-      if(!(await xsApplyRow(tg.kind, tg.o, tg.diffs, choices, aligns, prefix))) break;
-    }
+    const plans=targets.map(tg=>{ const choices={}, aligns={}; tg.diffs.forEach(d=>{ const vi=xsViOf(tg.kind, d); choices[vi]=policy; aligns[vi]=true; });
+      return { kind:tg.kind, o:tg.o, plan:xsBuildRowPlan(tg.kind, tg.o, tg.diffs, choices, aligns) }; });
+    await xsSendPlans(plans);
   }
   // the lot grid : each cell can be decided on its own (not one policy for everything), key = kind|vi|installation id
   async function xsApplyLotGrid(targets, cellChoice){
-    for(let i=0;i<targets.length;i++){ const tg=targets[i];
-      const choices={}, aligns={}; tg.diffs.forEach(d=>{ const vi=xsViOf(tg.kind, d); choices[vi]=cellChoice[tg.kind+'|'+vi+'|'+tg.o.id]||'excel'; aligns[vi]=true; });
-      const prefix=i>0?('Arrêté après '+i+' installation'+(i>1?'s':'')+' sur '+targets.length+' : '):'';
-      if(!(await xsApplyRow(tg.kind, tg.o, tg.diffs, choices, aligns, prefix))) break;
-    }
+    const plans=targets.map(tg=>{ const choices={}, aligns={}; tg.diffs.forEach(d=>{ const vi=xsViOf(tg.kind, d); choices[vi]=cellChoice[tg.kind+'|'+vi+'|'+tg.o.id]||'excel'; aligns[vi]=true; });
+      return { kind:tg.kind, o:tg.o, plan:xsBuildRowPlan(tg.kind, tg.o, tg.diffs, choices, aligns) }; });
+    await xsSendPlans(plans);
   }
   // Several fields changed by someone else on the same installation : one table, columns = fields (like the Excel header
   // row), the Excel row above the appli row — click a cell to keep it, click « Excel »/« Appli » to keep the whole row,
@@ -396,14 +406,17 @@ window.TodoExcelSync=(function(){
     return card;
   }
   let xsShownNow=[];   // what paintExcelSync last drew, for the « Tout garder … » buttons (read at click time)
-  // Returns whether it actually sent : a bulk loop (a lot, « Tout garder … ») stops at the first installation this
-  // returns false for (the file is locked or unreachable), instead of failing the same way on every one after it.
-  async function sendToExcel(kind, list, btn, extra, errPrefix){
+  // extra : one { force, seen } shared by every installation in « list », or (for a mix of per-installation choices,
+  // as in a lot) one array matching « list » one-for-one. Sent as a single request (packets of 8 Excel rows) : the
+  // bridge opens the file once per packet, instead of once per installation — the file stays free for the rest of the
+  // time, where a bridge that opened and closed it once per installation kept it busy for the whole bulk action.
+  async function sendToExcel(kind, list, btn, extra){
     if(ON_PHONE) return true;
     const label=btn?btn.textContent:'';
     if(btn){ btn.disabled=true; btn.textContent='Envoi…'; }
     try{
-      const { res, results, pending }=await xlSend(kind, list, list.map(o=>xlRowFor(kind, o, extra)), (k,n)=>{ if(btn && n>XL_PACKET) btn.textContent='Envoi '+k+'/'+n+'…'; });
+      const rows=list.map((o,i)=>xlRowFor(kind, o, Array.isArray(extra)?extra[i]:extra));
+      const { res, results, pending }=await xlSend(kind, list, rows, (k,n)=>{ if(btn && n>XL_PACKET) btn.textContent='Envoi '+k+'/'+n+'…'; });
       const msg=xlSummary(kind, results, res);
       try{ await xsReadFile(kind); }catch(e){ softFail('relecture de l’Excel', e); }
       // a cell the bridge could not write (changed by someone else) is not asked about here a second time : the fresh
@@ -419,7 +432,7 @@ window.TodoExcelSync=(function(){
       return true;
     }catch(e){
       if(btn){ btn.textContent=label; btn.disabled=false; }
-      showBridgeMsg((errPrefix||'')+e.message, false);
+      showBridgeMsg(e.message, false);
       return false;
     }
   }
