@@ -2813,10 +2813,10 @@ Responsable technique
     page.click(pipeTbl + " .xc-apply")
     check(eventually(lambda: next(o for o in stored(page, "todo-widget-opportunities") if o["id"] == "xa").get("commentaires") == "Vu au salon (Marie)", 3000), "excel ⇄ app: taking the Excel's « vide » cell puts its value in the app")
     bddTbl = "#xs-overlay tr:has-text('Les Vignes') td:has-text('Statut')"
-    # left as the default (« Excel ») ; ticking « aussi » brings the status into the pipeline too
-    page.click(bddTbl + " .xc-align:has-text('onboarding') input")
+    # left as the default (« Excel », « aussi » ticked by default) : the status also moves the pipeline along
+    check(page.is_checked(bddTbl + " .xc-align:has-text('onboarding') input"), "excel ⇄ app: « aussi » is ticked by default")
     page.click(bddTbl + " .xc-apply")
-    check(eventually(lambda: next(o for o in stored(page, "todo-widget-opportunities") if o["id"] == "xa").get("stage") == "onboarding", 3000), "excel ⇄ app: « Gagné » kept from the Suivi, « aussi » ticked: the deal moves to Onboarding")
+    check(eventually(lambda: next(o for o in stored(page, "todo-widget-opportunities") if o["id"] == "xa").get("stage") == "onboarding", 3000), "excel ⇄ app: « Gagné » kept from the Suivi, « aussi » ticked by default: the deal moves to Onboarding")
     page.click("#xs-overlay .xs-send[data-k=pipe]"); page.wait_for_timeout(400)
     sent_ids = [r["values"][19] for k, b in xs_sent if k == "pipe" for r in b["rows"]]
     check("Le Pré" in sent_ids, f"excel ⇄ app: « Envoyer au Pipe » sends what is pending ({sent_ids})")
@@ -3126,8 +3126,10 @@ Responsable technique
     r = sent3[0]["rows"][0] if sent3 else {}
     vi = str(r.get("values", [None] * 40).index("Note appli A")) if "Note appli A" in r.get("values", []) else "?"
     check(r.get("force") == {vi: "replace"} and r.get("seen") == {vi: "Note Excel A"}, f"excel ⇄ panel: the app's value replaces the cell only if it still holds the one shown ({r.get('force')}, {r.get('seen')})")
-    # row B: left on the default (« Excel »), the « aussi : la fiche prend … » box left unticked, then Appliquer
+    # row B: left on the default (« Excel »), the « aussi : la fiche prend … » box unticked (it is ticked by default), then Appliquer
     page.wait_for_selector(rowB + " .xc-apply", timeout=8000)
+    check(page.is_checked(rowB + " .xc-align input"), "excel ⇄ panel: « aussi » is ticked by default too")
+    page.click(rowB + " .xc-align input")
     page.click(rowB + " .xc-apply")
     yb = lambda: next(o for o in stored(page, "todo-widget-opportunities") if o["id"] == "yb")
     check(eventually(lambda: page.locator(rowB).count() == 0) and yb()["commentaires"] == "Note appli B" and "Note Excel B" in json.dumps(yb().get("excelKeep")),

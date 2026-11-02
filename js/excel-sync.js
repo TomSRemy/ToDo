@@ -182,7 +182,7 @@ window.TodoExcelSync=(function(){
   // then one « Appliquer » sends every field kept from the appli in a single request.
   function xsDiffTable(td, kind, o, diffs){
     if(!diffs.length) return;
-    const choices={}, aligns={}; diffs.forEach(d=>{ choices[xsViOf(kind, d)]='excel'; });   // default: nothing sent, the Excel's value is kept
+    const choices={}, aligns={}; diffs.forEach(d=>{ const vi=xsViOf(kind, d); choices[vi]='excel'; aligns[vi]=true; });   // default: nothing sent, the Excel's value is kept and brought into the fiche (sauf décoché)
     const wrap=document.createElement('div'); wrap.className='xc-wrap';
     const table=document.createElement('table'); table.className='xc-table';
     const headRow=document.createElement('tr'); headRow.appendChild(document.createElement('th'));
