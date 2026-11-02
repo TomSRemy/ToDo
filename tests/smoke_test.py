@@ -2889,6 +2889,55 @@ Responsable technique
     check(not posts and "pas à jour" in page.inner_text("#bridge-msg") and "1.14 est disponible" in page.inner_text("#bridge-msg"), f"an older bridge is refused: nothing sent, update asked ({page.inner_text('#bridge-msg')[:120]!r})")
     page.close()
 
+    # --- Excel ⇄ panel, a lot : folded by default, a dense grid when opened — a column header decides that field for
+    # the whole lot, a row name decides that whole installation, each installation keeps its own Excel value
+    pipe_head5 = [""] * 37; pipe_head5[6] = "Nom Producteur"; pipe_head5[19] = "Nom Centrale"; pipe_head5[30] = "Stade"; pipe_head5[35] = "Commentaires"
+    def lot_row(prod, centrale, stade, note):
+        r = [None] * 37; r[6] = prod; r[19] = centrale; r[30] = stade; r[35] = note
+        return r
+    sheet5 = {"Pipe Agrégation": [pipe_head5, lot_row("GAEC", "A", "Offre envoyée", None), lot_row("GAEC", "B", "Offre envoyée", None), lot_row("GAEC", "C", None, "Note Excel C")]}
+    sent5 = []
+    def bridge5(route, request):
+        h = {"Access-Control-Allow-Origin": "*", "Content-Type": "application/json", "Access-Control-Allow-Headers": "*", "Access-Control-Allow-Methods": "*"}
+        if request.method == "OPTIONS":
+            return route.fulfill(status=204, headers=h)
+        if request.url.endswith("/status"):
+            return route.fulfill(status=200, headers=h, body=json.dumps({"ok": True, "version": "1.14", "authorized": True, "pipe": {"name": "Pipe.xlsx", "found": True}, "bdd": {"name": "Suivi.xlsx", "found": True}}))
+        if request.url.endswith("/pipe/read"):
+            return route.fulfill(status=200, headers=h, body=json.dumps({"ok": True, "sheets": sheet5}))
+        if request.url.endswith("/bdd/read"):
+            return route.fulfill(status=200, headers=h, body=json.dumps({"ok": True, "sheets": {"BDD Agrégation": [[""] * 91]}}))
+        body = json.loads(request.post_data); sent5.append(body)
+        for r in body["rows"]:
+            for line in sheet5["Pipe Agrégation"][1:]:
+                if line[19] == r["values"][19]:
+                    line[30] = r["values"][30]; line[35] = r["values"][35]
+        return route.fulfill(status=200, headers=h, body=json.dumps({"ok": True, "results": [{"ok": True, "action": "mise à jour", "row": 2, "written": [30, 35], "mine": [30, 35], "conflicts": []} for _ in body["rows"]]}))
+    inst5 = [{"id": i, "kind": "installation", "company": "GAEC", "producteur": "GAEC", "centrale": c, "title": c, "stage": "pricing_indicatif",
+              "commentaires": "Note appli " + c, "pipeSentAt": 1, "requestId": "lotreq",
+              "createdAt": 1, "updatedAt": 1, "deleted": False} for i, c in (("la", "A"), ("lb", "B"), ("lc", "C"))]
+    inst5.append({"id": "lotreq", "kind": "request", "company": "GAEC", "label": "Lot mixte", "stage": "pricing_indicatif", "createdAt": 1, "updatedAt": 1, "deleted": False})
+    page, errors = new_page(browser, {"todo_todo-widget-opportunities": json.dumps(inst5), "todo_bridge-config": json.dumps({"port": 8765, "token": "k1"})}, viewport={"width": 1400, "height": 900})
+    page.route("http://127.0.0.1:8765/**", bridge5)
+    page.goto(URL); page.click('[data-tab="pipeline"]'); page.click("#pipe-more-btn"); page.click("#pipe-xs-btn")
+    page.wait_for_function("document.querySelector('#xs-overlay .xs-info').textContent.includes('relu le')", timeout=8000)
+    check(page.locator("#xs-overlay .xl-lot.open").count() == 0, "lot grid: folded by default")
+    check("3 cases" in page.inner_text("#xs-overlay .xl-tag"), f"lot grid: the tag shows the pending count ({page.inner_text('#xs-overlay .xl-tag')!r})")
+    page.click("#xs-overlay .xl-head")
+    check(page.locator("#xs-overlay .xl-colhead").count() == 2, "lot grid: two distinct columns (Stade affects A/B, Commentaires affects C)")
+    row_c = "#xs-overlay .xl-grid tr:has(.xl-rowhead:has-text('C'))"
+    page.click(row_c + " .xl-rowhead")
+    check(page.locator(row_c + " .xl-cell button.sel:has-text('Appli')").count() == 1, "lot grid: a row name toggles just that installation's own cell")
+    page.click(row_c + " .xl-rowhead")
+    page.click("#xs-overlay .xl-colhead:has-text('Stade')")   # the whole column at once : only A and B have this diff
+    page.click("#xs-overlay .xl-foot button")
+    check(eventually(lambda: len(sent5) == 2, 4000), f"lot grid: only the installations with the toggled column's diff are sent ({len(sent5)})")
+    vals5 = sorted(r["rows"][0]["seen"]["30"] for r in sent5)
+    check(vals5 == ["Offre envoyée", "Offre envoyée"] and all(r["rows"][0]["values"][19] != "C" for r in sent5),
+          f"lot grid: C (only a Commentaires diff) untouched by the Stade column's toggle ({vals5})")
+    check(not errors, f"lot grid: no page errors ({errors})")
+    page.close()
+
     # --- Réf. & data: clients grouped by company type, collapsed by default, search opens them
     cos = [{"id": f"co{i}", "name": n, "type": t, "whatTheyDo": "", "marketScope": [], "website": "", "createdAt": 1, "updatedAt": 1, "deleted": False}
            for i, (n, t) in enumerate([("Alpha", "Fournisseur"), ("Beta", "Client"), ("Gamma", "Client"), ("Delta", "")])]

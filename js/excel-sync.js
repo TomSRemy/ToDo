@@ -192,6 +192,13 @@ window.TodoExcelSync=(function(){
       await xsApplyRow(tg.kind, tg.o, tg.diffs, choices, aligns);
     }
   }
+  // the lot grid : each cell can be decided on its own (not one policy for everything), key = kind|vi|installation id
+  async function xsApplyLotGrid(targets, cellChoice){
+    for(const tg of targets){
+      const choices={}, aligns={}; tg.diffs.forEach(d=>{ const vi=xsViOf(tg.kind, d); choices[vi]=cellChoice[tg.kind+'|'+vi+'|'+tg.o.id]||'excel'; aligns[vi]=true; });
+      await xsApplyRow(tg.kind, tg.o, tg.diffs, choices, aligns);
+    }
+  }
   // Several fields changed by someone else on the same installation : one table, columns = fields (like the Excel header
   // row), the Excel row above the appli row — click a cell to keep it, click « Excel »/« Appli » to keep the whole row,
   // then one « Appliquer » sends every field kept from the appli in a single request.
@@ -269,9 +276,6 @@ window.TodoExcelSync=(function(){
     const nConflictCells=xsConflictTargets(shown).reduce((s,tg)=>s+tg.diffs.length, 0);
     ov.querySelectorAll('.xs-bulk').forEach(b=>{ b.textContent=(b.dataset.p==='excel'?'Tout garder Excel':'Tout garder appli')+' ('+nConflictCells+')'; b.disabled=!nConflictCells || !bridgeConfigured(); b.title=bridgeConfigured()?'':'Pont Excel non connecté'; });
     if(!shown.length){ body.innerHTML='<p class="xs-empty">✓ Tout est à jour'+(xsRead.pipe?'':' côté appli (relis les Excel pour vérifier le contenu des fichiers)')+'.</p>'; return; }
-    const t=document.createElement('table'); t.className='xs-table';
-    t.innerHTML='<thead><tr><th>Installation</th><th>Pipe Excel</th><th>Suivi (BDD)</th></tr></thead>';
-    const tb=document.createElement('tbody');
     const cell=(kind, o, st, diffs)=>{
       const td=document.createElement('td'); if(!st){ td.innerHTML='<span class="xs-na">pas encore (avant le pricing)</span>'; return td; }
       const tag=(cls,txt)=>{ const s=document.createElement('span'); s.className='xs-tag '+cls; s.textContent=txt; td.appendChild(s); };
@@ -285,41 +289,104 @@ window.TodoExcelSync=(function(){
       if(st.excel==='statut'){ const a=xsStatutAction(o, st.statut); if(a){ const b=document.createElement('button'); b.type='button'; b.className='pq-link'; b.textContent=a.label; b.onclick=()=>{ a.run(); renderPipeline(); paintExcelSync(); }; td.appendChild(b); } }
       if(xsTodo(st) && !diffs.length && bridgeConfigured()){ const b=document.createElement('button'); b.type='button'; b.className='pq-link xs-one'; b.textContent='Envoyer'; b.onclick=async()=>{ await sendToExcel(kind,[o],b); try{ await xsReadFile(kind); }catch(e){ softFail('relecture de l’Excel', e); } paintExcelSync(); }; td.appendChild(b); }
       return td; };
-    const row=({o,p,b,pDiffs,bDiffs})=>{ const tr=document.createElement('tr');
+    const soloRow=(tb,{o,p,b,pDiffs,bDiffs})=>{ const tr=document.createElement('tr');
       const n=document.createElement('td'); n.className='xs-name'; n.innerHTML='<b></b><span></span>'; n.firstChild.textContent=oppName(o); n.lastChild.textContent=[o.company, stageLabel(o.stage, o)].filter(Boolean).join(' · ');
       n.onclick=()=>{ $('xs-overlay').classList.add('hidden'); openOppDetail(o.id); };
       tr.append(n, cell('pipe', o, p, pDiffs), cell('bdd', o, b, bDiffs)); tb.appendChild(tr); };
-    // installations sent together for one pricing request (o.requestId) : grouped, with a bulk choice for the lot's cells
-    const flushed=new Set();
+    // installations sent together for one pricing request (o.requestId) : a lot, folded by default like a directory
+    const lotIds=new Set(), lots=[], solo=[];
     shown.forEach(r=>{ const rid=r.o.requestId;
-      if(rid){ if(flushed.has(rid)) return; flushed.add(rid);
+      if(rid){ if(lotIds.has(rid)) return; lotIds.add(rid);
         const members=shown.filter(x=>x.o.requestId===rid);
-        if(members.length>1){
-          const req=app.opportunities.find(x=>x.id===rid), label=(req && !req.deleted && req.label) || ('Lot de '+members.length+' installations');
-          const targets=xsConflictTargets(members), n=targets.reduce((s,tg)=>s+tg.diffs.length, 0);
-          const gtr=document.createElement('tr'); gtr.className='xs-group';
-          const gtd=document.createElement('td'); gtd.colSpan=3;
-          const lab=document.createElement('span'); lab.className='xs-group-label'; lab.textContent=label+' · '+members.length+' installations'; gtd.appendChild(lab);
-          if(n){ ['excel','appli'].forEach(policy=>{ const gb=document.createElement('button'); gb.type='button'; gb.className='pq-link xs-group-bulk';
-            gb.textContent=(policy==='excel'?'Tout Excel':'Tout appli')+' ('+n+')';
-            gb.onclick=async()=>{ gb.disabled=true; const t2=gb.textContent; gb.textContent='Envoi…'; await xsApplyBulk(targets, policy); gb.disabled=false; gb.textContent=t2; };
-            gtd.appendChild(gb); }); }
-          // more than one kind of change in the lot : harmonise just that one field across the lot, column by column
-          const byCol=new Map();
-          targets.forEach(tg=>tg.diffs.forEach(d=>{ const key=tg.kind+'|'+d.col.label; if(!byCol.has(key)) byCol.set(key, { kind:tg.kind, label:d.col.label, items:[] }); byCol.get(key).items.push({ o:tg.o, d }); }));
-          if(byCol.size>1) byCol.forEach(col=>{
-            const line=document.createElement('div'); line.className='xs-group-col';
-            const lb=document.createElement('span'); lb.textContent=col.label+(col.kind==='bdd'?' (Suivi)':'')+' · '+col.items.length; line.appendChild(lb);
-            ['excel','appli'].forEach(policy=>{ const cb=document.createElement('button'); cb.type='button'; cb.className='pq-link xs-group-col-bulk';
-              cb.textContent=policy==='excel'?'Excel':'Appli';
-              cb.onclick=async()=>{ cb.disabled=true; const t3=cb.textContent; cb.textContent='…'; await xsApplyBulk(col.items.map(it=>({ kind:col.kind, o:it.o, diffs:[it.d] })), policy); cb.disabled=false; cb.textContent=t3; };
-              line.appendChild(cb); });
-            gtd.appendChild(line); });
-          gtr.appendChild(gtd); tb.appendChild(gtr);
-        }
-        members.forEach(row);
-      } else row(r); });
-    t.appendChild(tb); body.appendChild(t);
+        if(members.length>1) lots.push({ rid, members }); else solo.push(members[0]); }
+      else solo.push(r); });
+    if(lots.length){ const lw=document.createElement('div'); lw.className='xl-lots'; lots.forEach(({rid,members})=>lw.appendChild(xlLotCard(rid, members))); body.appendChild(lw); }
+    if(solo.length){
+      if(lots.length){ const h=document.createElement('div'); h.className='xs-solo-head'; h.textContent='Hors lot'; body.appendChild(h); }
+      const t=document.createElement('table'); t.className='xs-table';
+      t.innerHTML='<thead><tr><th>Installation</th><th>Pipe Excel</th><th>Suivi (BDD)</th></tr></thead>';
+      const tb=document.createElement('tbody');
+      solo.forEach(r=>soloRow(tb, r));
+      t.appendChild(tb); body.appendChild(t);
+    }
+  }
+  // A lot, folded by default : its name, how many cases need a decision, two quick buttons for the whole lot.
+  // Opened, a dense grid — columns are the fields that diverge anywhere in the lot, rows are its installations ;
+  // a column header decides that field for the whole lot, a row name decides that whole installation, a cell just itself.
+  function xlLotCard(rid, members){
+    const req=app.opportunities.find(x=>x.id===rid), label=(req && !req.deleted && req.label) || ('Lot de '+members.length+' installations');
+    const targets=xsConflictTargets(members), nCells=targets.reduce((s,tg)=>s+tg.diffs.length, 0);
+    const card=document.createElement('div'); card.className='xl-lot';
+    const head=document.createElement('div'); head.className='xl-head';
+    head.innerHTML='<span class="xl-chev">▶</span><div class="xl-name"><b></b><span></span></div><div class="xl-meta"></div>';
+    head.querySelector('.xl-name b').textContent=label;
+    head.querySelector('.xl-name span').textContent=members.length+' installation'+(members.length>1?'s':'');
+    const meta=head.querySelector('.xl-meta');
+    const tag=document.createElement('span'); tag.className='xl-tag '+(nCells?'todo':'ok'); tag.textContent=nCells?nCells+' case'+(nCells>1?'s':''):'à jour'; meta.appendChild(tag);
+    card.appendChild(head);
+    if(!nCells) return card;   // nothing to decide : the tag alone says so, no need to open it
+
+    const quick=document.createElement('div'); quick.className='xl-quick';
+    [['excel','Tout Excel'],['appli','Tout appli']].forEach(([policy,lbl])=>{ const qb=document.createElement('button'); qb.type='button'; qb.textContent=lbl;
+      qb.onclick=e=>{ e.stopPropagation(); qb.disabled=true; xsApplyBulk(targets, policy); }; quick.appendChild(qb); });
+    meta.appendChild(quick);
+    head.onclick=()=>card.classList.toggle('open');
+
+    const byCol=new Map();
+    targets.forEach(tg=>tg.diffs.forEach(d=>{ const key=tg.kind+'|'+d.col.label; if(!byCol.has(key)) byCol.set(key, { kind:tg.kind, label:d.col.label, items:[] }); byCol.get(key).items.push({ o:tg.o, d }); }));
+    const cols=[...byCol.values()];
+    const cellChoice={};   // key kind|vi|installation id -> 'excel'|'appli'
+    cols.forEach(col=>col.items.forEach(it=>{ cellChoice[col.kind+'|'+xsViOf(col.kind, it.d)+'|'+it.o.id]='excel'; }));
+
+    const wrap=document.createElement('div'); wrap.className='xl-grid-wrap';
+    const table=document.createElement('table'); table.className='xl-grid';
+    const thead=document.createElement('thead'); const htr=document.createElement('tr'); htr.appendChild(document.createElement('th'));
+    const colBtns=[];
+    cols.forEach(col=>{ const th=document.createElement('th'); const cb=document.createElement('button'); cb.type='button'; cb.className='xl-colhead'; cb.dataset.side='excel';
+      cb.innerHTML='<b></b><small></small>'; cb.querySelector('b').textContent=col.label+(col.kind==='bdd'?' (Suivi)':''); cb.querySelector('small').textContent=col.items.length+' installation'+(col.items.length>1?'s':'');
+      th.appendChild(cb); htr.appendChild(th); colBtns.push(cb); });
+    thead.appendChild(htr); table.appendChild(thead);
+    const tbody=document.createElement('tbody'); table.appendChild(tbody);
+    const cellBtns=[];   // { kind, vi, oid, excelBtn, appliBtn }
+    members.forEach(m=>{
+      const tr=document.createElement('tr');
+      const rh=document.createElement('th'); const rb=document.createElement('button'); rb.type='button'; rb.className='xl-rowhead'; rb.dataset.side='excel';
+      rb.innerHTML='<b></b>'; rb.querySelector('b').textContent=oppName(m.o); rh.appendChild(rb); tr.appendChild(rh);
+      const rowCellKeys=[];
+      cols.forEach(col=>{
+        const td=document.createElement('td'); const item=col.items.find(it=>it.o.id===m.o.id);
+        if(!item){ td.className='xl-same'; td.textContent='—'; tr.appendChild(td); return; }
+        const vi=xsViOf(col.kind, item.d), key=col.kind+'|'+vi+'|'+m.o.id; rowCellKeys.push(key);
+        const c=document.createElement('div'); c.className='xl-cell';
+        const bE=document.createElement('button'); bE.type='button'; bE.innerHTML='<i>Excel</i>'; bE.appendChild(document.createTextNode(item.d.excel||'vide')); bE.classList.add('sel');
+        const bA=document.createElement('button'); bA.type='button'; bA.innerHTML='<i>Appli</i>'; bA.appendChild(document.createTextNode(item.d.app||'vide'));
+        bE.onclick=()=>{ cellChoice[key]='excel'; refresh(); }; bA.onclick=()=>{ cellChoice[key]='appli'; refresh(); };
+        c.append(bE, bA); td.appendChild(c); tr.appendChild(td);
+        cellBtns.push({ key, bE, bA });
+      });
+      rb.onclick=()=>{ const next=rb.dataset.side==='excel'?'appli':'excel'; rb.dataset.side=next; rowCellKeys.forEach(k=>{ cellChoice[k]=next; }); refresh(); };
+      tbody.appendChild(tr);
+    });
+    wrap.appendChild(table); card.appendChild(wrap);
+
+    colBtns.forEach((cb,i)=>{ const col=cols[i];
+      cb.onclick=()=>{ const next=cb.dataset.side==='excel'?'appli':'excel'; cb.dataset.side=next;
+        col.items.forEach(it=>{ cellChoice[col.kind+'|'+xsViOf(col.kind, it.d)+'|'+it.o.id]=next; }); refresh(); }; });
+
+    const foot=document.createElement('div'); foot.className='xl-foot';
+    const summary=document.createElement('span'); foot.appendChild(summary);
+    const apply=document.createElement('button'); apply.type='button'; foot.appendChild(apply);
+    card.appendChild(foot);
+
+    const refresh=()=>{
+      cellBtns.forEach(({key,bE,bA})=>{ const side=cellChoice[key]; bE.classList.toggle('sel', side==='excel'); bA.classList.toggle('sel', side==='appli'); });
+      const nApp=Object.values(cellChoice).filter(v=>v==='appli').length;
+      summary.textContent=nApp?nApp+' case'+(nApp>1?'s':'')+' à écrire dans Excel':'rien à écrire dans Excel';
+      apply.textContent='Appliquer ('+members.length+' installation'+(members.length>1?'s':'')+')';
+    };
+    refresh();
+    apply.onclick=async()=>{ apply.disabled=true; apply.textContent='Envoi…'; await xsApplyLotGrid(targets, cellChoice); };
+    return card;
   }
   let xsShownNow=[];   // what paintExcelSync last drew, for the « Tout garder … » buttons (read at click time)
   async function sendToExcel(kind, list, btn, extra){
