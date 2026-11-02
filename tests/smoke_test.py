@@ -2886,7 +2886,7 @@ Responsable technique
     page.route("http://127.0.0.1:8765/**", old_bridge)
     page.goto(URL); page.click('[data-tab="pipeline"]'); page.click(".pipe-card:has-text('Les Vignes')")
     page.click("#opp-detail-actions >> text=Envoyer au Pipe Excel"); page.wait_for_timeout(600)
-    check(not posts and "pas à jour" in page.inner_text("#bridge-msg") and "1.14 est disponible" in page.inner_text("#bridge-msg"), f"an older bridge is refused: nothing sent, update asked ({page.inner_text('#bridge-msg')[:120]!r})")
+    check(not posts and "pas à jour" in page.inner_text("#bridge-msg") and "1.15 est disponible" in page.inner_text("#bridge-msg"), f"an older bridge is refused: nothing sent, update asked ({page.inner_text('#bridge-msg')[:120]!r})")
     page.close()
 
     # --- Excel ⇄ panel, a lot : folded by default, a dense grid when opened — a column header decides that field for

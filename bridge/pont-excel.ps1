@@ -31,7 +31,7 @@
 param([int]$Port = 8765, [switch]$Reconfigurer, [switch]$Mock)
 
 $ErrorActionPreference = 'Stop'
-$Version = '1.14'
+$Version = '1.15'
 $Here = Split-Path -Parent $MyInvocation.MyCommand.Path
 # the settings (the two files, the key) live in the Windows profile, not next to the script: a new download, in any folder,
 # finds them again (no new key to copy into the app). An older settings file next to the script is taken over once.
@@ -155,7 +155,22 @@ function Open-Book($path) {
   }
   return @{ wb = $wb; opened = $true }
 }
-function Close-Book($book) { if ($book.opened) { try { $book.wb.Close($false) } catch { } ; Release-Excel } }
+# a failed close used to be swallowed silently, with no retry : the file (and the bridge's hidden Excel) could stay
+# locked long after the bridge went idle, for no reason visible in its window. A busy Excel is retried, like opening ;
+# any other failure is still swallowed (nothing more to try), but at least said, so it shows in the window.
+function Close-Book($book) {
+  if (-not $book.opened) { return }
+  for ($try = 1; $try -le 6; $try++) {
+    try { $book.wb.Close($false); break }
+    catch {
+      $busy = $_.Exception.Message -match '0x800AC472|0x8001010A|RPC_E_CALL_REJECTED|RPC_E_SERVERCALL_RETRYLATER'
+      if ($busy -and $try -lt 6) { Start-Sleep -Seconds 2; continue }
+      Write-Info ("Le fichier n'a pas pu être refermé proprement (" + $_.Exception.Message + ") : il peut rester verrouillé tant que ce pont tourne.") 'Red'
+      break
+    }
+  }
+  Release-Excel
+}
 # Writing happens in ONE sheet of each workbook, never elsewhere: « Pipe agrégation » in the Pipe, « BDD Agrégation » in
 # the Suivi (the other sheets — Tableau de bord, Paramètres, Dashboard… — are never touched). Sheet found by its name
 # (accents and case ignored); renamed or missing: nothing is written, the app is told why.
