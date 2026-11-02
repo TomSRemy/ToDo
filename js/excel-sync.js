@@ -39,7 +39,7 @@ window.TodoExcelSync=(function(){
   // writing, and keeps a journal of every cell; an older one is refused
   // the bridge published with this app (bridge/pont-excel.ps1 $Version; tests/bridge_test.py checks they match). Writing needs it:
   // 1.4 writes only in « Pipe Agrégation » / « BDD Agrégation », 1.7 adds new lines in a table with calculated columns
-  const BRIDGE_LATEST='1.12', BRIDGE_MIN='1.11';   // writing needs BRIDGE_MIN; a newer one is only offered
+  const BRIDGE_LATEST='1.13', BRIDGE_MIN='1.11';   // writing needs BRIDGE_MIN; a newer one is only offered
   const verAtLeast=(info, want)=>{ const v=String(info&&info.version||'0').split('.').map(Number), l=want.split('.').map(Number); return v[0]>l[0] || (v[0]===l[0] && (v[1]||0)>=l[1]); };
   const bridgeUpToDate=info=>verAtLeast(info, BRIDGE_MIN), bridgeLatest=info=>verAtLeast(info, BRIDGE_LATEST);
   // sent by packets of 8 lines (Excel takes a few seconds per line): no request runs long enough to be cut, and progress shows
@@ -203,8 +203,11 @@ window.TodoExcelSync=(function(){
       if(st.excel==='absent' && st.app!=='jamais') tag('bad','Absent du fichier');
       if(st.excel==='statut') tag('info','Statut Suivi : '+(st.statut||'?'));
       if(st.line) { const l=document.createElement('span'); l.className='xs-line'; l.textContent='ligne '+st.line; td.appendChild(l); }
-      st.diffs.filter(d=>d.byExcel).slice(0,6).forEach(d=>{ const r=document.createElement('div'); r.className='xs-diff';
-        const t=document.createElement('span'); t.textContent=d.col.label+' : Excel « '+(d.excel||'vide')+' » · appli « '+(d.app||'vide')+' »'; r.appendChild(t);
+      st.diffs.filter(d=>d.byExcel).slice(0,6).forEach(d=>{ const r=document.createElement('div'); r.className='xs-diff xr-row';
+        r.innerHTML='<b></b><span class="xr-v"><i>Excel</i><span></span></span><span class="xr-v"><i>Appli</i><span></span></span>';
+        r.querySelector('b').textContent=d.col.label;
+        r.querySelectorAll('.xr-v span')[0].textContent=d.excel||'vide';
+        r.querySelectorAll('.xr-v span')[1].textContent=d.app||'vide';
         const ask=document.createElement('div'); ask.className='xs-ask'; r.appendChild(ask);
         const vi=xsViOf(kind, d);
         xsAsk(ask, kind, o, vi, d, async ch=>{

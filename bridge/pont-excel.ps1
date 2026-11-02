@@ -31,7 +31,7 @@
 param([int]$Port = 8765, [switch]$Reconfigurer, [switch]$Mock)
 
 $ErrorActionPreference = 'Stop'
-$Version = '1.12'
+$Version = '1.13'
 $Here = Split-Path -Parent $MyInvocation.MyCommand.Path
 # the settings (the two files, the key) live in the Windows profile, not next to the script: a new download, in any folder,
 # finds them again (no new key to copy into the app). An older settings file next to the script is taken over once.
@@ -180,9 +180,19 @@ function New-ComAdapter($kind) {
   $a.Get = { param($a, $r, $c) (& $a.Cell $a $r $c).Value2 }
   $a.Column = { param($a, $c) $n = $a.lo.ListRows.Count; $out = New-Object object[] ($n + 1); if ($n -gt 0) { $v = $a.lo.ListColumns.Item($c).DataBodyRange.Value2; if ($n -eq 1) { $out[1] = $v } else { for ($r = 1; $r -le $n; $r++) { $out[$r] = $v[$r, 1] } } }; ,$out }
   $a.HasFormula = { param($a, $r, $c) [bool](& $a.Cell $a $r $c).HasFormula }
+  # a Windows/Office update can break Range.Value2 (and sometimes Range.Value) for every cell type at once
+  # ("Le cast spécifié n'est pas valide") ; writing the same value as a formula is unaffected, so every
+  # type falls back to it rather than only numbers and booleans
   $a.Set = { param($a, $r, $c, $v) $cell = (& $a.Cell $a $r $c); $b = $(if ($v -is [psobject]) { $v.PSObject.BaseObject } else { $v })
     try { if ($b -is [datetime]) { $cell.Value = $b } else { $cell.Value2 = $b } }
-    catch { if ($b -is [double] -or $b -is [int]) { $cell.Formula = ([double]$b).ToString([Globalization.CultureInfo]::InvariantCulture) } elseif ($b -is [bool]) { $cell.Formula = $(if ($b) { 'TRUE' } else { 'FALSE' }) } else { throw } } }
+    catch {
+      try {
+        if ($b -is [double] -or $b -is [int]) { $cell.Formula = ([double]$b).ToString([Globalization.CultureInfo]::InvariantCulture) }
+        elseif ($b -is [bool]) { $cell.Formula = $(if ($b) { 'TRUE' } else { 'FALSE' }) }
+        elseif ($b -is [datetime]) { $cell.Formula = '=DATE(' + $b.Year + ',' + $b.Month + ',' + $b.Day + ')' }
+        else { $cell.Formula = '="' + (([string]$b) -replace '"', '""' -replace "`r?`n", '" & CHAR(10) & "') + '"' }
+      } catch { $cell.Value = $b }   # a cell the formula bar won't accept (e.g. over Excel's 255-character formula-text limit) : last resort
+    } }
   $a.BeforeWrite = { param($a) }
   $a.AddRow = { param($a) $null = $a.lo.ListRows.Add(); $a.lo.ListRows.Count }
   $a.ExcelRow = { param($a, $r) $a.lo.DataBodyRange.Row + $r - 1 }
