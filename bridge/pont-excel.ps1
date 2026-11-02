@@ -31,7 +31,7 @@
 param([int]$Port = 8765, [switch]$Reconfigurer, [switch]$Mock)
 
 $ErrorActionPreference = 'Stop'
-$Version = '1.15'
+$Version = '1.16'
 $Here = Split-Path -Parent $MyInvocation.MyCommand.Path
 # the settings (the two files, the key) live in the Windows profile, not next to the script: a new download, in any folder,
 # finds them again (no new key to copy into the app). An older settings file next to the script is taken over once.
@@ -59,6 +59,15 @@ function Norm($s) {
   $t = ([string]$s).Normalize([Text.NormalizationForm]::FormD)
   $t = -join ($t.ToCharArray() | Where-Object { [Globalization.CharUnicodeInfo]::GetUnicodeCategory($_) -ne 'NonSpacingMark' })
   return ($t.ToLowerInvariant() -replace '[^a-z0-9]', '')
+}
+# compares the token byte by byte, without stopping at the first difference, so a wrong guess doesn't leak
+# anything through how long the comparison takes (the length check is fine : the token's length is not secret)
+function Token-Matches($given, $expected) {
+  if ($null -eq $given -or $null -eq $expected) { return $false }
+  $g = [Text.Encoding]::UTF8.GetBytes([string]$given); $e = [Text.Encoding]::UTF8.GetBytes([string]$expected)
+  if ($g.Length -ne $e.Length) { return $false }
+  $diff = 0; for ($i = 0; $i -lt $g.Length; $i++) { $diff = $diff -bor ($g[$i] -bxor $e[$i]) }
+  return ($diff -eq 0)
 }
 
 # ---------------- Configuration ----------------
@@ -166,6 +175,7 @@ function Close-Book($book) {
       $busy = $_.Exception.Message -match '0x800AC472|0x8001010A|RPC_E_CALL_REJECTED|RPC_E_SERVERCALL_RETRYLATER'
       if ($busy -and $try -lt 6) { Start-Sleep -Seconds 2; continue }
       Write-Info ("Le fichier n'a pas pu être refermé proprement (" + $_.Exception.Message + ") : il peut rester verrouillé tant que ce pont tourne.") 'Red'
+      Write-ErrorLog ("Fermeture échouée : " + $_.Exception.Message)
       break
     }
   }
@@ -327,6 +337,14 @@ function Write-Journal($a, $kind, $r, $c, $key, $old, $new, $why) {
   $line = (@((Get-Date -Format 'dd/MM/yyyy HH:mm:ss'), $Kinds[$kind].label, (& $a.ExcelRow $a $r), $a.Headers[$c - 1], $key, $old, $new, $why) | ForEach-Object { Csv-Field $_ }) -join ';'
   [IO.File]::AppendAllText($JournalPath, $line + "`r`n", (New-Object Text.UTF8Encoding $true))
 }
+# errors used to live only in the console window, lost on restart ; kept here too so a problem can be diagnosed afterwards
+$ErrorLogPath = Join-Path $BackupDir 'erreurs-pont.log'
+function Write-ErrorLog($msg) {
+  try {
+    if (-not (Test-Path $BackupDir)) { $null = New-Item -ItemType Directory -Path $BackupDir }
+    [IO.File]::AppendAllText($ErrorLogPath, ('[' + (Get-Date -Format 'dd/MM/yyyy HH:mm:ss') + '] ' + $msg + "`r`n"), (New-Object Text.UTF8Encoding $true))
+  } catch { }
+}
 # the row still holds this plant (and, when given, this business code): checked again right before writing
 function Row-Filled($a, $r) {
   $out = @(); for ($c = 1; $c -le $a.Headers.Count -and $out.Count -lt 4; $c++) { if (& $a.HasFormula $a $r $c) { continue }; $v = & $a.Get $a $r $c; if (-not (Is-EmptyCell $v)) { $out += ('« ' + $a.Headers[$c - 1] + ' » = « ' + (Show-Value $v) + ' »') } }
@@ -352,6 +370,7 @@ function Upsert-Rows($kind, $rows) {
       Ensure-Backup $a $state
       & $a.DeleteRows $a ($last + 1) $trail
       $state.wrote = $true
+      & $a.Save $a   # saved right away : nothing left in Excel's memory only, if the rest of the request fails
       Write-Journal $a $kind ($last + 1) 1 '(fin du tableau)' '' '' ("$trail ligne(s) vide(s) retirée(s) en fin de tableau")
       Write-Info ("$($Kinds[$kind].label) : $trail ligne(s) vide(s) retirée(s) en fin de tableau") 'Cyan'
     }
@@ -368,6 +387,7 @@ function Upsert-Rows($kind, $rows) {
     $codeCol = if ($kind -eq 'bdd') { Find-Col $a @('refwattee', 'codeaffaire', 'refwatee') @('refwatt', 'codeaffaire') @() } else { 0 }
     $off = $a.FirstCol - 1
     $results = New-Object System.Collections.ArrayList
+    $keyColCache = $null; $keyColCacheN = -1   # the key columns rarely change row to row within one batch : re-read only when a row was added
     foreach ($row in $rows) {
       # a row is either the plain list of values (older app) or { values, prev, keep, won, force, target }
       $isObj = ($row -isnot [array]) -and ($null -ne $row) -and ($row.PSObject.Properties['values'])
@@ -386,7 +406,8 @@ function Upsert-Rows($kind, $rows) {
       $codeOk = { param($r) if (-not $codeCol) { return $true }; $rc = Norm (& $a.Get $a $r $codeCol); return ($rc -eq '' -or $rc -eq $newCode -or ($prevCode -ne '' -and $rc -eq $prevCode)) }
       if (($keyVals | Where-Object { $_ -eq '' }).Count -gt 0) { [void]$results.Add(@{ ok = $false; key = $keyText; message = 'Clé incomplète (producteur ou centrale vide) : ligne ignorée.' }); continue }
       $n = & $a.RowCount $a
-      $cols = @(); foreach ($kc in $keyCols) { $cols += ,(& $a.Column $a $kc) }
+      if ($n -ne $keyColCacheN) { $keyColCache = @(); foreach ($kc in $keyCols) { $keyColCache += ,(& $a.Column $a $kc) }; $keyColCacheN = $n }
+      $cols = $keyColCache
       $found = @()
       for ($r = 1; $r -le $n; $r++) {
         $cur = @(); foreach ($col in $cols) { $cur += (Norm $col[$r]) }
@@ -486,7 +507,8 @@ function Upsert-Rows($kind, $rows) {
       # a line added then abandoned is removed. It was added at the END of the table: a colleague's insertion higher up only pushes
       # it down, so the last line is the one to look at — removed only if it is empty (never someone's line)
       if ($moved -and $addedNow -and $written.Count -eq 0) { try { $lastRow = & $a.RowCount $a; if ($lastRow -ge 1 -and (& $a.RowEmpty $a $lastRow)) { & $a.DeleteRow $a $lastRow } } catch { } }
-      if ($written.Count -gt 0) { $state.wrote = $true }
+      # saved right away, row by row : a crash, or an error further down the same batch, never loses more than the row in progress
+      if ($written.Count -gt 0) { $state.wrote = $true; & $a.Save $a }
       if ($moved) {
         [void]$results.Add(@{ ok = $false; key = $keyText; message = ($(if ($written.Count) { "Le tableau a bougé pendant l'écriture (tri ou insertion par un collègue) : arrêt après " + $written.Count + " case(s), notées dans le journal. Renvoie l'affaire." } else { "Le tableau a bougé (tri ou insertion par un collègue) : rien n'a été écrit sur cette ligne. Renvoie l'affaire." }) + $(if ($why) { ' (' + $why + ')' } else { '' })); written = @($written); mine = @($mine) })
         Write-Info ("$($Kinds[$kind].label) : tableau modifié pendant l'envoi, ligne arrêtée (" + $keyText + ')' + $(if ($why) { ' — ' + $why } else { '' })) 'Yellow'
@@ -566,10 +588,15 @@ function Read-Request($stream) {
   return @{ method = $parts[0]; path = ($parts[1] -split '\?')[0]; headers = $headers; body = [Text.Encoding]::UTF8.GetString($bodyMs.ToArray()) }
 }
 function Handle($req) {
+  # defense in depth against DNS-rebinding : a page on another domain whose name briefly resolves to 127.0.0.1
+  # would still send Host: 127.0.0.1:<port> or localhost:<port> only if it already knew the port, which the
+  # token already guards ; this just closes the one remaining gap for a request sent without a browser's Origin
+  $hostHeader = $req.headers['host']
+  if ($hostHeader -and $hostHeader -notmatch ('^(127\.0\.0\.1|localhost):' + $Port + '$')) { return @(403, @{ ok = $false; message = 'Hôte non autorisé.' }) }
   $origin = $req.headers['origin']
   if ($origin -and -not ($AllowedOrigins -contains $origin)) { return @(403, @{ ok = $false; message = 'Origine non autorisée.' }) }
   if ($req.method -eq 'OPTIONS') { return @(204, $null) }
-  $authorized = ($req.headers['x-bridge-token'] -eq $Config.token)
+  $authorized = (Token-Matches $req.headers['x-bridge-token'] $Config.token)
   if ($req.path -eq '/status') {
     return @(200, @{ ok = $true; version = $Version; authorized = $authorized; mock = [bool]$Mock;
         pipe = @{ name = [IO.Path]::GetFileName([string]$Config.pipe); found = ($Mock -or (Test-Path ([string]$Config.pipe))) };
@@ -650,7 +677,17 @@ Write-Host ('  Clé à recopier dans l''app (Réglages → Pont Excel) : ' + $Co
 Write-Host '  Laisse cette fenêtre ouverte (tu peux la réduire). Ctrl+C pour arrêter.'
 Write-Host ''
 try {
+$lastIdleCheck = [DateTime]::UtcNow
 while ($true) {
+  # no request pending : a chance to notice and release an Excel left open with nothing in it (a close that failed
+  # earlier, or one that never got a next request to retry on), instead of waiting indefinitely for one
+  while (-not $listener.Pending()) {
+    Start-Sleep -Milliseconds 500
+    if (([DateTime]::UtcNow - $lastIdleCheck).TotalMinutes -ge 5) {
+      $lastIdleCheck = [DateTime]::UtcNow
+      if ($script:xl) { try { if ($script:xl.Workbooks.Count -eq 0) { Release-Excel; Write-Info 'Excel libéré (resté ouvert sans classeur, inactif).' 'DarkGray' } } catch { $script:xl = $null } }
+    }
+  }
   $client = $listener.AcceptTcpClient()
   try {
     $client.ReceiveTimeout = 10000
@@ -670,6 +707,7 @@ while ($true) {
         if ($busy) { $msg = 'Excel est occupé (une cellule en cours de saisie, ou une fenêtre de message ouverte dans Excel) : termine la saisie ou ferme la fenêtre, puis réessaie.' }
         $at = ''; try { $at = ' [pont, ligne ' + $_.InvocationInfo.ScriptLineNumber + ' : ' + ($_.InvocationInfo.Line.Trim() -replace '\s+', ' ').Substring(0, [Math]::Min(90, ($_.InvocationInfo.Line.Trim() -replace '\s+', ' ').Length)) + ']' } catch { }
         Write-Info ("Erreur : " + $msg + $at) 'Red'
+        Write-ErrorLog ("Erreur : " + $msg + $at)
         $res = @(500, @{ ok = $false; message = $msg })
       }
     }
