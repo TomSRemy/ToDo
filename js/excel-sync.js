@@ -163,7 +163,7 @@ window.TodoExcelSync=(function(){
     let ov=$('xs-overlay');
     if(!ov){ ov=document.createElement('div'); ov.id='xs-overlay'; ov.className='modal-overlay';
       ov.innerHTML='<div class="modal-box wide xs-box" role="dialog" aria-labelledby="xs-title"><div class="xs-head"><h3 id="xs-title">Excel ⇄ appli</h3><div class="xs-filter"><button type="button" data-f="todo" class="on">À traiter</button><button type="button" data-f="all">Tout</button></div><button type="button" class="modal-x xs-x" aria-label="Fermer">×</button></div>'
-        +'<p class="modal-hint xs-info"></p><div class="xs-tools"><button type="button" class="xs-read">Relire les Excel</button><button type="button" class="xs-send" data-k="pipe"></button><button type="button" class="xs-send" data-k="bdd"></button></div><div class="xs-body"></div></div>';
+        +'<p class="modal-hint xs-info"></p><div class="xs-tools"><button type="button" class="xs-read">Relire les Excel</button><button type="button" class="xs-send" data-k="pipe"></button><button type="button" class="xs-send" data-k="bdd"></button><span class="xs-bulk-group"><button type="button" class="xs-bulk" data-p="excel">Tout garder Excel</button><button type="button" class="xs-bulk" data-p="appli">Tout garder appli</button></span></div><div class="xs-body"></div></div>';
       document.body.appendChild(ov); const close=()=>ov.classList.add('hidden');
       ov.addEventListener('click', e=>{ if(e.target===ov) close(); }); ov.querySelector('.xs-x').onclick=close;
       ov.querySelectorAll('.xs-filter button').forEach(b=>b.onclick=()=>{ ov.querySelectorAll('.xs-filter button').forEach(x=>x.classList.toggle('on', x===b)); paintExcelSync(); });
@@ -171,11 +171,46 @@ window.TodoExcelSync=(function(){
         try{ await xsReadFile('pipe'); await xsReadFile('bdd'); importParcFromBridge(true); }catch(err){ showBridgeMsg(err.message, false); } b.disabled=false; b.textContent=t; paintExcelSync(); };
       ov.querySelectorAll('.xs-send').forEach(b=>b.onclick=async()=>{ const kind=b.dataset.k, list=xsList().filter(xsInScope).filter(o=>(kind==='pipe'||xsBddApplies(o)) && xsTodo(xsState(kind,o)) && !((xsState(kind,o).diffs||[]).some(d=>d.byExcel))); if(!list.length) return;
         await sendToExcel(kind, list, b); if(bridgeConfigured()){ try{ await xsReadFile(kind); }catch(e){ softFail('relecture de l\u2019Excel', e); } } paintExcelSync(); });
+      // decide at once for every diverging cell currently shown (whatever scope/filter is selected, not just one lot)
+      ov.querySelectorAll('.xs-bulk').forEach(b=>b.onclick=async()=>{ const targets=xsConflictTargets(xsShownNow); if(!targets.length) return;
+        b.disabled=true; const t=b.textContent; b.textContent='Envoi…';
+        await xsApplyBulk(targets, b.dataset.p); b.disabled=false; b.textContent=t; });
     }
     { let sc=ov.querySelector('.xs-scope'); if(!sc){ sc=document.createElement('div'); sc.className='xs-scope xs-filter'; ov.querySelector('.xs-head').appendChild(sc);
         [['pipe','Pipeline'],['parc','Portefeuille (signés)'],['all','Tout']].forEach(([k,l])=>{ const b=document.createElement('button'); b.type='button'; b.dataset.s=k; b.textContent=l; b.onclick=()=>{ xsScope=k; paintExcelSync(); }; sc.appendChild(b); }); } }
     ov.classList.remove('hidden'); paintExcelSync();
     if(bridgeConfigured() && !(opts&&opts.noRead) && (!xsRead.pipe || Date.now()-xsRead.pipe.at>120000)){ try{ await xsReadFile('pipe'); await xsReadFile('bdd'); }catch(e){ softFail('relecture des Excel', e); } paintExcelSync(); }
+  }
+  // Writes what « choices » (and « aligns », for the ones kept from the Excel) say for this installation's diffs — the
+  // single row's « Appliquer » and the bulk « Tout garder … » buttons (a lot, or everything shown) both go through this.
+  async function xsApplyRow(kind, o, diffs, choices, aligns){
+    const force={}, seen={};
+    diffs.forEach(d=>{ const vi=xsViOf(kind, d);
+      if(choices[vi]==='appli'){
+        // the appli has nothing here: writing it would blank nothing (the bridge never empties a cell) — take the
+        // Excel value into the fiche instead, the way « Garder l'Excel » used to offer
+        if(!d.app){ const al=xsAlignAction(kind, o, vi, d.excel); if(al) al.run(); }
+        else { force[vi]='replace'; seen[vi]=d.excel; }
+      } else {
+        xsKeep(kind, o, vi, d.excel);
+        if(aligns[vi]){ const al=xsAlignAction(kind, o, vi, d.excel); if(al) al.run(); }
+      } });
+    if(Object.keys(force).length) await sendToExcel(kind, [o], null, { force, seen }); else { renderPipeline(); saveCrm(); }
+  }
+  // the diverging cells for a set of rows, as { kind, o, diffs } — a lot's rows, or everything currently shown
+  function xsConflictTargets(rowList){
+    const out=[]; (rowList||[]).forEach(r=>{ if(r.pDiffs.length) out.push({ kind:'pipe', o:r.o, diffs:r.pDiffs }); if(r.bDiffs.length) out.push({ kind:'bdd', o:r.o, diffs:r.bDiffs }); });
+    return out;
+  }
+  // one policy (« excel » or « appli ») for every cell of every target : a lot sent together for pricing often moves the
+  // same way on every plant, so this decides it once instead of installation by installation
+  async function xsApplyBulk(targets, policy){
+    for(const tg of targets){
+      const choices={}, aligns={}; tg.diffs.forEach(d=>{ const vi=xsViOf(tg.kind, d); choices[vi]=policy; aligns[vi]=true; });
+      await xsApplyRow(tg.kind, tg.o, tg.diffs, choices, aligns);
+    }
+    try{ await xsReadFile('pipe'); await xsReadFile('bdd'); }catch(e){ softFail('relecture des Excel', e); }
+    paintExcelSync();
   }
   // Several fields changed by someone else on the same installation : one table, columns = fields (like the Excel header
   // row), the Excel row above the appli row — click a cell to keep it, click « Excel »/« Appli » to keep the whole row,
@@ -227,18 +262,7 @@ window.TodoExcelSync=(function(){
     refresh();
     apply.onclick=async()=>{
       apply.disabled=true; apply.textContent='Envoi…';
-      const force={}, seen={};
-      diffs.forEach(d=>{ const vi=xsViOf(kind, d);
-        if(choices[vi]==='appli'){
-          // the appli has nothing here: writing it would blank nothing (the bridge never empties a cell) — take the
-          // Excel value into the fiche instead, the way « Garder l'Excel » used to offer
-          if(!d.app){ const al=xsAlignAction(kind, o, vi, d.excel); if(al) al.run(); }
-          else { force[vi]='replace'; seen[vi]=d.excel; }
-        } else {
-          xsKeep(kind, o, vi, d.excel);
-          if(aligns[vi]){ const al=xsAlignAction(kind, o, vi, d.excel); if(al) al.run(); }
-        } });
-      if(Object.keys(force).length) await sendToExcel(kind, [o], null, { force, seen }); else { renderPipeline(); saveCrm(); }
+      await xsApplyRow(kind, o, diffs, choices, aligns);
       try{ await xsReadFile(kind); }catch(e){ softFail('relecture de l’Excel', e); }
       paintExcelSync();
     };
@@ -251,16 +275,20 @@ window.TodoExcelSync=(function(){
       ? 'Pipe '+(xsRead.pipe?'relu le '+fmtD(xsRead.pipe.at)+' à '+new Date(xsRead.pipe.at).toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'}):'pas encore relu')+' · Suivi '+(xsRead.bdd?'relu':'pas encore relu')+'. Envoyer ne remplace jamais une case modifiée par un collègue : elle te sera demandée.'
       : 'Pont Excel non connecté sur cet ordinateur : la colonne « appli » dit ce qui a été envoyé ; le Suivi est relu depuis le Portefeuille (fichier chargé). Le pont se règle dans Réglages.';
     ov.querySelectorAll('.xs-scope button').forEach(b=>b.classList.toggle('on', b.dataset.s===xsScope));
-    const rows=xsList().filter(xsInScope).map(o=>({ o, p:xsState('pipe',o), b:xsBddApplies(o)?xsState('bdd',o):null }));
+    const rows=xsList().filter(xsInScope).map(o=>{ const p=xsState('pipe',o), b=xsBddApplies(o)?xsState('bdd',o):null;
+      return { o, p, b, pDiffs:p.diffs.filter(d=>d.byExcel), bDiffs:b?b.diffs.filter(d=>d.byExcel):[] }; });
     const todo=rows.filter(r=>xsTodo(r.p) || (r.b && xsTodo(r.b)));
-    const cntP=rows.filter(r=>xsTodo(r.p) && !r.p.diffs.some(d=>d.byExcel)).length, cntB=rows.filter(r=>r.b && xsTodo(r.b) && !r.b.diffs.some(d=>d.byExcel)).length;
+    const cntP=rows.filter(r=>xsTodo(r.p) && !r.pDiffs.length).length, cntB=rows.filter(r=>r.b && xsTodo(r.b) && !r.bDiffs.length).length;
     ov.querySelectorAll('.xs-send').forEach(b=>{ const n=b.dataset.k==='pipe'?cntP:cntB; b.textContent='Envoyer au '+(b.dataset.k==='pipe'?'Pipe':'Suivi')+' ('+n+')'; b.disabled=!n || !bridgeConfigured(); b.title=bridgeConfigured()?'':'Pont Excel non connecté'; });
     const shown=all?rows:todo;
+    xsShownNow=shown;
+    const nConflictCells=xsConflictTargets(shown).reduce((s,tg)=>s+tg.diffs.length, 0);
+    ov.querySelectorAll('.xs-bulk').forEach(b=>{ b.textContent=(b.dataset.p==='excel'?'Tout garder Excel':'Tout garder appli')+' ('+nConflictCells+')'; b.disabled=!nConflictCells || !bridgeConfigured(); b.title=bridgeConfigured()?'':'Pont Excel non connecté'; });
     if(!shown.length){ body.innerHTML='<p class="xs-empty">✓ Tout est à jour'+(xsRead.pipe?'':' côté appli (relis les Excel pour vérifier le contenu des fichiers)')+'.</p>'; return; }
     const t=document.createElement('table'); t.className='xs-table';
     t.innerHTML='<thead><tr><th>Installation</th><th>Pipe Excel</th><th>Suivi (BDD)</th></tr></thead>';
     const tb=document.createElement('tbody');
-    const cell=(kind, o, st)=>{
+    const cell=(kind, o, st, diffs)=>{
       const td=document.createElement('td'); if(!st){ td.innerHTML='<span class="xs-na">pas encore (avant le pricing)</span>'; return td; }
       const tag=(cls,txt)=>{ const s=document.createElement('span'); s.className='xs-tag '+cls; s.textContent=txt; td.appendChild(s); };
       if(st.app==='jamais') tag('warn','Pas envoyé');
@@ -269,16 +297,36 @@ window.TodoExcelSync=(function(){
       if(st.excel==='absent' && st.app!=='jamais') tag('bad','Absent du fichier');
       if(st.excel==='statut') tag('info','Statut Suivi : '+(st.statut||'?'));
       if(st.line) { const l=document.createElement('span'); l.className='xs-line'; l.textContent='ligne '+st.line; td.appendChild(l); }
-      xsDiffTable(td, kind, o, st.diffs.filter(d=>d.byExcel));
+      xsDiffTable(td, kind, o, diffs);
       if(st.excel==='statut'){ const a=xsStatutAction(o, st.statut); if(a){ const b=document.createElement('button'); b.type='button'; b.className='pq-link'; b.textContent=a.label; b.onclick=()=>{ a.run(); renderPipeline(); paintExcelSync(); }; td.appendChild(b); } }
-      if(xsTodo(st) && !st.diffs.some(d=>d.byExcel) && bridgeConfigured()){ const b=document.createElement('button'); b.type='button'; b.className='pq-link xs-one'; b.textContent='Envoyer'; b.onclick=async()=>{ await sendToExcel(kind,[o],b); try{ await xsReadFile(kind); }catch(e){ softFail('relecture de l\u2019Excel', e); } paintExcelSync(); }; td.appendChild(b); }
+      if(xsTodo(st) && !diffs.length && bridgeConfigured()){ const b=document.createElement('button'); b.type='button'; b.className='pq-link xs-one'; b.textContent='Envoyer'; b.onclick=async()=>{ await sendToExcel(kind,[o],b); try{ await xsReadFile(kind); }catch(e){ softFail('relecture de l’Excel', e); } paintExcelSync(); }; td.appendChild(b); }
       return td; };
-    shown.forEach(({o,p,b})=>{ const tr=document.createElement('tr');
+    const row=({o,p,b,pDiffs,bDiffs})=>{ const tr=document.createElement('tr');
       const n=document.createElement('td'); n.className='xs-name'; n.innerHTML='<b></b><span></span>'; n.firstChild.textContent=oppName(o); n.lastChild.textContent=[o.company, stageLabel(o.stage, o)].filter(Boolean).join(' · ');
       n.onclick=()=>{ $('xs-overlay').classList.add('hidden'); openOppDetail(o.id); };
-      tr.append(n, cell('pipe', o, p), cell('bdd', o, b)); tb.appendChild(tr); });
+      tr.append(n, cell('pipe', o, p, pDiffs), cell('bdd', o, b, bDiffs)); tb.appendChild(tr); };
+    // installations sent together for one pricing request (o.requestId) : grouped, with a bulk choice for the lot's cells
+    const flushed=new Set();
+    shown.forEach(r=>{ const rid=r.o.requestId;
+      if(rid){ if(flushed.has(rid)) return; flushed.add(rid);
+        const members=shown.filter(x=>x.o.requestId===rid);
+        if(members.length>1){
+          const req=app.opportunities.find(x=>x.id===rid), label=(req && !req.deleted && req.label) || ('Lot de '+members.length+' installations');
+          const targets=xsConflictTargets(members), n=targets.reduce((s,tg)=>s+tg.diffs.length, 0);
+          const gtr=document.createElement('tr'); gtr.className='xs-group';
+          const gtd=document.createElement('td'); gtd.colSpan=3;
+          const lab=document.createElement('span'); lab.className='xs-group-label'; lab.textContent=label+' · '+members.length+' installations'; gtd.appendChild(lab);
+          if(n){ ['excel','appli'].forEach(policy=>{ const gb=document.createElement('button'); gb.type='button'; gb.className='pq-link xs-group-bulk';
+            gb.textContent=(policy==='excel'?'Tout Excel':'Tout appli')+' ('+n+')';
+            gb.onclick=async()=>{ gb.disabled=true; const t2=gb.textContent; gb.textContent='Envoi…'; await xsApplyBulk(targets, policy); gb.disabled=false; gb.textContent=t2; };
+            gtd.appendChild(gb); }); }
+          gtr.appendChild(gtd); tb.appendChild(gtr);
+        }
+        members.forEach(row);
+      } else row(r); });
     t.appendChild(tb); body.appendChild(t);
   }
+  let xsShownNow=[];   // what paintExcelSync last drew, for the « Tout garder … » buttons (read at click time)
   async function sendToExcel(kind, list, btn, extra){
     if(ON_PHONE) return;
     const label=btn?btn.textContent:'';
