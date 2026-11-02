@@ -1086,13 +1086,6 @@
 .xr-item h4 span{ font:500 11px var(--font-mono); color:var(--tx3); }
 .xr-intro{ margin:0; font-size:12.5px; color:var(--tx2); }
 .xr-opt{ display:flex; gap:8px; align-items:center; font-size:13px; color:var(--tx1); cursor:pointer; padding:2px 0; }
-.xr-table{ display:flex; flex-direction:column; gap:6px; }
-.xr-row{ display:grid; grid-template-columns:120px minmax(0,1fr) minmax(0,1fr) 180px; gap:10px; align-items:center; font-size:12.5px; padding:6px 8px; border:1px solid var(--bd); border-radius:6px; background:var(--panel-2); }
-.xr-row b{ font-weight:600; color:var(--tx1); }
-.xr-v{ display:flex; flex-direction:column; min-width:0; color:var(--tx1); white-space:pre-wrap; word-break:break-word; }
-.xr-v i{ font:normal 500 10px var(--font-mono); text-transform:uppercase; letter-spacing:.06em; color:var(--tx3); }
-.xr-row select{ width:100%; }
-@media (max-width:760px){ .xr-row{ grid-template-columns:1fr 1fr; } .xr-row b{ grid-column:1 / -1; } .xr-row select{ grid-column:1 / -1; } }
 #xl-review-overlay{ z-index:20050; }   /* above the opportunity sheet it was opened from */
 
 /* editing one installation with a workbook of several plants: the others, to create in the same request */
@@ -1895,6 +1888,10 @@ html.no-bridge #pipe-xs-btn{ display:none; }
 .xc-cell{ display:block; width:100%; text-align:left; background:none; border:none; padding:6px 7px; font:12px var(--font-ui); color:var(--tx1); cursor:pointer; white-space:nowrap; max-width:160px; overflow:hidden; text-overflow:ellipsis; }
 .xc-cell:hover{ background:var(--panel-2); }
 .xc-cell.sel{ background:var(--accent-dim); box-shadow:inset 0 0 0 1.5px var(--accent); }
+.xc-cell.merged{ background:#7DD3FC22; box-shadow:inset 0 0 0 1.5px #7DD3FC; }
+.xc-merge{ display:block; margin-top:2px; background:none; border:none; padding:0; font:500 9.5px var(--font-ui); color:var(--tx3); text-decoration:underline; text-underline-offset:2px; cursor:pointer; text-transform:none; letter-spacing:0; }
+.xc-merge:hover{ color:var(--tx1); }
+.xc-merge.on{ color:#7DD3FC; }
 .xc-aligns{ display:flex; flex-direction:column; gap:3px; margin:2px 0 4px; }
 .xc-align{ display:flex; align-items:center; gap:6px; font-size:11.5px; color:var(--tx2); cursor:pointer; }
 .xc-align input{ margin:0; accent-color:var(--accent); }
@@ -2448,16 +2445,6 @@ html.widget .dup-banner{ display:none; }
   #pipeline-board{ gap:8px; padding:10px; }
 }
 
-/* ---------- Excel ⇄ appli: for each difference, « Garder l'appli » or « Garder l'Excel », then « Mettre aussi l'appli à jour ? » ---------- */
-.xs-ask{ display:flex; flex-wrap:wrap; align-items:center; gap:6px; margin:4px 0 2px; }
-.xs-q{ font-size:12px; color:var(--tx2); }
-.xs-choice{ background:var(--panel-2); border:1px solid var(--bd); color:var(--tx1); border-radius:999px; padding:3px 10px; font:500 12px var(--font-ui); cursor:pointer; max-width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-.xs-choice:hover{ border-color:var(--accent); color:var(--accent); }
-.xs-choice.yes{ border-color:var(--accent); color:var(--accent); }
-.xs-choice:focus-visible{ outline:2px solid var(--accent); outline-offset:1px; }
-.xs-done{ font-size:12px; color:var(--accent); }
-.xr-row{ grid-template-columns:120px minmax(0,1fr) minmax(0,1fr); }
-.xr-row .xs-ask{ grid-column:1 / -1; }
 
   /* ----- cold audit (2026-10-26): welcome, toast, bin, scope notes ----- */
   [hidden]{ display:none !important; }

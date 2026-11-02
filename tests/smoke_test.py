@@ -2825,46 +2825,49 @@ Responsable technique
     check(not errors, f"no page errors ({errors})")
     page.close()
 
-    # --- Excel bridge, shared file: a cell changed by a colleague is shown, nothing replaced without a choice
+    # --- Excel bridge, shared file: a cell changed by a colleague surfaces as an ordinary difference, in the same
+    # table as any other — no separate review for it ; the bridge never replaces it without a choice
     sent2 = []
+    pipe_head2 = [""] * 37; pipe_head2[6] = "Nom Producteur"; pipe_head2[19] = "Nom Centrale"; pipe_head2[30] = "Stade"; pipe_head2[35] = "Commentaires"
+    pipe_row2 = [None] * 37; pipe_row2[6] = "SCEA"; pipe_row2[19] = "Les Vignes"; pipe_row2[30] = "Perdu"; pipe_row2[35] = "Vu au salon (Marie)"
+    sheet2 = {"Pipe Agr\u00e9gation": [pipe_head2, pipe_row2]}
     def bridge2(route, request):
         if request.method == "OPTIONS":
             return route.fulfill(status=204, headers={"Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "*", "Access-Control-Allow-Methods": "*"})
         h = {"Access-Control-Allow-Origin": "*", "Content-Type": "application/json"}
         if request.url.endswith("/status"):
-            return route.fulfill(status=200, headers=h, body=json.dumps({"ok": True, "version": "1.11", "authorized": True, "pipe": {"name": "Pipe.xlsx", "found": True}, "bdd": {"name": "Suivi.xlsx", "found": True}}))
+            return route.fulfill(status=200, headers=h, body=json.dumps({"ok": True, "version": "1.14", "authorized": True, "pipe": {"name": "Pipe.xlsx", "found": True}, "bdd": {"name": "Suivi.xlsx", "found": True}}))
+        if request.url.endswith("/pipe/read"):
+            return route.fulfill(status=200, headers=h, body=json.dumps({"ok": True, "sheets": sheet2}))
         body = json.loads(request.post_data); sent2.append(body)
         if len(sent2) == 1:
-            res = {"ok": True, "action": "mise à jour", "row": 12, "key": "SCEA / Les Vignes", "cells": 2, "written": [3, 22], "mine": [0, 3, 22],
-                   "conflicts": [{"i": 30, "header": "Stade", "excel": "Perdu", "app": "Transféré BDD", "comment": False},
+            res = {"ok": True, "action": "mise \u00e0 jour", "row": 12, "key": "SCEA / Les Vignes", "cells": 2, "written": [3, 22], "mine": [0, 3, 22],
+                   "conflicts": [{"i": 30, "header": "Stade", "excel": "Perdu", "app": "Transf\u00e9r\u00e9 BDD", "comment": False},
                                  {"i": 35, "header": "Commentaires", "excel": "Vu au salon (Marie)", "app": "Relancer lundi", "comment": True}]}
         else:
-            res = {"ok": True, "action": "mise à jour", "row": 12, "key": "SCEA / Les Vignes", "cells": 1, "written": [35], "mine": [35], "conflicts": []}
+            res = {"ok": True, "action": "mise \u00e0 jour", "row": 12, "key": "SCEA / Les Vignes", "cells": 1, "written": [35], "mine": [35], "conflicts": []}
         return route.fulfill(status=200, headers=h, body=json.dumps({"ok": True, "results": [res], "fileWasClosed": len(sent2) == 1}))
     inst2 = [dict(inst[0], commentaires="Relancer lundi")]
     page, errors = new_page(browser, {"todo_todo-widget-opportunities": json.dumps(inst2), "todo_bridge-config": json.dumps({"port": 8765, "token": "k1"})})
     page.route("http://127.0.0.1:8765/**", bridge2)
     page.goto(URL); page.click('[data-tab="pipeline"]'); page.click(".pipe-card:has-text('Les Vignes')")
     page.click("#opp-detail-actions >> text=Envoyer au Pipe Excel")
-    page.wait_for_selector("#xl-review-overlay:not(.hidden)", timeout=5000)
+    page.wait_for_selector("#xs-overlay:not(.hidden)", timeout=5000)   # no separate popup : the conflict opens the same panel
     first = sent2[0]["rows"][0]
-    review = page.inner_text("#xl-review-overlay")
-    check(len(first["values"]) == 37 and first["prev"] is None and "Vu au salon (Marie)" in review and "Perdu" in review
-          and "ouvre-le avant" in page.inner_text("#bridge-msg"), "shared Excel: changed cells shown, closed file reported")
-    opts = [page.locator(f"#xr-0-{i} .xs-choice").count() for i in (30, 35)]
-    check(opts == [2, 3] and page.locator("#xr-0-35 .xs-choice:has-text('fusionner')").count() == 1, f"shared Excel: « les deux (fusionner) » offered for comments only ({opts})")
-    check("Pour les 2 cases" in page.inner_text("#xl-review-body .xr-all"), "shared Excel: one click for every cell is offered")
-    page.click("#xr-0-30 .xs-choice:has-text('l’Excel')")
-    check("Mettre aussi l’appli à jour" in page.inner_text("#xr-0-30"), "shared Excel: keeping the Excel asks whether to update the app too")
-    page.click("#xr-0-30 .xs-choice:text-is('Non')")
-    check("appli inchangée" in page.inner_text("#xr-0-30") and page.locator("#xr-0-30 .pq-link:has-text('changer')").count() == 1, "shared Excel: the choice is shown, and can be changed")
-    page.click("#xr-0-35 .xs-choice:has-text('fusionner')"); page.click("#xl-review-apply")
-    page.wait_for_function("document.getElementById('xl-review-overlay').classList.contains('hidden')")
+    check(len(first["values"]) == 37 and first["prev"] is None and "ouvre-le avant" in page.inner_text("#bridge-msg"), "shared Excel: closed file reported")
+    pipeTbl = "#xs-overlay tr:has-text('Les Vignes') td:has-text('Stade')"
+    page.wait_for_selector(pipeTbl + " .xc-cell", timeout=5000)
+    txt = page.inner_text(pipeTbl)
+    check("Perdu" in txt and "Vu au salon (Marie)" in txt, f"shared Excel: both changed cells shown in the one table, re-read from the file ({txt!r})")
+    check(page.locator(pipeTbl + " .xc-merge").count() == 1, f"shared Excel: \u00ab fusionner \u00bb offered for the comment column only ({page.locator(pipeTbl + ' .xc-merge').count()})")
+    page.click(pipeTbl + " .xc-align:has-text('Perdu') input")   # Excel kept for Stade (the default), « aussi » unticked
+    page.click(pipeTbl + " .xc-merge")   # merge the two comments
+    page.click(pipeTbl + " .xc-apply")
     page.wait_for_timeout(300)
     second = sent2[1]["rows"][0] if len(sent2) > 1 else {}
     o = stored(page, "todo-widget-opportunities")[0]
     check(second.get("seen") == {"35": "Vu au salon (Marie)"}, "shared Excel: the value seen is sent with the choice (replaced only if still there)")
-    check(second.get("force") == {"35": "merge"} and second.get("target") == 12 and o["excelKeep"]["pipe"] == {"30": "Perdu"},
+    check(second.get("force") == {"35": "merge"} and o["excelKeep"]["pipe"] == {"30": "Perdu"},
           f"shared Excel: merge sent for the comment, the kept status remembered ({second.get('force')}, {o.get('excelKeep')})")
     check(o["excelPrev"]["pipe"][3] == {"d": "2026-10-12"} and o["excelPrev"]["pipe"][35] == "Relancer lundi" and o["excelPrev"]["pipe"][30] is None,
           "shared Excel: the app remembers what it wrote, cell by cell (never the kept ones)")

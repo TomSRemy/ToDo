@@ -126,27 +126,6 @@ window.TodoExcelSync=(function(){
     if(vi===24){ const a=xsStatutAction(o, excel); return a?{ label:a.label.toLowerCase(), run:a.run }:null; }
     return null;
   }
-  // the two questions, in a given place (the Excel ⇄ panel, the review after a send); done(choice) once answered
-  function xsAsk(box, kind, o, vi, d, done, canMerge){
-    box.innerHTML=''; const q=document.createElement('span'); q.className='xs-q'; box.appendChild(q);
-    const btn=(label, cls, fn)=>{ const b=document.createElement('button'); b.type='button'; b.className='xs-choice'+(cls?' '+cls:''); b.textContent=label; b.onclick=fn; box.appendChild(b); return b; };
-    // the app has nothing here: the bridge never empties a cell, so « keep the app » would do nothing — take it, or leave it
-    if(!d.app){ const al=xsAlignAction(kind, o, vi, d.excel);
-      q.textContent='L’appli n’a rien ici :';
-      if(al) btn('reprendre « '+(d.excel||'')+' » dans l’appli', 'yes', ()=>done({ keep:'excel', align:true, run:al.run }));
-      btn('ignorer', '', ()=>done({ keep:'excel', align:false }));
-      return; }
-    q.textContent='Garder :';
-    btn('l’appli « '+d.app+' »', '', ()=>done({ keep:'app' }));
-    btn('l’Excel « '+(d.excel||'vide')+' »', '', ()=>{
-      const al=xsAlignAction(kind, o, vi, d.excel);
-      if(!al){ done({ keep:'excel', align:false }); return; }
-      box.innerHTML=''; const q2=document.createElement('span'); q2.className='xs-q'; q2.textContent='Mettre aussi l’appli à jour ('+al.label+') ?'; box.appendChild(q2);
-      btn('Oui', 'yes', ()=>done({ keep:'excel', align:true, run:al.run }));
-      btn('Non', '', ()=>done({ keep:'excel', align:false }));
-    });
-    if(canMerge) btn('les deux (fusionner)', '', ()=>done({ keep:'merge' }));
-  }
   // a status typed in the Suivi by someone: Gagné / Perdu / Abandon brought into the pipeline
   function xsStatutAction(o, statut){
     const s=pqFold(statut||'');
@@ -185,17 +164,19 @@ window.TodoExcelSync=(function(){
   // single row's « Appliquer » and the bulk « Tout garder … » buttons (a lot, or everything shown) both go through this.
   async function xsApplyRow(kind, o, diffs, choices, aligns){
     const force={}, seen={};
-    diffs.forEach(d=>{ const vi=xsViOf(kind, d);
-      if(choices[vi]==='appli'){
+    diffs.forEach(d=>{ const vi=xsViOf(kind, d), ch=choices[vi];
+      if(ch==='appli'){
         // the appli has nothing here: writing it would blank nothing (the bridge never empties a cell) — take the
         // Excel value into the fiche instead, the way « Garder l'Excel » used to offer
         if(!d.app){ const al=xsAlignAction(kind, o, vi, d.excel); if(al) al.run(); }
         else { force[vi]='replace'; seen[vi]=d.excel; }
-      } else {
+      } else if(ch==='merge'){ force[vi]='merge'; seen[vi]=d.excel; }   // comment columns only : both texts kept, one after the other, in the Excel
+      else {
         xsKeep(kind, o, vi, d.excel);
         if(aligns[vi]){ const al=xsAlignAction(kind, o, vi, d.excel); if(al) al.run(); }
       } });
-    if(Object.keys(force).length) await sendToExcel(kind, [o], null, { force, seen }); else { renderPipeline(); saveCrm(); }
+    // sendToExcel re-reads the file and repaints the panel itself ; nothing left to do when it sends
+    if(Object.keys(force).length) await sendToExcel(kind, [o], null, { force, seen }); else { renderPipeline(); saveCrm(); paintExcelSync(); }
   }
   // the diverging cells for a set of rows, as { kind, o, diffs } — a lot's rows, or everything currently shown
   function xsConflictTargets(rowList){
@@ -205,23 +186,26 @@ window.TodoExcelSync=(function(){
   // one policy (« excel » or « appli ») for every cell of every target : a lot sent together for pricing often moves the
   // same way on every plant, so this decides it once instead of installation by installation
   async function xsApplyBulk(targets, policy){
+    // each xsApplyRow (via sendToExcel, or directly when nothing is sent) already re-reads and repaints on its own
     for(const tg of targets){
       const choices={}, aligns={}; tg.diffs.forEach(d=>{ const vi=xsViOf(tg.kind, d); choices[vi]=policy; aligns[vi]=true; });
       await xsApplyRow(tg.kind, tg.o, tg.diffs, choices, aligns);
     }
-    try{ await xsReadFile('pipe'); await xsReadFile('bdd'); }catch(e){ softFail('relecture des Excel', e); }
-    paintExcelSync();
   }
   // Several fields changed by someone else on the same installation : one table, columns = fields (like the Excel header
   // row), the Excel row above the appli row — click a cell to keep it, click « Excel »/« Appli » to keep the whole row,
   // then one « Appliquer » sends every field kept from the appli in a single request.
+  const xsIsCommentCol=label=>/commentaire|remarque|observation|particularit/i.test(label||'');
   function xsDiffTable(td, kind, o, diffs){
     if(!diffs.length) return;
     const choices={}, aligns={}; diffs.forEach(d=>{ const vi=xsViOf(kind, d); choices[vi]='excel'; aligns[vi]=true; });   // default: nothing sent, the Excel's value is kept and brought into the fiche (sauf décoché)
     const wrap=document.createElement('div'); wrap.className='xc-wrap';
     const table=document.createElement('table'); table.className='xc-table';
     const headRow=document.createElement('tr'); headRow.appendChild(document.createElement('th'));
-    diffs.forEach(d=>{ const th=document.createElement('th'); th.textContent=d.col.label; headRow.appendChild(th); });
+    diffs.forEach(d=>{ const th=document.createElement('th'); th.textContent=d.col.label;
+      if(xsIsCommentCol(d.col.label)){ const vi=xsViOf(kind, d), mb=document.createElement('button'); mb.type='button'; mb.className='xc-merge'; mb.textContent='fusionner';
+        mb.onclick=()=>{ choices[vi]=choices[vi]==='merge'?'excel':'merge'; refresh(); }; th.appendChild(document.createElement('br')); th.appendChild(mb); }
+      headRow.appendChild(th); });
     const thead=document.createElement('thead'); thead.appendChild(headRow); table.appendChild(thead);
     const tbody=document.createElement('tbody'); table.appendChild(tbody);
     const mkRow=(side, label)=>{
@@ -244,8 +228,10 @@ window.TodoExcelSync=(function(){
     td.appendChild(foot);
     const refresh=()=>{
       diffs.forEach((d,i)=>{ const vi=xsViOf(kind, d), sel=choices[vi];
-        rowExcel.children[i+1].firstChild.classList.toggle('sel', sel==='excel');
-        rowApp.children[i+1].firstChild.classList.toggle('sel', sel==='appli'); });
+        const ec=rowExcel.children[i+1].firstChild, ac=rowApp.children[i+1].firstChild;
+        ec.classList.toggle('sel', sel==='excel'); ac.classList.toggle('sel', sel==='appli');
+        ec.classList.toggle('merged', sel==='merge'); ac.classList.toggle('merged', sel==='merge');
+        const mb=headRow.children[i+1].querySelector('.xc-merge'); if(mb) mb.classList.toggle('on', sel==='merge'); });
       rowExcel.firstChild.firstChild.classList.toggle('on', diffs.every(d=>choices[xsViOf(kind, d)]==='excel'));
       rowApp.firstChild.firstChild.classList.toggle('on', diffs.every(d=>choices[xsViOf(kind, d)]==='appli'));
       // kept from the Excel, and the Excel's value also fits a field on the fiche (a stage, a status) : offer to bring it in too
@@ -256,15 +242,13 @@ window.TodoExcelSync=(function(){
         const cb=document.createElement('input'); cb.type='checkbox'; cb.checked=!!aligns[vi]; cb.onchange=()=>{ aligns[vi]=cb.checked; };
         lab.append(cb, document.createTextNode(' aussi : '+al.label));
         alignBox.appendChild(lab); });
-      const nApp=Object.values(choices).filter(v=>v==='appli').length;
+      const nApp=Object.values(choices).filter(v=>v==='appli'||v==='merge').length;
       summary.textContent=nApp?nApp+' case'+(nApp>1?'s':'')+' à écrire dans Excel':'rien à écrire dans Excel';
     };
     refresh();
     apply.onclick=async()=>{
       apply.disabled=true; apply.textContent='Envoi…';
       await xsApplyRow(kind, o, diffs, choices, aligns);
-      try{ await xsReadFile(kind); }catch(e){ softFail('relecture de l’Excel', e); }
-      paintExcelSync();
     };
   }
   function paintExcelSync(){
@@ -345,85 +329,62 @@ window.TodoExcelSync=(function(){
     try{
       const { res, results, pending }=await xlSend(kind, list, list.map(o=>xlRowFor(kind, o, extra)), (k,n)=>{ if(btn && n>XL_PACKET) btn.textContent='Envoi '+k+'/'+n+'…'; });
       const msg=xlSummary(kind, results, res);
-      if(btn){ btn.textContent=pending.length?'À vérifier':'✓ Envoyé'; btn.title=msg; setTimeout(()=>{ btn.textContent=label; btn.disabled=false; },2500); }
+      try{ await xsReadFile(kind); }catch(e){ softFail('relecture de l’Excel', e); }
+      // a cell the bridge could not write (changed by someone else) is not asked about here a second time : the fresh
+      // read above makes it show up as an ordinary difference, decided in the same table as any other. Only a question
+      // about which row is meant (duplicate lines, another contract, a plant lost recently) still needs asking.
+      const questions=pending.filter(p=>p.r.question);
+      if(btn){ btn.textContent=questions.length?'À trancher':'✓ Envoyé'; btn.title=msg; setTimeout(()=>{ btn.textContent=label; btn.disabled=false; },2500); }
       showBridgeMsg(msg, true);
-      if(pending.length) openXlReview(kind, pending);
+      if(questions.length) openXlReview(kind, questions);
+      const ov=$('xs-overlay');
+      if(ov && !ov.classList.contains('hidden')) paintExcelSync();
+      else if(pending.length>questions.length) await openExcelSync({ noRead:true });   // a plain conflict, panel not open : show it there rather than nowhere
     }catch(e){
       if(btn){ btn.textContent=label; btn.disabled=false; }
       showBridgeMsg(e.message, false);
     }
   }
-  // What was not written: cells changed by someone else (Garder / Remplacer / Fusionner) and questions
-  // (duplicate lines, plant lost recently). « Garder » is the default everywhere.
-  let xrChoice={}, xrShow={};
+  // Which row is meant : several open lines share this plant's name (duplicate), the open line carries another
+  // contract's code, or a plant closed recently has a line that might be the same affair. A cell the bridge could not
+  // write (changed by someone else) is not asked here any more : sendToExcel's re-read already surfaces it as an
+  // ordinary difference, in the same table as any other.
   function openXlReview(kind, pending){
-    const box=$('xl-review-body'); box.innerHTML=''; xrChoice={}; xrShow={};
-    const nCells=pending.reduce((n,p)=>n+((p.r.conflicts||[]).length),0);
-    if(nCells>1){   // many cells: one click for all of them (each one can still be changed below)
-      const all=document.createElement('div'); all.className='xs-ask xr-all';
-      const q=document.createElement('span'); q.className='xs-q'; q.textContent='Pour les '+nCells+' cases :'; all.appendChild(q);
-      [['Garder l’appli partout',{ keep:'app' }],['Garder l’Excel partout (appli inchangée)',{ keep:'excel', align:false }]].forEach(([l,ch])=>{ const b=document.createElement('button'); b.type='button'; b.className='xs-choice'; b.textContent=l;
-        b.onclick=()=>Object.keys(xrShow).forEach(k=>xrShow[k](Object.assign({}, ch))); all.appendChild(b); });
-      box.appendChild(all);
-    }
-    $('xl-review-title').textContent=(kind==='pipe'?'Pipe Excel':'Suivi Agrégation')+' : à vérifier';
+    const box=$('xl-review-body'); box.innerHTML='';
+    $('xl-review-title').textContent=(kind==='pipe'?'Pipe Excel':'Suivi Agrégation')+' : quelle ligne ?';
     pending.forEach((p,idx)=>{
       const s=document.createElement('section'); s.className='xr-item';
       const h=document.createElement('h4'); h.textContent=p.r.key; if(p.r.row){ const sp=document.createElement('span'); sp.textContent='ligne '+p.r.row; h.appendChild(sp); } s.appendChild(h);
-      if(p.r.question){
-        const q=p.r.question, intro=document.createElement('p'); intro.className='xr-intro';
-        intro.textContent=q.type==='duplicate'?'Plusieurs lignes ouvertes ont ce producteur et cette centrale. Rien n’a été écrit : laquelle mettre à jour ?'
-          :q.type==='other-contract'?'La ligne de cette centrale porte un autre code affaire ('+(q.rows[0]&&q.rows[0].code||'')+' ; l’appli envoie '+(q.code||'')+') : c’est peut-être un autre contrat. Rien n’a été écrit.'
-          :'Cette centrale a une ligne close récemment. Rien n’a été écrit : nouvelle ligne ou reprendre l’ancienne ?';
-        s.appendChild(intro);
-        const desc=r=>[r.statut,r.date,r.code].filter(Boolean).join(' · ');
-        const opts=q.type==='duplicate'
-          ? [...q.rows.map(r=>[String(r.row),'Ligne '+r.row+(desc(r)?' · '+desc(r):'')]), ['new','Nouvelle ligne'], ['skip','Ne rien écrire']]
-          : q.type==='other-contract'
-          ? [['new','Nouvelle ligne pour ce contrat (l’autre reste telle quelle)'], ...q.rows.map(r=>[String(r.row),'C’est la même affaire : compléter la ligne '+r.row+' (cases vides seulement, le reste te sera demandé)']), ['skip','Ne rien écrire']]
-          : [['new','Nouvelle ligne (l’ancienne reste telle quelle)'], ...q.rows.map(r=>[String(r.row),'Reprendre la ligne '+r.row+' ('+[r.statut,r.date].filter(Boolean).join(', ')+')']), ['skip','Ne rien écrire']];
-        const def=q.type==='duplicate'?'skip':'new';
-        opts.forEach(([v,l])=>{ const lab=document.createElement('label'); lab.className='xr-opt'; const i=document.createElement('input'); i.type='radio'; i.name='xq-'+idx; i.value=v; i.checked=v===def; lab.append(i, document.createTextNode(' '+l)); s.appendChild(lab); });
-      }
-      if(p.r.conflicts && p.r.conflicts.length){
-        const intro=document.createElement('p'); intro.className='xr-intro'; intro.textContent='Ces cases ont été modifiées dans l’Excel par quelqu’un d’autre ; rien n’y a été écrit. Pour chacune : que garder ?'; s.appendChild(intro);
-        const t=document.createElement('div'); t.className='xr-table';
-        p.r.conflicts.forEach(c=>{
-          const r=document.createElement('div'); r.className='xr-row';
-          r.innerHTML='<b></b><span class="xr-v"><i>Excel</i><span></span></span><span class="xr-v"><i>Appli</i><span></span></span>';
-          r.querySelector('b').textContent=c.header; r.querySelectorAll('.xr-v span')[0].textContent=c.excel; r.querySelectorAll('.xr-v span')[1].textContent=c.app;
-          const ask=document.createElement('div'); ask.className='xs-ask'; ask.id='xr-'+idx+'-'+c.i; r.appendChild(ask); t.appendChild(r);
-          const key=idx+'-'+c.i; xrChoice[key]={ keep:'excel', align:false };
-          const again=()=>xsAsk(ask, kind, p.o, c.i, { app:c.app, excel:c.excel }, xrShow[key]=ch=>{ xrChoice[key]=ch;
-            ask.innerHTML=''; const sp=document.createElement('span'); sp.className='xs-done';
-            sp.textContent=ch.keep==='app'?'→ l’appli sera écrite dans l’Excel':ch.keep==='merge'?'→ les deux textes seront gardés':ch.align?'→ Excel gardé, appli mise à jour':'→ Excel gardé, appli inchangée';
-            const ch2=document.createElement('button'); ch2.type='button'; ch2.className='pq-link'; ch2.textContent='changer'; ch2.onclick=again; ask.append(sp, ch2); }, c.comment);
-          again();
-        });
-        s.appendChild(t);
-      }
+      const q=p.r.question, intro=document.createElement('p'); intro.className='xr-intro';
+      intro.textContent=q.type==='duplicate'?'Plusieurs lignes ouvertes ont ce producteur et cette centrale. Rien n’a été écrit : laquelle mettre à jour ?'
+        :q.type==='other-contract'?'La ligne de cette centrale porte un autre code affaire ('+(q.rows[0]&&q.rows[0].code||'')+' ; l’appli envoie '+(q.code||'')+') : c’est peut-être un autre contrat. Rien n’a été écrit.'
+        :'Cette centrale a une ligne close récemment. Rien n’a été écrit : nouvelle ligne ou reprendre l’ancienne ?';
+      s.appendChild(intro);
+      const desc=r=>[r.statut,r.date,r.code].filter(Boolean).join(' · ');
+      const opts=q.type==='duplicate'
+        ? [...q.rows.map(r=>[String(r.row),'Ligne '+r.row+(desc(r)?' · '+desc(r):'')]), ['new','Nouvelle ligne'], ['skip','Ne rien écrire']]
+        : q.type==='other-contract'
+        ? [['new','Nouvelle ligne pour ce contrat (l’autre reste telle quelle)'], ...q.rows.map(r=>[String(r.row),'C’est la même affaire : compléter la ligne '+r.row+' (cases vides seulement, le reste te sera demandé)']), ['skip','Ne rien écrire']]
+        : [['new','Nouvelle ligne (l’ancienne reste telle quelle)'], ...q.rows.map(r=>[String(r.row),'Reprendre la ligne '+r.row+' ('+[r.statut,r.date].filter(Boolean).join(', ')+')']), ['skip','Ne rien écrire']];
+      const def=q.type==='duplicate'?'skip':'new';
+      opts.forEach(([v,l])=>{ const lab=document.createElement('label'); lab.className='xr-opt'; const i=document.createElement('input'); i.type='radio'; i.name='xq-'+idx; i.value=v; i.checked=v===def; lab.append(i, document.createTextNode(' '+l)); s.appendChild(lab); });
       box.appendChild(s);
     });
     $('xl-review-apply').onclick=async ()=>{
       const list=[], rows=[];
       pending.forEach((p,idx)=>{
-        const force={}, seen={}, o=p.o;
-        (p.r.conflicts||[]).forEach(c=>{
-          const ch=xrChoice[idx+'-'+c.i]||{ keep:'excel', align:false };
-          if(ch.keep==='excel'){ if(ch.align && ch.run) ch.run(); else xsKeep(kind, o, c.i, c.excel); }
-          else { force[c.i]=ch.keep==='app'?'replace':'merge'; seen[c.i]=c.excel; }   // the bridge replaces only if the cell still holds what was shown here
-        });
-        let target=null;
-        if(p.r.question){ const ch=document.querySelector('input[name="xq-'+idx+'"]:checked'); const v=ch?ch.value:'skip'; if(v==='skip') return; target=v==='new'?'new':+v; }
-        else if(!Object.keys(force).length) return;
-        list.push(o); rows.push(xlRowFor(kind, o, Object.assign({ force, seen }, target!=null?{ target }:{}, p.r.row && !p.r.question?{ target:p.r.row }:{})));
+        const ch=document.querySelector('input[name="xq-'+idx+'"]:checked'); const v=ch?ch.value:'skip'; if(v==='skip') return;
+        list.push(p.o); rows.push(xlRowFor(kind, p.o, { target:v==='new'?'new':+v }));
       });
-      saveCrm(); closeXlReview();
-      if(!rows.length){ showBridgeMsg('Rien de plus à écrire : l’Excel garde ses valeurs.', true); return; }
+      closeXlReview();
+      if(!rows.length){ showBridgeMsg('Rien envoyé.', true); return; }
       try{
         const { res, results, pending:again }=await xlSend(kind, list, rows);
         showBridgeMsg(xlSummary(kind, results, res), true);
-        if(again.length) openXlReview(kind, again);
+        try{ await xsReadFile(kind); }catch(e){ softFail('relecture de l’Excel', e); }
+        const ov=$('xs-overlay'); if(ov && !ov.classList.contains('hidden')) paintExcelSync();
+        const qAgain=again.filter(p=>p.r.question);
+        if(qAgain.length) openXlReview(kind, qAgain);
       }catch(e){ showBridgeMsg(e.message, false); }
     };
     $('xl-review-overlay').classList.remove('hidden');
