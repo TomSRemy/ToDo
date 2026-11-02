@@ -2804,16 +2804,19 @@ Responsable technique
     page.wait_for_function("document.querySelector('#xs-overlay .xs-info').textContent.includes('relu le')", timeout=8000)
     xs = page.inner_text("#xs-overlay .xs-body")
     check("Le Pré" in xs and "Pas envoyé" in xs, "excel ⇄ app: an installation never sent is listed")
-    check("Commentaires : Excel « Vu au salon (Marie) »" in xs and "ligne 3" in xs, f"excel ⇄ app: a cell changed in the Pipe by a colleague is shown, with its line ({xs[:300]!r})")
+    check("commentaires" in xs.lower() and "Vu au salon (Marie)" in xs and "ligne 3" in xs, f"excel ⇄ app: a cell changed in the Pipe by a colleague is shown, with its line ({xs[:300]!r})")
     check("avant le pricing" in xs, "excel ⇄ app: the Suivi only from the pricing on")
-    # each difference: « Garder l'appli » or « Garder l'Excel », then « Mettre aussi l'appli à jour ? »
-    diff = "#xs-overlay .xs-diff:has-text('Commentaires')"
-    # (the app has no comment here: no « keep the app's empty value », which the bridge would never write — take it, or ignore)
-    check(page.locator(diff + " .xs-choice").all_inner_texts() == ["reprendre « Vu au salon (Marie) » dans l’appli", "ignorer"], f"excel ⇄ app: the app has nothing here: take the Excel's value or ignore ({page.locator(diff + ' .xs-choice').all_inner_texts()})")
-    page.click(diff + " .xs-choice:has-text('reprendre')")
-    check(eventually(lambda: next(o for o in stored(page, "todo-widget-opportunities") if o["id"] == "xa").get("commentaires") == "Vu au salon (Marie)", 3000), "excel ⇄ app: « reprendre » puts the Excel's value in the app")
-    page.click("#xs-overlay .xs-diff:has-text('Statut') .xs-choice:has-text('l’Excel')"); page.click("#xs-overlay .xs-diff:has-text('Statut') .xs-choice:text-is('Oui')")
-    check(eventually(lambda: next(o for o in stored(page, "todo-widget-opportunities") if o["id"] == "xa").get("stage") == "onboarding", 3000), "excel ⇄ app: « Gagné » kept from the Suivi, app aligned: the deal moves to Onboarding")
+    # each difference: a table, Excel's row above the appli's ; a cell click keeps it, « Appliquer » sends what was kept from the appli
+    pipeTbl = "#xs-overlay tr:has-text('Les Vignes') td:has-text('Commentaires')"
+    # the app has nothing here: the « appli » cell reads « vide » — clicking it takes the Excel's value instead
+    page.click(pipeTbl + " .xc-cell:text-is('vide')")
+    page.click(pipeTbl + " .xc-apply")
+    check(eventually(lambda: next(o for o in stored(page, "todo-widget-opportunities") if o["id"] == "xa").get("commentaires") == "Vu au salon (Marie)", 3000), "excel ⇄ app: taking the Excel's « vide » cell puts its value in the app")
+    bddTbl = "#xs-overlay tr:has-text('Les Vignes') td:has-text('Statut')"
+    # left as the default (« Excel ») ; ticking « aussi » brings the status into the pipeline too
+    page.click(bddTbl + " .xc-align:has-text('onboarding') input")
+    page.click(bddTbl + " .xc-apply")
+    check(eventually(lambda: next(o for o in stored(page, "todo-widget-opportunities") if o["id"] == "xa").get("stage") == "onboarding", 3000), "excel ⇄ app: « Gagné » kept from the Suivi, « aussi » ticked: the deal moves to Onboarding")
     page.click("#xs-overlay .xs-send[data-k=pipe]"); page.wait_for_timeout(400)
     sent_ids = [r["values"][19] for k, b in xs_sent if k == "pipe" for r in b["rows"]]
     check("Le Pré" in sent_ids, f"excel ⇄ app: « Envoyer au Pipe » sends what is pending ({sent_ids})")
@@ -3115,14 +3118,17 @@ Responsable technique
     page, errors = new_page(browser, {"todo_todo-widget-opportunities": json.dumps(i3), "todo_bridge-config": json.dumps({"port": 8765, "token": "k1"})}, viewport={"width": 1400, "height": 900})
     page.route("http://127.0.0.1:8765/**", bridge3)
     page.goto(URL); page.click('[data-tab="pipeline"]'); page.click("#pipe-more-btn"); page.click("#pipe-xs-btn")
-    rowA = "#xs-overlay tr:has-text('Toit A') .xs-diff:has-text('Commentaires')"; rowB = "#xs-overlay tr:has-text('Toit B') .xs-diff:has-text('Commentaires')"
-    page.wait_for_selector(rowA + " .xs-choice", timeout=8000)
-    page.click(rowA + " .xs-choice:has-text('l’appli')")
-    check(eventually(lambda: len(sent3) == 1), f"excel ⇄ panel: « Garder l'appli » sends at once ({page.evaluate("(document.getElementById('bridge-msg')||{}).textContent")})")
+    rowA = "#xs-overlay tr:has-text('Toit A') td:has-text('Commentaires')"; rowB = "#xs-overlay tr:has-text('Toit B') td:has-text('Commentaires')"
+    page.wait_for_selector(rowA + " .xc-cell", timeout=8000)
+    page.click(rowA + " .xc-cell:text-is('Note appli A')")   # select the appli's value for this column
+    page.click(rowA + " .xc-apply")
+    check(eventually(lambda: len(sent3) == 1), f"excel ⇄ panel: « Appliquer » with the appli's value selected sends it ({page.evaluate("(document.getElementById('bridge-msg')||{}).textContent")})")
     r = sent3[0]["rows"][0] if sent3 else {}
     vi = str(r.get("values", [None] * 40).index("Note appli A")) if "Note appli A" in r.get("values", []) else "?"
     check(r.get("force") == {vi: "replace"} and r.get("seen") == {vi: "Note Excel A"}, f"excel ⇄ panel: the app's value replaces the cell only if it still holds the one shown ({r.get('force')}, {r.get('seen')})")
-    page.click(rowB + " .xs-choice:has-text('l’Excel')"); page.click(rowB + " .xs-choice:text-is('Non')")
+    # row B: left on the default (« Excel »), the « aussi : la fiche prend … » box left unticked, then Appliquer
+    page.wait_for_selector(rowB + " .xc-apply", timeout=8000)
+    page.click(rowB + " .xc-apply")
     yb = lambda: next(o for o in stored(page, "todo-widget-opportunities") if o["id"] == "yb")
     check(eventually(lambda: page.locator(rowB).count() == 0) and yb()["commentaires"] == "Note appli B" and "Note Excel B" in json.dumps(yb().get("excelKeep")),
           "excel ⇄ panel: « Garder l'Excel » + « Non »: the app unchanged, the question not asked again for that value")

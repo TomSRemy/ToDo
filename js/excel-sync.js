@@ -177,6 +177,72 @@ window.TodoExcelSync=(function(){
     ov.classList.remove('hidden'); paintExcelSync();
     if(bridgeConfigured() && !(opts&&opts.noRead) && (!xsRead.pipe || Date.now()-xsRead.pipe.at>120000)){ try{ await xsReadFile('pipe'); await xsReadFile('bdd'); }catch(e){ softFail('relecture des Excel', e); } paintExcelSync(); }
   }
+  // Several fields changed by someone else on the same installation : one table, columns = fields (like the Excel header
+  // row), the Excel row above the appli row — click a cell to keep it, click « Excel »/« Appli » to keep the whole row,
+  // then one « Appliquer » sends every field kept from the appli in a single request.
+  function xsDiffTable(td, kind, o, diffs){
+    if(!diffs.length) return;
+    const choices={}, aligns={}; diffs.forEach(d=>{ choices[xsViOf(kind, d)]='excel'; });   // default: nothing sent, the Excel's value is kept
+    const wrap=document.createElement('div'); wrap.className='xc-wrap';
+    const table=document.createElement('table'); table.className='xc-table';
+    const headRow=document.createElement('tr'); headRow.appendChild(document.createElement('th'));
+    diffs.forEach(d=>{ const th=document.createElement('th'); th.textContent=d.col.label; headRow.appendChild(th); });
+    const thead=document.createElement('thead'); thead.appendChild(headRow); table.appendChild(thead);
+    const tbody=document.createElement('tbody'); table.appendChild(tbody);
+    const mkRow=(side, label)=>{
+      const tr=document.createElement('tr');
+      const rowBtn=document.createElement('button'); rowBtn.type='button'; rowBtn.className='xc-rowsel'; rowBtn.innerHTML='<span class="dot"></span>'+label;
+      const th=document.createElement('th'); th.appendChild(rowBtn); tr.appendChild(th);
+      diffs.forEach(d=>{ const vi=xsViOf(kind, d), td2=document.createElement('td'), b=document.createElement('button');
+        b.type='button'; b.className='xc-cell'; b.textContent=(side==='excel'?d.excel:d.app)||'vide';
+        b.onclick=()=>{ choices[vi]=side; refresh(); };
+        td2.appendChild(b); tr.appendChild(td2); });
+      rowBtn.onclick=()=>{ diffs.forEach(d=>{ choices[xsViOf(kind, d)]=side; }); refresh(); };
+      return tr;
+    };
+    const rowExcel=mkRow('excel', 'Excel'), rowApp=mkRow('appli', 'Appli');
+    tbody.append(rowExcel, rowApp); wrap.appendChild(table); td.appendChild(wrap);
+    const alignBox=document.createElement('div'); alignBox.className='xc-aligns'; td.appendChild(alignBox);
+    const foot=document.createElement('div'); foot.className='xc-foot';
+    const summary=document.createElement('span'); foot.appendChild(summary);
+    const apply=document.createElement('button'); apply.type='button'; apply.className='pq-link xc-apply'; apply.textContent='Appliquer'; foot.appendChild(apply);
+    td.appendChild(foot);
+    const refresh=()=>{
+      diffs.forEach((d,i)=>{ const vi=xsViOf(kind, d), sel=choices[vi];
+        rowExcel.children[i+1].firstChild.classList.toggle('sel', sel==='excel');
+        rowApp.children[i+1].firstChild.classList.toggle('sel', sel==='appli'); });
+      rowExcel.firstChild.firstChild.classList.toggle('on', diffs.every(d=>choices[xsViOf(kind, d)]==='excel'));
+      rowApp.firstChild.firstChild.classList.toggle('on', diffs.every(d=>choices[xsViOf(kind, d)]==='appli'));
+      // kept from the Excel, and the Excel's value also fits a field on the fiche (a stage, a status) : offer to bring it in too
+      alignBox.innerHTML='';
+      diffs.forEach(d=>{ const vi=xsViOf(kind, d); if(choices[vi]!=='excel') return;
+        const al=xsAlignAction(kind, o, vi, d.excel); if(!al) return;
+        const lab=document.createElement('label'); lab.className='xc-align';
+        const cb=document.createElement('input'); cb.type='checkbox'; cb.checked=!!aligns[vi]; cb.onchange=()=>{ aligns[vi]=cb.checked; };
+        lab.append(cb, document.createTextNode(' aussi : '+al.label));
+        alignBox.appendChild(lab); });
+      const nApp=Object.values(choices).filter(v=>v==='appli').length;
+      summary.textContent=nApp?nApp+' case'+(nApp>1?'s':'')+' à écrire dans Excel':'rien à écrire dans Excel';
+    };
+    refresh();
+    apply.onclick=async()=>{
+      apply.disabled=true; apply.textContent='Envoi…';
+      const force={}, seen={};
+      diffs.forEach(d=>{ const vi=xsViOf(kind, d);
+        if(choices[vi]==='appli'){
+          // the appli has nothing here: writing it would blank nothing (the bridge never empties a cell) — take the
+          // Excel value into the fiche instead, the way « Garder l'Excel » used to offer
+          if(!d.app){ const al=xsAlignAction(kind, o, vi, d.excel); if(al) al.run(); }
+          else { force[vi]='replace'; seen[vi]=d.excel; }
+        } else {
+          xsKeep(kind, o, vi, d.excel);
+          if(aligns[vi]){ const al=xsAlignAction(kind, o, vi, d.excel); if(al) al.run(); }
+        } });
+      if(Object.keys(force).length) await sendToExcel(kind, [o], null, { force, seen }); else { renderPipeline(); saveCrm(); }
+      try{ await xsReadFile(kind); }catch(e){ softFail('relecture de l’Excel', e); }
+      paintExcelSync();
+    };
+  }
   function paintExcelSync(){
     const ov=$('xs-overlay'); if(!ov || ov.classList.contains('hidden')) return;
     const all=ov.querySelector('.xs-filter .on').dataset.f==='all', body=ov.querySelector('.xs-body'); body.innerHTML='';
@@ -203,20 +269,7 @@ window.TodoExcelSync=(function(){
       if(st.excel==='absent' && st.app!=='jamais') tag('bad','Absent du fichier');
       if(st.excel==='statut') tag('info','Statut Suivi : '+(st.statut||'?'));
       if(st.line) { const l=document.createElement('span'); l.className='xs-line'; l.textContent='ligne '+st.line; td.appendChild(l); }
-      st.diffs.filter(d=>d.byExcel).slice(0,6).forEach(d=>{ const r=document.createElement('div'); r.className='xs-diff xr-row';
-        r.innerHTML='<b></b><span class="xr-v"><i>Excel</i><span></span></span><span class="xr-v"><i>Appli</i><span></span></span>';
-        r.querySelector('b').textContent=d.col.label;
-        r.querySelectorAll('.xr-v span')[0].textContent=d.excel||'vide';
-        r.querySelectorAll('.xr-v span')[1].textContent=d.app||'vide';
-        const ask=document.createElement('div'); ask.className='xs-ask'; r.appendChild(ask);
-        const vi=xsViOf(kind, d);
-        xsAsk(ask, kind, o, vi, d, async ch=>{
-          if(ch.keep==='excel'){ if(ch.align) ch.run(); else xsKeep(kind, o, vi, d.excel); renderPipeline(); paintExcelSync(); return; }
-          // « Garder l'appli »: written only if the cell still holds what was shown here
-          ask.textContent='Envoi…';
-          await sendToExcel(kind, [o], null, { force:{ [vi]:'replace' }, seen:{ [vi]:d.excel } });
-          try{ await xsReadFile(kind); }catch(e){ softFail('relecture de l\u2019Excel', e); } paintExcelSync(); });
-        td.appendChild(r); });
+      xsDiffTable(td, kind, o, st.diffs.filter(d=>d.byExcel));
       if(st.excel==='statut'){ const a=xsStatutAction(o, st.statut); if(a){ const b=document.createElement('button'); b.type='button'; b.className='pq-link'; b.textContent=a.label; b.onclick=()=>{ a.run(); renderPipeline(); paintExcelSync(); }; td.appendChild(b); } }
       if(xsTodo(st) && !st.diffs.some(d=>d.byExcel) && bridgeConfigured()){ const b=document.createElement('button'); b.type='button'; b.className='pq-link xs-one'; b.textContent='Envoyer'; b.onclick=async()=>{ await sendToExcel(kind,[o],b); try{ await xsReadFile(kind); }catch(e){ softFail('relecture de l\u2019Excel', e); } paintExcelSync(); }; td.appendChild(b); }
       return td; };
