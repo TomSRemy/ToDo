@@ -32,7 +32,7 @@
 param([int]$Port = 8765, [switch]$Reconfigurer, [switch]$Mock)
 
 $ErrorActionPreference = 'Stop'
-$Version = '1.17'
+$Version = '1.18'
 $Here = Split-Path -Parent $MyInvocation.MyCommand.Path
 # the settings (the two files, the key) live in the Windows profile, not next to the script: a new download, in any folder,
 # finds them again (no new key to copy into the app). An older settings file next to the script is taken over once.
@@ -525,7 +525,9 @@ function Upsert-Rows($kind, $rows) {
         Write-Info ("$($Kinds[$kind].label) : tableau modifié pendant l'envoi, ligne arrêtée (" + $keyText + ')' + $(if ($why) { ' — ' + $why } else { '' })) 'Yellow'
         continue
       }
-      if (-not $isNew -and $written.Count -eq 0 -and $conflicts.Count -eq 0) { $action = 'aucun changement' }
+      # « mise à jour » used to stay even when nothing was actually written (only a cell kept as a conflict) : misleading,
+      # since it reads as a successful write. Now it only means a cell really changed in the file.
+      if (-not $isNew -and $written.Count -eq 0) { $action = 'aucun changement' }
       [void]$results.Add(@{ ok = $true; action = $action; row = (& $a.ExcelRow $a $target); cells = $written.Count; key = $keyText; note = $note; written = @($written); mine = @($mine); conflicts = @($conflicts) })
       Write-Info ("$($Kinds[$kind].label) : ligne $action (" + $keyText + ')' + $(if ($conflicts.Count) { ' — ' + $conflicts.Count + ' case(s) gardée(s)' } else { '' })) 'Green'
     }
