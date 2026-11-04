@@ -5,7 +5,7 @@ window.TodoExcelSync=(function(){
   // what this part uses from js/app.js, given where its code used to stand in js/app.js (so it runs in the same order);
   // app.<name>: a value js/app.js defines further down or may replace, read when used
   api.init=function(app){
-    const { $, ON_PHONE, PQ_FIELDS, bddCells, bridgeCall, bridgeCheck, bridgeConfigured, cellToText, codeAffaire, importParcFromBridge, isExited, openOppDetail, oppActionBtn, oppName, pipeCells, pqFold, pqPad, relanceOnMove, renderPipeline, saveCrm, setOppStage, softFail, stageIndex, stageLabel, suiviState, touchCrm }=app;
+    const { $, ON_PHONE, PQ_FIELDS, bddCells, bridgeCall, bridgeCheck, bridgeConfigured, cellToText, codeAffaire, copyToClipboard, importParcFromBridge, isExited, openOppDetail, oppActionBtn, oppName, pipeCells, pqFold, pqPad, relanceOnMove, renderPipeline, saveCrm, setOppStage, softFail, stageIndex, stageLabel, suiviState, touchCrm }=app;
     Object.assign(api, { xsState, xsList, openExcelSync, showBridgeMsg, excelButtons });   // function declarations: ready before the code below runs
   // ---------- Sending to the shared Excel files: the safe part is written at once, the rest is shown to decide ----------
   // The bridge never overwrites what someone else typed: such cells are kept and reported, duplicates and plants lost
@@ -16,6 +16,8 @@ window.TodoExcelSync=(function(){
     const values=(kind==='pipe'?pipeCells:bddCells)(o);
     return Object.assign({ values, prev:(o.excelPrev&&o.excelPrev[kind])||null, keep:(o.excelKeep&&o.excelKeep[kind])||null, won:xlWon(o) }, extra||{});
   }
+  // the same line the bridge would write, as text : for pasting into Excel by hand instead of sending through the bridge
+  const xlRowTsv=(kind,o)=>(kind==='pipe'?pipeCells:bddCells)(o).map(cellToText).join('\t');
   function xlRemember(kind, o, values, r){
     if(!r || !r.ok || r.action==='en attente') return;
     o.excelPrev=o.excelPrev||{}; const prev=(o.excelPrev[kind]||[]).slice();
@@ -144,19 +146,24 @@ window.TodoExcelSync=(function(){
   // which lines the panel shows: the pipeline's (not signed yet, lost ones included), the Portefeuille's (signed), or all
   let xsScope='pipe';
   const xsInScope=o=>xsScope==='all'?true:xsScope==='parc'?(!isExited(o) && stageIndex(o.stage)>=stageIndex('onboarding')):(isExited(o) || stageIndex(o.stage)<stageIndex('onboarding'));
+  // what « Envoyer » would send, and what « Copier » copies instead : the same list, so copying never misses a row sending would have caught
+  const xsPendingList=kind=>xsList().filter(xsInScope).filter(o=>(kind==='pipe'||xsBddApplies(o)) && xsTodo(xsState(kind,o)) && !((xsState(kind,o).diffs||[]).some(d=>d.byExcel)));
   async function openExcelSync(opts){
     xsScope=opts && opts.scope || 'pipe';
     let ov=$('xs-overlay');
     if(!ov){ ov=document.createElement('div'); ov.id='xs-overlay'; ov.className='modal-overlay';
       ov.innerHTML='<div class="modal-box wide xs-box" role="dialog" aria-labelledby="xs-title"><div class="xs-head"><h3 id="xs-title">Excel ⇄ appli</h3><div class="xs-filter"><button type="button" data-f="todo" class="on">À traiter</button><button type="button" data-f="all">Tout</button></div><button type="button" class="modal-x xs-x" aria-label="Fermer">×</button></div>'
-        +'<p class="modal-hint xs-info"></p><p class="xs-read-err" hidden></p><div class="xs-tools"><button type="button" class="xs-read">Relire les Excel</button><button type="button" class="xs-send" data-k="pipe"></button><button type="button" class="xs-send" data-k="bdd"></button><span class="xs-bulk-group"><button type="button" class="xs-bulk" data-p="excel">Tout garder Excel</button><button type="button" class="xs-bulk" data-p="appli">Tout garder appli</button></span></div><div class="xs-body"></div></div>';
+        +'<p class="modal-hint xs-info"></p><p class="xs-read-err" hidden></p><div class="xs-tools"><button type="button" class="xs-read">Relire les Excel</button><button type="button" class="xs-send" data-k="pipe"></button><button type="button" class="xs-copy ghost-btn" data-k="pipe" title="Copier les lignes à coller soi-même dans Excel, au lieu d’envoyer via le pont">Copier</button><button type="button" class="xs-send" data-k="bdd"></button><button type="button" class="xs-copy ghost-btn" data-k="bdd" title="Copier les lignes à coller soi-même dans Excel, au lieu d’envoyer via le pont">Copier</button><span class="xs-bulk-group"><button type="button" class="xs-bulk" data-p="excel">Tout garder Excel</button><button type="button" class="xs-bulk" data-p="appli">Tout garder appli</button></span></div><div class="xs-body"></div></div>';
       document.body.appendChild(ov); const close=()=>ov.classList.add('hidden');
       ov.addEventListener('click', e=>{ if(e.target===ov) close(); }); ov.querySelector('.xs-x').onclick=close;
       ov.querySelectorAll('.xs-filter button').forEach(b=>b.onclick=()=>{ ov.querySelectorAll('.xs-filter button').forEach(x=>x.classList.toggle('on', x===b)); paintExcelSync(); });
       ov.querySelector('.xs-read').onclick=async e=>{ const b=e.currentTarget, t=b.textContent; b.disabled=true; b.textContent='Lecture…';
         try{ await xsReadFile('pipe'); await xsReadFile('bdd'); importParcFromBridge(true); }catch(err){ showBridgeMsg(err.message, false); } b.disabled=false; b.textContent=t; paintExcelSync(); };
-      ov.querySelectorAll('.xs-send').forEach(b=>b.onclick=async()=>{ const kind=b.dataset.k, list=xsList().filter(xsInScope).filter(o=>(kind==='pipe'||xsBddApplies(o)) && xsTodo(xsState(kind,o)) && !((xsState(kind,o).diffs||[]).some(d=>d.byExcel))); if(!list.length) return;
+      ov.querySelectorAll('.xs-send').forEach(b=>b.onclick=async()=>{ const kind=b.dataset.k, list=xsPendingList(kind); if(!list.length) return;
         await sendToExcel(kind, list, b); if(bridgeConfigured()){ try{ await xsReadFile(kind); }catch(e){ softFail('relecture de l\u2019Excel', e); } } paintExcelSync(); });
+      // same rows as \u00ab Envoyer \u00bb, but nothing sent through the bridge : one line per installation, ready to paste into Excel
+      ov.querySelectorAll('.xs-copy').forEach(b=>b.onclick=()=>{ const kind=b.dataset.k, list=xsPendingList(kind); if(!list.length) return;
+        copyToClipboard(list.map(o=>xlRowTsv(kind,o)).join('\n'), b); });
       // decide at once for every diverging cell currently shown (whatever scope/filter is selected, not just one lot)
       ov.querySelectorAll('.xs-bulk').forEach(b=>b.onclick=async()=>{ const targets=xsConflictTargets(xsShownNow); if(!targets.length) return;
         b.disabled=true; const t=b.textContent; b.textContent='Envoi…';
@@ -232,6 +239,8 @@ window.TodoExcelSync=(function(){
     const todo=rows.filter(r=>xsTodo(r.p) || (r.b && xsTodo(r.b)));
     const cntP=rows.filter(r=>xsTodo(r.p) && !r.pDiffs.length).length, cntB=rows.filter(r=>r.b && xsTodo(r.b) && !r.bDiffs.length).length;
     ov.querySelectorAll('.xs-send').forEach(b=>{ const n=b.dataset.k==='pipe'?cntP:cntB; b.textContent='Envoyer au '+(b.dataset.k==='pipe'?'Pipe':'Suivi')+' ('+n+')'; b.disabled=!n || !bridgeConfigured(); b.title=bridgeConfigured()?'':'Pont Excel non connecté'; });
+    // no bridge needed to copy (unlike « Envoyer ») : works even without the pont configured
+    ov.querySelectorAll('.xs-copy').forEach(b=>{ const n=b.dataset.k==='pipe'?cntP:cntB; b.textContent='Copier ('+n+')'; b.disabled=!n; });
     const shown=all?rows:todo;
     xsShownNow=shown;
     const nConflictCells=xsConflictTargets(shown).reduce((s,tg)=>s+tg.diffs.length, 0);
