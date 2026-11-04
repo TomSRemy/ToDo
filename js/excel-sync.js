@@ -285,6 +285,13 @@ window.TodoExcelSync=(function(){
             if(list.length) await sendToExcel(kind, list, null); }
           sb.disabled=false; sb.textContent=t; };
         meta.appendChild(sb); }
+      // no diffs to decide, but the chevron is shown either way : clicking it opened nothing (members.length can be in
+      // the dozens, with no way to see which installations the lot actually covers). A plain list fixes both.
+      head.onclick=()=>card.classList.toggle('open');
+      const plain=document.createElement('div'); plain.className='xl-grid-wrap xl-plain';
+      const ul=document.createElement('ul');
+      members.forEach(m=>{ const li=document.createElement('li'); li.textContent=(m.o.producteur||m.o.company||'(sans nom)')+' — '+codeAffaire(m.o); ul.appendChild(li); });
+      plain.appendChild(ul); card.appendChild(plain);
       return card;
     }
 
