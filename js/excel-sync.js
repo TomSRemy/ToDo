@@ -82,7 +82,8 @@ window.TodoExcelSync=(function(){
   async function xsReadFile(kind){
     try{
       const res=await bridgeCall('GET','/'+kind+'/read',null,60000), sheets=res.sheets||{};
-      const name=Object.keys(sheets).find(n=>xsNorm(n)===XS_KEYS[kind].sheet); if(!name) throw new Error('Onglet introuvable dans le fichier '+(kind==='pipe'?'Pipe':'BDD')+' (renommé ou déplacé ?)');
+      const name=Object.keys(sheets).find(n=>xsNorm(n)===XS_KEYS[kind].sheet);
+      if(!name) throw new Error('Onglet introuvable dans le fichier '+(kind==='pipe'?'Pipe':'BDD')+' (onglets trouvés : '+(Object.keys(sheets).join(', ')||'aucun')+')');
       const rows=sheets[name]||[], K=XS_KEYS[kind];
       const hi=rows.findIndex((r,i)=>i<20 && (r||[]).some(c=>xsNorm(c)===xsNorm(K.header))); if(hi<0) throw new Error('En-tête « '+K.header+' » introuvable');
       const off=rows[hi].findIndex(c=>xsNorm(c)===xsNorm(K.header))-K.a, map=new Map();
