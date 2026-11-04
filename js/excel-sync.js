@@ -72,13 +72,15 @@ window.TodoExcelSync=(function(){
   let xsReadError={ pipe:null, bdd:null };   // the last read's failure, kept until the next try succeeds or fails again —
   // shown right in the panel (not just a toast that disappears) so a tab renamed or missing in the Excel doesn't go unnoticed
   // a / b: the two key columns (0 = column A): Pipe G « Nom Producteur » + T « Nom Centrale »; Suivi AF « Nom_prod » + AH « Nom_Installation_prod »
-  const XS_KEYS={ pipe:{ header:'Nom Producteur', a:6, b:19, sheet:/^\s*pipe\s+agr[eé]gation\s*$/i }, bdd:{ header:'Nom_prod', a:31, b:33, sheet:/^\s*bdd\s+agr[eé]gation\s*$/i } };   // that sheet only, never another « Pipe … » one
+  // the sheet name compared the same way the bridge itself does (accents/case/spacing folded away, not a literal
+  // regex) : a tab name whose accent is stored as a decomposed Unicode character still matches
+  const XS_KEYS={ pipe:{ header:'Nom Producteur', a:6, b:19, sheet:'pipeagregation' }, bdd:{ header:'Nom_prod', a:31, b:33, sheet:'bddagregation' } };   // that sheet only, never another « Pipe … » one
   const xsAppValues=(kind,o)=>kind==='pipe'?PQ_FIELDS.reduce((row,f,i)=>{ row[xsColIdx(f.col)]=pipeCells(o)[i]; return row; }, []):bddCells(o);
   const xsKey=(kind, vals)=>xsNorm(vals[XS_KEYS[kind].a])+'|'+xsNorm(vals[XS_KEYS[kind].b]);
   async function xsReadFile(kind){
     try{
       const res=await bridgeCall('GET','/'+kind+'/read',null,60000), sheets=res.sheets||{};
-      const name=Object.keys(sheets).find(n=>XS_KEYS[kind].sheet.test(n)); if(!name) throw new Error('Onglet introuvable dans le fichier '+(kind==='pipe'?'Pipe':'BDD')+' (renommé ou déplacé ?)');
+      const name=Object.keys(sheets).find(n=>xsNorm(n)===XS_KEYS[kind].sheet); if(!name) throw new Error('Onglet introuvable dans le fichier '+(kind==='pipe'?'Pipe':'BDD')+' (renommé ou déplacé ?)');
       const rows=sheets[name]||[], K=XS_KEYS[kind];
       const hi=rows.findIndex((r,i)=>i<20 && (r||[]).some(c=>xsNorm(c)===xsNorm(K.header))); if(hi<0) throw new Error('En-tête « '+K.header+' » introuvable');
       const off=rows[hi].findIndex(c=>xsNorm(c)===xsNorm(K.header))-K.a, map=new Map();
