@@ -3384,7 +3384,7 @@
     const items=opportunities.filter(o=>!o.deleted && o.kind!=='request' && o.stage!=='converti')
       .filter(o=>!q || pqFold([o.company,o.centrale,o.title,o.prenom,o.nom,o.dept].join(' ')).includes(q))
       .filter(o=>!vp || vp(o));
-    const live=items.filter(o=>!isExited(o)), exited=items.filter(isExited);
+    const live=items.filter(o=>!isExited(o)), exited=items.filter(o=>isExited(o) && o.stage!=='perdu'), lostOffers=items.filter(o=>o.stage==='perdu');
     if(q && !items.length){ const e=document.createElement('div'); e.className='pipe-noresult'; e.innerHTML='<p></p><button type="button" class="ghost-btn">Effacer la recherche</button>';   // cold audit: an empty board said nothing
       e.querySelector('p').textContent='Rien pour « '+$('opp-search').value.trim()+' ». Essaie un nom de producteur, de centrale, de contact ou un département.'; e.querySelector('button').onclick=()=>$('opp-search-clear').click(); board.appendChild(e); }
     $('pipe-exited-toggle').textContent=pipeShowExited?'Masquer les sorties':('Sorties ('+exited.length+')');
@@ -3411,6 +3411,16 @@
       if(!inPhase.length){ const e=document.createElement('div'); e.className='pipe-empty'; e.textContent='—'; col.appendChild(e); col.classList.add('empty'); }   // empty columns stay narrow
       board.appendChild(col);
     });
+    // marking an offer lost used to just drop the card into the same hidden « Sorties » bucket as No Go / Abandonné :
+    // clicking « Offre perdue » looked like it did nothing. Its own column, always visible, like any other step.
+    if(lostOffers.length){
+      const col=document.createElement('div'); col.className='pipe-col lost';
+      const head=document.createElement('div'); head.className='pipe-col-head';
+      head.innerHTML='<span>Offres perdues</span><span>'+lostOffers.length+'</span>';
+      col.appendChild(head);
+      lostOffers.sort((a,b)=>(b.lostAt||0)-(a.lostAt||0)).forEach(o=>col.appendChild(buildPipeCard(o)));
+      board.appendChild(col);
+    }
     if(pipeShowExited && exited.length){
       const col=document.createElement('div'); col.className='pipe-col lost';
       const head=document.createElement('div'); head.className='pipe-col-head';
