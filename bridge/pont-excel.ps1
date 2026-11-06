@@ -2,8 +2,12 @@
   Pont Excel pour Todo — à lancer sur l'ordinateur (Windows PowerShell 5.1, rien à installer).
 
   L'app Todo (https://tomsremy.github.io/ToDo/) envoie ses lignes ici, sur http://127.0.0.1:8765.
-  Le pont les écrit dans les fichiers Excel du dossier synchronisé avec SharePoint, en passant par
-  Excel lui-même : mise en forme, listes déroulantes et formules sont conservées. OneDrive synchronise ensuite.
+  Le pont écrit dans les fichiers Excel du dossier synchronisé avec SharePoint. Si quelqu'un a déjà le
+  fichier ouvert (toi ou un collègue), le pont écrit dans cette session Excel même, en direct, pour que
+  sa prochaine sauvegarde inclue ces changements. Sinon, il écrit le fichier lui-même (sans ouvrir Excel,
+  via EPPlus, téléchargé une fois au premier lancement) : plus robuste, mais une toute nouvelle ligne n'est
+  pas encore gérée par ce chemin — ouvre le fichier toi-même dans ce cas, et le pont repasse par Excel.
+  Dans les deux cas : mise en forme, listes déroulantes et formules sont conservées. OneDrive synchronise ensuite.
 
   Règles d'écriture (plusieurs personnes travaillent dans les mêmes fichiers) :
    - le pont n'écrit que dans l'onglet « Pipe agrégation » du Pipe et « BDD Agrégation » du Suivi, jamais ailleurs ;
@@ -32,8 +36,9 @@
 param([int]$Port = 8765, [switch]$Reconfigurer, [switch]$Mock)
 
 $ErrorActionPreference = 'Stop'
-$Version = '1.20'
+$Version = '1.21'
 $Here = Split-Path -Parent $MyInvocation.MyCommand.Path
+$LibDir = Join-Path $Here 'lib'
 # the settings (the two files, the key) live in the Windows profile, not next to the script: a new download, in any folder,
 # finds them again (no new key to copy into the app). An older settings file next to the script is taken over once.
 $LegacyConfig = Join-Path $Here 'pont-excel-config.json'
@@ -51,6 +56,37 @@ $Kinds = @{
   pipe = @{ label = 'Pipe agrégation'; header = 'Nom Producteur'; keys = @('Nom Producteur', 'Nom Centrale'); sheet = 'Pipe agrégation' }
   bdd  = @{ label = 'BDD Agrégation'; header = 'Nom_prod'; keys = @('Nom_prod', 'Nom_Installation_prod'); sheet = 'BDD Agrégation' }
 }
+# EPPlus : lit/écrit un .xlsx sans ouvrir Excel, utilisé quand personne n'a le fichier ouvert (sinon, COM, plus bas).
+# Téléchargé une fois (paquet NuGet, EPPlus 4.5.3.3 — la dernière version LGPL, un seul fichier .dll, aucune
+# dépendance, cible .NET Framework nativement) et gardé dans lib/ à côté du script ; plus besoin ensuite.
+$script:eppReady = $false
+function Ensure-EPPlus {
+  if ($script:eppReady) { return }
+  $dllPath = Join-Path $LibDir 'EPPlus.dll'
+  if (-not (Test-Path $LibDir)) { $null = New-Item -ItemType Directory -Path $LibDir }
+  if (-not (Test-Path $dllPath)) {
+    Write-Info 'Téléchargement d''EPPlus (une fois, pour écrire les Excel sans les ouvrir)…' 'Cyan'
+    $tmpZip = Join-Path $LibDir 'epplus.nupkg.zip'
+    try {
+      Invoke-WebRequest -Uri 'https://api.nuget.org/v3-flatcontainer/epplus/4.5.3.3/epplus.4.5.3.3.nupkg' -OutFile $tmpZip -UseBasicParsing
+      Add-Type -AssemblyName System.IO.Compression.FileSystem
+      $zip = [System.IO.Compression.ZipFile]::OpenRead($tmpZip)
+      try {
+        $entry = $zip.Entries | Where-Object { $_.FullName -eq 'lib/net40/EPPlus.dll' }
+        if (-not $entry) { throw "EPPlus.dll introuvable dans le paquet téléchargé (format inattendu)." }
+        [System.IO.Compression.ZipFileExtensions]::ExtractToFile($entry, $dllPath, $true)
+      } finally { $zip.Dispose() }
+    } catch {
+      Remove-Item $dllPath -ErrorAction SilentlyContinue
+      throw ("Impossible de récupérer EPPlus (" + $_.Exception.Message + ") : vérifie l'accès internet vers nuget.org, ou ouvre toi-même le fichier dans Excel avant d'envoyer (le pont repassera par Excel).")
+    } finally { Remove-Item $tmpZip -ErrorAction SilentlyContinue }
+  }
+  Add-Type -Path $dllPath
+  $script:eppReady = $true
+}
+# le fichier est-il déjà ouvert quelque part (toi ou un collègue) ? Si oui, on écrit dans cette session Excel-là
+# (plus bas, les fonctions *-Book) ; sinon, EPPlus écrit le fichier lui-même, sans jamais ouvrir Excel.
+function Is-AlreadyOpen($path) { [bool](Find-OpenBook ([IO.Path]::GetFileName($path))) }
 
 function Write-Info($msg, $color = 'Gray') { Write-Host ('[' + (Get-Date -Format 'HH:mm:ss') + '] ' + $msg) -ForegroundColor $color }
 # a formula that returns a literal text : the reliable way to write a string Excel would otherwise try to parse
@@ -245,6 +281,65 @@ function New-ComAdapter($kind) {
   $a.Close = { param($a) Close-Book $a.book }
   return $a
 }
+# finds the table's sheet and its ListObject-equivalent (an EPPlus ExcelTable) by the same header column as Find-Table,
+# without opening Excel. Used only to READ (New-DirectAdapter re-opens its own copy for writing) or to find out there's
+# nothing to find — never mutated here.
+function Find-DirectTable($pkg, $kind) {
+  $k = $Kinds[$kind]
+  $ws = $null
+  foreach ($w in $pkg.Workbook.Worksheets) { if ((Norm $w.Name) -eq (Norm $k.sheet)) { $ws = $w; break } }
+  if (-not $ws) { throw ("Onglet « " + $k.sheet + " » introuvable dans « " + [IO.Path]::GetFileName($pkg.File.Name) + " » : rien n'est écrit (le pont n'écrit que dans cet onglet).") }
+  foreach ($t in $ws.Tables) {
+    for ($c = $t.Address.Start.Column; $c -le $t.Address.End.Column; $c++) { if ((Norm $ws.Cells[$t.Address.Start.Row, $c].Text) -eq (Norm $k.header)) { return @{ ws = $ws; table = $t } } }
+  }
+  throw ("Tableau « " + $k.label + " » introuvable dans l'onglet « " + $k.sheet + " » (colonne « " + $k.header + " ») : rien n'est écrit.")
+}
+# écrit le fichier directement (EPPlus), sans jamais ouvrir Excel : utilisé seulement quand personne n'a le fichier
+# ouvert (sinon New-ComAdapter, plus haut, pour écrire dans cette session Excel-là). Jamais testé en conditions
+# réelles (pas de Windows ici) : à valider avant de lui faire confiance sur les vrais fichiers.
+# Une toute nouvelle ligne (AddRow) n'est PAS gérée ici : étendre le tableau Excel (pas juste la feuille) sans
+# API EPPlus fiable vérifiée serait le risquer de corrompre la structure du tableau pour de bon. Le message
+# d'erreur dit d'ouvrir le fichier toi-même, ce qui fait repasser la prochaine requête par New-ComAdapter.
+function New-DirectAdapter($kind) {
+  Ensure-EPPlus
+  $path = $Config.$kind
+  if (-not (Test-Path $path)) { throw "Fichier introuvable : $path" }
+  $pkg = New-Object OfficeOpenXml.ExcelPackage (Get-Item $path)
+  try { $found = Find-DirectTable $pkg $kind } catch { $pkg.Dispose(); throw }
+  $ws = $found.ws; $table = $found.table
+  $firstRow = $table.Address.Start.Row; $firstCol = $table.Address.Start.Column; $lastCol = $table.Address.End.Column
+  $headers = @(); for ($c = $firstCol; $c -le $lastCol; $c++) { $headers += [string]$ws.Cells[$firstRow, $c].Text }
+  $a = @{ kind = $kind; pkg = $pkg; ws = $ws; table = $table; Headers = $headers; FirstCol = $firstCol; firstRow = $firstRow; lastRow = $table.Address.End.Row; path = $path }
+  $a.RowCount = { param($a) $a.lastRow - $a.firstRow }
+  $a.Cell = { param($a, $r, $c) $a.ws.Cells[$a.firstRow + $r, $a.FirstCol + $c - 1] }
+  $a.Get = { param($a, $r, $c) (& $a.Cell $a $r $c).Value }
+  $a.Column = { param($a, $c) $n = & $a.RowCount $a; $out = New-Object object[] ($n + 1); for ($r = 1; $r -le $n; $r++) { $out[$r] = & $a.Get $a $r $c }; ,$out }
+  $a.HasFormula = { param($a, $r, $c) [bool](& $a.Cell $a $r $c).Formula }
+  # EPPlus's Formula property has no leading « = » (unlike COM's) ; Quote-Formula always returns one, stripped here
+  $a.Set = { param($a, $r, $c, $v) $cell = (& $a.Cell $a $r $c)
+    if ($v -is [string] -and $v.Length -gt 0 -and '=+-@'.IndexOf($v[0]) -ge 0) { $cell.Formula = (Quote-Formula $v).Substring(1); return }
+    if ($v -is [datetime]) { $cell.Value = $v; if ($cell.Style.Numberformat.Format -notmatch '[dmy]') { $cell.Style.Numberformat.Format = 'dd/mm/yyyy' }; return }
+    $cell.Value = $v }
+  $a.BeforeWrite = { param($a) }
+  $a.AddRow = { param($a) throw "Nouvelle ligne : pas encore prise en charge sans Excel ouvert. Ouvre le fichier toi-même dans Excel, puis réessaie." }
+  $a.ExcelRow = { param($a, $r) $a.firstRow + $r }
+  $a.RowEmpty = { param($a, $r) for ($c = 1; $c -le $a.Headers.Count; $c++) { if (& $a.HasFormula $a $r $c) { continue }; if (-not (Is-EmptyCell (& $a.Get $a $r $c))) { return $false } }; return $true }
+  # clears the cells rather than truly removing the worksheet row : removing a row would also need to shrink the
+  # Table's own range, which isn't done here for the same reason AddRow doesn't grow it. Harmless : a cleared trailing
+  # row still reads as empty (RowEmpty above), so it keeps getting reused/retrimmed, never piling up unnoticed.
+  $a.DeleteRow = { param($a, $r) for ($c = 1; $c -le $a.Headers.Count; $c++) { if (-not (& $a.HasFormula $a $r $c)) { (& $a.Cell $a $r $c).Value = $null } } }
+  $a.DeleteRows = { param($a, $first, $count) for ($i = 0; $i -lt $count; $i++) { & $a.DeleteRow $a ($first + $i) } }
+  $a.WasClosed = $true
+  $a.Backup = { param($a, $dir, $stamp) $n = [IO.Path]::GetFileNameWithoutExtension($a.path); $e = [IO.Path]::GetExtension($a.path); $p = Join-Path $dir ($n + "-" + $stamp + $e); Copy-Item $a.path $p; $p }
+  $a.BackupPattern = { param($a) [IO.Path]::GetFileNameWithoutExtension($a.path) + "-*" + [IO.Path]::GetExtension($a.path) }
+  # written to a temp file, then swapped in with one atomic rename : a reader never sees a half-written file, and
+  # the real file is never even touched if something fails before this point
+  $a.Save = { param($a) $tmp = $a.path + '.tmp-' + [guid]::NewGuid().ToString('N') + '.xlsx'
+    try { $a.pkg.SaveAs([IO.FileInfo]$tmp) } catch { Remove-Item $tmp -ErrorAction SilentlyContinue; throw }
+    Move-Item -Path $tmp -Destination $a.path -Force }
+  $a.Close = { param($a) $a.pkg.Dispose() }
+  return $a
+}
 $script:mockTables = @{}
 function New-MockAdapter($kind) {
   if (-not $script:mockTables.ContainsKey($kind)) {
@@ -275,7 +370,12 @@ function New-MockAdapter($kind) {
   $a.Close = { param($a) }
   return $a
 }
-function New-Adapter($kind) { if ($Mock) { return New-MockAdapter $kind } else { return New-ComAdapter $kind } }
+function New-Adapter($kind) {
+  if ($Mock) { return New-MockAdapter $kind }
+  if (Is-AlreadyOpen $Config.$kind) { return New-ComAdapter $kind }   # someone has it open : write into that session
+  try { return New-DirectAdapter $kind }
+  catch { Write-Info ("Écriture directe impossible (" + $_.Exception.Message + ") : on passe par Excel.") 'DarkGray'; return New-ComAdapter $kind }
+}
 
 # ---------------- Upsert ----------------
 $ClosedStatus = @('perdu', 'abandonne', 'nogo', 'resilie')
@@ -542,6 +642,34 @@ function Upsert-Rows($kind, $rows) {
 }
 
 # ---------------- Reading (Parc) ----------------
+# same reading, without opening Excel (EPPlus) : used only when nobody has the file open (see Is-AlreadyOpen).
+# Reading never writes anything, so there's no corruption risk here even if something about this path is wrong —
+# worst case it throws and Read-Sheets falls back to the Excel/COM path below.
+function Read-Sheets-Direct($kind) {
+  Ensure-EPPlus
+  $path = $Config.$kind
+  if (-not (Test-Path $path)) { throw "Fichier introuvable : $path" }
+  $pkg = New-Object OfficeOpenXml.ExcelPackage (Get-Item $path)
+  try {
+    $out = @{}; $allNames = @($pkg.Workbook.Worksheets | ForEach-Object { $_.Name })
+    foreach ($ws in $pkg.Workbook.Worksheets) {
+      if ((Norm $ws.Name) -ne (Norm $Kinds[$kind].sheet) -and -not ($kind -eq 'bdd' -and $ws.Name -match 'Dashboard')) { continue }
+      $rows = New-Object System.Collections.ArrayList
+      $dim = $ws.Dimension
+      if ($dim) {
+        # absolute columns/rows from 1, not from $dim.Start : the rest of the pont assumes the table starts at A1
+        # (like Read-Request's COM path, whose Value2 array is 1-based from wherever the used range itself starts)
+        for ($r = 1; $r -le $dim.End.Row; $r++) {
+          $line = New-Object object[] $dim.End.Column
+          for ($c = 1; $c -le $dim.End.Column; $c++) { $line[$c - 1] = $ws.Cells[$r, $c].Value }
+          [void]$rows.Add($line)
+        }
+      }
+      $out[$ws.Name] = $rows
+    }
+    return @{ sheets = $out; allNames = $allNames }
+  } finally { $pkg.Dispose() }
+}
 function Read-Sheets($kind) {
   $out = @{}
   if ($Mock) {
@@ -551,6 +679,9 @@ function Read-Sheets($kind) {
     foreach ($r in $t.rows) { [void]$rows.Add([object[]]$r) }
     $out[$Kinds[$kind].sheet] = $rows
     return @{ sheets = $out; allNames = @($Kinds[$kind].sheet) }
+  }
+  if (-not (Is-AlreadyOpen $Config.$kind)) {
+    try { return Read-Sheets-Direct $kind } catch { Write-Info ("Lecture directe impossible (" + $_.Exception.Message + ") : on passe par Excel.") 'DarkGray' }
   }
   $book = Open-Book $Config.$kind
   try {
