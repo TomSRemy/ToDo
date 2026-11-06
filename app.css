@@ -1989,8 +1989,7 @@ html.lite .pipe-summary{ display:none; }
 .pipe-req-head .pipe-req-label{ order:5; flex-basis:100%; font-weight:500; white-space:nowrap; }
 .pipe-req-head .pipe-req-label::before{ content:none; }
 .pipe-req-head .pipe-req-label-in{ order:5; flex-basis:100%; }
-.pipe-req-card .pipe-who-row{ flex-wrap:nowrap; }
-.pipe-who-row .pipe-ungroup{ margin-left:auto; flex-shrink:0; }
+.pipe-who-row .pipe-ungroup{ margin-left:auto; flex-shrink:0; }   /* wrapping stays allowed (base rule) : forcing one line here is what pushed long text past the card's edge */
 .pipe-req-head .pipe-card-company{ flex:1 1 0; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .pipe-days{ white-space:nowrap; }
 /* every folded part of a sheet looks the same: a panel with « ▸ Title  details » */
