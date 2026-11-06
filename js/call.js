@@ -10,12 +10,17 @@ window.TodoCall=(function(){
   // ---------- Notes express / mode appel: notes typed in bulk, the app spots the figures and offers to fill the sheet ----------
   const QN_LABELS={ kwc:'Puissance', mwh:'P50', p90:'P90', mesPrev:'MES prévisionnelle', mesEff:'MES effective', dept:'Département', commune:'Commune', cp:'Code postal',
     contrat:'Type de contrat', duree:'Durée (ans)', debut:'Début du contrat', install:'Technologie', rdv1:'RDV 1', rdv2:'RDV 2', nature:'Offre demandée', spv:'SPV', siret:'SIRET',
-    tel:'Téléphone', mail:'Mail', relance:'Relance', particularites:'Particularités' };
-  const QN_PER_PLANT=new Set(['kwc','mwh','p90','mesPrev','mesEff','dept','commune','cp','contrat','duree','debut','install','spv','siret','particularites']);
+    tel:'Téléphone', mail:'Mail', relance:'Relance', particularites:'Particularités', prixType:'Structure de prix', prixValeur:'Prix' };
+  const QN_PER_PLANT=new Set(['kwc','mwh','p90','mesPrev','mesEff','dept','commune','cp','contrat','duree','debut','install','spv','siret','particularites','prixType','prixValeur']);
+  // the pricing formats actually used : fixed €/MWh ; « CR » (Complément de Rémunération : M0 + frais de gestion, or A% × M0) ;
+  // indexed on a yearly forward price (A% × CAL<année>) ; anything else typed free
+  const PRIX_TYPES={ fixe:'Fixe', cr:'CR (M0 + frais / A% × M0)', indexe_cal:'Indexé (A% × CAL)', autre:'Autre' };
   // a production for the eye: « 1 200 MWh », nothing when the value is not a number (« abc », « n/c »)
   function mwhText(v){ const n=pqNum(String(v==null?'':v)); return isFinite(n) && n?Math.round(n).toLocaleString('fr-FR')+' MWh':''; }
   function qnShow(k, v){ if(v==null || v==='') return '—';
     if(k==='kwc') return fmtKwc(v); if(k==='mwh' || k==='p90') return mwhText(v)?mwhText(v)+'/an':String(v);
+    if(k==='prixType') return PRIX_TYPES[v]||String(v);
+    if(k==='prixValeur') return /^\d+([.,]\d+)?$/.test(String(v))?String(v)+' €/MWh':String(v);
     if(/^\d{4}-\d{2}-\d{2}$/.test(String(v))) return pqIsoToFr(v); return String(v); }
   function parseQuickNotes(text){
     const t=String(text||'').replace(/ /g,' '), f=pqFold(t), out={};
@@ -40,6 +45,12 @@ window.TodoCall=(function(){
       .forEach(([k,re])=>{ const r=re.exec(f); const v=r && isoOf(r[1]); if(v) out[k]=v; });
     if(/\b(offre|prix|pricing)\s+engageant/.test(f) || /\bengageante?\b/.test(f)) out.nature='Engageante';
     else if(/\b(offre|prix|pricing)\s+(indicati|non engageant)/.test(f)) out.nature='Non engageante';
+    // price : fixed (a €/MWh figure, explicitly « fixe »), CR (M0 + frais de gestion, or A% x M0), indexed on a CAL year (A% x CAL27)
+    if((m=new RegExp(qty+'\\s*%\\s*x\\s*cal\\s*(\\d{2,4})','i').exec(f))){ out.prixType='indexe_cal'; out.prixValeur=m[1]+'% x CAL'+m[2].slice(-2); }
+    else if((m=new RegExp(qty+'\\s*%\\s*x\\s*m0','i').exec(f))){ out.prixType='cr'; out.prixValeur=m[1]+'% x M0'; }
+    else if(/\bm0\s*\+\s*frais/.test(f) || /\bcompl[ée]ment de r[ée]mun[ée]ration\b/.test(f) || /\bcr\b.{0,10}\bm0\b/.test(f)) out.prixType='cr';
+    else if((m=new RegExp('\\bprix\\s+fixe\\b[^\\n.;]{0,20}?'+qty+'\\s*(?:€|eur(?:os)?)?\\s*/?\\s*mwh','i').exec(t)) || (m=new RegExp(qty+'\\s*(?:€|eur(?:os)?)\\s*/\\s*mwh','i').exec(t))){ out.prixType='fixe'; out.prixValeur=String(pqNum(m[1])); }
+    else if(/\bprix\s+fixe\b/i.test(f)) out.prixType='fixe';
     if((m=/\bspv\s*[:=]?\s*([^\n,;()]{2,60}?)(?=\s*(?:[.,;()\n]|\bsiret\b|$))/i.exec(t))) out.spv=m[1].trim();
     if((m=/\b(\d{3}\s?\d{3}\s?\d{3}\s?\d{5})\b/.exec(t))) out.siret=m[1].replace(/\s/g,'');
     return out;

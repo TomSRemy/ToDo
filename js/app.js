@@ -61,7 +61,7 @@
     {key:'prise_contact',label:'Prise de contact',phase:'qualif',who:'Com',task:'Prendre le RDV 1',pipe:'Prise en contact'},
     {key:'collecte',label:'Collecte d\u2019infos',phase:'qualif',who:'Com',task:'Collecter les infos centrale',pipe:"Collecte d'informations"},
     {key:'qualif_en_cours',label:'Qualification',phase:'qualif',who:'Com',task:'RDV 2 et décision Go / No Go',pipe:'Qualification en cours'},
-    {key:'pricing_indicatif',label:'Pricing indicatif',phase:'offre',who:'Ops',task:'En attente de retour des Ops',bdd:'En préparation'},
+    {key:'pricing_indicatif',label:'Pricing indicatif',phase:'attente_prix',who:'Ops',task:'En attente de retour des Ops',bdd:'En préparation'},
     {key:'offre_remise',label:'Offre à remettre',phase:'offre',who:'Com',task:'Remettre l\u2019offre au producteur',bdd:'En préparation'},
     {key:'offre_attente',label:'Retour sur l\u2019offre',phase:'offre',who:'Client',task:'Relancer le producteur sur l\u2019offre',bdd:'En attente'},
     {key:'kyc',label:'KYC + solvabilité',phase:'contrat',who:'Jur',task:'KYC et solvabilité',bdd:'En attente'},
@@ -2766,7 +2766,7 @@
   //  - 'installation' : one plant = one line in the Pipe and BDD sheets; fields stored flat (key per column)
   //  - 'request'      : a pricing request grouping installations (installation.requestId)
   const PIPE_PHASES=[
-    {key:'prequal',label:'Pré-qualif'},{key:'qualif',label:'Qualification'},{key:'offre',label:'Offre'},
+    {key:'prequal',label:'Pré-qualif'},{key:'qualif',label:'Qualification'},{key:'attente_prix',label:'Attente de prix'},{key:'offre',label:'Offre'},
     {key:'contrat',label:'Contrat'},{key:'onboarding',label:'Onboarding'},{key:'actif',label:'En service'}
   ];
   const OPP_EXITS={ no_go:'No Go', perdu:'Perdu', abandonne:'Abandonné' };
@@ -4657,7 +4657,8 @@
       if(missing.length){ const m=document.createElement('p'); m.className='os-missing'; m.textContent='Non renseigné : '+missing.join(', '); c.appendChild(m); }
       grid.appendChild(c); return c;
     };
-    card('Centrale', [['Nom',oppName(o)],['Type',o.install],['Contrat',o.contrat],['Productible',o.kwc&&o.mwh?Math.round(pqNum(o.mwh)*1000/pqNum(o.kwc))+' kWh/kWc':''],
+    const prixLabel=(t,v)=>{ const l={ fixe:'Fixe', cr:'CR', indexe_cal:'Indexé CAL', autre:'Autre' }[t]; return [l,v].filter(Boolean).join(' · '); };
+    card('Centrale', [['Nom',oppName(o)],['Type',o.install],['Contrat',o.contrat],['Prix',prixLabel(o.prixType,o.prixValeur)],['Productible',o.kwc&&o.mwh?Math.round(pqNum(o.mwh)*1000/pqNum(o.kwc))+' kWh/kWc':''],
       ['P90',mwh(o.p90)],['MES prévisionnelle',o.mesEff?o.mesPrev:'',{optional:true}],['Début → fin',[o.debut,o.fin].filter(Boolean).join(' → ')+(o.duree?' ('+o.duree+' ans)':'')],
       ['Région',o.region],['SPV',o.spv],['SIRET',o.siret,{copy:true}],['Particularités',o.particularites,{wide:true}]]);
     // contacts: the main one, then the others, each with Tél. 1 / Tél. 2 / mail
@@ -4936,7 +4937,7 @@
     qualif_en_cours:[{ id:'rdv2', label:'RDV 2', date:'rdv2' },{ id:'decision', label:'Décision Go / No Go prise' }],
     pricing_indicatif:[{ id:'mail', label:'Mail de demande envoyé', auto:l=>l.every(o=>o.mailSentAt), act:{ label:'Copier le mail', show:l=>!l.every(o=>o.mailSentAt), fn:(l,btn)=>{ const ml=pricingMail(reqOfList(l), l); copyToClipboard(ml.subject+'\n\n'+ml.body, btn); markMailSent(l); } } },
       { id:'caract', label:'Fichier Caractéristiques joint', auto:l=>l.every(o=>o.caractSentAt), act:{ label:'Créer le fichier', show:l=>!l.every(o=>o.caractSentAt), fn:(l,btn)=>downloadCaract(l, btn) } },
-      { id:'ops', label:'Retour d’Ops reçu' },{ id:'prix', label:'Prix noté dans la fiche' }],
+      { id:'ops', label:'Retour d’Ops reçu' },{ id:'prix', label:'Prix noté dans la fiche', auto:l=>l.every(o=>o.prixValeur) }],
     offre_remise:[{ id:'prete', label:'Offre préparée' },{ id:'envoyee', label:'Offre remise au producteur', date:'dateOffre' }],
     offre_attente:[{ id:'relance', label:'Relance faite', note:l=>{ const t=pqDateOf(l[0].dateOffre); if(!t) return ''; const n=Math.floor((Date.now()-t)/864e5); return n>0?'offre remise il y a '+n+' jour'+(n>1?'s':''):''; } },{ id:'reponse', label:'Réponse du producteur reçue' }],
     kyc:[{ id:'docs', label:'Documents KYC reçus' },{ id:'solva', label:'Solvabilité validée (Juridique)' }],
