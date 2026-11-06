@@ -36,7 +36,7 @@
 param([int]$Port = 8765, [switch]$Reconfigurer, [switch]$Mock)
 
 $ErrorActionPreference = 'Stop'
-$Version = '1.24'
+$Version = '1.25'
 $Here = Split-Path -Parent $MyInvocation.MyCommand.Path
 $LibDir = Join-Path $Here 'lib'
 # the settings (the two files, the key) live in the Windows profile, not next to the script: a new download, in any folder,
@@ -290,7 +290,7 @@ function Find-DirectTable($pkg, $kind, $fileName) {
   foreach ($w in $pkg.Workbook.Worksheets) { if ((Norm $w.Name) -eq (Norm $k.sheet)) { $ws = $w; break } }
   if (-not $ws) { throw ("Onglet « " + $k.sheet + " » introuvable dans « " + $fileName + " » : rien n'est écrit (le pont n'écrit que dans cet onglet).") }
   foreach ($t in $ws.Tables) {
-    for ($c = $t.Address.Start.Column; $c -le $t.Address.End.Column; $c++) { if ((Norm $ws.Cells[$t.Address.Start.Row, $c].Text) -eq (Norm $k.header)) { return @{ ws = $ws; table = $t } } }
+    for ($c = $t.Address.Start.Column; $c -le $t.Address.End.Column; $c++) { if ((Norm $ws.Cells.get_Item($t.Address.Start.Row, $c).Text) -eq (Norm $k.header)) { return @{ ws = $ws; table = $t } } }
   }
   throw ("Tableau « " + $k.label + " » introuvable dans l'onglet « " + $k.sheet + " » (colonne « " + $k.header + " ») : rien n'est écrit.")
 }
@@ -340,11 +340,11 @@ function New-DirectAdapter($kind) {
     $found = Find-DirectTable $pkg $kind ([IO.Path]::GetFileName($path))
     $ws = $found.ws; $table = $found.table
     $firstRow = $table.Address.Start.Row; $firstCol = $table.Address.Start.Column; $lastCol = $table.Address.End.Column
-    $headers = @(); for ($c = $firstCol; $c -le $lastCol; $c++) { $headers += [string]$ws.Cells[$firstRow, $c].Text }
+    $headers = @(); for ($c = $firstCol; $c -le $lastCol; $c++) { $headers += [string]$ws.Cells.get_Item($firstRow, $c).Text }
   } catch { $pkg.Dispose(); $ms.Dispose(); throw }
   $a = @{ kind = $kind; pkg = $pkg; ms = $ms; ws = $ws; table = $table; Headers = $headers; FirstCol = $firstCol; firstRow = $firstRow; lastRow = $table.Address.End.Row; path = $path }
   $a.RowCount = { param($a) $a.lastRow - $a.firstRow }
-  $a.Cell = { param($a, $r, $c) $a.ws.Cells[$a.firstRow + $r, $a.FirstCol + $c - 1] }
+  $a.Cell = { param($a, $r, $c) $a.ws.Cells.get_Item($a.firstRow + $r, $a.FirstCol + $c - 1) }
   $a.Get = { param($a, $r, $c) (& $a.Cell $a $r $c).Value }
   $a.Column = { param($a, $c) $n = & $a.RowCount $a; $out = New-Object object[] ($n + 1); for ($r = 1; $r -le $n; $r++) { $out[$r] = & $a.Get $a $r $c }; ,$out }
   $a.HasFormula = { param($a, $r, $c) [bool](& $a.Cell $a $r $c).Formula }
@@ -694,7 +694,7 @@ function Read-Sheets-Direct($kind) {
         # (like Read-Request's COM path, whose Value2 array is 1-based from wherever the used range itself starts)
         for ($r = 1; $r -le $dim.End.Row; $r++) {
           $line = New-Object object[] $dim.End.Column
-          for ($c = 1; $c -le $dim.End.Column; $c++) { $line[$c - 1] = $ws.Cells[$r, $c].Value }
+          for ($c = 1; $c -le $dim.End.Column; $c++) { $line[$c - 1] = $ws.Cells.get_Item($r, $c).Value }
           [void]$rows.Add($line)
         }
       }
