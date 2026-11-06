@@ -3344,7 +3344,8 @@
     const nx=document.createElement('div'); nx.className='pipe-next'; const what=(tk && plainLinks(tk.title||'').replace(/\s+—\s+.*$/,'').trim())||stageTaskOf(st, o); nx.textContent='→ '+(st.who!=='Com' && (!tk || tk.status==='en_attente')?'En attente '+(st.who==='Ops'?'d\u2019Ops':st.who==='Jur'?'du Juridique':st.who==='Client'?'du producteur':'de la Direction')+' : '+(/^[A-Z]{2}/.test(what)?what:what.charAt(0).toLowerCase()+what.slice(1)):what); card.appendChild(nx);
     const m=document.createElement('div'); m.className='pipe-who-row';
     const w=document.createElement('span'); w.className='who-chip who-'+String(st.who).toLowerCase(); w.textContent=WHO[st.who]||st.who; m.appendChild(w);
-    const d=daysInStage(o); if(d!=null){ const sp=document.createElement('span'); sp.className='pipe-days'+(d>15?' late':''); sp.textContent=d===0?'à l’étape depuis aujourd’hui':'à l’étape depuis '+d+' j'; sp.title='Jours passés à cette étape'; m.appendChild(sp); }
+    const t=stageEnteredAt(o), d=t?Math.max(0,Math.floor((Date.now()-t)/864e5)):null;
+    if(d!=null){ const sp=document.createElement('span'); sp.className='pipe-days'+(d>15?' late':''); sp.textContent=DF_DM.format(new Date(t)); sp.title='À cette étape depuis le '+DF_DM.format(new Date(t))+(d>0?' ('+d+' j)':' (aujourd’hui)'); m.appendChild(sp); }
     card.appendChild(m);
     if(o.requestId){ const all=requestInstalls(o.requestId).filter(x=>!isExited(x)); if(all.length>group.length){ const req=opportunities.find(x=>x.id===o.requestId)||{};
       const a=document.createElement('button'); a.type='button'; a.className='pipe-origin'; a.textContent='↳ demande '+(req.label||req.company||'')+' · '+all.length+' install.'; a.onclick=e=>{ e.stopPropagation(); openRequestDetail(o.requestId); }; card.appendChild(a); } }
@@ -4922,7 +4923,8 @@
   // « Maintenant » : what the current step asks for, with the dates that matter at that step
   // ---------- « Étape en cours » : the step, who has it and since when, its checklist, one button to move on ----------
   const WHO={ Com:'À moi', Ops:'Ops', Jur:'Juridique', Client:'Producteur', Dir:'Direction' };   // in full on chips and sheets (cold audit: « Jur », « Dir », « Client »)
-  function daysInStage(o){ const log=(o.stageLog||[]).filter(e=>e && e.stage===o.stage && e.at>1e12); const t=log.length?log[log.length-1].at:(o.updatedAt>1e12?o.updatedAt:0); return t?Math.max(0,Math.floor((Date.now()-t)/864e5)):null; }
+  function stageEnteredAt(o){ const log=(o.stageLog||[]).filter(e=>e && e.stage===o.stage && e.at>1e12); return log.length?log[log.length-1].at:(o.updatedAt>1e12?o.updatedAt:0); }
+  function daysInStage(o){ const t=stageEnteredAt(o); return t?Math.max(0,Math.floor((Date.now()-t)/864e5)):null; }
   const reqMissing=list=>list.reduce((s,x)=>s+CARACT_ROWS.filter(l=>REQ_NEEDED.has(caractKey(l)) && caractValue(x,l)==='').length,0);
   // each step's checklist. auto: known by the app (ticked by itself) · date: a date of the sheet, typed right there
   // (ticking it puts today) · act: a button doing the thing next to it · else ticked by hand, with the day it was ticked
