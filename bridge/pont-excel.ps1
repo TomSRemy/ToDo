@@ -36,7 +36,7 @@
 param([int]$Port = 8765, [switch]$Reconfigurer, [switch]$Mock)
 
 $ErrorActionPreference = 'Stop'
-$Version = '1.21'
+$Version = '1.22'
 $Here = Split-Path -Parent $MyInvocation.MyCommand.Path
 $LibDir = Join-Path $Here 'lib'
 # the settings (the two files, the key) live in the Windows profile, not next to the script: a new download, in any folder,
@@ -284,15 +284,24 @@ function New-ComAdapter($kind) {
 # finds the table's sheet and its ListObject-equivalent (an EPPlus ExcelTable) by the same header column as Find-Table,
 # without opening Excel. Used only to READ (New-DirectAdapter re-opens its own copy for writing) or to find out there's
 # nothing to find — never mutated here.
-function Find-DirectTable($pkg, $kind) {
+function Find-DirectTable($pkg, $kind, $fileName) {
   $k = $Kinds[$kind]
   $ws = $null
   foreach ($w in $pkg.Workbook.Worksheets) { if ((Norm $w.Name) -eq (Norm $k.sheet)) { $ws = $w; break } }
-  if (-not $ws) { throw ("Onglet « " + $k.sheet + " » introuvable dans « " + [IO.Path]::GetFileName($pkg.File.Name) + " » : rien n'est écrit (le pont n'écrit que dans cet onglet).") }
+  if (-not $ws) { throw ("Onglet « " + $k.sheet + " » introuvable dans « " + $fileName + " » : rien n'est écrit (le pont n'écrit que dans cet onglet).") }
   foreach ($t in $ws.Tables) {
     for ($c = $t.Address.Start.Column; $c -le $t.Address.End.Column; $c++) { if ((Norm $ws.Cells[$t.Address.Start.Row, $c].Text) -eq (Norm $k.header)) { return @{ ws = $ws; table = $t } } }
   }
   throw ("Tableau « " + $k.label + " » introuvable dans l'onglet « " + $k.sheet + " » (colonne « " + $k.header + " ») : rien n'est écrit.")
+}
+# the whole file read into memory in one shot, then released immediately : EPPlus's constructor taking a FileInfo
+# keeps that file open for as long as the package object lives, which holds the very lock on the real file this
+# whole rewrite was meant to shrink (confirmed : it showed Excel's own "fichier ouvert dans une autre application").
+# A MemoryStream has no file handle on the real path at all, so nothing is held open past this one quick read.
+function Open-DirectPackage($path) {
+  $bytes = [IO.File]::ReadAllBytes($path)
+  $ms = New-Object IO.MemoryStream (,$bytes)
+  @{ pkg = (New-Object OfficeOpenXml.ExcelPackage ($ms)); ms = $ms }
 }
 # écrit le fichier directement (EPPlus), sans jamais ouvrir Excel : utilisé seulement quand personne n'a le fichier
 # ouvert (sinon New-ComAdapter, plus haut, pour écrire dans cette session Excel-là). Jamais testé en conditions
@@ -304,12 +313,12 @@ function New-DirectAdapter($kind) {
   Ensure-EPPlus
   $path = $Config.$kind
   if (-not (Test-Path $path)) { throw "Fichier introuvable : $path" }
-  $pkg = New-Object OfficeOpenXml.ExcelPackage (Get-Item $path)
-  try { $found = Find-DirectTable $pkg $kind } catch { $pkg.Dispose(); throw }
+  $opened = Open-DirectPackage $path; $pkg = $opened.pkg; $ms = $opened.ms
+  try { $found = Find-DirectTable $pkg $kind ([IO.Path]::GetFileName($path)) } catch { $pkg.Dispose(); $ms.Dispose(); throw }
   $ws = $found.ws; $table = $found.table
   $firstRow = $table.Address.Start.Row; $firstCol = $table.Address.Start.Column; $lastCol = $table.Address.End.Column
   $headers = @(); for ($c = $firstCol; $c -le $lastCol; $c++) { $headers += [string]$ws.Cells[$firstRow, $c].Text }
-  $a = @{ kind = $kind; pkg = $pkg; ws = $ws; table = $table; Headers = $headers; FirstCol = $firstCol; firstRow = $firstRow; lastRow = $table.Address.End.Row; path = $path }
+  $a = @{ kind = $kind; pkg = $pkg; ms = $ms; ws = $ws; table = $table; Headers = $headers; FirstCol = $firstCol; firstRow = $firstRow; lastRow = $table.Address.End.Row; path = $path }
   $a.RowCount = { param($a) $a.lastRow - $a.firstRow }
   $a.Cell = { param($a, $r, $c) $a.ws.Cells[$a.firstRow + $r, $a.FirstCol + $c - 1] }
   $a.Get = { param($a, $r, $c) (& $a.Cell $a $r $c).Value }
@@ -337,7 +346,7 @@ function New-DirectAdapter($kind) {
   $a.Save = { param($a) $tmp = $a.path + '.tmp-' + [guid]::NewGuid().ToString('N') + '.xlsx'
     try { $a.pkg.SaveAs([IO.FileInfo]$tmp) } catch { Remove-Item $tmp -ErrorAction SilentlyContinue; throw }
     Move-Item -Path $tmp -Destination $a.path -Force }
-  $a.Close = { param($a) $a.pkg.Dispose() }
+  $a.Close = { param($a) $a.pkg.Dispose(); $a.ms.Dispose() }
   return $a
 }
 $script:mockTables = @{}
@@ -649,7 +658,7 @@ function Read-Sheets-Direct($kind) {
   Ensure-EPPlus
   $path = $Config.$kind
   if (-not (Test-Path $path)) { throw "Fichier introuvable : $path" }
-  $pkg = New-Object OfficeOpenXml.ExcelPackage (Get-Item $path)
+  $opened = Open-DirectPackage $path; $pkg = $opened.pkg
   try {
     $out = @{}; $allNames = @($pkg.Workbook.Worksheets | ForEach-Object { $_.Name })
     foreach ($ws in $pkg.Workbook.Worksheets) {
@@ -668,7 +677,7 @@ function Read-Sheets-Direct($kind) {
       $out[$ws.Name] = $rows
     }
     return @{ sheets = $out; allNames = $allNames }
-  } finally { $pkg.Dispose() }
+  } finally { $pkg.Dispose(); $opened.ms.Dispose() }
 }
 function Read-Sheets($kind) {
   $out = @{}
