@@ -36,7 +36,7 @@
 param([int]$Port = 8765, [switch]$Reconfigurer, [switch]$Mock)
 
 $ErrorActionPreference = 'Stop'
-$Version = '1.23'
+$Version = '1.24'
 $Here = Split-Path -Parent $MyInvocation.MyCommand.Path
 $LibDir = Join-Path $Here 'lib'
 # the settings (the two files, the key) live in the Windows profile, not next to the script: a new download, in any folder,
@@ -335,10 +335,13 @@ function New-DirectAdapter($kind) {
   $path = $Config.$kind
   if (-not (Test-Path $path)) { throw "Fichier introuvable : $path" }
   $opened = Open-DirectPackage $path; $pkg = $opened.pkg; $ms = $opened.ms
-  try { $found = Find-DirectTable $pkg $kind ([IO.Path]::GetFileName($path)) } catch { $pkg.Dispose(); $ms.Dispose(); throw }
-  $ws = $found.ws; $table = $found.table
-  $firstRow = $table.Address.Start.Row; $firstCol = $table.Address.Start.Column; $lastCol = $table.Address.End.Column
-  $headers = @(); for ($c = $firstCol; $c -le $lastCol; $c++) { $headers += [string]$ws.Cells[$firstRow, $c].Text }
+  # anything in here failing must still release the in-memory package — not just the Find-DirectTable call itself
+  try {
+    $found = Find-DirectTable $pkg $kind ([IO.Path]::GetFileName($path))
+    $ws = $found.ws; $table = $found.table
+    $firstRow = $table.Address.Start.Row; $firstCol = $table.Address.Start.Column; $lastCol = $table.Address.End.Column
+    $headers = @(); for ($c = $firstCol; $c -le $lastCol; $c++) { $headers += [string]$ws.Cells[$firstRow, $c].Text }
+  } catch { $pkg.Dispose(); $ms.Dispose(); throw }
   $a = @{ kind = $kind; pkg = $pkg; ms = $ms; ws = $ws; table = $table; Headers = $headers; FirstCol = $firstCol; firstRow = $firstRow; lastRow = $table.Address.End.Row; path = $path }
   $a.RowCount = { param($a) $a.lastRow - $a.firstRow }
   $a.Cell = { param($a, $r, $c) $a.ws.Cells[$a.firstRow + $r, $a.FirstCol + $c - 1] }
