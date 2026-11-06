@@ -32,7 +32,7 @@
 param([int]$Port = 8765, [switch]$Reconfigurer, [switch]$Mock)
 
 $ErrorActionPreference = 'Stop'
-$Version = '1.19'
+$Version = '1.20'
 $Here = Split-Path -Parent $MyInvocation.MyCommand.Path
 # the settings (the two files, the key) live in the Windows profile, not next to the script: a new download, in any folder,
 # finds them again (no new key to copy into the app). An older settings file next to the script is taken over once.
@@ -550,10 +550,13 @@ function Read-Sheets($kind) {
     [void]$rows.Add([object[]]$t.headers)
     foreach ($r in $t.rows) { [void]$rows.Add([object[]]$r) }
     $out[$Kinds[$kind].sheet] = $rows
-    return $out
+    return @{ sheets = $out; allNames = @($Kinds[$kind].sheet) }
   }
   $book = Open-Book $Config.$kind
   try {
+    # every worksheet's name, whether or not it matches : the only way the app can show what's really in the file
+    # when the expected one isn't found, instead of a blind "aucun" that doesn't say what was actually there
+    $allNames = @($book.wb.Worksheets | ForEach-Object { $_.Name })
     foreach ($ws in $book.wb.Worksheets) {
       # only the sheet the app works with (and the Suivi's Dashboard, for the yearly goals): never another « Pipe … » sheet
       if ((Norm $ws.Name) -ne (Norm $Kinds[$kind].sheet) -and -not ($kind -eq 'bdd' -and $ws.Name -match 'Dashboard')) { continue }
@@ -566,7 +569,7 @@ function Read-Sheets($kind) {
       $out[$ws.Name] = $rows
     }
   } finally { Close-Book $book }
-  return $out
+  return @{ sheets = $out; allNames = $allNames }
 }
 
 # ---------------- Minimal HTTP server on 127.0.0.1 (no admin rights needed) ----------------
@@ -655,7 +658,8 @@ function Handle($req) {
     return @(200, @{ ok = $true; headers = $t.headers; rows = @($t.rows | ForEach-Object { ,@($_ | ForEach-Object { Show-Value $_ }) }) })
   }
   if ($req.method -eq 'GET' -and $req.path -match '^/(pipe|bdd)/read$') {
-    return @(200, @{ ok = $true; sheets = (Read-Sheets $Matches[1]) })
+    $r = Read-Sheets $Matches[1]
+    return @(200, @{ ok = $true; sheets = $r.sheets; allNames = $r.allNames })
   }
   return @(404, @{ ok = $false; message = 'Route inconnue.' })
 }
