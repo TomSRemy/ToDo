@@ -36,7 +36,7 @@
 param([int]$Port = 8765, [switch]$Reconfigurer, [switch]$Mock)
 
 $ErrorActionPreference = 'Stop'
-$Version = '1.26'
+$Version = '1.27'
 $Here = Split-Path -Parent $MyInvocation.MyCommand.Path
 $LibDir = Join-Path $Here 'lib'
 # the settings (the two files, the key) live in the Windows profile, not next to the script: a new download, in any folder,
@@ -367,7 +367,14 @@ function New-DirectAdapter($kind) {
   $a.BackupPattern = { param($a) [IO.Path]::GetFileNameWithoutExtension($a.path) + "-*" + [IO.Path]::GetExtension($a.path) }
   # written to a temp file, then swapped in with one atomic rename : a reader never sees a half-written file, and
   # the real file is never even touched if something fails before this point
-  $a.Save = { param($a) $tmp = $a.path + '.tmp-' + [guid]::NewGuid().ToString('N') + '.xlsx'
+  # the temp file lived right next to the real one, inside the same OneDrive-synced folder : OneDrive sees it appear
+  # like any other file and can start syncing it before it's renamed away a moment later (confirmed : Excel showed
+  # "fichier introuvable" trying to reach it). %TEMP% is outside any synced folder, and still the same drive as the
+  # user profile (so the final rename is still a same-volume, atomic replace).
+  $a.Save = { param($a)
+    $tmpDir = Join-Path ([IO.Path]::GetTempPath()) 'PontExcel'
+    if (-not (Test-Path $tmpDir)) { $null = New-Item -ItemType Directory -Path $tmpDir }
+    $tmp = Join-Path $tmpDir ([guid]::NewGuid().ToString('N') + '.xlsx')
     try { $a.pkg.SaveAs([IO.FileInfo]$tmp) } catch { Remove-Item $tmp -ErrorAction SilentlyContinue; throw }
     try { Invoke-AtomicReplace $tmp $a.path } catch { Remove-Item $tmp -ErrorAction SilentlyContinue; throw } }
   $a.Close = { param($a) $a.pkg.Dispose(); $a.ms.Dispose() }
