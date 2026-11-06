@@ -36,7 +36,7 @@
 param([int]$Port = 8765, [switch]$Reconfigurer, [switch]$Mock)
 
 $ErrorActionPreference = 'Stop'
-$Version = '1.22'
+$Version = '1.23'
 $Here = Split-Path -Parent $MyInvocation.MyCommand.Path
 $LibDir = Join-Path $Here 'lib'
 # the settings (the two files, the key) live in the Windows profile, not next to the script: a new download, in any folder,
@@ -294,6 +294,27 @@ function Find-DirectTable($pkg, $kind, $fileName) {
   }
   throw ("Tableau « " + $k.label + " » introuvable dans l'onglet « " + $k.sheet + " » (colonne « " + $k.header + " ») : rien n'est écrit.")
 }
+# a genuinely atomic replace (MoveFileEx + MOVEFILE_REPLACE_EXISTING), not Move-Item -Force : on PowerShell 5.1 /
+# .NET Framework, Move-Item -Force onto an existing file isn't guaranteed to be one atomic rename under the hood
+# (it may delete the destination first, then move) — which would reopen the exact "half-written file" window this
+# whole rewrite exists to close. This calls the Win32 API directly instead of trusting that implementation detail.
+$script:atomicReady = $false
+function Invoke-AtomicReplace($from, $to) {
+  if (-not $script:atomicReady) {
+    Add-Type -TypeDefinition @"
+using System; using System.Runtime.InteropServices;
+public static class TodoAtomicMove {
+  [DllImport("kernel32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
+  static extern bool MoveFileEx(string lpExistingFileName, string lpNewFileName, uint dwFlags);
+  public static void Replace(string from, string to) {
+    if (!MoveFileEx(from, to, 0x1)) throw new System.ComponentModel.Win32Exception(Marshal.GetLastWin32Error());
+  }
+}
+"@
+    $script:atomicReady = $true
+  }
+  [TodoAtomicMove]::Replace($from, $to)
+}
 # the whole file read into memory in one shot, then released immediately : EPPlus's constructor taking a FileInfo
 # keeps that file open for as long as the package object lives, which holds the very lock on the real file this
 # whole rewrite was meant to shrink (confirmed : it showed Excel's own "fichier ouvert dans une autre application").
@@ -345,7 +366,7 @@ function New-DirectAdapter($kind) {
   # the real file is never even touched if something fails before this point
   $a.Save = { param($a) $tmp = $a.path + '.tmp-' + [guid]::NewGuid().ToString('N') + '.xlsx'
     try { $a.pkg.SaveAs([IO.FileInfo]$tmp) } catch { Remove-Item $tmp -ErrorAction SilentlyContinue; throw }
-    Move-Item -Path $tmp -Destination $a.path -Force }
+    try { Invoke-AtomicReplace $tmp $a.path } catch { Remove-Item $tmp -ErrorAction SilentlyContinue; throw } }
   $a.Close = { param($a) $a.pkg.Dispose(); $a.ms.Dispose() }
   return $a
 }
