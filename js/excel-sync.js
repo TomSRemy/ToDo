@@ -276,15 +276,20 @@ window.TodoExcelSync=(function(){
     else { const o=members[0].o; head.querySelector('.xl-name b').textContent=o.producteur||o.company||'(sans nom)'; head.querySelector('.xl-name span').textContent=codeAffaire(o); }
     const meta=head.querySelector('.xl-meta');
     const targets=xsConflictTargets(members), nCells=targets.reduce((s,tg)=>s+tg.diffs.length, 0);
+    const destLabel=kinds=>kinds.map(k=>k==='pipe'?'Pipe':'Suivi').join(' + ');
+    const pendingList=kind=>members.filter(m=>{ const st=kind==='pipe'?m.p:m.b, diffs=kind==='pipe'?m.pDiffs:m.bDiffs; return st && xsTodo(st) && !(diffs||[]).length; }).map(m=>m.o);
     const needsSend=members.filter(m=>(xsTodo(m.p)&&!m.pDiffs.length) || (m.b&&xsTodo(m.b)&&!m.bDiffs.length)).length;
     const tag=document.createElement('span'); tag.className='xl-tag '+(nCells?'todo':needsSend?'warn':'ok');
     tag.textContent=nCells?nCells+' case'+(nCells>1?'s':''):needsSend?(needsSend>1?needsSend+' pas envoyées':'pas envoyé'):'à jour';
     meta.appendChild(tag);
+    // which file(s) this card actually touches : « où ça part » n'était visible qu'une fois le détail ouvert
+    const destKinds=nCells?[...new Set(targets.map(tg=>tg.kind))]:['pipe','bdd'].filter(k=>pendingList(k).length);
+    if(destKinds.length){ const dest=document.createElement('span'); dest.className='xl-dest'; dest.textContent=destLabel(destKinds); meta.appendChild(dest); }
     card.appendChild(head);
     if(!nCells){
-      if(needsSend && bridgeConfigured()){ const sb=document.createElement('button'); sb.type='button'; sb.className='pq-link'; sb.textContent='Envoyer';
+      if(needsSend && bridgeConfigured()){ const sb=document.createElement('button'); sb.type='button'; sb.className='pq-link'; sb.textContent='Envoyer ('+destLabel(destKinds)+')';
         sb.onclick=async e=>{ e.stopPropagation(); sb.disabled=true; const t=sb.textContent; sb.textContent='Envoi…';
-          for(const kind of ['pipe','bdd']){ const list=members.filter(m=>{ const st=kind==='pipe'?m.p:m.b, diffs=kind==='pipe'?m.pDiffs:m.bDiffs; return st && xsTodo(st) && !diffs.length; }).map(m=>m.o);
+          for(const kind of ['pipe','bdd']){ const list=pendingList(kind);
             if(list.length) await sendToExcel(kind, list, null); }
           sb.disabled=false; sb.textContent=t; };
         meta.appendChild(sb); }
@@ -358,7 +363,8 @@ window.TodoExcelSync=(function(){
         bE.classList.toggle('sel', side==='excel'); bA.classList.toggle('sel', side==='appli');
         bE.classList.toggle('merged', side==='merge'); bA.classList.toggle('merged', side==='merge'); });
       const nApp=Object.values(cellChoice).filter(v=>v==='appli'||v==='merge').length;
-      summary.textContent=nApp?nApp+' case'+(nApp>1?'s':'')+' à écrire dans Excel':'rien à écrire dans Excel';
+      const writeKinds=[...new Set(cols.filter(col=>col.items.some(it=>{ const v=cellChoice[col.kind+'|'+xsViOf(col.kind, it.d)+'|'+it.o.id]; return v==='appli'||v==='merge'; })).map(c=>c.kind))];
+      summary.textContent=nApp?nApp+' case'+(nApp>1?'s':'')+' à écrire dans '+destLabel(writeKinds):'rien à écrire dans Excel';
       apply.textContent='Appliquer ('+members.length+' installation'+(members.length>1?'s':'')+')';
     };
     refresh();
