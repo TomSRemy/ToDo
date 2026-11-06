@@ -392,7 +392,10 @@ window.TodoExcelSync=(function(){
       return true;
     }catch(e){
       if(btn){ btn.textContent=label; btn.disabled=false; }
-      showBridgeMsg(e.message, false);
+      // a brand new line needs someone to have the file open (bridge limitation) : a clear thing to go do, shown
+      // long enough to actually open the file and come back, instead of a message that fades before that
+      const needsOpen=/pas encore prise en charge sans Excel ouvert/.test(e.message||'');
+      showBridgeMsg(needsOpen?'Ouvre le fichier Excel, puis reviens cliquer « Envoyer » : '+e.message:e.message, false, needsOpen?20000:undefined);
       return false;
     }
   }
@@ -443,11 +446,11 @@ window.TodoExcelSync=(function(){
   function closeXlReview(){ $('xl-review-overlay').classList.add('hidden'); }
   $('xl-review-later').onclick=closeXlReview;
   $('xl-review-overlay').addEventListener('click', e=>{ if(e.target.id==='xl-review-overlay') closeXlReview(); });
-  function showBridgeMsg(msg, ok){
+  function showBridgeMsg(msg, ok, ms){
     let el=$('bridge-msg');
     if(!el){ el=document.createElement('div'); el.id='bridge-msg'; el.setAttribute('role','status'); document.body.appendChild(el); }
     el.textContent=msg; el.className='bridge-msg show'+(ok?'':' err');
-    clearTimeout(el._t); el._t=setTimeout(()=>{ el.className='bridge-msg'; }, ok?3500:7000);
+    clearTimeout(el._t); el._t=setTimeout(()=>{ el.className='bridge-msg'; }, ms!=null?ms:(ok?3500:7000));
   }
   // Buttons added to the installation sheet / pricing request when the bridge is set up on this browser
   function excelButtons(actions, list){
