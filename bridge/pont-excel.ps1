@@ -36,7 +36,7 @@
 param([int]$Port = 8765, [switch]$Reconfigurer, [switch]$Mock)
 
 $ErrorActionPreference = 'Stop'
-$Version = '1.27'
+$Version = '1.28'
 $Here = Split-Path -Parent $MyInvocation.MyCommand.Path
 $LibDir = Join-Path $Here 'lib'
 # the settings (the two files, the key) live in the Windows profile, not next to the script: a new download, in any folder,
@@ -360,7 +360,9 @@ function New-DirectAdapter($kind) {
   # clears the cells rather than truly removing the worksheet row : removing a row would also need to shrink the
   # Table's own range, which isn't done here for the same reason AddRow doesn't grow it. Harmless : a cleared trailing
   # row still reads as empty (RowEmpty above), so it keeps getting reused/retrimmed, never piling up unnoticed.
-  $a.DeleteRow = { param($a, $r) for ($c = 1; $c -le $a.Headers.Count; $c++) { if (-not (& $a.HasFormula $a $r $c)) { (& $a.Cell $a $r $c).Value = $null } } }
+  # setting a property straight on a call expression's result ((& ...).Value = …) doesn't reliably work in
+  # PowerShell the way it does on a variable ($cell.Value = …, used everywhere else here) — assign first, like Set does
+  $a.DeleteRow = { param($a, $r) for ($c = 1; $c -le $a.Headers.Count; $c++) { if (-not (& $a.HasFormula $a $r $c)) { $cell = & $a.Cell $a $r $c; $cell.Value = $null } } }
   $a.DeleteRows = { param($a, $first, $count) for ($i = 0; $i -lt $count; $i++) { & $a.DeleteRow $a ($first + $i) } }
   $a.WasClosed = $true
   $a.Backup = { param($a, $dir, $stamp) $n = [IO.Path]::GetFileNameWithoutExtension($a.path); $e = [IO.Path]::GetExtension($a.path); $p = Join-Path $dir ($n + "-" + $stamp + $e); Copy-Item $a.path $p; $p }
