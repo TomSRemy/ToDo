@@ -115,7 +115,9 @@ window.TodoExcelSync=(function(){
     else if(kind==='bdd'){ const s2=suiviState(o); if(s2) st.excel=s2.k==='missing'?'absent':s2.k==='diff'?'statut':'present', st.statut=s2.p&&s2.p.statut; }
     return st;
   }
-  const xsTodo=st=>st.app==='jamais'||st.app==='modif'||st.excel==='absent'||st.excel==='modifie'||st.excel==='statut'||(st.diffs||[]).length>0;
+  // « jamais envoyé » d'après les repères de l'appli ne veut rien dire si l'Excel relu montre déjà exactement les
+  // mêmes valeurs (st.excel==='present', aucune diff) : rien à écrire, ça ne doit pas ressortir comme « à traiter ».
+  const xsTodo=st=>st.excel==='absent'||st.excel==='modifie'||st.excel==='statut'||(st.diffs||[]).length>0||((st.app==='jamais'||st.app==='modif') && st.excel!=='present');
   function xsList(){ return app.opportunities.filter(o=>!o.deleted && o.kind==='installation' && (!isExited(o) || (o.excelSent||o.pipeSentAt||o.bddSentAt))); }
   const xsBddApplies=o=>isExited(o) || stageIndex(o.stage)>=stageIndex('pricing_indicatif');
   // a value changed in the Pipe by a colleague, taken into the app
