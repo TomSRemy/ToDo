@@ -36,7 +36,7 @@
 param([int]$Port = 8765, [switch]$Reconfigurer, [switch]$Mock)
 
 $ErrorActionPreference = 'Stop'
-$Version = '1.25'
+$Version = '1.26'
 $Here = Split-Path -Parent $MyInvocation.MyCommand.Path
 $LibDir = Join-Path $Here 'lib'
 # the settings (the two files, the key) live in the Windows profile, not next to the script: a new download, in any folder,
@@ -694,7 +694,11 @@ function Read-Sheets-Direct($kind) {
         # (like Read-Request's COM path, whose Value2 array is 1-based from wherever the used range itself starts)
         for ($r = 1; $r -le $dim.End.Row; $r++) {
           $line = New-Object object[] $dim.End.Column
-          for ($c = 1; $c -le $dim.End.Column; $c++) { $line[$c - 1] = $ws.Cells.get_Item($r, $c).Value }
+          # EPPlus hands back a real [datetime] for a date-formatted cell, unlike COM's Value2 (always a plain number
+          # for a date) — converted back to that same OLE date number here, the only form the app's own reading
+          # code (xsCellText) knows how to turn into a date ; left as [datetime], PowerShell's JSON serializer
+          # would print it as "/Date(…)/ ", unreadable to the app (exactly what showed up on screen).
+          for ($c = 1; $c -le $dim.End.Column; $c++) { $v = $ws.Cells.get_Item($r, $c).Value; if ($v -is [datetime]) { $v = $v.ToOADate() }; $line[$c - 1] = $v }
           [void]$rows.Add($line)
         }
       }

@@ -1842,7 +1842,7 @@ body.postit-open #pipeline-board.pipe-list{ padding-bottom:300px; }
 
 /* Excel ⇄ appli */
 html.no-bridge #pipe-xs-btn{ display:none; }
-.xs-box{ max-width:1100px; }
+.modal-box.wide.xs-box{ max-width:1100px; }   /* .xs-box alone lost to .modal-box.wide's 760px : same specificity weight, needed */
 .xs-head{ display:flex; align-items:center; gap:14px; }
 .xs-head h3{ margin:0; } .xs-x{ position:static; margin-left:auto; }
 .xs-filter{ display:flex; gap:6px; }
