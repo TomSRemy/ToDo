@@ -758,11 +758,11 @@
       <button class="data-btn" id="install-btn" style="width:100%;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="2" width="14" height="20" rx="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg>Installer l'app</button>
     </div>
     <div class="list-manager" id="ai-section">
-      <h2>Claude pour compléter les fiches (facultatif)</h2>
-      <p class="list-hint">« Compléter avec l’IA » interroge Claude directement depuis l’appli, avec une clé de l’API Claude (créée sur la console Anthropic, facturée à l’usage, à part de l’abonnement Pro). La clé peut aussi être collée dans la fenêtre la première fois. Elle reste sur cet appareil (jamais synchronisée ni exportée) ; les infos de la fiche concernée sont envoyées à Anthropic.</p>
+      <h2>IA pour compléter les fiches (facultatif)</h2>
+      <p class="list-hint">« Compléter avec l’IA » interroge Gemini directement depuis l’appli, avec une clé de l’API Gemini (gratuite, créée sur Google AI Studio). La clé peut aussi être collée dans la fenêtre la première fois. Elle reste sur cet appareil (jamais synchronisée ni exportée) ; les infos de la fiche concernée sont envoyées à Google.</p>
       <div style="display:flex; flex-direction:column; gap:8px;">
-        <input type="password" id="ai-key-input" placeholder="Clé API Claude (sk-ant-…)" autocomplete="off">
-        <a class="sync-token-link" href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener">Créer une clé sur la console Anthropic ↗</a>
+        <input type="password" id="ai-key-input" placeholder="Clé API Gemini (AIza…)" autocomplete="off">
+        <a class="sync-token-link" href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener">Créer une clé gratuite sur Google AI Studio ↗</a>
         <button class="data-btn" id="ai-key-save" style="width:100%;">Enregistrer la clé sur cet appareil</button>
         <span id="ai-key-status" style="font-size:11px; color:var(--tx3); font-family:var(--font-mono);"></span>
       </div>

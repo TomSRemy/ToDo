@@ -4603,7 +4603,7 @@
     tools.innerHTML='<span>Lignes :</span><button type="button" data-rows="needed">Obligatoires</button><button type="button" data-rows="all">Tout le fichier</button>';
     const paintRows=()=>{ sc.querySelector('.req-table').classList.toggle('only-needed', only); tools.querySelectorAll('button').forEach(b=>b.classList.toggle('on', (b.dataset.rows==='needed')===only)); };
     tools.querySelectorAll('button').forEach(b=>b.onclick=()=>{ only=b.dataset.rows==='needed'; lsSet('req-rows', only?'needed':'all'); paintRows(); });
-    if(!window.TODO_LITE && aiOn()){ const ai=document.createElement('button'); ai.type='button'; ai.className='req-ai'; ai.textContent='Compléter avec l\u2019IA'; ai.title='Claude propose ce qui se déduit des infos de la fiche (coordonnées, altitude, région, productible…) ; tu choisis ce qui est rempli';
+    if(!window.TODO_LITE && aiOn()){ const ai=document.createElement('button'); ai.type='button'; ai.className='req-ai'; ai.textContent='Compléter avec l\u2019IA'; ai.title='L’IA propose ce qui se déduit des infos de la fiche (coordonnées, altitude, région, productible…) ; tu choisis ce qui est rempli';
       ai.onclick=()=>openAiFill(list.filter(x=>!x.deleted), ()=>{ if(viewingOppId) openOppDetail(viewingOppId); }); tools.appendChild(ai); }
     wrap.appendChild(tools); wrap.appendChild(sc); paintRows();
     if(!window.TODO_LITE) reqFillHandle(sc);
@@ -6253,7 +6253,7 @@
   // « Réglages »: a table of contents at the top, one click to each part (UX audit TD3)
   // « Réglages » (UX audit TD3): four groups, a table of contents beside them, and each part's state on its title
   const SETTINGS_NAMES={ 'clients-section':'Clients', 'projects-section':'Projets', 'sync-section':'Synchro GitHub', 'conflicts-section':'Conflits', 'backup-section':'Sauvegarde',
-    'storage-section':'Stockage', 'bridge-section':'Pont Excel', 'install-section':'Installer l\u2019appli', 'ai-section':'Claude (facultatif)' };
+    'storage-section':'Stockage', 'bridge-section':'Pont Excel', 'install-section':'Installer l\u2019appli', 'ai-section':'IA (facultatif)' };
   const settingsShown=s=>!s.classList.contains('hidden') && !s.hidden && s.style.display!=='none';
   function settingsPill(id, text, kind){ const s=$(id); if(!s) return; const h=s.querySelector('h2'); if(!h) return;
     let p=h.querySelector('.settings-pill'); if(!text){ if(p) p.remove(); return; }
@@ -6416,7 +6416,7 @@
   $('pipe-meet-toggle').onclick=()=>{ pipeOffers=false; pipeMeet=!pipeMeet; meetStuckOnly=false; if(pipeMeet){ pipeDash=false; pipeMap=false; } renderPipeline(); };
   $('pipe-xs-btn').onclick=()=>openExcelSync({ scope:'pipe' });
   if($('ai-section')) $('ai-section').hidden=!aiOn();
-  { const st=()=>{ const k=aiKey(); $('ai-key-status').textContent=k?'Clé enregistrée (…'+k.slice(-4)+'). Vide le champ et enregistre pour l\u2019oublier.':'Pas de clé : copier-coller avec claude.ai.'; };
+  { const st=()=>{ const k=aiKey(); $('ai-key-status').textContent=k?'Clé enregistrée (…'+k.slice(-4)+'). Vide le champ et enregistre pour l\u2019oublier.':'Pas de clé : créer une clé gratuite sur Google AI Studio.'; };
     if($('ai-key-save')){ $('ai-key-save').onclick=()=>{ const v=$('ai-key-input').value.trim(); try{ if(v) localStorage.setItem('ai-key', v); else localStorage.removeItem('ai-key'); }catch(e){} $('ai-key-input').value=''; st(); }; st(); } }
   if($('parc-xs-btn')){ $('parc-xs-btn').onclick=()=>openExcelSync({ scope:'parc' }); if(ON_PHONE) $('parc-xs-btn').hidden=true; }
   $('pipe-map-toggle').onclick=()=>{ pipeOffers=false; pipeMap=!pipeMap; pipeDash=false; pipeMeet=false; parcMapSel=null; parcMapView=null; renderPipeline(); };

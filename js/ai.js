@@ -5,11 +5,11 @@ window.TodoAI=(function(){
   // everything this part uses from js/app.js, given once when the app has finished loading
   api.init=function(app){
     const { aiKey, $, CARACT_ROWS, caractKey, caractSet, caractValue, oppName, renderPipeline, saveCrm, touchCrm }=app;
-  // ---------- « Compléter avec l'IA » : Claude proposes the empty lines of the characteristics file that follow from what the sheet knows ----------
-  // Its key stays on this device (like the GitHub token); without one, the request is copied for claude.ai and the answer pasted back.
-  const AI_MODEL='claude-sonnet-5-5';
+  // ---------- « Compléter avec l'IA » : Gemini (niveau gratuit) propose les lignes vides du fichier caractéristiques qui se déduisent de ce que connaît la fiche ----------
+  // Sa clé reste sur cet appareil (comme le jeton GitHub) ; clé gratuite sur aistudio.google.com/app/apikey.
+  const AI_MODEL='gemini-2.5-flash';
   // set aside for now (2026-10-23): hidden unless turned on for this device (localStorage feat-ai = 1)
-  try{ if(localStorage.getItem('feat-ai')!=='1') localStorage.removeItem('ai-key'); }catch(e){}   // AI set aside: no Claude key kept on the device meanwhile (audit A16)
+  try{ if(localStorage.getItem('feat-ai')!=='1') localStorage.removeItem('ai-key'); }catch(e){}   // AI set aside: no Gemini key kept on the device meanwhile (audit A16)
   function aiPrompt(list){
     const plants=list.map(o=>{ const known={}, empty=[];
       CARACT_ROWS.forEach(l=>{ const v=caractValue(o,l); if(v!=='' && v!=null) known[l]=String(v); else empty.push(l); });
@@ -35,11 +35,13 @@ window.TodoAI=(function(){
     return rows;
   }
   async function aiAsk(prompt){
-    const r=await fetch('https://api.anthropic.com/v1/messages', { method:'POST', headers:{ 'content-type':'application/json', 'x-api-key':aiKey(), 'anthropic-version':'2023-06-01', 'anthropic-dangerous-direct-browser-access':'true' },
-      body:JSON.stringify({ model:AI_MODEL, max_tokens:4000, messages:[{ role:'user', content:prompt }] }) });
+    const url='https://generativelanguage.googleapis.com/v1beta/models/'+AI_MODEL+':generateContent?key='+encodeURIComponent(aiKey());
+    const r=await fetch(url, { method:'POST', headers:{ 'content-type':'application/json' },
+      body:JSON.stringify({ contents:[{ role:'user', parts:[{ text:prompt }] }], generationConfig:{ responseMimeType:'application/json' } }) });
     const j=await r.json().catch(()=>({}));
-    if(!r.ok) throw new Error(r.status===401?'Clé Claude refusée (Réglages).':(j.error && j.error.message)||('Erreur '+r.status));
-    return (j.content||[]).filter(c=>c.type==='text').map(c=>c.text).join('\n');
+    if(!r.ok) throw new Error((r.status===400||r.status===403)?'Clé Gemini refusée (Réglages).':(j.error && j.error.message)||('Erreur '+r.status));
+    const cand=(j.candidates||[])[0];
+    return ((cand && cand.content && cand.content.parts)||[]).map(p=>p.text||'').join('\n');
   }
   function openAiFill(list, done){
     if(!list.length) return;
@@ -50,7 +52,7 @@ window.TodoAI=(function(){
     const close=()=>ov.remove();
     ov.querySelector('.ai-close').onclick=close; ov.addEventListener('click', e=>{ if(e.target===ov) close(); }); ov.addEventListener('keydown', e=>{ if(e.key==='Escape'){ e.stopPropagation(); close(); } });
     const prompt=aiPrompt(list), empties=list.reduce((n,o)=>n+CARACT_ROWS.filter(l=>caractValue(o,l)==='').length,0);
-    ov.querySelector('.ai-hint').textContent=empties+' case'+(empties>1?'s':'')+' vide'+(empties>1?'s':'')+' sur '+list.length+' installation'+(list.length>1?'s':'')+'. Claude ne propose que ce qui se déduit de la fiche (lieu, techno, production) et n’invente aucun identifiant ; rien n’est rempli sans ton accord.';
+    ov.querySelector('.ai-hint').textContent=empties+' case'+(empties>1?'s':'')+' vide'+(empties>1?'s':'')+' sur '+list.length+' installation'+(list.length>1?'s':'')+'. L’IA ne propose que ce qui se déduit de la fiche (lieu, techno, production) et n’invente aucun identifiant ; rien n’est rempli sans ton accord.';
     const ask=ov.querySelector('.ai-ask'), rowsBox=ov.querySelector('.ai-rows'), fill=ov.querySelector('.ai-fill');
     let rows=[];
     const show=r=>{ rows=r; rowsBox.innerHTML='';
@@ -62,17 +64,17 @@ window.TodoAI=(function(){
       paint(); };
     function paint(){ const n=rows.filter(x=>x.cb.checked).length; fill.hidden=!rows.length; fill.disabled=!n; fill.textContent=n?'Remplir '+n+' case'+(n>1?'s':''):'Rien de coché'; }
     fill.onclick=()=>{ const ok=rows.filter(x=>x.cb.checked); const touched=new Set(); ok.forEach(x=>{ caractSet(x.o, x.l, x.v); touched.add(x.o); }); touched.forEach(o=>touchCrm(o)); saveCrm(); renderPipeline(); close(); if(done) done(); };
-    // everything in the app: Claude answers here, through the key kept on this device (asked here the first time)
-    const go=document.createElement('button'); go.type='button'; go.className='ai-go'; go.textContent='Demander à Claude';
-    go.onclick=async()=>{ go.disabled=true; go.textContent='Claude réfléchit…';
+    // everything in the app: Gemini answers here, through the key kept on this device (asked here the first time)
+    const go=document.createElement('button'); go.type='button'; go.className='ai-go'; go.textContent='Demander à l’IA';
+    go.onclick=async()=>{ go.disabled=true; go.textContent='Ça réfléchit…';
       try{ show(aiParse(await aiAsk(prompt), list)); go.textContent='Redemander'; }
-      catch(err){ rowsBox.innerHTML=''; const p2=document.createElement('p'); p2.className='modal-hint ai-err'; p2.textContent=err.message||String(err); rowsBox.appendChild(p2); go.textContent='Réessayer'; if(/refusée|401/.test(p2.textContent)) askKey(); }
+      catch(err){ rowsBox.innerHTML=''; const p2=document.createElement('p'); p2.className='modal-hint ai-err'; p2.textContent=err.message||String(err); rowsBox.appendChild(p2); go.textContent='Réessayer'; if(/refusée|400|403/.test(p2.textContent)) askKey(); }
       go.disabled=false; };
     const askKey=()=>{ ask.innerHTML='';
-      const p2=document.createElement('p'); p2.className='modal-hint'; p2.textContent='Une fois pour cet appareil : colle ta clé de l’API Claude. Elle reste ici (jamais synchronisée ni exportée).';
-      const inp=document.createElement('input'); inp.type='password'; inp.id='ai-key-here'; inp.className='ai-key-in'; inp.placeholder='sk-ant-…'; inp.autocomplete='off';
+      const p2=document.createElement('p'); p2.className='modal-hint'; p2.textContent='Une fois pour cet appareil : colle ta clé de l’API Gemini (gratuite). Elle reste ici (jamais synchronisée ni exportée).';
+      const inp=document.createElement('input'); inp.type='password'; inp.id='ai-key-here'; inp.className='ai-key-in'; inp.placeholder='AIza…'; inp.autocomplete='off';
       const save=document.createElement('button'); save.type='button'; save.className='ai-go'; save.textContent='Enregistrer et demander';
-      const link=document.createElement('a'); link.href='https://console.anthropic.com/settings/keys'; link.target='_blank'; link.rel='noopener'; link.className='sync-token-link'; link.textContent='Créer une clé sur la console Anthropic ↗';
+      const link=document.createElement('a'); link.href='https://aistudio.google.com/app/apikey'; link.target='_blank'; link.rel='noopener'; link.className='sync-token-link'; link.textContent='Créer une clé gratuite sur Google AI Studio ↗';
       save.onclick=()=>{ const v=inp.value.trim(); if(!v){ inp.focus(); return; } try{ localStorage.setItem('ai-key', v); }catch(e){} ask.innerHTML=''; ask.appendChild(go); go.click(); };
       inp.addEventListener('keydown', e=>{ if(e.key==='Enter') save.click(); });
       const row=document.createElement('div'); row.className='ai-key-row'; row.append(inp, save);
