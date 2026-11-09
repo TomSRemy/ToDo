@@ -1842,7 +1842,7 @@ body.postit-open #pipeline-board.pipe-list{ padding-bottom:300px; }
 
 /* Synchro Excel : a real tab (#tab-excel, in the sidebar) since it stopped being a popup window */
 html.no-bridge #pipe-xs-btn{ display:none; }
-#tab-excel{ padding:18px max(18px, env(safe-area-inset-right,0px)) 28px max(18px, env(safe-area-inset-left,0px)); overflow-y:auto; max-width:1100px; }
+#tab-excel{ padding:18px max(18px, env(safe-area-inset-right,0px)) 28px max(18px, env(safe-area-inset-left,0px)); overflow-y:auto; }
 .xs-top-row{ display:flex; align-items:center; gap:14px; flex-wrap:wrap; margin-bottom:6px; }
 .xs-top-row h1{ margin:0; font-size:17px; font-weight:700; color:var(--tx1); }
 .xs-info{ font-size:12.5px; color:var(--tx2); line-height:1.5; margin:0 0 10px; }
