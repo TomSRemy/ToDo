@@ -2,6 +2,8 @@
 // without overwriting a colleague's cell, and « Excel ⇄ appli », what changed on either side since. Split out of js/app.js (code audit).
 window.TodoExcelSync=(function(){
   const api={};
+  // a plain paper-plane, so « Envoyer »/« Appliquer » read as a send action at a glance, not just another button
+  const XL_SEND_ICO='<svg class="xl-send-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>';
   // what this part uses from js/app.js, given where its code used to stand in js/app.js (so it runs in the same order);
   // app.<name>: a value js/app.js defines further down or may replace, read when used
   api.init=function(app){
@@ -244,7 +246,7 @@ window.TodoExcelSync=(function(){
       return { o, p, b, pDiffs:p.diffs.filter(d=>d.byExcel), bDiffs:b?b.diffs.filter(d=>d.byExcel):[] }; });
     const todo=rows.filter(r=>xsTodo(r.p) || (r.b && xsTodo(r.b)));
     const cntP=rows.filter(r=>xsTodo(r.p) && !r.pDiffs.length).length, cntB=rows.filter(r=>r.b && xsTodo(r.b) && !r.bDiffs.length).length;
-    ov.querySelectorAll('.xs-send').forEach(b=>{ const n=b.dataset.k==='pipe'?cntP:cntB; b.textContent='Envoyer au '+(b.dataset.k==='pipe'?'Pipe':'Suivi')+' ('+n+')'; b.disabled=!n || !bridgeConfigured(); b.title=bridgeConfigured()?'':'Pont Excel non connecté'; });
+    ov.querySelectorAll('.xs-send').forEach(b=>{ const n=b.dataset.k==='pipe'?cntP:cntB; b.innerHTML=XL_SEND_ICO+'Envoyer au '+(b.dataset.k==='pipe'?'Pipe':'Suivi')+' ('+n+')'; b.disabled=!n || !bridgeConfigured(); b.title=bridgeConfigured()?'':'Pont Excel non connecté'; });
     // no bridge needed to copy (unlike « Envoyer ») : works even without the pont configured
     ov.querySelectorAll('.xs-copy').forEach(b=>{ const n=b.dataset.k==='pipe'?cntP:cntB; b.textContent='Copier ('+n+')'; b.disabled=!n; });
     const shown=all?rows:todo;
@@ -290,7 +292,7 @@ window.TodoExcelSync=(function(){
     if(destKinds.length){ const dest=document.createElement('span'); dest.className='xl-dest'; dest.textContent=destLabel(destKinds); meta.appendChild(dest); }
     card.appendChild(head);
     if(!nCells){
-      if(needsSend && bridgeConfigured()){ const sb=document.createElement('button'); sb.type='button'; sb.className='pq-link'; sb.textContent='Envoyer ('+destLabel(destKinds)+')';
+      if(needsSend && bridgeConfigured()){ const sb=document.createElement('button'); sb.type='button'; sb.className='pq-link'; sb.innerHTML=XL_SEND_ICO+'Envoyer ('+destLabel(destKinds)+')';
         sb.onclick=async e=>{ e.stopPropagation(); sb.disabled=true; const t=sb.textContent; sb.textContent='Envoi…';
           for(const kind of ['pipe','bdd']){ const list=pendingList(kind);
             if(list.length) await sendToExcel(kind, list, null); }
@@ -368,7 +370,7 @@ window.TodoExcelSync=(function(){
       const nApp=Object.values(cellChoice).filter(v=>v==='appli'||v==='merge').length;
       const writeKinds=[...new Set(cols.filter(col=>col.items.some(it=>{ const v=cellChoice[col.kind+'|'+xsViOf(col.kind, it.d)+'|'+it.o.id]; return v==='appli'||v==='merge'; })).map(c=>c.kind))];
       summary.textContent=nApp?nApp+' case'+(nApp>1?'s':'')+' à écrire dans '+destLabel(writeKinds):'rien à écrire dans Excel';
-      apply.textContent='Appliquer ('+members.length+' installation'+(members.length>1?'s':'')+')';
+      apply.innerHTML=XL_SEND_ICO+'Appliquer ('+members.length+' installation'+(members.length>1?'s':'')+')';
     };
     refresh();
     apply.onclick=async()=>{ apply.disabled=true; apply.textContent='Envoi…'; await xsApplyLotGrid(targets, cellChoice); };
