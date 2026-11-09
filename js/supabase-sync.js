@@ -100,7 +100,7 @@ window.TodoTeam=(function(){
       .on('postgres_changes', { event:'*', schema:'public', table }, payload=>{
         const row=payload.new || payload.old; if(!row) return;
         onChange(rowToItem(row), payload.eventType);
-      }).subscribe();
+      }).subscribe((status, err)=>{ console.log('[team realtime]', table, status, err||''); });   // SUBSCRIBED/CHANNEL_ERROR/TIMED_OUT/CLOSED : visible dans la console, à suivre tant que le temps réel n'est pas confirmé fiable
     return ()=>client.removeChannel(ch);
   }
 
