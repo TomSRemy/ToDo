@@ -346,7 +346,7 @@
      never reads these numbers itself, just frames pages PowerKlock already serves for this (curated once there) */
   .synth-market{ display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:10px; margin-bottom:14px; }
   .synth-mkt-tile{ background:var(--panel-2); border:1px solid var(--bd); border-radius:8px; overflow:hidden; display:flex; flex-direction:column; }
-  .synth-mkt-tile iframe{ width:100%; height:112px; border:0; display:block; background:#0B0F14; }
+  .synth-mkt-tile iframe{ width:100%; height:230px; border:0; display:block; background:#0B0F14; }
   @media (max-width:760px){ .synth-market{ display:none; } }
   .stat-card{ flex:1; background:var(--panel-2); border:1px solid var(--bd); border-radius:6px; padding:12px 14px; }
   .stat-card-num{ font-family:var(--font-mono); font-size:22px; font-weight:700; color:var(--tx1); line-height:1; margin-bottom:4px; }
