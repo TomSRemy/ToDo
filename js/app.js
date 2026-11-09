@@ -1402,14 +1402,6 @@
     const live=all.filter(o=>!isExited(o) && o.stage!=='actif');
     const grid=document.createElement('div'); grid.className='pd-grid synth-grid';
 
-    const ph=PIPE_PHASES.filter(p=>p.key!=='prequal' && p.key!=='actif').map(p=>{ const l=live.filter(o=>oppPhase(o)===p.key); return { label:p.label, n:l.length, kwc:l.reduce((s,o)=>s+kwcNum(o),0) }; });
-    const maxK=Math.max(1,...ph.map(p=>p.kwc));
-    const c1=document.createElement('section'); c1.className='pd-card synth-card'; c1.onclick=()=>gsTab('pipeline');
-    const h1=document.createElement('h4'); h1.textContent='Pipeline par phase'; c1.appendChild(h1);
-    ph.forEach(p=>{ const r=document.createElement('div'); r.className='pd-bar-row'; r.innerHTML='<span class="pd-l"></span><span class="pd-bar"><span></span></span><span class="pd-v"></span>';
-      r.querySelector('.pd-l').textContent=p.label; r.querySelector('.pd-bar span').style.width=(p.kwc?Math.max(2,p.kwc/maxK*100):0)+'%'; r.querySelector('.pd-v').textContent=(p.kwc?fmtMwc(p.kwc):'—')+' · '+p.n; c1.appendChild(r); });
-    grid.appendChild(c1);
-
     if(parcData===null) loadParc();
     if(parcData) grid.appendChild(window.TodoParc.parcChart(parcData.items.filter(p=>p.statut==='Gagné')));
 
@@ -1429,7 +1421,7 @@
   }
   function renderToday(){
     renderSynthMarket();
-    renderSynthPanels();
+    setTimeout(renderSynthPanels, 0);   // construit le graphe SVG : jamais sur le chemin critique du démarrage (ex. l'ouverture du post-it)
     const statsRow=$('today-stats-row'), list=$('today-list');
     renderBackupBanner();
     const open=activeTasks();

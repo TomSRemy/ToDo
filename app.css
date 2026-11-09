@@ -349,9 +349,11 @@
   .synth-mkt-label{ font:700 9.5px var(--font-mono); letter-spacing:.05em; text-transform:uppercase; color:var(--tx3); margin-bottom:2px; }
   .synth-mkt-tile iframe{ width:100%; height:120px; border:0; display:block; background:transparent; }
   .synth-panels{ margin-bottom:14px; }
-  .synth-grid.pd-grid{ grid-template-columns:repeat(auto-fit,minmax(280px,1fr)); }
+  .synth-grid.pd-grid{ grid-template-columns:1fr; }   /* pleine largeur, empilés : les graphes ont besoin de place, pas de barre de scroll interne */
   .synth-card{ cursor:pointer; }
-  .synth-grid .parc-chart-block{ cursor:default; }
+  .synth-grid .parc-chart-block{ cursor:default; background:var(--panel); padding:14px 16px; }
+  .synth-grid .parc-chart-block .parc-h{ margin-bottom:8px; }
+  .synth-grid .parc-chart{ min-width:0; max-width:none; }
   @media (max-width:760px){ .synth-market, .synth-panels{ display:none; } }
   .stat-card{ flex:1; background:var(--panel-2); border:1px solid var(--bd); border-radius:6px; padding:12px 14px; }
   .stat-card-num{ font-family:var(--font-mono); font-size:22px; font-weight:700; color:var(--tx1); line-height:1; margin-bottom:4px; }
