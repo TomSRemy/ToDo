@@ -5523,6 +5523,7 @@
     try{ const s=await bridgeCall('GET','/status',null,2500); bridgeState={ ok:true, authorized:!!s.authorized, checkedAt:Date.now(), info:s }; }
     catch(e){ bridgeState={ ok:false, authorized:false, checkedAt:Date.now(), info:null, error:e.message }; }
     renderBridgeStatus();
+    if($('rs-pipe-file-name')) renderExcelLinks();
     return bridgeState;
   }
   // the bridge's files: always the published version, never a copy the browser kept (a new address each time)
@@ -6717,8 +6718,19 @@
   // can show which file is in use — not a way to open it (a SharePoint/OneDrive link, below, does that instead)
   const PIPE_FILE_KEY='pipe-file-name', BDD_FILE_KEY='bdd-file-name';
   function renderExcelLinks(){
-    $('rs-pipe-file-name').textContent=localStorage.getItem(PIPE_FILE_KEY)||'(aucun choisi)';
-    $('rs-bdd-file-name').textContent=localStorage.getItem(BDD_FILE_KEY)||'(aucun choisi)';
+    // the bridge, once connected, already reports both filenames (its own real config) — always more exact than
+    // anything picked here by hand, so it wins whenever it's available ; « Parcourir » stays useful without it
+    const fromBridge=bridgeState.ok && bridgeState.authorized && bridgeState.info;
+    const pipeBtn=$('rs-pipe-file-btn'), bddBtn=$('rs-bdd-file-btn');
+    if(fromBridge){
+      $('rs-pipe-file-name').textContent=bridgeState.info.pipe.found?bridgeState.info.pipe.name+' (pont)':'fichier introuvable (pont)';
+      $('rs-bdd-file-name').textContent=bridgeState.info.bdd.found?bridgeState.info.bdd.name+' (pont)':'fichier introuvable (pont)';
+      pipeBtn.classList.add('hidden'); bddBtn.classList.add('hidden');
+    } else {
+      $('rs-pipe-file-name').textContent=localStorage.getItem(PIPE_FILE_KEY)||'(aucun choisi)';
+      $('rs-bdd-file-name').textContent=localStorage.getItem(BDD_FILE_KEY)||'(aucun choisi)';
+      pipeBtn.classList.remove('hidden'); bddBtn.classList.remove('hidden');
+    }
   }
   const parcSource=()=>{ try{ return Object.assign({ link:'', auto:true }, JSON.parse(localStorage.getItem(PARC_SRC_KEY)||'{}')); }catch(e){ return { link:'', auto:true }; } };
   const saveParcSource=s=>{ lsSet(PARC_SRC_KEY, JSON.stringify(s)); };
