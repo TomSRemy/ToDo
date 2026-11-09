@@ -3,7 +3,8 @@
 Application web (PWA) sans serveur : HTML, CSS et JavaScript, sans étape de build.
 
 - **Code** : ce dépôt (public). Aucune donnée ni aucun secret ici.
-- **Données** : dans le navigateur (IndexedDB), synchronisées dans un **dépôt GitHub privé** séparé (`data/tasks.json`, `crm.json`, `notes.json`, `parc.json`, `tasks-inbox.json`, `contacts-inbox.json`). Chaque synchro est un commit : toutes les versions passées restent dans l'historique de ce dépôt.
+- **Données personnelles** (tâches, post-it) : dans le navigateur (IndexedDB), synchronisées dans un **dépôt GitHub privé** séparé (`data/tasks.json`, `notes.json`, `tasks-inbox.json`, `contacts-inbox.json`). Chaque synchro est un commit : toutes les versions passées restent dans l'historique de ce dépôt.
+- **Données d'équipe** (pipeline, contacts, sociétés, rendez-vous) : en migration vers Supabase (`supabase/schema.sql`), pour un pipeline partagé entre plusieurs personnes avec une vraie authentification ; voir `js/supabase-sync.js`. Pas encore branché sur les écrans — en attendant, ces données restent sur `data/crm.json` comme avant.
 - **Hébergement** : Cloudflare Pages (adresse propre à l'appli, règles de sécurité de `_headers`), et GitHub Pages en secours.
 
 ## Contenu
@@ -15,6 +16,7 @@ Application web (PWA) sans serveur : HTML, CSS et JavaScript, sans étape de bui
 | `sw.js` | Hors ligne : le code d'abord par le réseau, le cache en secours ; les données GitHub ne sont jamais mises en cache |
 | `_headers` | Règles de sécurité de la page (Cloudflare Pages) |
 | `bridge/` | Pont Excel local (PowerShell) : lit et écrit le Pipe et le Suivi sur le PC |
+| `supabase/schema.sql` | Schéma de la base d'équipe (pipeline, contacts, sociétés, rendez-vous), à appliquer sur un projet Supabase (beta puis prod) |
 | `outlook-vba/` | Copie de secours de la macro Outlook (sans jeton) |
 | `tests/` | Tests de bout en bout (Playwright), lancés à chaque push par GitHub Actions |
 
@@ -63,6 +65,7 @@ flowchart LR
 |---|---:|---|
 | `js/boot.js` | ~10 | Lit `?lite` / `?widget` avant tout le reste |
 | `js/storage.js` | ~115 | Données dans IndexedDB (copie en mémoire), petits réglages dans localStorage |
+| `js/supabase-sync.js` | ~110 | Équipe (Supabase) : pipeline, contacts, sociétés, rendez-vous partagés — auth par lien magique, lecture/écriture, temps réel, migration one-shot. Inactif sans configuration ; pas encore branché sur les écrans |
 | `js/merge.js` | ~100 | Fusion de synchro : fiche par fiche, champ par champ ; note ligne par ligne |
 | `js/parse.js` | ~900 | Lecteurs sans écran, testés seuls : demandes de prix, signatures, mails, Excel des producteurs, `.vcf`, dates françaises |
 | `js/market.js` | ~185 | Onglet Marché : tableau PowerKlock, chiffres pour les mails et le mode appel |
