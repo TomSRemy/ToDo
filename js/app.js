@@ -1394,8 +1394,41 @@
       tile.appendChild(f); root.appendChild(tile);
     });
   }
+  function renderSynthPanels(){
+    const root=$('synth-panels'); if(!root || ON_PHONE) return;
+    root.innerHTML='';
+    const all=opportunities.filter(o=>!o.deleted && o.kind!=='request' && o.stage!=='converti');
+    const live=all.filter(o=>!isExited(o) && o.stage!=='actif');
+    const grid=document.createElement('div'); grid.className='pd-grid synth-grid';
+
+    const ph=PIPE_PHASES.filter(p=>p.key!=='prequal' && p.key!=='actif').map(p=>{ const l=live.filter(o=>oppPhase(o)===p.key); return { label:p.label, n:l.length, kwc:l.reduce((s,o)=>s+kwcNum(o),0) }; });
+    const maxK=Math.max(1,...ph.map(p=>p.kwc));
+    const c1=document.createElement('section'); c1.className='pd-card synth-card'; c1.onclick=()=>gsTab('pipeline');
+    const h1=document.createElement('h4'); h1.textContent='Pipeline par phase'; c1.appendChild(h1);
+    ph.forEach(p=>{ const r=document.createElement('div'); r.className='pd-bar-row'; r.innerHTML='<span class="pd-l"></span><span class="pd-bar"><span></span></span><span class="pd-v"></span>';
+      r.querySelector('.pd-l').textContent=p.label; r.querySelector('.pd-bar span').style.width=(p.kwc?Math.max(2,p.kwc/maxK*100):0)+'%'; r.querySelector('.pd-v').textContent=(p.kwc?fmtMwc(p.kwc):'—')+' · '+p.n; c1.appendChild(r); });
+    grid.appendChild(c1);
+
+    if(parcData===null) loadParc();
+    if(parcData) grid.appendChild(window.TodoParc.parcChart(parcData.items.filter(p=>p.statut==='Gagné')));
+
+    const c3=document.createElement('section'); c3.className='pd-card';
+    const h3=document.createElement('h4'); h3.textContent='Affaires en cours · '+live.length; c3.appendChild(h3);
+    live.slice().sort((a,b)=>kwcNum(b)-kwcNum(a)).slice(0,8).forEach(o=>{
+      const r=document.createElement('button'); r.type='button'; r.className='tw-row';
+      r.innerHTML='<span class="k"><b></b><span></span></span><span class="v"></span>';
+      r.querySelector('b').textContent=oppName(o); r.querySelector('.k span').textContent=stageLabel(o.stage,o);
+      r.querySelector('.v').textContent=kwcNum(o)?fmtMwc(kwcNum(o)):'';
+      r.onclick=()=>{ gsTab('pipeline'); setTimeout(()=>openOppDetail(o.id),30); };
+      c3.appendChild(r);
+    });
+    if(!live.length){ const e=document.createElement('p'); e.className='pd-hint'; e.textContent='Aucune affaire en cours.'; c3.appendChild(e); }
+    grid.appendChild(c3);
+    root.appendChild(grid);
+  }
   function renderToday(){
     renderSynthMarket();
+    renderSynthPanels();
     const statsRow=$('today-stats-row'), list=$('today-list');
     renderBackupBanner();
     const open=activeTasks();
@@ -1410,11 +1443,17 @@
     });
 
     statsRow.innerHTML='';
+    const synthAll=opportunities.filter(o=>!o.deleted && o.kind!=='request' && o.stage!=='converti');
+    const synthLive=synthAll.filter(o=>!isExited(o) && o.stage!=='actif');
+    const synthNow=Date.now();
+    const synthStalled=synthLive.filter(o=>(o.kind==='installation'||o.kind==='prequal') && lastMove(o)>1e12 && synthNow-lastMove(o)>=STALL_DAYS*864e5);
+    const synthYear=String(new Date().getFullYear());
+    const synthSignedYr=synthAll.filter(o=>!isExited(o) && stageIndex(o.stage)>=stageIndex('onboarding') && ((o.stageLog||[]).some(e=>(e.stage==='onboarding'||e.stage==='actif') && e.at && new Date(e.at).getFullYear()===+synthYear) || (!(o.stageLog||[]).length && o.updatedAt && new Date(o.updatedAt).getFullYear()===+synthYear)));
     const cards=[
-      ['En retard', overdueTasks.length, 'crit'],
-      ["Dues aujourd'hui", todayTasks.length, 'accent'],
-      ['Cette semaine', weekTasks.length, ''],
-      ['Total ouvertes', open.length, '']
+      ['Pipeline en cours', synthLive.length, ''],
+      ['Bloqués', synthStalled.length, synthStalled.length?'crit':''],
+      ['Tâches en retard', overdueTasks.length, overdueTasks.length?'crit':''],
+      ['Portefeuille signé '+synthYear, fmtMwc(synthSignedYr.reduce((s,o)=>s+kwcNum(o),0)), '']
     ];
     cards.forEach(([label,num,cls])=>{
       const card=document.createElement('div'); card.className='stat-card';

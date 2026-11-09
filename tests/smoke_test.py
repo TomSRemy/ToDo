@@ -950,7 +950,7 @@ with sync_playwright() as p:
     page, errors = new_page(browser, {"todo_todo-widget-opportunities": json.dumps(pd_opps)}, viewport={"width": 1300, "height": 900})
     page.goto(URL); page.click('[data-tab="pipeline"]'); page.click("#pipe-dash-toggle")
     dash = page.inner_text("#pipeline-board")
-    check("2,5 MWc" in dash and "sortis en" in dash.lower() and page.locator(".pd-bar-row:not(.pd-who-row)").count() == 5, "pipeline dashboard: MWc in progress, exits of the year, one bar per phase in process (in service = Portefeuille)")
+    check("2,5 MWc" in dash and "sortis en" in dash.lower() and page.locator("#pipeline-board .pd-bar-row:not(.pd-who-row)").count() == 5, "pipeline dashboard: MWc in progress, exits of the year, one bar per phase in process (in service = Portefeuille)")
     rows = page.eval_on_selector_all(".pd-trow", "els=>els.map(e=>e.innerText.replace(/\\s+/g,' '))")
     check(any(r.startswith("Pricing indicatif 11 j") for r in rows) and any(r.startswith("Négociation 20 j") for r in rows), f"pipeline dashboard: average days per step from the history ({rows})")
     check("Alpha" in page.inner_text(".pd-card:has-text('Dossiers qui traînent')"), "pipeline dashboard: the deal stuck for 20 days is listed")

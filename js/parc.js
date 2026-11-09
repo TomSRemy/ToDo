@@ -6,7 +6,7 @@ window.TodoParc=(function(){
   // app.<name>: a value js/app.js defines further down or may replace, read when used
   api.init=function(app){
     const { $, MAP_PHASES, MAP_TECHS, PARC_CADRES, PARC_COLORS, allCompanyNames, askConfirm, celebrate, closeRenewalTask, coDupKey, copyToClipboard, createTask, ensureCompany, escapeHtml, fmtKwc, inProcess, isExited, loadParc, loadScript, loseOpps, lsSet, newOppId, openCompanySheet, openOppDetail, oppName, oppPhase, parcBars, parcNorm, parcTable, parcYearsShown, pqFold, pqIsoToFr, pqNum, prefsToNote, relanceOnMove, render, renderPipeline, saveCrm, saveTasks, stageLabel, toISO, touchCrm }=app;
-    Object.assign(api, { parcKey, ensureRenewalTasks, renderParc, attachTip, openParcPlant, openMapPoint, parcMap });   // function declarations: ready before the code below runs
+    Object.assign(api, { parcKey, ensureRenewalTasks, renderParc, attachTip, openParcPlant, openMapPoint, parcMap, parcChart });   // function declarations: ready before the code below runs
   // ---------- Renewals: a task per won contract ending within N months (once, on every device) ----------
   const RENEW_KEY='renew-months';
   const renewMonths=()=>{ try{ return parseInt(localStorage.getItem('todo_'+RENEW_KEY),10)||6; }catch(e){ return 6; } };
