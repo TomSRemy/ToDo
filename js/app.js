@@ -6876,16 +6876,10 @@
       location.reload();   // le client Supabase se construit une fois, au chargement : on recharge pour qu'il reprenne la config
     };
     $('team-login-btn').onclick=async()=>{
-      const email=$('team-email').value.trim(); if(!email){ $('team-auth-status').textContent='Email requis.'; return; }
-      $('team-auth-status').textContent='Envoi du code…';
-      try{ await window.TodoTeam.sendMagicLink(email); $('team-auth-status').textContent='Code envoyé à '+email+' : recopie-le ci-dessous (marche dans n’importe quel navigateur).'; }
-      catch(e){ $('team-auth-status').textContent='Erreur : '+(e&&e.message||e); }
-    };
-    $('team-code-btn').onclick=async()=>{
-      const email=$('team-email').value.trim(), code=$('team-code').value.trim();
-      if(!email || !code){ $('team-auth-status').textContent='Email et code requis.'; return; }
-      $('team-auth-status').textContent='Vérification…';
-      try{ await window.TodoTeam.verifyCode(email, code); await renderTeamStatus(); $('team-code').value=''; }
+      const email=$('team-email').value.trim(), pwd=$('team-password').value;
+      if(!email || !pwd){ $('team-auth-status').textContent='Email et mot de passe requis.'; return; }
+      $('team-auth-status').textContent='Connexion…';
+      try{ await window.TodoTeam.signIn(email, pwd); await renderTeamStatus(); $('team-password').value=''; }
       catch(e){ $('team-auth-status').textContent='Erreur : '+(e&&e.message||e); }
     };
     $('team-load-btn').onclick=async()=>{

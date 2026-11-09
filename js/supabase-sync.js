@@ -47,18 +47,12 @@ window.TodoTeam=(function(){
   function isSignedIn(){ return !!session; }
   function currentUser(){ return session && session.user; }
 
-  async function sendMagicLink(email){
+  // comptes créés à la main par l'admin (dashboard Supabase), jamais d'inscription ni de mail envoyé
+  // par l'appli : aucune dépendance à un service d'envoi d'email ni à un domaine vérifié
+  async function signIn(email, password){
     if(!client) await init();
     if(!client) throw new Error('Synchro équipe non configurée (Réglages › Synchro équipe)');
-    const { error }=await client.auth.signInWithOtp({ email, options:{ emailRedirectTo: location.href.split('#')[0] } });
-    if(error) throw error;
-  }
-  // code à 6 chiffres du même mail, tapé dans l'appli : marche quel que soit le navigateur qui ouvre le
-  // mail (pas de lien à cliquer, donc pas de risque d'atterrir dans un autre navigateur que celui de l'appli)
-  async function verifyCode(email, code){
-    if(!client) await init();
-    if(!client) throw new Error('Synchro équipe non configurée (Réglages › Synchro équipe)');
-    const { data, error }=await client.auth.verifyOtp({ email, token:code.trim(), type:'email' });
+    const { data, error }=await client.auth.signInWithPassword({ email, password });
     if(error) throw error;
     session=data && data.session;
     return session;
@@ -127,5 +121,5 @@ window.TodoTeam=(function(){
     return report;
   }
 
-  return { TABLES, init, loadConfig, saveConfig, isConfigured, isSignedIn, currentUser, sendMagicLink, verifyCode, signOut, pullAll, pushItem, subscribe, migrateFromLocal };
+  return { TABLES, init, loadConfig, saveConfig, isConfigured, isSignedIn, currentUser, signIn, signOut, pullAll, pushItem, subscribe, migrateFromLocal };
 })();

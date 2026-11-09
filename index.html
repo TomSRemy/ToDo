@@ -772,7 +772,7 @@
     <h3 class="settings-group" id="grp-team">Équipe (bêta)</h3>
     <div class="list-manager" id="team-section">
       <h2>Synchro équipe</h2>
-      <p class="list-hint">Pipeline, contacts, sociétés et rendez-vous partagés avec l'équipe, sur une base à part (Supabase). <b>En test</b> : rien n'est encore branché sur les écrans, ça ne change rien à l'appli tant que ça reste ici. Connexion par lien envoyé par email, pas de mot de passe.</p>
+      <p class="list-hint">Pipeline, contacts, sociétés et rendez-vous partagés avec l'équipe, sur une base à part (Supabase). <b>En test</b> : rien n'est encore branché sur les écrans, ça ne change rien à l'appli tant que ça reste ici. Comptes créés par l'admin (toi) dans le dashboard Supabase : pas d'inscription dans l'appli, aucun email envoyé.</p>
       <div style="display:flex; flex-direction:column; gap:8px;">
         <input type="text" id="team-url" placeholder="URL du projet (https://xxxx.supabase.co)" autocomplete="off">
         <input type="password" id="team-key" placeholder="Clé publique (anon)" autocomplete="off">
@@ -781,9 +781,8 @@
       </div>
       <div style="display:flex; flex-direction:column; gap:8px; margin-top:10px;">
         <input type="email" id="team-email" placeholder="Ton email" autocomplete="off">
-        <button class="data-btn" id="team-login-btn" style="width:100%;">Recevoir le code de connexion</button>
-        <input type="text" id="team-code" placeholder="Code à 6 chiffres reçu par email" autocomplete="off" inputmode="numeric">
-        <button class="data-btn" id="team-code-btn" style="width:100%;">Valider le code</button>
+        <input type="password" id="team-password" placeholder="Mot de passe" autocomplete="current-password">
+        <button class="data-btn" id="team-login-btn" style="width:100%;">Se connecter</button>
         <span id="team-auth-status" class="bridge-status"></span>
       </div>
       <div class="data-actions" style="margin-top:10px;">
