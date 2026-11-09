@@ -47,7 +47,9 @@ window.TodoAI=(function(){
     if(!list.length) return;
     let ov=$('ai-overlay'); if(ov) ov.remove();
     ov=document.createElement('div'); ov.id='ai-overlay'; ov.className='modal-overlay';
-    ov.innerHTML='<div class="modal-box wide ai-box" role="dialog" aria-labelledby="ai-title"><div class="opp-detail-head"><h3 id="ai-title">Compléter avec l’IA</h3></div><p class="modal-hint ai-hint"></p><div class="ai-ask"></div><div class="ai-rows"></div><div class="crm-form-actions"><button type="button" class="ai-fill" hidden></button><button type="button" class="ghost-btn ai-close">Fermer</button></div></div>';
+    ov.innerHTML='<div class="modal-box wide ai-box" role="dialog" aria-labelledby="ai-title"><div class="opp-detail-head"><h3 id="ai-title">Compléter avec l’IA</h3></div><p class="modal-hint ai-hint"></p><div class="ai-ask"></div>'+
+      '<div class="ai-manual"><button type="button" class="ghost-btn ai-manual-btn">Copier pour Claude (claude.ai, abonnement Pro)</button><div class="ai-manual-paste" hidden><p class="modal-hint">Le prompt est copié et claude.ai s’est ouvert dans un nouvel onglet. Colle la réponse de Claude ci-dessous.</p><textarea class="ai-manual-text" rows="6" placeholder="Réponse collée de Claude…"></textarea><button type="button" class="ai-go ai-manual-read">Lire la réponse</button></div></div>'+
+      '<div class="ai-rows"></div><div class="crm-form-actions"><button type="button" class="ai-fill" hidden></button><button type="button" class="ghost-btn ai-close">Fermer</button></div></div>';
     document.body.appendChild(ov);
     const close=()=>ov.remove();
     ov.querySelector('.ai-close').onclick=close; ov.addEventListener('click', e=>{ if(e.target===ov) close(); }); ov.addEventListener('keydown', e=>{ if(e.key==='Escape'){ e.stopPropagation(); close(); } });
@@ -64,6 +66,17 @@ window.TodoAI=(function(){
       paint(); };
     function paint(){ const n=rows.filter(x=>x.cb.checked).length; fill.hidden=!rows.length; fill.disabled=!n; fill.textContent=n?'Remplir '+n+' case'+(n>1?'s':''):'Rien de coché'; }
     fill.onclick=()=>{ const ok=rows.filter(x=>x.cb.checked); const touched=new Set(); ok.forEach(x=>{ caractSet(x.o, x.l, x.v); touched.add(x.o); }); touched.forEach(o=>touchCrm(o)); saveCrm(); renderPipeline(); close(); if(done) done(); };
+    // alternative sans clé ni serveur : copier le prompt pour claude.ai (abonnement Pro, pas facturé au token), coller la réponse
+    const manualPaste=ov.querySelector('.ai-manual-paste'), manualText=ov.querySelector('.ai-manual-text');
+    ov.querySelector('.ai-manual-btn').onclick=async()=>{
+      try{ await navigator.clipboard.writeText(prompt); }catch(e){}
+      window.open('https://claude.ai/new', '_blank', 'noopener');
+      manualPaste.hidden=false; manualText.focus();
+    };
+    ov.querySelector('.ai-manual-read').onclick=()=>{
+      try{ show(aiParse(manualText.value, list)); }
+      catch(err){ rowsBox.innerHTML=''; const p2=document.createElement('p'); p2.className='modal-hint ai-err'; p2.textContent=err.message||String(err); rowsBox.appendChild(p2); }
+    };
     // everything in the app: Gemini answers here, through the key kept on this device (asked here the first time)
     const go=document.createElement('button'); go.type='button'; go.className='ai-go'; go.textContent='Demander à l’IA';
     go.onclick=async()=>{ go.disabled=true; go.textContent='Ça réfléchit…';
