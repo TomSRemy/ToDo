@@ -8,7 +8,7 @@
   c'est la même CLI que celle qui fait tourner cette session.
 
   Lancement : double-clic sur « Lancer-relais-claude.bat ». Au premier lancement, recopie la clé affichée
-  dans l'app (Réglages → Pont Excel, section relais local). Laisse la fenêtre ouverte, comme le pont Excel.
+  dans l'app (Réglages → IA). Laisse la fenêtre ouverte, comme le pont Excel.
 
   Vérifie d'abord, dans une invite de commandes normale, que « claude --version » répond : ce script a besoin
   que Claude Code soit installé et connecté (claude /login fait une fois suffit).
@@ -128,7 +128,7 @@ $listener = New-Object System.Net.Sockets.TcpListener ([System.Net.IPAddress]::L
 $started = $false
 try { $listener.Start(); $started = $true } catch { }
 if (-not $started) {
-  Write-Info ("Le port " + $Port + " est déjà utilisé : soit le relais tourne déjà (Alt+N marche alors sans rien faire de plus), soit ferme l'autre fenêtre qui l'occupe.") 'Yellow'
+  Write-Info ("Le port " + $Port + " est déjà utilisé : soit le relais tourne déjà dans une autre fenêtre (rien à faire de plus), soit ferme ce qui l'occupe puis relance.") 'Yellow'
   exit 1
 }
 Write-Host ''
