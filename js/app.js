@@ -5542,6 +5542,7 @@
   window.TodoExcelSync.init({ $, ON_PHONE, PQ_FIELDS, bddCells, bridgeCall, bridgeCheck, bridgeConfigured, cellToText, closeOppDetail, codeAffaire, copyToClipboard, gsTab:(...a)=>gsTab(...a), importParcFromBridge, isExited, openOppDetail, oppActionBtn, oppName, pipeCells, pqFold, pqPad, relanceOnMove, renderPipeline, saveCrm, setOppStage, softFail, stageIndex, stageLabel, suiviState, touchCrm, get bridgeState(){ return bridgeState; }, set bridgeState(v){ bridgeState=v; }, get opportunities(){ return opportunities; }, set opportunities(v){ opportunities=v; } });   // Envoi vers les Excel partagés et Excel ⇄ appli — js/excel-sync.js
   function renderLists(){
     renderStorageGauge();
+    renderExcelLinks();
     renderClientList();
     projectChipRow.innerHTML='';
     if(!projectsList.length){ const p=document.createElement('p'); p.className='list-empty'; p.textContent='Aucun projet.'; projectChipRow.appendChild(p); }
@@ -6712,6 +6713,15 @@
   // A web page cannot read a file on SharePoint by itself (sign-in + the browser blocks it); the bridge reads the
   // synced copy on the computer instead. The link is kept to open the file in one click.
   const PARC_SRC_KEY='todo_parc-source';
+  // the Pipe has no read-into-the-app mechanism (unlike Suivi/Portefeuille) : just a link saved for one click to open
+  // it — the Suivi link here is the same stored value as Portefeuille's own (one source of truth, edited from either).
+  const PIPE_LINK_KEY='pipe-link';
+  function renderExcelLinks(){
+    const pipeLink=localStorage.getItem(PIPE_LINK_KEY)||'', bddLink=parcSource().link||'';
+    $('rs-pipe-link').value=pipeLink; $('rs-bdd-link').value=bddLink;
+    const show=(id, v)=>{ const a=$(id), ok=/^https:\/\//i.test(v||''); a.classList.toggle('hidden', !ok); if(ok) a.href=v; };
+    show('rs-pipe-open-link', pipeLink); show('rs-bdd-open-link', bddLink);
+  }
   const parcSource=()=>{ try{ return Object.assign({ link:'', auto:true }, JSON.parse(localStorage.getItem(PARC_SRC_KEY)||'{}')); }catch(e){ return { link:'', auto:true }; } };
   const saveParcSource=s=>{ lsSet(PARC_SRC_KEY, JSON.stringify(s)); };
   function renderParcSource(){
@@ -6770,8 +6780,10 @@
   $('bridge-save-btn').onclick=()=>{ bridgeCfg.token=$('bridge-token').value.trim(); saveBridgeCfg(); $('bridge-status').textContent='Test…'; bridgeCheck(); };
   $('parc-bridge-btn').onclick=()=>importParcFromBridge(false);
   $('parc-source-btn').onclick=()=>{ $('parc-source').classList.toggle('hidden'); renderParcSource(); };
-  $('parc-link-save').onclick=()=>{ const v=$('parc-link').value.trim(); if(v && !/^https:\/\//i.test(v)){ $('parc-source-hint').textContent='Le lien doit commencer par https://'; return; } const s=parcSource(); s.link=v; saveParcSource(s); renderParcSource(); };
+  $('parc-link-save').onclick=()=>{ const v=$('parc-link').value.trim(); if(v && !/^https:\/\//i.test(v)){ $('parc-source-hint').textContent='Le lien doit commencer par https://'; return; } const s=parcSource(); s.link=v; saveParcSource(s); renderParcSource(); renderExcelLinks(); };
   $('parc-auto').onchange=()=>{ const s=parcSource(); s.auto=$('parc-auto').checked; saveParcSource(s); renderParcSource(); };
+  $('rs-pipe-link-save').onclick=()=>{ const v=$('rs-pipe-link').value.trim(); if(v && !/^https:\/\//i.test(v)){ $('rs-link-hint').textContent='Le lien doit commencer par https://'; return; } $('rs-link-hint').textContent=''; lsSet(PIPE_LINK_KEY, v); renderExcelLinks(); };
+  $('rs-bdd-link-save').onclick=()=>{ const v=$('rs-bdd-link').value.trim(); if(v && !/^https:\/\//i.test(v)){ $('rs-link-hint').textContent='Le lien doit commencer par https://'; return; } $('rs-link-hint').textContent=''; const s=parcSource(); s.link=v; saveParcSource(s); renderExcelLinks(); };
   $('parc-file').addEventListener('change', e=>{ if(e.target.files[0]) importParcFile(e.target.files[0]); e.target.value=''; });
   $('vcf-btn').onclick=openVcfExport;
   $('help-btn').onclick=()=>$('guide-overlay').classList.remove('hidden');

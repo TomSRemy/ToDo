@@ -758,6 +758,13 @@
         <button class="data-btn" id="bridge-save-btn" style="width:100%;">Enregistrer et tester</button>
         <span id="bridge-status" class="bridge-status"></span>
       </div>
+      <div class="parc-source" style="margin-top:14px;">
+        <label for="rs-pipe-link">Lien de l'Excel « Pipe Agrégation » (SharePoint / OneDrive)</label>
+        <div class="parc-source-row"><input type="url" id="rs-pipe-link" placeholder="https://…sharepoint.com/…/Pipe_Agregation.xlsx" autocomplete="off"><button type="button" class="pipe-bar-btn" id="rs-pipe-link-save">Enregistrer</button><a class="pipe-bar-btn hidden" id="rs-pipe-open-link" target="_blank" rel="noopener noreferrer">Ouvrir ↗</a></div>
+        <label for="rs-bdd-link" style="margin-top:10px; display:block;">Lien de l'Excel « Suivi Agrégation » (SharePoint / OneDrive)</label>
+        <div class="parc-source-row"><input type="url" id="rs-bdd-link" placeholder="https://…sharepoint.com/…/Suivi_Agregation.xlsx" autocomplete="off"><button type="button" class="pipe-bar-btn" id="rs-bdd-link-save">Enregistrer</button><a class="pipe-bar-btn hidden" id="rs-bdd-open-link" target="_blank" rel="noopener noreferrer">Ouvrir ↗</a></div>
+        <p class="parc-source-hint" id="rs-link-hint"></p>
+      </div>
     </div>
     <h3 class="settings-group" id="grp-app">Appli</h3>
     <div class="list-manager" id="install-section" style="display:none;">
