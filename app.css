@@ -2428,9 +2428,12 @@ html.widget .dup-banner{ display:none; }
 @media (max-width: 760px){ .pipe-bar-spacer{ display:none; } .pipe-seg{ max-width:100%; overflow-x:auto; } }
 
 /* ---------- « Réglages » (UX audit TD3): table of contents beside four groups, each part's state on its title ---------- */
-#tab-lists{ padding:0; }
+/* display:block, not the .tab-panel base's flex : a flex item's sizing breaks position:sticky
+   on .settings-toc below (confirmed in a stripped-down reproduction) — #tab-lists has one child
+   (.settings-layout, a grid) and nothing here relies on flex, so switching it off is free */
+#tab-lists{ padding:0; display:block; }
 .settings-layout{ display:grid; grid-template-columns:210px minmax(0,1fr); align-items:start; min-height:100%; }
-.settings-toc{ position:sticky; top:0; align-self:start; display:flex; flex-direction:column; gap:1px; padding:18px 10px; border-right:1px solid var(--bd); background:var(--panel); min-height:100%; box-sizing:border-box; }
+.settings-toc{ position:sticky; top:0; align-self:start; display:flex; flex-direction:column; gap:1px; padding:18px 10px; border-right:1px solid var(--bd); background:var(--panel); max-height:100vh; overflow-y:auto; box-sizing:border-box; }
 .settings-toc .g{ font:600 10.5px var(--font-mono); letter-spacing:.7px; text-transform:uppercase; color:var(--tx3); padding:14px 10px 4px; }
 .settings-toc .g:first-child{ padding-top:0; }
 .settings-toc button{ display:flex; justify-content:space-between; align-items:center; gap:8px; background:none; border:none; border-radius:4px; color:var(--tx2); font:13px var(--font-ui); text-align:left; padding:6px 10px; cursor:pointer; }
