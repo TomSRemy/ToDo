@@ -47,14 +47,15 @@ window.TodoAI=(function(){
     if(!list.length) return;
     let ov=$('ai-overlay'); if(ov) ov.remove();
     ov=document.createElement('div'); ov.id='ai-overlay'; ov.className='modal-overlay';
-    ov.innerHTML='<div class="modal-box wide ai-box" role="dialog" aria-labelledby="ai-title"><div class="opp-detail-head"><h3 id="ai-title">Compléter avec l’IA</h3></div><p class="modal-hint ai-hint"></p><div class="ai-ask"></div>'+
+    ov.innerHTML='<div class="modal-box wide ai-box" role="dialog" aria-labelledby="ai-title"><div class="opp-detail-head"><h3 id="ai-title">Compléter avec l’IA</h3></div><p class="modal-hint ai-hint"></p>'+
       '<div class="ai-manual"><button type="button" class="ai-go ai-relay-btn" hidden>Demander via le relais local (Claude Code)</button><button type="button" class="ghost-btn ai-manual-btn">Copier pour Claude (claude.ai, abonnement Pro)</button><div class="ai-manual-paste" hidden><p class="modal-hint">Le prompt est copié et claude.ai s’est ouvert dans un nouvel onglet. Colle la réponse de Claude ci-dessous.</p><textarea class="ai-manual-text" rows="6" placeholder="Réponse collée de Claude…"></textarea><button type="button" class="ai-go ai-manual-read">Lire la réponse</button></div></div>'+
+      '<details class="ai-fallback"><summary>Pas de Claude ? Utiliser Gemini (gratuit)</summary><div class="ai-ask"></div></details>'+
       '<div class="ai-rows"></div><div class="crm-form-actions"><button type="button" class="ai-fill" hidden></button><button type="button" class="ghost-btn ai-close">Fermer</button></div></div>';
     document.body.appendChild(ov);
     const close=()=>ov.remove();
     ov.querySelector('.ai-close').onclick=close; ov.addEventListener('click', e=>{ if(e.target===ov) close(); }); ov.addEventListener('keydown', e=>{ if(e.key==='Escape'){ e.stopPropagation(); close(); } });
     const prompt=aiPrompt(list), empties=list.reduce((n,o)=>n+CARACT_ROWS.filter(l=>caractValue(o,l)==='').length,0);
-    ov.querySelector('.ai-hint').textContent=empties+' case'+(empties>1?'s':'')+' vide'+(empties>1?'s':'')+' sur '+list.length+' installation'+(list.length>1?'s':'')+'. L’IA ne propose que ce qui se déduit de la fiche (lieu, techno, production) et n’invente aucun identifiant ; rien n’est rempli sans ton accord.';
+    ov.querySelector('.ai-hint').textContent=empties+' case'+(empties>1?'s':'')+' vide'+(empties>1?'s':'')+' sur '+list.length+' installation'+(list.length>1?'s':'')+'. L’IA ne propose que ce qui se déduit de la fiche (lieu, techno, production) et n’invente aucun identifiant ; rien n’est rempli sans ton accord. Claude en priorité ; sans accès à Claude, Gemini (gratuit) ci-dessous.';
     const ask=ov.querySelector('.ai-ask'), rowsBox=ov.querySelector('.ai-rows'), fill=ov.querySelector('.ai-fill');
     let rows=[];
     const show=r=>{ rows=r; rowsBox.innerHTML='';
@@ -77,16 +78,18 @@ window.TodoAI=(function(){
       try{ show(aiParse(manualText.value, list)); }
       catch(err){ rowsBox.innerHTML=''; const p2=document.createElement('p'); p2.className='modal-hint ai-err'; p2.textContent=err.message||String(err); rowsBox.appendChild(p2); }
     };
-    // automatique, sans clé : relais local vers Claude Code (bridge/relais-claude.ps1), si configuré dans Réglages
-    const relayBtn=ov.querySelector('.ai-relay-btn');
-    if(claudeRelayConfigured && claudeRelayConfigured()){
-      relayBtn.hidden=false;
+    // Claude en priorité : automatique via le relais local s'il est configuré, sinon le bouton manuel reste la première action visible
+    const relayBtn=ov.querySelector('.ai-relay-btn'), manualBtn=ov.querySelector('.ai-manual-btn');
+    const relayReady=!!(claudeRelayConfigured && claudeRelayConfigured());
+    if(relayReady){
+      relayBtn.hidden=false; manualBtn.hidden=true;
       relayBtn.onclick=async()=>{ relayBtn.disabled=true; relayBtn.textContent='Claude Code réfléchit…';
         try{ show(aiParse(await claudeRelayAsk(prompt), list)); relayBtn.textContent='Redemander via le relais local'; }
         catch(err){ rowsBox.innerHTML=''; const p2=document.createElement('p'); p2.className='modal-hint ai-err'; p2.textContent=err.message||String(err); rowsBox.appendChild(p2); relayBtn.textContent='Réessayer via le relais local'; }
         relayBtn.disabled=false; };
+      relayBtn.click();
     }
-    // everything in the app: Gemini answers here, through the key kept on this device (asked here the first time)
+    // Gemini (gratuit), en secours pour qui n'a pas Claude : replié, jamais déclenché automatiquement
     const go=document.createElement('button'); go.type='button'; go.className='ai-go'; go.textContent='Demander à l’IA';
     go.onclick=async()=>{ go.disabled=true; go.textContent='Ça réfléchit…';
       try{ show(aiParse(await aiAsk(prompt), list)); go.textContent='Redemander'; }
@@ -101,7 +104,7 @@ window.TodoAI=(function(){
       inp.addEventListener('keydown', e=>{ if(e.key==='Enter') save.click(); });
       const row=document.createElement('div'); row.className='ai-key-row'; row.append(inp, save);
       ask.append(p2, row, link); setTimeout(()=>inp.focus(), 30); };
-    if(aiKey()){ ask.appendChild(go); setTimeout(()=>go.click(), 0); } else askKey();
+    if(aiKey()){ ask.appendChild(go); } else askKey();
   }
     Object.assign(api, { openAiFill });
   };
