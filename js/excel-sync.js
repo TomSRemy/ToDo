@@ -8,12 +8,12 @@ window.TodoExcelSync=(function(){
   // instead of having to find it again in Pipeline — never bubbles (installs a stopPropagation, the surrounding row/
   // header has its own click for something else : fold the card, cycle a cell's choice…)
   const XL_OPEN_ICO='<svg class="xl-open-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>';
-  const xlOpenBtn=oid=>{ const b=document.createElement('button'); b.type='button'; b.className='xl-open'; b.title='Ouvrir la fiche'; b.innerHTML=XL_OPEN_ICO;
-    b.onclick=e=>{ e.stopPropagation(); openOppDetail(oid); }; return b; };
   // what this part uses from js/app.js, given where its code used to stand in js/app.js (so it runs in the same order);
   // app.<name>: a value js/app.js defines further down or may replace, read when used
   api.init=function(app){
     const { $, ON_PHONE, PQ_FIELDS, bddCells, bridgeCall, bridgeCheck, bridgeConfigured, cellToText, closeOppDetail, codeAffaire, copyToClipboard, gsTab, importParcFromBridge, isExited, openOppDetail, oppActionBtn, oppName, pipeCells, pqFold, pqPad, relanceOnMove, renderPipeline, saveCrm, setOppStage, softFail, stageIndex, stageLabel, suiviState, touchCrm }=app;
+    const xlOpenBtn=oid=>{ const b=document.createElement('button'); b.type='button'; b.className='xl-open'; b.title='Ouvrir la fiche'; b.innerHTML=XL_OPEN_ICO;
+      b.onclick=e=>{ e.stopPropagation(); openOppDetail(oid); }; return b; };
     Object.assign(api, { xsState, xsList, openExcelSync, showBridgeMsg, excelButtons });   // function declarations: ready before the code below runs
   // ---------- Sending to the shared Excel files: the safe part is written at once, the rest is shown to decide ----------
   // The bridge never overwrites what someone else typed: such cells are kept and reported, duplicates and plants lost
