@@ -769,6 +769,27 @@
         <p class="parc-source-hint">Juste pour vérifier le nom du fichier que tu utilises — un navigateur ne peut pas retenir son emplacement réel ni l'ouvrir directement (sécurité). Pour un vrai bouton « Ouvrir », passe par un lien SharePoint/OneDrive à la place.</p>
       </div>
     </div>
+    <h3 class="settings-group" id="grp-team">Équipe (bêta)</h3>
+    <div class="list-manager" id="team-section">
+      <h2>Synchro équipe</h2>
+      <p class="list-hint">Pipeline, contacts, sociétés et rendez-vous partagés avec l'équipe, sur une base à part (Supabase). <b>En test</b> : rien n'est encore branché sur les écrans, ça ne change rien à l'appli tant que ça reste ici. Connexion par lien envoyé par email, pas de mot de passe.</p>
+      <div style="display:flex; flex-direction:column; gap:8px;">
+        <input type="text" id="team-url" placeholder="URL du projet (https://xxxx.supabase.co)" autocomplete="off">
+        <input type="password" id="team-key" placeholder="Clé publique (anon)" autocomplete="off">
+        <button class="data-btn" id="team-save-btn" style="width:100%;">Enregistrer la configuration</button>
+        <span id="team-config-status" class="bridge-status"></span>
+      </div>
+      <div style="display:flex; flex-direction:column; gap:8px; margin-top:10px;">
+        <input type="email" id="team-email" placeholder="Ton email" autocomplete="off">
+        <button class="data-btn" id="team-login-btn" style="width:100%;">Recevoir le lien de connexion</button>
+        <span id="team-auth-status" class="bridge-status"></span>
+      </div>
+      <div class="data-actions" style="margin-top:10px;">
+        <button class="data-btn" id="team-load-btn" type="button">Charger les données d'équipe (vérification)</button>
+        <button class="data-btn" id="team-migrate-btn" type="button">Migrer mes données locales →</button>
+      </div>
+      <span id="team-action-status" class="bridge-status"></span>
+    </div>
     <h3 class="settings-group" id="grp-app">Appli</h3>
     <div class="list-manager" id="install-section" style="display:none;">
       <h2>Application</h2>

@@ -166,6 +166,7 @@
     if(seeded){ saveTasks(); saveClients(); saveProjects(); }
     if(crmSeeded){ saveCrm(); }
     await loadSyncConfig();
+    if(window.TodoTeam) window.TodoTeam.init().then(renderTeamStatus).catch(()=>{});   // bêta : inactif si pas configuré
     consolidateNotes(); rollDailyNote(); prefsInit();
     loadParc(); ensureRenewalTasks();
     if(migrateCompanyStars() | migrateContactCivility()) saveCrm();
@@ -6847,6 +6848,54 @@
     const n=document.createElement('div'); n.className='parc-muted'; n.textContent=list.length+' installation'+(list.length>1?'s':'')+' · '+fmtMwc(list.reduce((s,p)=>s+p.kwc,0));
     b.appendChild(n);
     return b;
+  }
+
+  // ---------- Synchro équipe (Supabase, bêta) : voir js/supabase-sync.js. Inactif sans config, aucun effet sur l'appli en service. ----------
+  async function renderTeamStatus(){
+    const cfgEl=$('team-config-status'), authEl=$('team-auth-status');
+    if(!cfgEl || !authEl || !window.TodoTeam) return;
+    const cfg=await window.TodoTeam.loadConfig();
+    cfgEl.textContent=cfg&&cfg.url?'Configuré : '+cfg.url:'Pas encore configuré.';
+    cfgEl.className='bridge-status'+(cfg&&cfg.url?' on':'');
+    if(window.TodoTeam.isSignedIn()){
+      const u=window.TodoTeam.currentUser();
+      authEl.textContent='Connecté comme '+(u&&u.email||'?');
+      authEl.className='bridge-status on';
+    } else {
+      authEl.textContent=window.TodoTeam.isConfigured()?'Non connecté.':'Configure d’abord la connexion ci-dessus.';
+      authEl.className='bridge-status';
+    }
+  }
+  if($('team-section')){
+    (async()=>{ const cfg=window.TodoTeam&&await window.TodoTeam.loadConfig(); if(cfg){ $('team-url').value=cfg.url||''; $('team-key').value=cfg.anonKey||''; } })();
+    $('team-save-btn').onclick=async()=>{
+      const url=$('team-url').value.trim(), key=$('team-key').value.trim();
+      if(!url || !key){ $('team-config-status').textContent='URL et clé requises.'; return; }
+      await window.TodoTeam.saveConfig({ url, anonKey:key });
+      $('team-config-status').textContent='Enregistré, rechargement…';
+      location.reload();   // le client Supabase se construit une fois, au chargement : on recharge pour qu'il reprenne la config
+    };
+    $('team-login-btn').onclick=async()=>{
+      const email=$('team-email').value.trim(); if(!email){ $('team-auth-status').textContent='Email requis.'; return; }
+      $('team-auth-status').textContent='Envoi du lien…';
+      try{ await window.TodoTeam.sendMagicLink(email); $('team-auth-status').textContent='Lien envoyé à '+email+', ouvre-le depuis cet appareil.'; }
+      catch(e){ $('team-auth-status').textContent='Erreur : '+(e&&e.message||e); }
+    };
+    $('team-load-btn').onclick=async()=>{
+      const el=$('team-action-status'); el.textContent='Chargement…';
+      try{
+        const out=[];
+        for(const t of ['opportunities','contacts','companies','meetings']){ const rows=await window.TodoTeam.pullAll(t); out.push(t+' : '+(rows?rows.length:0)); }
+        el.textContent=out.join(' · ');
+      }catch(e){ el.textContent='Erreur : '+(e&&e.message||e); }
+    };
+    $('team-migrate-btn').onclick=async()=>{
+      if(!await askConfirm('Copier tes données locales (contacts, sociétés, pipeline, rendez-vous) vers la base équipe bêta ? À faire une seule fois, sur le projet de test.', 'Migrer')) return;
+      const el=$('team-action-status'); el.textContent='Migration…';
+      try{ const report=await window.TodoTeam.migrateFromLocal(); el.textContent=JSON.stringify(report); }
+      catch(e){ el.textContent='Erreur : '+(e&&e.message||e); }
+    };
+    renderTeamStatus();
   }
 
   $('bridge-token').value=bridgeCfg.token||'';
