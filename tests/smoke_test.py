@@ -91,7 +91,7 @@ def new_page(browser, seed=None, **ctx):
     page.add_init_script("try{ if(!sessionStorage.getItem('cvs')){ sessionStorage.setItem('cvs','1'); if(localStorage.getItem('contacts-view')===null) localStorage.setItem('contacts-view','groupe'); } }catch(e){}")
     if seed:
         page.add_init_script(
-            "if(!sessionStorage.getItem('seeded')){ for (const [k,v] of Object.entries(" + json.dumps(seed) + ")) localStorage.setItem(k,v); sessionStorage.setItem('seeded','1'); }")
+            "try{ if(!sessionStorage.getItem('seeded')){ for (const [k,v] of Object.entries(" + json.dumps(seed) + ")) localStorage.setItem(k,v); sessionStorage.setItem('seeded','1'); } }catch(e){}")
     return page, errors
 
 
@@ -459,7 +459,7 @@ with sync_playwright() as p:
 
     # --- backup reminder: no sync and no export for a month
     page, errors = new_page(browser, {"todo_todo-widget-tasks": json.dumps([task("bk", "Une tâche")])}, viewport={"width": 1300, "height": 850})
-    page.add_init_script("if(!sessionStorage.getItem('bk')){ localStorage.setItem('first-seen-at', String(Date.now()-40*864e5)); sessionStorage.setItem('bk','1'); }")
+    page.add_init_script("try{ if(!sessionStorage.getItem('bk')){ localStorage.setItem('first-seen-at', String(Date.now()-40*864e5)); sessionStorage.setItem('bk','1'); } }catch(e){}")
     page.goto(URL)
     check(eventually(lambda: page.is_visible("#backup-banner") and "40 jours" in page.inner_text("#backup-banner"), 3000), "backup reminder: shown after a month without sync nor export")
     with page.expect_download() as dl: page.click("#backup-banner .bk-go")
@@ -1104,7 +1104,7 @@ with sync_playwright() as p:
     # its own page, without new_page's « grouped view » setting, and checked once the app has run (the HTML already marks « liste » active)
     page = browser.new_page(viewport={"width": 1300, "height": 700}); errors = []; page.on("pageerror", lambda e: errors.append(str(e)))
     page.route("**/fonts.g*/**", lambda r: r.abort())
-    page.add_init_script("if(!sessionStorage.getItem('seeded')){ localStorage.setItem('todo_todo-widget-contacts', " + json.dumps(json.dumps(many)) + "); sessionStorage.setItem('seeded','1'); }")
+    page.add_init_script("try{ if(!sessionStorage.getItem('seeded')){ localStorage.setItem('todo_todo-widget-contacts', " + json.dumps(json.dumps(many)) + "); sessionStorage.setItem('seeded','1'); } }catch(e){}")
     page.goto(URL); page.click('[data-tab="contacts"]'); page.wait_for_selector("#contacts-list .contact-row")
     cv = page.evaluate("[localStorage.getItem('contacts-view'), [...document.querySelectorAll('#contacts-view-switch .view-icon-btn.active')].map(b=>b.dataset.view)]")
     check(page.locator('#contacts-view-switch [data-view="liste"].active').count() == 1 and page.locator("#contacts-list .company-group-header").count() == 0,
@@ -1221,7 +1221,7 @@ with sync_playwright() as p:
              "tasks.json": [], "crm.json": {"companies": [], "contacts": [], "meetings": [], "opportunities": []}}
     base_n = [{"id": "scratchpad", "text": "Appeler Paul", "createdAt": 1, "updatedAt": n_at, "deleted": False}]
     page, errors = new_page(browser, dict(SYNC_ON, **{"todo_todo-widget-notes": json.dumps(base_n), "todo_sync-notes-base": json.dumps(base_n)}), viewport={"width": 1300, "height": 850})
-    page.add_init_script("if(!sessionStorage.getItem('pv')){ localStorage.setItem('saved-views-tasks', JSON.stringify([{name:'Vue PC', filter:'critique'}])); sessionStorage.setItem('pv','1'); }")
+    page.add_init_script("try{ if(!sessionStorage.getItem('pv')){ localStorage.setItem('saved-views-tasks', JSON.stringify([{name:'Vue PC', filter:'critique'}])); sessionStorage.setItem('pv','1'); } }catch(e){}")
     mock_github(page, files); page.goto(URL)
     page.wait_for_function("(localStorage.getItem('saved-views-tasks')||'').includes('Vue téléphone')", timeout=10000)
     names = [v["name"] for v in page.evaluate("JSON.parse(localStorage.getItem('saved-views-tasks'))")]
@@ -1427,7 +1427,7 @@ with sync_playwright() as p:
     ctx = browser.new_context(viewport={"width": 1300, "height": 900}, permissions=["clipboard-read", "clipboard-write"])
     page = ctx.new_page(); errors = []; page.on("pageerror", lambda e: errors.append(str(e)))
     page.route("**/fonts.g*/**", lambda r: r.abort())
-    page.add_init_script("if(!sessionStorage.getItem('seeded')){ localStorage.setItem('todo_todo-widget-opportunities', " + json.dumps(json.dumps(cp_opps)) + "); sessionStorage.setItem('seeded','1'); }")
+    page.add_init_script("try{ if(!sessionStorage.getItem('seeded')){ localStorage.setItem('todo_todo-widget-opportunities', " + json.dumps(json.dumps(cp_opps)) + "); sessionStorage.setItem('seeded','1'); } }catch(e){}")
     page.goto(URL); page.click('[data-tab="pipeline"]'); page.locator(".pipe-req-card .pipe-card-title").first.click()
     act(page, "Copier lignes Pipe")
     check(page.is_visible("#choice-overlay") and "2 installations" in page.inner_text("#choice-text"), "pipe copy: asks one line per installation or one for all")
@@ -1866,7 +1866,7 @@ with sync_playwright() as p:
             mi(3, "VENTUS", "Parc des Crêtes", "offre_attente", "12000", "28000", "01/12/2027", "Eolien"), mi(4, "ZEN", "Hangar 2", "negociation", "250", "290", "15/09/2026"),
             dict(mi(5, "ZEN", "Perdu", "perdu", "100", "", "2027"))]
     ctx = browser.new_context(viewport={"width": 1400, "height": 900}, permissions=["clipboard-read", "clipboard-write"], accept_downloads=True)
-    ctx.add_init_script("if(!sessionStorage.getItem('seeded')){ localStorage.setItem('todo_todo-widget-opportunities', %s); sessionStorage.setItem('seeded','1'); }" % json.dumps(json.dumps(meet)))
+    ctx.add_init_script("try{ if(!sessionStorage.getItem('seeded')){ localStorage.setItem('todo_todo-widget-opportunities', %s); sessionStorage.setItem('seeded','1'); } }catch(e){}" % json.dumps(json.dumps(meet)))
     page = ctx.new_page(); errors = []; page.on("pageerror", lambda e: errors.append(str(e)))
     page.goto(URL); page.click('[data-tab="pipeline"]'); page.click("#pipe-meet-toggle")
     secs = page.eval_on_selector_all(".meet-table tr.meet-sec th", "els=>els.map(e=>e.innerText.replace(/\\s+/g,' ').trim())")
@@ -2032,7 +2032,7 @@ with sync_playwright() as p:
     big_t = [{"id": f"lt{i}", "title": f"Tâche {i} [[SOC {i % 400}]]", "urgency": "moyenne", "status": "a_faire", "subtasks": [], "archived": False, "deleted": False, "createdAt": 1, "updatedAt": 1} for i in range(2000)]
     page = browser.new_page(viewport={"width": 1300, "height": 850}); errors = []; page.on("pageerror", lambda e: errors.append(str(e)))
     page.route("**/fonts.g*/**", lambda r: r.abort())
-    page.add_init_script("if(!sessionStorage.getItem('seeded')){ localStorage.setItem('todo_todo-widget-contacts', " + json.dumps(json.dumps(big_c)) + "); localStorage.setItem('todo_todo-widget-tasks', " + json.dumps(json.dumps(big_t)) + "); sessionStorage.setItem('seeded','1'); }")
+    page.add_init_script("try{ if(!sessionStorage.getItem('seeded')){ localStorage.setItem('todo_todo-widget-contacts', " + json.dumps(json.dumps(big_c)) + "); localStorage.setItem('todo_todo-widget-tasks', " + json.dumps(json.dumps(big_t)) + "); sessionStorage.setItem('seeded','1'); } }catch(e){}")
     t0 = time.time(); page.goto(URL); page.click('[data-tab="tasks"]'); page.wait_for_timeout(500)
     heap = page.evaluate("Math.round(performance.memory.usedJSHeapSize/1e6)"); took = time.time() - t0
     check(heap < 200 and page.locator(".wl").count() > 100, f"load: 2 000 tasks with links and 3 000 contacts stay light ({heap} MB, {took:.1f} s)")

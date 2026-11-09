@@ -1371,7 +1371,28 @@
     b.querySelector('.bk-go').onclick=()=>{ exportData(); renderBackupBanner(); };
     b.querySelector('.bk-later').onclick=()=>{ lsSet('backup-snooze-until', String(Date.now()+7*864e5)); renderBackupBanner(); };
   }
+  // 6 widgets curated once on PowerKlock (« Mon tableau »-style solo links, stable server-side — not a code
+  // decoded from the URL) : each its own iframe, so they can be read, reordered or dropped without touching
+  // the rest of the dashboard. Built once ; renderToday() runs often (every task change), reloading 6 iframes
+  // every time would be wasteful and would flash the widgets empty.
+  const SYNTH_MARKET=[
+    ['Spot France', 'https://tomsremy.github.io/PowerKlock/index.html#solo=r32f858d9b99644'],
+    ['Cal 2027 France', 'https://tomsremy.github.io/PowerKlock/index.html#solo=rca6f65bc3b519e'],
+    ['TTF (Gaz)', 'https://tomsremy.github.io/PowerKlock/index.html#solo=rc6b0978829b146'],
+    ['EUA (CO₂)', 'https://tomsremy.github.io/PowerKlock/index.html#solo=re5a2afed952b78'],
+    ['Brent (Pétrole)', 'https://tomsremy.github.io/PowerKlock/index.html#solo=rfce01959ad5f8a'],
+    ['GO 2027', 'https://tomsremy.github.io/PowerKlock/index.html#solo=r33a322a3b47f7f']
+  ];
+  function renderSynthMarket(){
+    const root=$('synth-market'); if(!root || root.dataset.built || ON_PHONE) return; root.dataset.built='1';
+    SYNTH_MARKET.forEach(([label, url])=>{
+      const tile=document.createElement('div'); tile.className='synth-mkt-tile';
+      const f=document.createElement('iframe'); f.src=url; f.title=label; f.loading='lazy'; f.referrerPolicy='no-referrer';
+      tile.appendChild(f); root.appendChild(tile);
+    });
+  }
   function renderToday(){
+    renderSynthMarket();
     const statsRow=$('today-stats-row'), list=$('today-list');
     renderBackupBanner();
     const open=activeTasks();
