@@ -4,7 +4,7 @@ window.TodoAI=(function(){
   const api={};
   // everything this part uses from js/app.js, given once when the app has finished loading
   api.init=function(app){
-    const { aiKey, $, CARACT_ROWS, caractKey, caractSet, caractValue, oppName, renderPipeline, saveCrm, touchCrm }=app;
+    const { aiKey, $, CARACT_ROWS, caractKey, caractSet, caractValue, oppName, renderPipeline, saveCrm, touchCrm, claudeRelayConfigured, claudeRelayAsk }=app;
   // ---------- « Compléter avec l'IA » : Gemini (niveau gratuit) propose les lignes vides du fichier caractéristiques qui se déduisent de ce que connaît la fiche ----------
   // Sa clé reste sur cet appareil (comme le jeton GitHub) ; clé gratuite sur aistudio.google.com/app/apikey.
   const AI_MODEL='gemini-2.5-flash';
@@ -48,7 +48,7 @@ window.TodoAI=(function(){
     let ov=$('ai-overlay'); if(ov) ov.remove();
     ov=document.createElement('div'); ov.id='ai-overlay'; ov.className='modal-overlay';
     ov.innerHTML='<div class="modal-box wide ai-box" role="dialog" aria-labelledby="ai-title"><div class="opp-detail-head"><h3 id="ai-title">Compléter avec l’IA</h3></div><p class="modal-hint ai-hint"></p><div class="ai-ask"></div>'+
-      '<div class="ai-manual"><button type="button" class="ghost-btn ai-manual-btn">Copier pour Claude (claude.ai, abonnement Pro)</button><div class="ai-manual-paste" hidden><p class="modal-hint">Le prompt est copié et claude.ai s’est ouvert dans un nouvel onglet. Colle la réponse de Claude ci-dessous.</p><textarea class="ai-manual-text" rows="6" placeholder="Réponse collée de Claude…"></textarea><button type="button" class="ai-go ai-manual-read">Lire la réponse</button></div></div>'+
+      '<div class="ai-manual"><button type="button" class="ai-go ai-relay-btn" hidden>Demander via le relais local (Claude Code)</button><button type="button" class="ghost-btn ai-manual-btn">Copier pour Claude (claude.ai, abonnement Pro)</button><div class="ai-manual-paste" hidden><p class="modal-hint">Le prompt est copié et claude.ai s’est ouvert dans un nouvel onglet. Colle la réponse de Claude ci-dessous.</p><textarea class="ai-manual-text" rows="6" placeholder="Réponse collée de Claude…"></textarea><button type="button" class="ai-go ai-manual-read">Lire la réponse</button></div></div>'+
       '<div class="ai-rows"></div><div class="crm-form-actions"><button type="button" class="ai-fill" hidden></button><button type="button" class="ghost-btn ai-close">Fermer</button></div></div>';
     document.body.appendChild(ov);
     const close=()=>ov.remove();
@@ -77,6 +77,15 @@ window.TodoAI=(function(){
       try{ show(aiParse(manualText.value, list)); }
       catch(err){ rowsBox.innerHTML=''; const p2=document.createElement('p'); p2.className='modal-hint ai-err'; p2.textContent=err.message||String(err); rowsBox.appendChild(p2); }
     };
+    // automatique, sans clé : relais local vers Claude Code (bridge/relais-claude.ps1), si configuré dans Réglages
+    const relayBtn=ov.querySelector('.ai-relay-btn');
+    if(claudeRelayConfigured && claudeRelayConfigured()){
+      relayBtn.hidden=false;
+      relayBtn.onclick=async()=>{ relayBtn.disabled=true; relayBtn.textContent='Claude Code réfléchit…';
+        try{ show(aiParse(await claudeRelayAsk(prompt), list)); relayBtn.textContent='Redemander via le relais local'; }
+        catch(err){ rowsBox.innerHTML=''; const p2=document.createElement('p'); p2.className='modal-hint ai-err'; p2.textContent=err.message||String(err); rowsBox.appendChild(p2); relayBtn.textContent='Réessayer via le relais local'; }
+        relayBtn.disabled=false; };
+    }
     // everything in the app: Gemini answers here, through the key kept on this device (asked here the first time)
     const go=document.createElement('button'); go.type='button'; go.className='ai-go'; go.textContent='Demander à l’IA';
     go.onclick=async()=>{ go.disabled=true; go.textContent='Ça réfléchit…';

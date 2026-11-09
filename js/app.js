@@ -5544,6 +5544,27 @@
     renderBridgeStatus();
     return bridgeState;
   }
+
+  // Relais Claude (js/ai.js, facultatif) : même principe que le pont Excel, un autre port, sans fichiers.
+  // Claude Code tourne déjà sur l'ordinateur (abonnement Pro/Max) ; « bridge/relais-claude.ps1 » lui transmet le prompt.
+  let claudeRelayCfg={ port:8766, token:'' };
+  try{ const r=localStorage.getItem('todo_claude-relay-config'); if(r) claudeRelayCfg=Object.assign(claudeRelayCfg, JSON.parse(r)); }catch(e){}
+  function saveClaudeRelayCfg(){ lsSet('todo_claude-relay-config', JSON.stringify(claudeRelayCfg)); }
+  const claudeRelayConfigured=()=>!ON_PHONE && !!claudeRelayCfg.token;
+  async function claudeRelayAsk(prompt){
+    if(ON_PHONE) throw new Error('Le relais Claude ne s’utilise que depuis l’ordinateur.');
+    const ctl=new AbortController(); const t=setTimeout(()=>ctl.abort(), 125000);
+    try{
+      const res=await fetch('http://127.0.0.1:'+(claudeRelayCfg.port||8766)+'/ask', { method:'POST', signal:ctl.signal, headers:{ 'X-Bridge-Token':claudeRelayCfg.token||'', 'Content-Type':'application/json' }, body:JSON.stringify({ prompt }) });
+      const data=await res.json().catch(()=>({}));
+      if(!res.ok) throw new Error(data.message||('Erreur '+res.status));
+      return data.text||'';
+    }catch(e){
+      if(e.name==='AbortError') throw new Error('Claude Code ne répond pas (délai dépassé).');
+      if(e instanceof TypeError) throw new Error('Relais introuvable : lance « Lancer-relais-claude.bat » sur l’ordinateur.');
+      throw e;
+    }finally{ clearTimeout(t); }
+  }
   // the bridge's files: always the published version, never a copy the browser kept (a new address each time)
   document.querySelectorAll('a.bridge-dl').forEach(a=>a.addEventListener('click', ()=>{ a.href=a.getAttribute('href').split('?')[0]+'?t='+Date.now(); }));
   function renderBridgeStatus(){
@@ -6437,6 +6458,8 @@
   if($('ai-section')) $('ai-section').hidden=!aiOn();
   { const st=()=>{ const k=aiKey(); $('ai-key-status').textContent=k?'Clé enregistrée (…'+k.slice(-4)+'). Vide le champ et enregistre pour l\u2019oublier.':'Pas de clé : créer une clé gratuite sur Google AI Studio.'; };
     if($('ai-key-save')){ $('ai-key-save').onclick=()=>{ const v=$('ai-key-input').value.trim(); try{ if(v) localStorage.setItem('ai-key', v); else localStorage.removeItem('ai-key'); }catch(e){} $('ai-key-input').value=''; st(); }; st(); } }
+  { const st=()=>{ $('claude-relay-status').textContent=claudeRelayConfigured()?'Clé enregistrée. « Demander via le relais local » apparaît dans Compléter avec l’IA.':'Pas de clé : lance bridge/Lancer-relais-claude.bat.'; };
+    if($('claude-relay-save')){ $('claude-relay-token').value=claudeRelayCfg.token||''; $('claude-relay-save').onclick=()=>{ claudeRelayCfg.token=$('claude-relay-token').value.trim(); saveClaudeRelayCfg(); st(); }; st(); } }
   if($('parc-xs-btn')){ $('parc-xs-btn').onclick=()=>openExcelSync({ scope:'parc' }); if(ON_PHONE) $('parc-xs-btn').hidden=true; }
   $('pipe-map-toggle').onclick=()=>{ pipeOffers=false; pipeMap=!pipeMap; pipeDash=false; pipeMeet=false; parcMapSel=null; parcMapView=null; renderPipeline(); };
   $('pipe-list-toggle').onclick=()=>{ pipeOffers=false; pipeMap=false; pipeList=!(pipeList && !pipeDash && !pipeMeet); pipeDash=false; pipeMeet=false; lsSet('pipe-list', pipeList?'1':'0'); renderPipeline(); };
@@ -7473,7 +7496,7 @@
     get opportunities(){ return opportunities; }, get contacts(){ return contacts; } });
   window.TodoPresent.init({ $, meetCopyShort, meetChangesBlock, MAP_PHASES, MEET_COLS, MEET_PHASES, MES_WEIGHTS, OPP_STAGES, PIPE_PHASES, WHO, WHO_COLORS, activeTasks, buildHistory, caractValue, daysInStage, escapeHtml, fmtKwc, fmtMwc, kwcNum, loadScript, meetBlockKey, meetBlockName, meetCopy, meetData, meetHiddenCols, meetPhasesOn, meetPick, meetPrint, meetTotal, meetVis, meetVisuals, meetXlsx, mesForecast, openOppDetail, openRequestDetail, oppName, oppStage, plainLinks, pqNum, prefsToNote, renderPipeline, stageLabel, stageTaskOf, toISO });   // js/present.js
   window.TodoPhone.init({ $, askConfirm, tell, contactDupKeys, ensureCompany, loadTesseract, openContactForm, parseSignatureText, pqFmtPhone, pqFold, renderContacts, saveCrm, toISO, touchCrm, get contacts(){ return contacts; } });   // js/phone.js
-  window.TodoAI.init({ aiKey, $, CARACT_ROWS, caractKey, caractSet, caractValue, oppName, renderPipeline, saveCrm, touchCrm });   // js/ai.js
+  window.TodoAI.init({ aiKey, $, CARACT_ROWS, caractKey, caractSet, caractValue, oppName, renderPipeline, saveCrm, touchCrm, claudeRelayConfigured, claudeRelayAsk });   // js/ai.js
   window.TodoWeek.init({ tasks:()=>tasks, URGENCY_META, openWeekTask, rescheduleTask });   // js/week.js
   window.TodoInsights.init({ tasks:()=>tasks, opportunities:()=>opportunities, escapeHtml });   // js/insights.js
   window.TodoFocus.init({ validateTask });   // js/focus.js
