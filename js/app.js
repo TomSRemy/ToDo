@@ -6924,7 +6924,7 @@
       if(!email || !pwd){ $('team-auth-status').textContent='Email et mot de passe requis.'; return; }
       $('team-auth-status').textContent='Connexion…';
       try{ await window.TodoTeam.signIn(email, pwd); await renderTeamStatus(); $('team-password').value=''; await teamSyncPull(); teamSyncSubscribe(); }
-      catch(e){ $('team-auth-status').textContent='Erreur : '+(e&&e.message||e); }
+      catch(e){ console.error('[team signIn]', e); $('team-auth-status').textContent='Erreur : '+(e&&e.message||e); }
     };
     $('team-load-btn').onclick=async()=>{
       const el=$('team-action-status'); el.textContent='Chargement…';
@@ -6932,13 +6932,13 @@
         const out=[];
         for(const t of ['opportunities','contacts','companies','meetings']){ const rows=await window.TodoTeam.pullAll(t); out.push(t+' : '+(rows?rows.length:0)); }
         el.textContent=out.join(' · ');
-      }catch(e){ el.textContent='Erreur : '+(e&&e.message||e); }
+      }catch(e){ console.error('[team load]', e); el.textContent='Erreur : '+(e&&e.message||e); }
     };
     $('team-migrate-btn').onclick=async()=>{
       if(!await askConfirm('Copier tes données locales (contacts, sociétés, pipeline, rendez-vous) vers la base équipe bêta ? À faire une seule fois, sur le projet de test.', 'Migrer')) return;
       const el=$('team-action-status'); el.textContent='Migration…';
       try{ const report=await window.TodoTeam.migrateFromLocal(); el.textContent=JSON.stringify(report); }
-      catch(e){ el.textContent='Erreur : '+(e&&e.message||e); }
+      catch(e){ console.error('[team migrate]', e); el.textContent='Erreur : '+(e&&e.message||e); }
     };
     renderTeamStatus();
   }
