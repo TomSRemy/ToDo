@@ -1110,6 +1110,9 @@
       '<div class="edit-btn-row"><button class="edit-del ghost-btn danger-btn" type="button">Supprimer</button><button class="edit-cancel" type="button">Annuler</button><button class="edit-save" type="button">Enregistrer</button></div>';
     row.appendChild(f);
     quickDates(f.querySelector('.e-due'));
+    const focusBtn=document.createElement('button'); focusBtn.type='button'; focusBtn.className='ghost-btn edit-focus'; focusBtn.textContent='Focus';
+    focusBtn.onclick=()=>window.TodoFocus.open(t);
+    const btnRow=f.querySelector('.edit-btn-row'); btnRow.insertBefore(focusBtn, btnRow.firstChild);
 
     const stWrap=f.querySelector('.subtasks-edit');
     let localSubs=(t.subtasks||[]).map(s=>({...s, text:s.text!=null?s.text:String(s.title||s.label||'')}));
@@ -7462,6 +7465,7 @@
   window.TodoAI.init({ aiKey, $, CARACT_ROWS, caractKey, caractSet, caractValue, oppName, renderPipeline, saveCrm, touchCrm });   // js/ai.js
   window.TodoWeek.init({ tasks:()=>tasks, URGENCY_META, openWeekTask, rescheduleTask });   // js/week.js
   window.TodoInsights.init({ tasks:()=>tasks, opportunities:()=>opportunities, escapeHtml });   // js/insights.js
+  window.TodoFocus.init({ validateTask });   // js/focus.js
 })();
 
 if('serviceWorker' in navigator){

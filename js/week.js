@@ -28,9 +28,10 @@ window.TodoWeek=(function(){
       byDay[i].forEach(t=>{
         const card=document.createElement('div'); card.className='week-card'; card.draggable=true; card.dataset.id=t.id;
         const uMeta=URGENCY_META[t.urgency]||URGENCY_META.moyenne;
-        card.innerHTML='<span class="week-card-title"></span><span class="week-card-urg"></span>';
+        card.innerHTML='<span class="week-card-title"></span><span class="week-card-urg"></span><button type="button" class="week-card-focus" title="Focus">●</button>';
         card.querySelector('.week-card-title').textContent=t.title||'(sans titre)';
         const u=card.querySelector('.week-card-urg'); u.textContent=uMeta.label; u.style.color=uMeta.color;
+        card.querySelector('.week-card-focus').onclick=e=>{ e.stopPropagation(); if(window.TodoFocus) window.TodoFocus.open(t); };
         card.addEventListener('dragstart', e=>{ e.dataTransfer.setData('text/plain', t.id); card.classList.add('dragging'); });
         card.addEventListener('dragend', ()=>card.classList.remove('dragging'));
         card.addEventListener('click', ()=>openWeekTask(t.id));

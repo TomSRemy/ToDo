@@ -2582,3 +2582,24 @@ html.widget .dup-banner{ display:none; }
   .bilan-bar{ width:100%; background:var(--accent); border-radius:4px; min-height:4px; }
   .bilan-bar-col span{ color:var(--tx3); font-size:10.5px; }
   @media (max-width:860px){ .week-grid{ grid-template-columns:repeat(2, minmax(0,1fr)); } .bilan-stats{ grid-template-columns:repeat(2, minmax(0,1fr)); } .bilan-cols{ grid-template-columns:1fr; } }
+
+  .week-card{ position:relative; }
+  .week-card-focus{ position:absolute; top:7px; right:7px; width:18px; height:18px; border-radius:50%; background:none; border:1px solid var(--bd); color:var(--tx3); font-size:8px; line-height:16px; padding:0; cursor:pointer; }
+  .week-card-focus:hover{ border-color:var(--accent); color:var(--accent); }
+
+  /* ---------- Focus (overlay #focus-overlay) ---------- */
+  .focus-box{ max-width:420px; display:flex; flex-direction:column; align-items:center; gap:18px; text-align:center; }
+  .focus-eyebrow{ font:600 11px var(--font-mono); letter-spacing:.5px; color:var(--tx3); text-transform:uppercase; }
+  .focus-task-title{ margin:0; font-size:18px; font-weight:700; color:var(--tx1); line-height:1.35; }
+  .focus-ring-wrap{ position:relative; width:170px; height:170px; display:flex; align-items:center; justify-content:center; }
+  .focus-ring{ position:absolute; top:0; left:0; transform:rotate(-90deg); }
+  .focus-ring-progress{ transition:stroke-dashoffset .3s linear; }
+  .focus-time{ display:flex; flex-direction:column; align-items:center; gap:2px; }
+  .focus-clock{ font:700 32px var(--font-mono); color:var(--tx1); }
+  .focus-of{ font:500 11px var(--font-ui); color:var(--tx3); }
+  .focus-controls{ display:flex; gap:10px; width:100%; }
+  .focus-controls button{ flex:1; padding:10px; font:600 13px var(--font-ui); border-radius:8px; cursor:pointer; }
+  .focus-controls .focus-toggle, .focus-controls .focus-add5{ background:var(--panel-2); border:1px solid var(--bd); color:var(--tx2); }
+  .focus-controls .focus-done{ flex:1.6; background:var(--accent); border:none; color:#04070C; font-weight:700; }
+  .focus-mode-row{ display:flex; align-items:center; justify-content:space-between; width:100%; color:var(--tx3); font-size:12px; gap:8px; }
+  .focus-close{ width:100%; }
