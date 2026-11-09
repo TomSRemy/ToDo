@@ -6912,6 +6912,9 @@
     $('team-save-btn').onclick=async()=>{
       const url=$('team-url').value.trim(), key=$('team-key').value.trim();
       if(!url || !key){ $('team-config-status').textContent='URL et clé requises.'; return; }
+      // un header HTTP n'accepte que de l'ISO-8859-1 : un caractère collé par erreur (guillemet
+      // typographique, espace invisible…) donne sinon une erreur fetch cryptique bien plus tard
+      if(!/^[\x00-\xFF]*$/.test(url) || !/^[\x00-\xFF]*$/.test(key)){ $('team-config-status').textContent='URL ou clé : caractère invalide (recopie depuis le bloc de code, sans rien autour).'; return; }
       await window.TodoTeam.saveConfig({ url, anonKey:key });
       $('team-config-status').textContent='Enregistré, rechargement…';
       location.reload();   // le client Supabase se construit une fois, au chargement : on recharge pour qu'il reprenne la config
