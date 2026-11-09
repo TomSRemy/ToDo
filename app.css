@@ -1849,6 +1849,12 @@ html.no-bridge #pipe-xs-btn{ display:none; }
 .xs-filter{ display:flex; gap:6px; margin-left:auto; }
 .xs-filter button{ background:var(--panel-2); border:1px solid var(--bd); border-radius:999px; color:var(--tx2); font:500 12px var(--font-ui); padding:3px 11px; cursor:pointer; }
 .xs-filter button.on{ color:var(--accent); border-color:var(--accent); }
+/* which file : real tabs (underline), not a pill filter — the thing people couldn't tell apart at a glance */
+.xl-filekind{ display:flex; gap:2px; border-bottom:1px solid var(--bd); margin-bottom:12px; }
+.xl-filekind button{ background:none; border:none; border-bottom:2px solid transparent; color:var(--tx2); font:600 13px var(--font-ui); padding:8px 14px 7px; cursor:pointer; margin-bottom:-1px; }
+.xl-filekind button[data-fk="bdd"]{ --fk:#E88FD0; } .xl-filekind button[data-fk="pipe"]{ --fk:#5BA8F5; } .xl-filekind button[data-fk="all"]{ --fk:var(--accent); }
+.xl-filekind button.on{ color:var(--fk, var(--accent)); border-bottom-color:var(--fk, var(--accent)); }
+.xl-filekind button:hover:not(.on){ color:var(--tx1); }
 .xs-tools{ display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin:8px 0 10px; }
 .xs-tools button{ font:600 12.5px var(--font-ui); padding:7px 14px; border-radius:var(--radius); border:1px solid var(--bd); background:var(--panel-2); color:var(--tx1); cursor:pointer; }
 .xs-tools .xs-send{ background:var(--accent); border-color:var(--accent); color:#04070C; }

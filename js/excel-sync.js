@@ -158,6 +158,9 @@ window.TodoExcelSync=(function(){
   // which lines the panel shows: the pipeline's (not signed yet, lost ones included), the Portefeuille's (signed), or all
   let xsScope='pipe';
   const xsInScope=o=>xsScope==='all'?true:xsScope==='parc'?(!isExited(o) && stageIndex(o.stage)>=stageIndex('onboarding')):(isExited(o) || stageIndex(o.stage)<stageIndex('onboarding'));
+  // which file : « Suivi » and « Pipe » were hard to tell apart at a glance — real tabs instead of a text tag per cell
+  let xsFileFilter='all';
+  const xsFileOn=k=>xsFileFilter==='all'||xsFileFilter===k;
   // what « Envoyer » would send, and what « Copier » copies instead : the same list, so copying never misses a row sending would have caught
   const xsPendingList=kind=>xsList().filter(xsInScope).filter(o=>(kind==='pipe'||xsBddApplies(o)) && xsTodo(xsState(kind,o)) && !((xsState(kind,o).diffs||[]).some(d=>d.byExcel)));
   // a real tab (js/app.js's tab system shows/hides #tab-excel), not a modal any more : no close button, no
@@ -167,8 +170,10 @@ window.TodoExcelSync=(function(){
     const ov=$('tab-excel'); if(!ov) return;
     if(!ov.dataset.built){ ov.dataset.built='1';
       ov.innerHTML='<div class="xs-top"><div class="xs-top-row"><h1>Synchro Excel</h1><div class="xs-filter"><button type="button" data-f="todo" class="on">À traiter</button><button type="button" data-f="all">Tout</button></div></div>'
+        +'<div class="xl-filekind"><button type="button" data-fk="bdd">Suivi</button><button type="button" data-fk="pipe">Pipe</button><button type="button" data-fk="all" class="on">Tout</button></div>'
         +'<p class="xs-info"></p><p class="xs-read-err" hidden></p><div class="xs-tools"><button type="button" class="xs-read">Relire les Excel</button><button type="button" class="xs-send" data-k="pipe"></button><button type="button" class="xs-copy" data-k="pipe" title="Copier les lignes à coller soi-même dans Excel, au lieu d’envoyer via le pont">Copier</button><button type="button" class="xs-send" data-k="bdd"></button><button type="button" class="xs-copy" data-k="bdd" title="Copier les lignes à coller soi-même dans Excel, au lieu d’envoyer via le pont">Copier</button><span class="xs-bulk-group"><button type="button" class="xs-bulk" data-p="excel">Tout garder Excel</button><button type="button" class="xs-bulk" data-p="appli">Tout garder appli</button></span></div></div><div class="xs-body"></div>';
       ov.querySelectorAll('.xs-filter button').forEach(b=>b.onclick=()=>{ ov.querySelectorAll('.xs-filter button').forEach(x=>x.classList.toggle('on', x===b)); paintExcelSync(); });
+      ov.querySelectorAll('.xl-filekind button').forEach(b=>b.onclick=()=>{ xsFileFilter=b.dataset.fk; paintExcelSync(); });
       ov.querySelector('.xs-read').onclick=async e=>{ const b=e.currentTarget, t=b.textContent; b.disabled=true; b.textContent='Lecture…';
         try{ await xsReadFile('pipe'); await xsReadFile('bdd'); importParcFromBridge(true); }catch(err){ showBridgeMsg(err.message, false); } b.disabled=false; b.textContent=t; paintExcelSync(); };
       ov.querySelectorAll('.xs-send').forEach(b=>b.onclick=async()=>{ const kind=b.dataset.k, list=xsPendingList(kind); if(!list.length) return;
@@ -246,13 +251,16 @@ window.TodoExcelSync=(function(){
     const errs=['pipe','bdd'].filter(k=>xsReadError[k]).map(k=>(k==='pipe'?'Pipe':'Suivi')+' : '+xsReadError[k]);
     const errEl=ov.querySelector('.xs-read-err'); errEl.hidden=!errs.length; errEl.textContent=errs.join(' · ');
     ov.querySelectorAll('.xs-scope button').forEach(b=>b.classList.toggle('on', b.dataset.s===xsScope));
+    ov.querySelectorAll('.xl-filekind button').forEach(b=>b.classList.toggle('on', b.dataset.fk===xsFileFilter));
     const rows=xsList().filter(xsInScope).map(o=>{ const p=xsState('pipe',o), b=xsBddApplies(o)?xsState('bdd',o):null;
-      return { o, p, b, pDiffs:p.diffs.filter(d=>d.byExcel), bDiffs:b?b.diffs.filter(d=>d.byExcel):[] }; });
-    const todo=rows.filter(r=>xsTodo(r.p) || (r.b && xsTodo(r.b)));
-    const cntP=rows.filter(r=>xsTodo(r.p) && !r.pDiffs.length).length, cntB=rows.filter(r=>r.b && xsTodo(r.b) && !r.bDiffs.length).length;
-    ov.querySelectorAll('.xs-send').forEach(b=>{ const n=b.dataset.k==='pipe'?cntP:cntB; b.innerHTML=XL_SEND_ICO+'Envoyer au '+(b.dataset.k==='pipe'?'Pipe':'Suivi')+' ('+n+')'; b.disabled=!n || !bridgeConfigured(); b.title=bridgeConfigured()?'':'Pont Excel non connecté'; });
+      return { o, p, b, pDiffs:xsFileOn('pipe')?p.diffs.filter(d=>d.byExcel):[], bDiffs:(b && xsFileOn('bdd'))?b.diffs.filter(d=>d.byExcel):[] }; });
+    const relevant=r=>(xsFileOn('pipe') && xsTodo(r.p)) || (xsFileOn('bdd') && r.b && xsTodo(r.b));
+    const todo=rows.filter(relevant);
+    const cntP=xsFileOn('pipe')?rows.filter(r=>xsTodo(r.p) && !r.pDiffs.length).length:0, cntB=xsFileOn('bdd')?rows.filter(r=>r.b && xsTodo(r.b) && !r.bDiffs.length).length:0;
+    ov.querySelectorAll('.xs-send').forEach(b=>{ const k=b.dataset.k, n=k==='pipe'?cntP:cntB; b.classList.toggle('hidden', !xsFileOn(k));
+      b.innerHTML=XL_SEND_ICO+'Envoyer au '+(k==='pipe'?'Pipe':'Suivi')+' ('+n+')'; b.disabled=!n || !bridgeConfigured(); b.title=bridgeConfigured()?'':'Pont Excel non connecté'; });
     // no bridge needed to copy (unlike « Envoyer ») : works even without the pont configured
-    ov.querySelectorAll('.xs-copy').forEach(b=>{ const n=b.dataset.k==='pipe'?cntP:cntB; b.textContent='Copier ('+n+')'; b.disabled=!n; });
+    ov.querySelectorAll('.xs-copy').forEach(b=>{ const k=b.dataset.k, n=k==='pipe'?cntP:cntB; b.classList.toggle('hidden', !xsFileOn(k)); b.textContent='Copier ('+n+')'; b.disabled=!n; });
     const shown=all?rows:todo;
     xsShownNow=shown;
     const nConflictCells=xsConflictTargets(shown).reduce((s,tg)=>s+tg.diffs.length, 0);
@@ -293,8 +301,8 @@ window.TodoExcelSync=(function(){
     const meta=head.querySelector('.xl-meta');
     const targets=xsConflictTargets(members), nCells=targets.reduce((s,tg)=>s+tg.diffs.length, 0);
     const destLabel=kinds=>kinds.map(k=>k==='pipe'?'Pipe':'Suivi').join(' + ');
-    const pendingList=kind=>members.filter(m=>{ const st=kind==='pipe'?m.p:m.b, diffs=kind==='pipe'?m.pDiffs:m.bDiffs; return st && xsTodo(st) && !(diffs||[]).length; }).map(m=>m.o);
-    const needsSend=members.filter(m=>(xsTodo(m.p)&&!m.pDiffs.length) || (m.b&&xsTodo(m.b)&&!m.bDiffs.length)).length;
+    const pendingList=kind=>{ if(!xsFileOn(kind)) return []; return members.filter(m=>{ const st=kind==='pipe'?m.p:m.b, diffs=kind==='pipe'?m.pDiffs:m.bDiffs; return st && xsTodo(st) && !(diffs||[]).length; }).map(m=>m.o); };
+    const needsSend=members.filter(m=>(xsFileOn('pipe') && xsTodo(m.p)&&!m.pDiffs.length) || (xsFileOn('bdd') && m.b&&xsTodo(m.b)&&!m.bDiffs.length)).length;
     const tag=document.createElement('span'); tag.className='xl-tag '+(nCells?'todo':needsSend?'warn':'ok');
     tag.textContent=nCells?nCells+' case'+(nCells>1?'s':''):needsSend?(needsSend>1?needsSend+' pas envoyées':'pas envoyé'):'à jour';
     meta.appendChild(tag);

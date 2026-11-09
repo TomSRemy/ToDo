@@ -2975,9 +2975,9 @@ Responsable technique
     page, errors = new_page(browser, {"todo_todo-widget-opportunities": json.dumps(inst6), "todo_bridge-config": json.dumps({"port": 8765, "token": "k1"})}, viewport={"width": 1400, "height": 900})
     page.route("http://127.0.0.1:8765/**", bridge6)
     page.goto(URL)
-    if page.is_visible("#postit"): page.click("#postit-min")   # the note (open by default) floats bottom-right, over this test's buttons there
     page.click('[data-tab="pipeline"]'); page.click("#pipe-more-btn"); page.click("#pipe-xs-btn")
     page.wait_for_function("document.querySelector('#tab-excel .xs-info').textContent.includes('relu le')", timeout=8000)
+    if page.is_visible("#postit"): page.click("#postit-min")   # the note (open by default) floats bottom-right, over this test's buttons there
     page.click("#tab-excel .xl-head")
     page.click("#tab-excel .xl-colhead")
     page.click("#tab-excel .xl-foot button")
