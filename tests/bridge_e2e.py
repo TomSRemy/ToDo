@@ -51,39 +51,39 @@ try:
         page.add_init_script("if(!sessionStorage.getItem('s')){ localStorage.setItem('todo_todo-widget-opportunities', %s); localStorage.setItem('todo_bridge-config', %s); sessionStorage.setItem('s','1'); }"
                              % (json.dumps(json.dumps(insts)), json.dumps(json.dumps({"port": PORT, "token": "mocktoken"}))))
         page.goto(URL); page.click('[data-tab="pipeline"]'); page.click("#pipe-more-btn"); page.click("#pipe-xs-btn")
-        page.wait_for_selector("#xs-overlay .xs-send[data-k=pipe]:not([disabled])", timeout=20000)
-        page.click("#xs-overlay .xs-send[data-k=pipe]")
-        page.wait_for_function("document.querySelector('#xs-overlay .xs-send[data-k=pipe]').textContent.startsWith('Envoyer')", timeout=60000)
+        page.wait_for_selector("#tab-excel .xs-send[data-k=pipe]:not([disabled])", timeout=20000)
+        page.click("#tab-excel .xs-send[data-k=pipe]")
+        page.wait_for_function("document.querySelector('#tab-excel .xs-send[data-k=pipe]').textContent.startsWith('Envoyer')", timeout=60000)
         rows = dump("pipe")
         mine = [r for r in rows if r[6] == "SCEA Essai"]
         check(len(rows) == 13 and len(mine) == 12 and rows[0][6] == "AUTRE PROD", f"12 lines added after the colleague's one, nothing else moved ({len(rows)} lines)")
         r0 = next(r for r in mine if r[19] == "Toit 0")
         check(r0[22] == "100" and r0[1] == "True" and r0[36] == "True", f"each value in its column (kWc in W, New in B, Qualification in AK): {r0[22]!r} {r0[1]!r} {r0[36]!r}")
         snap = dump("pipe")
-        page.click("#xs-overlay .xs-read"); page.wait_for_timeout(1500)
-        check("Tout est à jour" in page.inner_text("#xs-overlay .xs-body") or page.locator("#xs-overlay .xs-diff").count() == 0, "after the send and a new reading: nothing left to do on the Pipe")
+        page.click("#tab-excel .xs-read"); page.wait_for_timeout(1500)
+        check("Tout est à jour" in page.inner_text("#tab-excel .xs-body") or page.locator("#tab-excel .xs-diff").count() == 0, "after the send and a new reading: nothing left to do on the Pipe")
         # a colleague writes a comment in two lines
         idx = {r[19]: i for i, r in enumerate(rows)}
         call("POST", "/mock/edit/pipe", {"op": "set", "row": idx["Toit 1"] + 1, "col": 36, "value": "Vu par Paul"})
         call("POST", "/mock/edit/pipe", {"op": "set", "row": idx["Toit 2"] + 1, "col": 36, "value": "Rappeler en mars"})
-        page.click("#xs-overlay .xs-read"); page.wait_for_selector("#xs-overlay .xs-diff:has-text('Vu par Paul')", timeout=20000)
+        page.click("#tab-excel .xs-read"); page.wait_for_selector("#tab-excel .xs-diff:has-text('Vu par Paul')", timeout=20000)
         # Toit 1: the app has no comment → « reprendre … dans l'appli » (never an empty value written over the colleague's)
-        d1 = "#xs-overlay tr:has-text('Toit 1') .xs-diff"
+        d1 = "#tab-excel tr:has-text('Toit 1') .xs-diff"
         check("L’appli n’a rien ici" in page.inner_text(d1) and page.locator(d1 + " .xs-choice:has-text('l’appli «')").count() == 0, "the app has nothing: no « keep the app (empty) » choice")
         page.click(d1 + " .xs-choice:has-text('reprendre')"); page.wait_for_timeout(500)
         e1 = next(o for o in json.loads(page.evaluate("window.storage.peek('todo-widget-opportunities')")) if o["id"] == "e1")
         check(e1.get("commentaires") == "Vu par Paul", f"« reprendre … dans l'appli »: the app takes the colleague's comment ({e1.get('commentaires')!r})")
         # Toit 2: the app wrote « Note appli », a colleague replaced it → « Garder l'appli » writes it back (the value seen is still there)
-        d2 = "#xs-overlay tr:has-text('Toit 2') .xs-diff"
+        d2 = "#tab-excel tr:has-text('Toit 2') .xs-diff"
         page.click(d2 + " .xs-choice:has-text('l’appli «')"); page.wait_for_timeout(3000)
         t2 = next(r for r in dump("pipe") if r[19] == "Toit 2")
         check(t2[35] == "Note appli", f"« Garder l'appli »: the app's value is back in the Excel ({t2[35]!r})")
         # the Suivi: from the pricing on; read back on its real key columns
-        page.click("#xs-overlay .xs-send[data-k=bdd]"); page.wait_for_timeout(3000)
+        page.click("#tab-excel .xs-send[data-k=bdd]"); page.wait_for_timeout(3000)
         brows = dump("bdd")
         check(len(brows) == 3 and all(r[31] == "SCEA Essai" for r in brows) and sorted(r[33] for r in brows) == ["Toit 0", "Toit 1", "Toit 2"], f"Suivi: the 3 lines at the pricing step, keys in AF / AH ({[(r[31], r[33]) for r in brows]})")
-        page.click("#xs-overlay .xs-read"); page.wait_for_timeout(2000)
-        body = page.inner_text("#xs-overlay .xs-body") if page.locator("#xs-overlay .xs-body table").count() else ""
+        page.click("#tab-excel .xs-read"); page.wait_for_timeout(2000)
+        body = page.inner_text("#tab-excel .xs-body") if page.locator("#tab-excel .xs-body table").count() else ""
         check("Absent du fichier" not in body, "Suivi read back on its key columns: no line wrongly « absent »")
         check(not errors, f"no page errors ({errors})")
         b.close()

@@ -1840,12 +1840,13 @@ body.postit-open #pipeline-board.pipe-list{ padding-bottom:300px; }
 .opp-history li span{ font-family:var(--font-mono); font-size:11.5px; color:var(--tx3); }
 .opp-history li b{ font-weight:500; color:var(--tx1); }
 
-/* Excel ⇄ appli */
+/* Synchro Excel : a real tab (#tab-excel, in the sidebar) since it stopped being a popup window */
 html.no-bridge #pipe-xs-btn{ display:none; }
-.modal-box.wide.xs-box{ max-width:1100px; }   /* .xs-box alone lost to .modal-box.wide's 760px : same specificity weight, needed */
-.xs-head{ display:flex; align-items:center; gap:14px; }
-.xs-head h3{ margin:0; } .xs-x{ position:static; margin-left:auto; }
-.xs-filter{ display:flex; gap:6px; }
+#tab-excel{ padding:18px max(18px, env(safe-area-inset-right,0px)) 28px max(18px, env(safe-area-inset-left,0px)); overflow-y:auto; max-width:1100px; }
+.xs-top-row{ display:flex; align-items:center; gap:14px; flex-wrap:wrap; margin-bottom:6px; }
+.xs-top-row h1{ margin:0; font-size:17px; font-weight:700; color:var(--tx1); }
+.xs-info{ font-size:12.5px; color:var(--tx2); line-height:1.5; margin:0 0 10px; }
+.xs-filter{ display:flex; gap:6px; margin-left:auto; }
 .xs-filter button{ background:var(--panel-2); border:1px solid var(--bd); border-radius:999px; color:var(--tx2); font:500 12px var(--font-ui); padding:3px 11px; cursor:pointer; }
 .xs-filter button.on{ color:var(--accent); border-color:var(--accent); }
 .xs-tools{ display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin:8px 0 10px; }
@@ -1861,6 +1862,10 @@ html.no-bridge #pipe-xs-btn{ display:none; }
 
 /* a lot (several installations sent together for one pricing request) : folded by default like a directory ;
    opened, a dense grid — click a column header to decide that field for the whole lot, a row name for the whole line */
+.xl-section-h{ display:flex; align-items:baseline; gap:9px; margin:22px 0 10px; }
+.xl-section-h:first-child{ margin-top:0; }
+.xl-section-h h2{ font-size:12.5px; font-weight:700; text-transform:uppercase; letter-spacing:.04em; color:var(--tx2); margin:0; }
+.xl-section-h span{ font:600 11px var(--font-mono); color:var(--tx3); background:var(--panel-2); border-radius:999px; padding:1px 8px; }
 .xl-lots{ display:flex; flex-direction:column; gap:10px; margin-bottom:14px; }
 .xl-lot{ background:var(--panel); border:1px solid var(--bd); border-radius:11px; overflow:hidden; }
 .xl-head{ display:flex; align-items:center; gap:12px; padding:12px 14px; cursor:pointer; }
@@ -1889,7 +1894,10 @@ table.xl-grid{ border-collapse:collapse; width:100%; min-width:520px; font-size:
 .xl-grid th:last-child, .xl-grid td:last-child{ border-right:none; }
 .xl-grid tr:last-child th, .xl-grid tr:last-child td{ border-bottom:none; }
 .xl-grid thead th{ background:var(--panel-2); }
-.xl-colhead{ display:flex; flex-direction:column; width:100%; padding:6px 9px; cursor:pointer; text-align:left; background:none; border:none; font-family:inherit; }
+.xl-colhead{ display:flex; flex-direction:column; width:100%; padding:7px 9px 6px; cursor:pointer; text-align:left; background:none; border:none; border-top:2px solid transparent; font-family:inherit; }
+.xl-colhead.pipe{ border-top-color:#5BA8F5; } .xl-colhead.bdd{ border-top-color:#E88FD0; }
+.xl-col-src{ font:700 9px var(--font-mono); letter-spacing:.03em; margin-bottom:2px; }
+.xl-colhead.pipe .xl-col-src{ color:#5BA8F5; } .xl-colhead.bdd .xl-col-src{ color:#E88FD0; }
 .xl-colhead:hover{ background:var(--panel-3); }
 .xl-colhead b{ font:600 9.5px var(--font-mono); text-transform:uppercase; letter-spacing:.03em; color:var(--tx2); }
 .xl-colhead small{ font:500 9px var(--font-ui); color:var(--tx3); margin-top:1px; }
@@ -2155,7 +2163,7 @@ details.req-compare:not([open]) > .req-compare-h::before{ transform:none; }
 details.req-compare > .req-compare-h{ font-size:12.5px; }
 .req-inst-name b{ font-size:12.5px; }
 @media (max-width:760px){ .sp-actions .sp-next{ font-size:14px; padding:12px 14px; } }
-.xs-head{ flex-wrap:wrap; } .xs-scope{ margin-left:auto; }
+.xs-scope{ margin-left:auto; }
 /* « Compléter avec l'IA » */
 .req-ai{ margin-left:auto; background:none; border:1px solid #B49CFF; color:#B49CFF; border-radius:999px; font:600 11.5px var(--font-ui); padding:3px 11px; cursor:pointer; }
 .req-ai:hover{ background:color-mix(in srgb, #B49CFF 14%, transparent); }

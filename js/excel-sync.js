@@ -7,7 +7,7 @@ window.TodoExcelSync=(function(){
   // what this part uses from js/app.js, given where its code used to stand in js/app.js (so it runs in the same order);
   // app.<name>: a value js/app.js defines further down or may replace, read when used
   api.init=function(app){
-    const { $, ON_PHONE, PQ_FIELDS, bddCells, bridgeCall, bridgeCheck, bridgeConfigured, cellToText, codeAffaire, copyToClipboard, importParcFromBridge, isExited, openOppDetail, oppActionBtn, oppName, pipeCells, pqFold, pqPad, relanceOnMove, renderPipeline, saveCrm, setOppStage, softFail, stageIndex, stageLabel, suiviState, touchCrm }=app;
+    const { $, ON_PHONE, PQ_FIELDS, bddCells, bridgeCall, bridgeCheck, bridgeConfigured, cellToText, codeAffaire, copyToClipboard, gsTab, importParcFromBridge, isExited, openOppDetail, oppActionBtn, oppName, pipeCells, pqFold, pqPad, relanceOnMove, renderPipeline, saveCrm, setOppStage, softFail, stageIndex, stageLabel, suiviState, touchCrm }=app;
     Object.assign(api, { xsState, xsList, openExcelSync, showBridgeMsg, excelButtons });   // function declarations: ready before the code below runs
   // ---------- Sending to the shared Excel files: the safe part is written at once, the rest is shown to decide ----------
   // The bridge never overwrites what someone else typed: such cells are kept and reported, duplicates and plants lost
@@ -160,14 +160,14 @@ window.TodoExcelSync=(function(){
   const xsInScope=o=>xsScope==='all'?true:xsScope==='parc'?(!isExited(o) && stageIndex(o.stage)>=stageIndex('onboarding')):(isExited(o) || stageIndex(o.stage)<stageIndex('onboarding'));
   // what « Envoyer » would send, and what « Copier » copies instead : the same list, so copying never misses a row sending would have caught
   const xsPendingList=kind=>xsList().filter(xsInScope).filter(o=>(kind==='pipe'||xsBddApplies(o)) && xsTodo(xsState(kind,o)) && !((xsState(kind,o).diffs||[]).some(d=>d.byExcel)));
+  // a real tab (js/app.js's tab system shows/hides #tab-excel), not a modal any more : no close button, no
+  // backdrop-click-to-close, content built once into the panel instead of appended to <body>
   async function openExcelSync(opts){
     xsScope=opts && opts.scope || 'pipe';
-    let ov=$('xs-overlay');
-    if(!ov){ ov=document.createElement('div'); ov.id='xs-overlay'; ov.className='modal-overlay';
-      ov.innerHTML='<div class="modal-box wide xs-box" role="dialog" aria-labelledby="xs-title"><div class="xs-head"><h3 id="xs-title">Synchro Excel</h3><div class="xs-filter"><button type="button" data-f="todo" class="on">À traiter</button><button type="button" data-f="all">Tout</button></div><button type="button" class="modal-x xs-x" aria-label="Fermer">×</button></div>'
-        +'<p class="modal-hint xs-info"></p><p class="xs-read-err" hidden></p><div class="xs-tools"><button type="button" class="xs-read">Relire les Excel</button><button type="button" class="xs-send" data-k="pipe"></button><button type="button" class="xs-copy ghost-btn" data-k="pipe" title="Copier les lignes à coller soi-même dans Excel, au lieu d’envoyer via le pont">Copier</button><button type="button" class="xs-send" data-k="bdd"></button><button type="button" class="xs-copy ghost-btn" data-k="bdd" title="Copier les lignes à coller soi-même dans Excel, au lieu d’envoyer via le pont">Copier</button><span class="xs-bulk-group"><button type="button" class="xs-bulk" data-p="excel">Tout garder Excel</button><button type="button" class="xs-bulk" data-p="appli">Tout garder appli</button></span></div><div class="xs-body"></div></div>';
-      document.body.appendChild(ov); const close=()=>ov.classList.add('hidden');
-      ov.addEventListener('click', e=>{ if(e.target===ov) close(); }); ov.querySelector('.xs-x').onclick=close;
+    const ov=$('tab-excel'); if(!ov) return;
+    if(!ov.dataset.built){ ov.dataset.built='1';
+      ov.innerHTML='<div class="xs-top"><div class="xs-top-row"><h1>Synchro Excel</h1><div class="xs-filter"><button type="button" data-f="todo" class="on">À traiter</button><button type="button" data-f="all">Tout</button></div></div>'
+        +'<p class="xs-info"></p><p class="xs-read-err" hidden></p><div class="xs-tools"><button type="button" class="xs-read">Relire les Excel</button><button type="button" class="xs-send" data-k="pipe"></button><button type="button" class="xs-copy" data-k="pipe" title="Copier les lignes à coller soi-même dans Excel, au lieu d’envoyer via le pont">Copier</button><button type="button" class="xs-send" data-k="bdd"></button><button type="button" class="xs-copy" data-k="bdd" title="Copier les lignes à coller soi-même dans Excel, au lieu d’envoyer via le pont">Copier</button><span class="xs-bulk-group"><button type="button" class="xs-bulk" data-p="excel">Tout garder Excel</button><button type="button" class="xs-bulk" data-p="appli">Tout garder appli</button></span></div></div><div class="xs-body"></div>';
       ov.querySelectorAll('.xs-filter button').forEach(b=>b.onclick=()=>{ ov.querySelectorAll('.xs-filter button').forEach(x=>x.classList.toggle('on', x===b)); paintExcelSync(); });
       ov.querySelector('.xs-read').onclick=async e=>{ const b=e.currentTarget, t=b.textContent; b.disabled=true; b.textContent='Lecture…';
         try{ await xsReadFile('pipe'); await xsReadFile('bdd'); importParcFromBridge(true); }catch(err){ showBridgeMsg(err.message, false); } b.disabled=false; b.textContent=t; paintExcelSync(); };
@@ -181,9 +181,9 @@ window.TodoExcelSync=(function(){
         b.disabled=true; const t=b.textContent; b.textContent='Envoi…';
         await xsApplyBulk(targets, b.dataset.p); b.disabled=false; b.textContent=t; });
     }
-    { let sc=ov.querySelector('.xs-scope'); if(!sc){ sc=document.createElement('div'); sc.className='xs-scope xs-filter'; ov.querySelector('.xs-head').appendChild(sc);
+    { let sc=ov.querySelector('.xs-scope'); if(!sc){ sc=document.createElement('div'); sc.className='xs-scope xs-filter'; ov.querySelector('.xs-top-row').appendChild(sc);
         [['pipe','Pipeline'],['parc','Portefeuille (signés)'],['all','Tout']].forEach(([k,l])=>{ const b=document.createElement('button'); b.type='button'; b.dataset.s=k; b.textContent=l; b.onclick=()=>{ xsScope=k; paintExcelSync(); }; sc.appendChild(b); }); } }
-    ov.classList.remove('hidden'); paintExcelSync();
+    paintExcelSync();
     if(bridgeConfigured() && !(opts&&opts.noRead) && (!xsRead.pipe || Date.now()-xsRead.pipe.at>120000)){ try{ await xsReadFile('pipe'); await xsReadFile('bdd'); }catch(e){ softFail('relecture des Excel', e); } paintExcelSync(); }
   }
   // What « choices » (and « aligns », for the ones kept from the Excel) say for this installation's diffs : the local
@@ -236,7 +236,7 @@ window.TodoExcelSync=(function(){
     await xsSendPlans(plans);
   }
   function paintExcelSync(){
-    const ov=$('xs-overlay'); if(!ov || ov.classList.contains('hidden')) return;
+    const ov=$('tab-excel'); if(!ov || ov.classList.contains('hidden')) return;
     const all=ov.querySelector('.xs-filter .on').dataset.f==='all', body=ov.querySelector('.xs-body'); body.innerHTML='';
     ov.querySelector('.xs-info').textContent=bridgeConfigured()
       ? 'Pipe '+(xsRead.pipe?'relu le '+new Date(xsRead.pipe.at).toLocaleDateString('fr-FR')+' à '+new Date(xsRead.pipe.at).toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'}):'pas encore relu')+' · Suivi '+(xsRead.bdd?'relu':'pas encore relu')+'. Envoyer ne remplace jamais une case modifiée par un collègue : elle te sera demandée.'
@@ -266,9 +266,16 @@ window.TodoExcelSync=(function(){
         const members=shown.filter(x=>x.o.requestId===rid);
         groups.push({ rid:members.length>1?rid:null, members }); }
       else groups.push({ rid:null, members:[r] }); });
-    const lw=document.createElement('div'); lw.className='xl-lots';
-    groups.forEach(({rid,members})=>lw.appendChild(xlLotCard(rid, members)));
-    body.appendChild(lw);
+    // two groups instead of one flat list : a conflict needs a decision, a plain send doesn't — mixing them made it
+    // hard to tell at a glance which installations actually needed attention
+    const trancher=[], envoyer=[];
+    groups.forEach(g=>(xsConflictTargets(g.members).reduce((s,tg)=>s+tg.diffs.length,0)?trancher:envoyer).push(g));
+    const section=(title, list)=>{ if(!list.length) return;
+      const h=document.createElement('div'); h.className='xl-section-h'; h.innerHTML='<h2></h2><span></span>';
+      h.querySelector('h2').textContent=title; h.querySelector('span').textContent=list.length; body.appendChild(h);
+      const lw=document.createElement('div'); lw.className='xl-lots';
+      list.forEach(({rid,members})=>lw.appendChild(xlLotCard(rid, members))); body.appendChild(lw); };
+    section('À trancher', trancher); section('À envoyer', envoyer);
   }
   // A card, folded by default : its name, how many cases need a decision, two quick buttons for the whole group.
   // Opened, a dense grid — columns are the fields that diverge anywhere in the group, rows are its installations ;
@@ -328,8 +335,11 @@ window.TodoExcelSync=(function(){
     const table=document.createElement('table'); table.className='xl-grid';
     const thead=document.createElement('thead'); const htr=document.createElement('tr'); htr.appendChild(document.createElement('th'));
     const colBtns=[];
-    cols.forEach(col=>{ const th=document.createElement('th'); const cb=document.createElement('button'); cb.type='button'; cb.className='xl-colhead'; cb.dataset.side='excel'; cb.dataset.comment=xsIsCommentCol(col.label)?'1':'';
-      cb.innerHTML='<b></b><small></small>'; cb.querySelector('b').textContent=col.label+(col.kind==='bdd'?' (Suivi)':''); cb.querySelector('small').textContent=col.items.length+' installation'+(col.items.length>1?'s':'')+(cb.dataset.comment?' · clic : fusionner':'');
+    cols.forEach(col=>{ const th=document.createElement('th'); const cb=document.createElement('button'); cb.type='button'; cb.className='xl-colhead '+col.kind; cb.dataset.side='excel'; cb.dataset.comment=xsIsCommentCol(col.label)?'1':'';
+      // which file this column belongs to, always shown (not just a "(Suivi)" suffix on bdd) : a card mixing Pipe
+      // and Suivi columns (like a lot with both a Pipe date and a Suivi statut in conflict) used to read as one
+      // undifferentiated table — now each column says PIPE or SUIVI plainly, matching the card's own dest badge
+      cb.innerHTML='<span class="xl-col-src"></span><b></b><small></small>'; cb.querySelector('.xl-col-src').textContent=col.kind==='pipe'?'Pipe':'Suivi'; cb.querySelector('b').textContent=col.label; cb.querySelector('small').textContent=col.items.length+' installation'+(col.items.length>1?'s':'')+(cb.dataset.comment?' · clic : fusionner':'');
       th.appendChild(cb); htr.appendChild(th); colBtns.push(cb); });
     thead.appendChild(htr); table.appendChild(thead);
     const tbody=document.createElement('tbody'); table.appendChild(tbody);
@@ -401,9 +411,9 @@ window.TodoExcelSync=(function(){
       if(btn){ btn.textContent=questions.length?'À trancher':'✓ Envoyé'; btn.title=msg; setTimeout(()=>{ btn.textContent=label; btn.disabled=false; },2500); }
       showBridgeMsg(msg, true);
       if(questions.length) openXlReview(kind, questions);
-      const ov=$('xs-overlay');
+      const ov=$('tab-excel');
       if(ov && !ov.classList.contains('hidden')) paintExcelSync();
-      else if(pending.length>questions.length) await openExcelSync({ noRead:true });   // a plain conflict, panel not open : show it there rather than nowhere
+      else if(pending.length>questions.length){ gsTab('excel'); await openExcelSync({ noRead:true }); }   // a plain conflict, tab not open : show it there rather than nowhere
       return true;
     }catch(e){
       if(btn){ btn.textContent=label; btn.disabled=false; }
@@ -451,7 +461,7 @@ window.TodoExcelSync=(function(){
         const { res, results, pending:again }=await xlSend(kind, list, rows);
         showBridgeMsg(xlSummary(kind, results, res), true);
         try{ await xsReadFile(kind); }catch(e){ softFail('relecture de l’Excel', e); }
-        const ov=$('xs-overlay'); if(ov && !ov.classList.contains('hidden')) paintExcelSync();
+        const ov=$('tab-excel'); if(ov && !ov.classList.contains('hidden')) paintExcelSync();
         const qAgain=again.filter(p=>p.r.question);
         if(qAgain.length) openXlReview(kind, qAgain);
       }catch(e){ showBridgeMsg(e.message, false); }

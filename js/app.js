@@ -5537,7 +5537,9 @@
       +(window.TodoExcelSync.bridgeLatest(s.info)?' · pont v'+s.info.version:bridgeUpToDate(s.info)?' · pont v'+s.info.version+' (la '+window.TodoExcelSync.BRIDGE_LATEST+' est disponible, plus sûre : télécharge pont-excel.ps1 ci-dessus quand tu veux)':' · ⚠ ton pont est en version '+(s.info.version||'?')+', la '+window.TodoExcelSync.BRIDGE_LATEST+' est disponible : télécharge pont-excel.ps1 ci-dessus, remplace l\u2019ancien fichier et relance le pont');
     el.className='bridge-status '+(bridgeUpToDate(s.info)?'on':'off');
   }
-  window.TodoExcelSync.init({ $, ON_PHONE, PQ_FIELDS, bddCells, bridgeCall, bridgeCheck, bridgeConfigured, cellToText, codeAffaire, copyToClipboard, importParcFromBridge, isExited, openOppDetail, oppActionBtn, oppName, pipeCells, pqFold, pqPad, relanceOnMove, renderPipeline, saveCrm, setOppStage, softFail, stageIndex, stageLabel, suiviState, touchCrm, get bridgeState(){ return bridgeState; }, set bridgeState(v){ bridgeState=v; }, get opportunities(){ return opportunities; }, set opportunities(v){ opportunities=v; } });   // Envoi vers les Excel partagés et Excel ⇄ appli — js/excel-sync.js
+  // gsTab : not yet defined at this point in the file (const, no hoisting) — deferred to call time, same way
+  // openExcelSync is proxied in reverse at the top of this file
+  window.TodoExcelSync.init({ $, ON_PHONE, PQ_FIELDS, bddCells, bridgeCall, bridgeCheck, bridgeConfigured, cellToText, codeAffaire, copyToClipboard, gsTab:(...a)=>gsTab(...a), importParcFromBridge, isExited, openOppDetail, oppActionBtn, oppName, pipeCells, pqFold, pqPad, relanceOnMove, renderPipeline, saveCrm, setOppStage, softFail, stageIndex, stageLabel, suiviState, touchCrm, get bridgeState(){ return bridgeState; }, set bridgeState(v){ bridgeState=v; }, get opportunities(){ return opportunities; }, set opportunities(v){ opportunities=v; } });   // Envoi vers les Excel partagés et Excel ⇄ appli — js/excel-sync.js
   function renderLists(){
     renderStorageGauge();
     renderClientList();
@@ -5989,12 +5991,9 @@
     reader.readAsText(file);
   }
 
-  const tabContacts=$('tab-contacts'), tabPipeline=$('tab-pipeline'), tabParc=$('tab-parc');
+  const tabContacts=$('tab-contacts'), tabPipeline=$('tab-pipeline'), tabParc=$('tab-parc'), tabExcel=$('tab-excel');
   tabs.forEach(el=>{ el.onclick=()=>{
-    // a permanent, one-click way in : not a real content section (still a modal, so the current tab stays as it
-    // is underneath), but a place of its own in the sidebar instead of buried behind a button inside Pipeline
-    if(el.dataset.tab==='excel'){ openExcelSync(); return; }
-    tabs.forEach(t=>t.classList.remove('active')); el.classList.add('active'); const tgt=el.dataset.tab; tabToday.classList.toggle('hidden',tgt!=='today'); tabTasks.classList.toggle('hidden',tgt!=='tasks'); tabInbox.classList.toggle('hidden',tgt!=='inbox'); tabArchive.classList.toggle('hidden',tgt!=='archive'); tabLists.classList.toggle('hidden',tgt!=='lists'); tabContacts.classList.toggle('hidden',tgt!=='contacts'); tabPipeline.classList.toggle('hidden',tgt!=='pipeline'); tabParc.classList.toggle('hidden',tgt!=='parc'); $('tab-network').classList.toggle('hidden',tgt!=='network'); if(tgt==='network') showNetwork(); $('tab-market').classList.toggle('hidden',tgt!=='market'); if(tgt==='market') renderMarket(); if(tgt==='parc'){ renderParc(); $('parc-bridge-btn').classList.toggle('hidden', !bridgeConfigured()); renderParcSource(); if(bridgeConfigured() && parcSource().auto && (!parcData || Date.now()-(parcData.importedAt||0)>600000)) importParcFromBridge(true); } if(tgt==='today')renderToday(); if(tgt==='archive')renderArchive(); if(tgt==='contacts'){ refreshContactsTypeFilter(); renderContacts(); fetchContactInbox(); } if(tgt==='pipeline')renderPipeline(); if(tgt==='lists'){ if(bridgeConfigured()) bridgeCheck(); else renderBridgeStatus(); renderLists(); renderConflicts(); $('sync-owner').value=syncConfig.owner||''; $('sync-repo').value=syncConfig.repo||''; if(syncConfig.enabled) setSyncStatus('Synchro active'); } if(tgt==='inbox')fetchInbox(); }; });
+    tabs.forEach(t=>t.classList.remove('active')); el.classList.add('active'); const tgt=el.dataset.tab; tabToday.classList.toggle('hidden',tgt!=='today'); tabTasks.classList.toggle('hidden',tgt!=='tasks'); tabInbox.classList.toggle('hidden',tgt!=='inbox'); tabArchive.classList.toggle('hidden',tgt!=='archive'); tabLists.classList.toggle('hidden',tgt!=='lists'); tabContacts.classList.toggle('hidden',tgt!=='contacts'); tabPipeline.classList.toggle('hidden',tgt!=='pipeline'); tabParc.classList.toggle('hidden',tgt!=='parc'); tabExcel.classList.toggle('hidden',tgt!=='excel'); if(tgt==='excel') openExcelSync(); $('tab-network').classList.toggle('hidden',tgt!=='network'); if(tgt==='network') showNetwork(); $('tab-market').classList.toggle('hidden',tgt!=='market'); if(tgt==='market') renderMarket(); if(tgt==='parc'){ renderParc(); $('parc-bridge-btn').classList.toggle('hidden', !bridgeConfigured()); renderParcSource(); if(bridgeConfigured() && parcSource().auto && (!parcData || Date.now()-(parcData.importedAt||0)>600000)) importParcFromBridge(true); } if(tgt==='today')renderToday(); if(tgt==='archive')renderArchive(); if(tgt==='contacts'){ refreshContactsTypeFilter(); renderContacts(); fetchContactInbox(); } if(tgt==='pipeline')renderPipeline(); if(tgt==='lists'){ if(bridgeConfigured()) bridgeCheck(); else renderBridgeStatus(); renderLists(); renderConflicts(); $('sync-owner').value=syncConfig.owner||''; $('sync-repo').value=syncConfig.repo||''; if(syncConfig.enabled) setSyncStatus('Synchro active'); } if(tgt==='inbox')fetchInbox(); }; });
 
   $('submit-task').onclick=addTask;
   addSection.addEventListener('keydown', e=>{ if(e.key==='Enter' && e.target.tagName!=='TEXTAREA'){ e.preventDefault(); addTask(); } });
@@ -6418,11 +6417,11 @@
   $('tasks-views-btn').onclick=e=>{ e.stopPropagation(); openViewsMenu('tasks', e.currentTarget); };
   $('pipe-views-btn').onclick=e=>{ e.stopPropagation(); openViewsMenu('pipeline', e.currentTarget); };
   $('pipe-meet-toggle').onclick=()=>{ pipeOffers=false; pipeMeet=!pipeMeet; meetStuckOnly=false; if(pipeMeet){ pipeDash=false; pipeMap=false; } renderPipeline(); };
-  $('pipe-xs-btn').onclick=()=>openExcelSync({ scope:'pipe' });
+  $('pipe-xs-btn').onclick=()=>{ gsTab('excel'); openExcelSync({ scope:'pipe' }); };
   if($('ai-section')) $('ai-section').hidden=!aiOn();
   { const st=()=>{ const k=aiKey(); $('ai-key-status').textContent=k?'Clé enregistrée (…'+k.slice(-4)+'). Vide le champ et enregistre pour l\u2019oublier.':'Pas de clé : copier-coller avec claude.ai.'; };
     if($('ai-key-save')){ $('ai-key-save').onclick=()=>{ const v=$('ai-key-input').value.trim(); try{ if(v) localStorage.setItem('ai-key', v); else localStorage.removeItem('ai-key'); }catch(e){} $('ai-key-input').value=''; st(); }; st(); } }
-  if($('parc-xs-btn')){ $('parc-xs-btn').onclick=()=>openExcelSync({ scope:'parc' }); if(ON_PHONE) $('parc-xs-btn').hidden=true; }
+  if($('parc-xs-btn')){ $('parc-xs-btn').onclick=()=>{ gsTab('excel'); openExcelSync({ scope:'parc' }); }; if(ON_PHONE) $('parc-xs-btn').hidden=true; }
   $('pipe-map-toggle').onclick=()=>{ pipeOffers=false; pipeMap=!pipeMap; pipeDash=false; pipeMeet=false; parcMapSel=null; parcMapView=null; renderPipeline(); };
   $('pipe-list-toggle').onclick=()=>{ pipeOffers=false; pipeMap=false; pipeList=!(pipeList && !pipeDash && !pipeMeet); pipeDash=false; pipeMeet=false; lsSet('pipe-list', pipeList?'1':'0'); renderPipeline(); };
   $('pq-save-btn').onclick=saveOpp;
@@ -7226,7 +7225,7 @@
       { t:'Nouvelle pré-qualif', k:'prequalif prospect', go:clickEl('prequal-add-btn','pipeline') },
       { t:'Nouveau contact', k:'ajouter contact personne', go:clickEl('contact-add-btn','contacts') },
       { t:'Coller une signature de mail', k:'contact signature', go:clickEl('sig-paste-btn','contacts') },
-      { t:'Synchro Excel : ce qui est envoyé ou pas', k:'excel pipe bdd suivi envoye pousse synchro', go:()=>openExcelSync() },
+      { t:'Synchro Excel : ce qui est envoyé ou pas', k:'excel pipe bdd suivi envoye pousse synchro', go:()=>gsTab('excel') },
       { t:'Pipeline en liste', k:'liste tableau installations toutes', go:()=>{ gsTab('pipeline'); setTimeout(()=>{ pipeList=true; pipeDash=false; pipeMeet=false; lsSet('pipe-list','1'); renderPipeline(); },40); } },
       { t:'Vue réunion du pipeline', k:'reunion pricing partager', go:()=>{ gsTab('pipeline'); setTimeout(()=>{ if(!pipeMeet){ pipeMeet=true; pipeDash=false; renderPipeline(); } },40); } },
       { t:'Tableau de bord du pipeline', k:'dashboard stats', go:()=>{ gsTab('pipeline'); setTimeout(()=>{ if(!pipeDash){ pipeDash=true; pipeMeet=false; renderPipeline(); } },40); } },
