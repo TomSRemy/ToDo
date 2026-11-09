@@ -1,5 +1,5 @@
 // Todo — the shared Excel files (loaded before js/app.js): sending a deal to the Pipe and the Suivi through the local bridge
-// without overwriting a colleague's cell, and « Excel ⇄ appli », what changed on either side since. Split out of js/app.js (code audit).
+// without overwriting a colleague's cell, and « Synchro Excel », what changed on either side since. Split out of js/app.js (code audit).
 window.TodoExcelSync=(function(){
   const api={};
   // a plain paper-plane, so « Envoyer »/« Appliquer » read as a send action at a glance, not just another button
@@ -66,7 +66,7 @@ window.TodoExcelSync=(function(){
     }
     return { res, results, pending };
   }
-  // ---------- Excel ⇄ appli : what was sent to the Pipe and to the Suivi (BDD), what changed since on either side ----------
+  // ---------- Synchro Excel : what was sent to the Pipe and to the Suivi (BDD), what changed since on either side ----------
   const xsHash=vals=>{ const t=(vals||[]).map(v=>cellToText(v)).join('␟'); let h=5381; for(let i=0;i<t.length;i++) h=((h*33)^t.charCodeAt(i))>>>0; return h.toString(36); };
   const xsNorm=v=>pqFold(String(v==null?'':v)).replace(/[^a-z0-9]/g,'');
   const xsColIdx=letters=>String(letters||'').toUpperCase().split('').reduce((n,ch)=>n*26+(ch.charCodeAt(0)-64),0)-1;
@@ -164,7 +164,7 @@ window.TodoExcelSync=(function(){
     xsScope=opts && opts.scope || 'pipe';
     let ov=$('xs-overlay');
     if(!ov){ ov=document.createElement('div'); ov.id='xs-overlay'; ov.className='modal-overlay';
-      ov.innerHTML='<div class="modal-box wide xs-box" role="dialog" aria-labelledby="xs-title"><div class="xs-head"><h3 id="xs-title">Excel ⇄ appli</h3><div class="xs-filter"><button type="button" data-f="todo" class="on">À traiter</button><button type="button" data-f="all">Tout</button></div><button type="button" class="modal-x xs-x" aria-label="Fermer">×</button></div>'
+      ov.innerHTML='<div class="modal-box wide xs-box" role="dialog" aria-labelledby="xs-title"><div class="xs-head"><h3 id="xs-title">Synchro Excel</h3><div class="xs-filter"><button type="button" data-f="todo" class="on">À traiter</button><button type="button" data-f="all">Tout</button></div><button type="button" class="modal-x xs-x" aria-label="Fermer">×</button></div>'
         +'<p class="modal-hint xs-info"></p><p class="xs-read-err" hidden></p><div class="xs-tools"><button type="button" class="xs-read">Relire les Excel</button><button type="button" class="xs-send" data-k="pipe"></button><button type="button" class="xs-copy ghost-btn" data-k="pipe" title="Copier les lignes à coller soi-même dans Excel, au lieu d’envoyer via le pont">Copier</button><button type="button" class="xs-send" data-k="bdd"></button><button type="button" class="xs-copy ghost-btn" data-k="bdd" title="Copier les lignes à coller soi-même dans Excel, au lieu d’envoyer via le pont">Copier</button><span class="xs-bulk-group"><button type="button" class="xs-bulk" data-p="excel">Tout garder Excel</button><button type="button" class="xs-bulk" data-p="appli">Tout garder appli</button></span></div><div class="xs-body"></div></div>';
       document.body.appendChild(ov); const close=()=>ov.classList.add('hidden');
       ov.addEventListener('click', e=>{ if(e.target===ov) close(); }); ov.querySelector('.xs-x').onclick=close;

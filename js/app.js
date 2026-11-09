@@ -3350,15 +3350,15 @@
     if(o.requestId){ const all=requestInstalls(o.requestId).filter(x=>!isExited(x)); if(all.length>group.length){ const req=opportunities.find(x=>x.id===o.requestId)||{};
       const a=document.createElement('button'); a.type='button'; a.className='pipe-origin'; a.textContent='↳ demande '+(req.label||req.company||'')+' · '+all.length+' install.'; a.onclick=e=>{ e.stopPropagation(); openRequestDetail(o.requestId); }; card.appendChild(a); } }
   }
-  // how many lines wait for the Excel files (or changed there), on the « Excel ⇄ » button
+  // how many lines wait for the Excel files (or changed there), on the « Synchro Excel » button
   function paintXsCount(){ const b=$('pipe-xs-btn'); if(!b || ON_PHONE) return; let n=0;
     try{ xsList().filter(o=>isExited(o) || stageIndex(o.stage)<stageIndex('onboarding')).forEach(o=>{ if(xsTodo(xsState('pipe',o)) || (xsBddApplies(o) && xsTodo(xsState('bdd',o)))) n++; }); }catch(e){ softFail('compteur Excel', e); }
-    b.textContent='Excel ⇄'+(n?' · '+n:''); b.classList.toggle('xs-pending', n>0); pipeXsN=n; paintPipeMore(); }
+    b.textContent='Synchro Excel'+(n?' · '+n:''); b.classList.toggle('xs-pending', n>0); pipeXsN=n; paintPipeMore(); }
   // « ⋯ » of the pipeline bar: the lines waiting for the Excel files and the duplicates, added up on it (UX audit TD1)
   let pipeXsN=0;
   function paintPipeMore(){ const el=$('pipe-more-n'); if(!el) return; const dup=$('pipe-dup-btn'), xs=$('pipe-xs-btn');
     const n=(xs && getComputedStyle(xs).display!=='none'?pipeXsN:0)+(dup && !dup.hidden?dupCount():0);
-    el.hidden=!n; el.textContent=n; el.title=n+' à vérifier : envois Excel ⇄ et doublons possibles'; $('pipe-more-btn').setAttribute('aria-label','Plus d\u2019actions'+(n?' ('+n+' à vérifier)':'')); $('pipe-more-btn').classList.toggle('on', pipeShowExited); }
+    el.hidden=!n; el.textContent=n; el.title=n+' à vérifier : envois Synchro Excel et doublons possibles'; $('pipe-more-btn').setAttribute('aria-label','Plus d\u2019actions'+(n?' ('+n+' à vérifier)':'')); $('pipe-more-btn').classList.toggle('on', pipeShowExited); }
   function renderPipelineInner(){
     if(normalizeOpps()) saveCrmLocalOnly();
     const board=$('pipeline-board');
@@ -7226,7 +7226,7 @@
       { t:'Nouvelle pré-qualif', k:'prequalif prospect', go:clickEl('prequal-add-btn','pipeline') },
       { t:'Nouveau contact', k:'ajouter contact personne', go:clickEl('contact-add-btn','contacts') },
       { t:'Coller une signature de mail', k:'contact signature', go:clickEl('sig-paste-btn','contacts') },
-      { t:'Excel ⇄ appli : ce qui est envoyé ou pas', k:'excel pipe bdd suivi envoye pousse synchro', go:()=>openExcelSync() },
+      { t:'Synchro Excel : ce qui est envoyé ou pas', k:'excel pipe bdd suivi envoye pousse synchro', go:()=>openExcelSync() },
       { t:'Pipeline en liste', k:'liste tableau installations toutes', go:()=>{ gsTab('pipeline'); setTimeout(()=>{ pipeList=true; pipeDash=false; pipeMeet=false; lsSet('pipe-list','1'); renderPipeline(); },40); } },
       { t:'Vue réunion du pipeline', k:'reunion pricing partager', go:()=>{ gsTab('pipeline'); setTimeout(()=>{ if(!pipeMeet){ pipeMeet=true; pipeDash=false; renderPipeline(); } },40); } },
       { t:'Tableau de bord du pipeline', k:'dashboard stats', go:()=>{ gsTab('pipeline'); setTimeout(()=>{ if(!pipeDash){ pipeDash=true; pipeMeet=false; renderPipeline(); } },40); } },
