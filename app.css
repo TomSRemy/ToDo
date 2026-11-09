@@ -166,6 +166,11 @@
   .tab:hover{ color:var(--tx1); background:var(--panel-2); }
   .tab.active{ color:var(--accent); background:var(--accent-dim); border-left-color:var(--accent); }
   .tab-icon{ width:15px; height:15px; flex-shrink:0; stroke:currentColor; }
+  /* section headers inside the sidebar's tab list (To do / Origination) : a label, not a button — no hover, no click */
+  .tab-sec{ font-family:var(--font-mono); font-size:9.5px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:var(--tx3); padding:12px 10px 3px; }
+  .tabs .tab-sec:first-child{ padding-top:2px; }
+  .tab-div{ height:1px; background:var(--bd-soft); margin:8px 2px; }
+  .tabs-bottom{ margin-top:10px; padding-top:10px; border-top:1px solid var(--bd-soft); }
 
   /* Below this width, the sidebar collapses to icons only — filters/views live
      in the top toolbar (not the sidebar) precisely so they survive this. */
@@ -176,6 +181,7 @@
     .app-sidebar .head-stats{ display:none; }
     .tabs{ padding:0 8px; }
     .tab{ justify-content:center; padding:10px 0; gap:0; }
+    .tab-sec{ display:none; }
     .app-sidebar-back{ padding:12px 0 0; padding-top:14px; justify-content:center; }
     .tab-badge{ margin-left:0; min-width:6px; width:6px; height:6px; padding:0; font-size:0; }
   }
