@@ -2603,3 +2603,9 @@ html.widget .dup-banner{ display:none; }
   .focus-controls .focus-done{ flex:1.6; background:var(--accent); border:none; color:#04070C; font-weight:700; }
   .focus-mode-row{ display:flex; align-items:center; justify-content:space-between; width:100%; color:var(--tx3); font-size:12px; gap:8px; }
   .focus-close{ width:100%; }
+
+  /* ---------- Capture vocale (#quick-add-voice) ---------- */
+  #quick-add-voice{ display:flex; align-items:center; justify-content:center; padding:8px; }
+  #quick-add-voice svg{ width:15px; height:15px; }
+  #quick-add-voice.listening{ color:#04070C; background:var(--accent); border-color:var(--accent); animation:voicePulse 1.1s ease-in-out infinite; }
+  @keyframes voicePulse{ 0%,100%{ box-shadow:0 0 0 0 var(--accent-dim); } 50%{ box-shadow:0 0 0 6px transparent; } }

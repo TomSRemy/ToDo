@@ -1159,6 +1159,15 @@
   function openWeekTask(id){ document.querySelector('[data-tab="tasks"]').click(); openEdit(id); }
   function rescheduleTask(id, due){ const t=tasks.find(x=>x.id===id); if(!t) return; t.due=due; touch(t); saveTasks(); renderToday(); }
 
+  // from js/voice.js: a dictated task, the date/time it understood already pulled out of the title
+  function openVoiceTask(title, due, time){
+    openAddForm();
+    $('f-title').value=title;
+    if(due) $('f-due').value=due;
+    if(time){ reminderRow.style.display='flex'; $('f-reminder').value=(due||toISO(new Date()))+'T'+time; }
+    $('f-title').focus();
+  }
+
   function makeGroupHeader(label,color,count){
     const d=document.createElement('div'); d.className='group-header';
     if(color) d.style.color=color;
@@ -7466,6 +7475,8 @@
   window.TodoWeek.init({ tasks:()=>tasks, URGENCY_META, openWeekTask, rescheduleTask });   // js/week.js
   window.TodoInsights.init({ tasks:()=>tasks, opportunities:()=>opportunities, escapeHtml });   // js/insights.js
   window.TodoFocus.init({ validateTask });   // js/focus.js
+  window.TodoVoice.init({ openVoiceTask });   // js/voice.js
+  window.TodoVoice.wire($('quick-add-voice'), quickAddInput);
 })();
 
 if('serviceWorker' in navigator){
