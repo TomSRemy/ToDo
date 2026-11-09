@@ -759,11 +759,11 @@
         <span id="bridge-status" class="bridge-status"></span>
       </div>
       <div class="parc-source" style="margin-top:14px;">
-        <label for="rs-pipe-link">Lien de l'Excel « Pipe Agrégation » (SharePoint / OneDrive)</label>
-        <div class="parc-source-row"><input type="url" id="rs-pipe-link" placeholder="https://…sharepoint.com/…/Pipe_Agregation.xlsx" autocomplete="off"><button type="button" class="pipe-bar-btn" id="rs-pipe-link-save">Enregistrer</button><a class="pipe-bar-btn hidden" id="rs-pipe-open-link" target="_blank" rel="noopener noreferrer">Ouvrir ↗</a></div>
-        <label for="rs-bdd-link" style="margin-top:10px; display:block;">Lien de l'Excel « Suivi Agrégation » (SharePoint / OneDrive)</label>
-        <div class="parc-source-row"><input type="url" id="rs-bdd-link" placeholder="https://…sharepoint.com/…/Suivi_Agregation.xlsx" autocomplete="off"><button type="button" class="pipe-bar-btn" id="rs-bdd-link-save">Enregistrer</button><a class="pipe-bar-btn hidden" id="rs-bdd-open-link" target="_blank" rel="noopener noreferrer">Ouvrir ↗</a></div>
-        <p class="parc-source-hint" id="rs-link-hint"></p>
+        <label for="rs-pipe-file">Fichier « Pipe Agrégation »</label>
+        <div class="parc-source-row"><input type="file" id="rs-pipe-file" accept=".xlsx" class="hidden"><button type="button" class="pipe-bar-btn" id="rs-pipe-file-btn">Parcourir…</button><span id="rs-pipe-file-name" class="rs-file-name"></span></div>
+        <label for="rs-bdd-file" style="margin-top:10px; display:block;">Fichier « Suivi Agrégation »</label>
+        <div class="parc-source-row"><input type="file" id="rs-bdd-file" accept=".xlsx" class="hidden"><button type="button" class="pipe-bar-btn" id="rs-bdd-file-btn">Parcourir…</button><span id="rs-bdd-file-name" class="rs-file-name"></span></div>
+        <p class="parc-source-hint">Juste pour vérifier le nom du fichier que tu utilises — un navigateur ne peut pas retenir son emplacement réel ni l'ouvrir directement (sécurité). Pour un vrai bouton « Ouvrir », passe par un lien SharePoint/OneDrive à la place.</p>
       </div>
     </div>
     <h3 class="settings-group" id="grp-app">Appli</h3>
