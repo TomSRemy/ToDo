@@ -2,7 +2,6 @@
 // Gardées en IndexedDB sur cet appareil UNIQUEMENT (clé « todo-clips », pas dans les fichiers synchronisés sur GitHub) :
 // une image collée pèse largement plus qu'une fiche entière, et chaque synchro est un commit gardé pour toujours (README).
 window.TodoClips=(function(){
-  let app=null;   // what this part needs from js/app.js, given once at start-up (init)
   let map=null, loading=null;
   async function load(){
     if(map) return map;
@@ -49,7 +48,7 @@ window.TodoClips=(function(){
     zone.addEventListener('drop', e=>{ e.preventDefault(); zone.classList.remove('drag-over'); [...(e.dataTransfer.files||[])].forEach(addFile); });
   }
   const api={};
-  api.init=function(a){ app=a; };
+  api.init=function(){};   // nothing from js/app.js needed yet — kept for the same shape as the other modules
   api.mount=mount;
   return api;
 })();
