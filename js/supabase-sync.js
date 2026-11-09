@@ -53,6 +53,16 @@ window.TodoTeam=(function(){
     const { error }=await client.auth.signInWithOtp({ email, options:{ emailRedirectTo: location.href.split('#')[0] } });
     if(error) throw error;
   }
+  // code à 6 chiffres du même mail, tapé dans l'appli : marche quel que soit le navigateur qui ouvre le
+  // mail (pas de lien à cliquer, donc pas de risque d'atterrir dans un autre navigateur que celui de l'appli)
+  async function verifyCode(email, code){
+    if(!client) await init();
+    if(!client) throw new Error('Synchro équipe non configurée (Réglages › Synchro équipe)');
+    const { data, error }=await client.auth.verifyOtp({ email, token:code.trim(), type:'email' });
+    if(error) throw error;
+    session=data && data.session;
+    return session;
+  }
   async function signOut(){ if(client) await client.auth.signOut(); session=null; }
 
   // app <-> ligne de table : les champs connus restent des colonnes (filtrage/index), le reste
@@ -117,5 +127,5 @@ window.TodoTeam=(function(){
     return report;
   }
 
-  return { TABLES, init, loadConfig, saveConfig, isConfigured, isSignedIn, currentUser, sendMagicLink, signOut, pullAll, pushItem, subscribe, migrateFromLocal };
+  return { TABLES, init, loadConfig, saveConfig, isConfigured, isSignedIn, currentUser, sendMagicLink, verifyCode, signOut, pullAll, pushItem, subscribe, migrateFromLocal };
 })();

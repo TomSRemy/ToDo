@@ -6877,8 +6877,15 @@
     };
     $('team-login-btn').onclick=async()=>{
       const email=$('team-email').value.trim(); if(!email){ $('team-auth-status').textContent='Email requis.'; return; }
-      $('team-auth-status').textContent='Envoi du lien…';
-      try{ await window.TodoTeam.sendMagicLink(email); $('team-auth-status').textContent='Lien envoyé à '+email+', ouvre-le depuis cet appareil.'; }
+      $('team-auth-status').textContent='Envoi du code…';
+      try{ await window.TodoTeam.sendMagicLink(email); $('team-auth-status').textContent='Code envoyé à '+email+' : recopie-le ci-dessous (marche dans n’importe quel navigateur).'; }
+      catch(e){ $('team-auth-status').textContent='Erreur : '+(e&&e.message||e); }
+    };
+    $('team-code-btn').onclick=async()=>{
+      const email=$('team-email').value.trim(), code=$('team-code').value.trim();
+      if(!email || !code){ $('team-auth-status').textContent='Email et code requis.'; return; }
+      $('team-auth-status').textContent='Vérification…';
+      try{ await window.TodoTeam.verifyCode(email, code); await renderTeamStatus(); $('team-code').value=''; }
       catch(e){ $('team-auth-status').textContent='Erreur : '+(e&&e.message||e); }
     };
     $('team-load-btn').onclick=async()=>{
