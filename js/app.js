@@ -37,13 +37,15 @@
   const doVcfExport=(...a)=>window.TodoPhone.doVcfExport(...a);   // js/phone.js
   const renderPipeMeet=(...a)=>window.TodoPresent.renderPipeMeet(...a);   // js/present.js
   const { renderMarket, loadMarket, marketLine } = window.TodoMarket;   // js/market.js
+  const { renderWeek } = window.TodoWeek;   // js/week.js
+  const { renderBilan } = window.TodoInsights;   // js/insights.js
   window.TodoMarket.init({ askText:(...a)=>askText(...a), tell:(...a)=>tell(...a), escapeHtml:(...a)=>escapeHtml(...a), prefsToNote:(...a)=>prefsToNote(...a), gsTab:(...a)=>gsTab(...a) });
   const taskList=$('task-list'), badge=$('todo-badge'), headStats=$('head-stats'), tableHeader=$('table-header');
   const filters=$('filters'), viewSwitch=$('view-switch'), snoozePopover=$('snooze-popover');
   const reminderToggle=$('reminder-toggle'), reminderRow=$('reminder-row'), recurToggle=$('recur-toggle'), recurRow=$('recur-row');
   const clientInput=$('f-client'), projectInput=$('f-project'), clientDot=$('client-dot'), projectDot=$('project-dot');
   const clientDatalist=$('client-datalist'), projectDatalist=$('project-datalist');
-  const tabs=document.querySelectorAll('.tab'), tabToday=$('tab-today'), tabTasks=$('tab-tasks'), tabInbox=$('tab-inbox'), tabArchive=$('tab-archive'), tabLists=$('tab-lists');
+  const tabs=document.querySelectorAll('.tab'), tabToday=$('tab-today'), tabTasks=$('tab-tasks'), tabInbox=$('tab-inbox'), tabArchive=$('tab-archive'), tabLists=$('tab-lists'), tabWeek=$('tab-week'), tabBilan=$('tab-bilan');
   const projectChipRow=$('project-chip-row');
   const addSection=$('add-section'), cancelTaskBtn=$('cancel-task');
   const quickAddInput=$('quick-add-input'), quickAddMore=$('quick-add-more');
@@ -1150,6 +1152,9 @@
   }
 
   function openEdit(id){ editingId=id; render(); }
+
+  function openWeekTask(id){ document.querySelector('[data-tab="tasks"]').click(); openEdit(id); }
+  function rescheduleTask(id, due){ const t=tasks.find(x=>x.id===id); if(!t) return; t.due=due; touch(t); saveTasks(); renderToday(); }
 
   function makeGroupHeader(label,color,count){
     const d=document.createElement('div'); d.className='group-header';
@@ -5990,7 +5995,7 @@
   }
 
   const tabContacts=$('tab-contacts'), tabPipeline=$('tab-pipeline'), tabParc=$('tab-parc');
-  tabs.forEach(el=>{ el.onclick=()=>{ tabs.forEach(t=>t.classList.remove('active')); el.classList.add('active'); const tgt=el.dataset.tab; tabToday.classList.toggle('hidden',tgt!=='today'); tabTasks.classList.toggle('hidden',tgt!=='tasks'); tabInbox.classList.toggle('hidden',tgt!=='inbox'); tabArchive.classList.toggle('hidden',tgt!=='archive'); tabLists.classList.toggle('hidden',tgt!=='lists'); tabContacts.classList.toggle('hidden',tgt!=='contacts'); tabPipeline.classList.toggle('hidden',tgt!=='pipeline'); tabParc.classList.toggle('hidden',tgt!=='parc'); $('tab-network').classList.toggle('hidden',tgt!=='network'); if(tgt==='network') showNetwork(); $('tab-market').classList.toggle('hidden',tgt!=='market'); if(tgt==='market') renderMarket(); if(tgt==='parc'){ renderParc(); $('parc-bridge-btn').classList.toggle('hidden', !bridgeConfigured()); renderParcSource(); if(bridgeConfigured() && parcSource().auto && (!parcData || Date.now()-(parcData.importedAt||0)>600000)) importParcFromBridge(true); } if(tgt==='today')renderToday(); if(tgt==='archive')renderArchive(); if(tgt==='contacts'){ refreshContactsTypeFilter(); renderContacts(); fetchContactInbox(); } if(tgt==='pipeline')renderPipeline(); if(tgt==='lists'){ if(bridgeConfigured()) bridgeCheck(); else renderBridgeStatus(); renderLists(); renderConflicts(); $('sync-owner').value=syncConfig.owner||''; $('sync-repo').value=syncConfig.repo||''; if(syncConfig.enabled) setSyncStatus('Synchro active'); } if(tgt==='inbox')fetchInbox(); }; });
+  tabs.forEach(el=>{ el.onclick=()=>{ tabs.forEach(t=>t.classList.remove('active')); el.classList.add('active'); const tgt=el.dataset.tab; tabToday.classList.toggle('hidden',tgt!=='today'); tabTasks.classList.toggle('hidden',tgt!=='tasks'); tabInbox.classList.toggle('hidden',tgt!=='inbox'); tabArchive.classList.toggle('hidden',tgt!=='archive'); tabLists.classList.toggle('hidden',tgt!=='lists'); tabContacts.classList.toggle('hidden',tgt!=='contacts'); tabPipeline.classList.toggle('hidden',tgt!=='pipeline'); tabParc.classList.toggle('hidden',tgt!=='parc'); $('tab-network').classList.toggle('hidden',tgt!=='network'); if(tgt==='network') showNetwork(); $('tab-market').classList.toggle('hidden',tgt!=='market'); if(tgt==='market') renderMarket(); tabWeek.classList.toggle('hidden',tgt!=='week'); if(tgt==='week') renderWeek(); tabBilan.classList.toggle('hidden',tgt!=='bilan'); if(tgt==='bilan') renderBilan(); if(tgt==='parc'){ renderParc(); $('parc-bridge-btn').classList.toggle('hidden', !bridgeConfigured()); renderParcSource(); if(bridgeConfigured() && parcSource().auto && (!parcData || Date.now()-(parcData.importedAt||0)>600000)) importParcFromBridge(true); } if(tgt==='today')renderToday(); if(tgt==='archive')renderArchive(); if(tgt==='contacts'){ refreshContactsTypeFilter(); renderContacts(); fetchContactInbox(); } if(tgt==='pipeline')renderPipeline(); if(tgt==='lists'){ if(bridgeConfigured()) bridgeCheck(); else renderBridgeStatus(); renderLists(); renderConflicts(); $('sync-owner').value=syncConfig.owner||''; $('sync-repo').value=syncConfig.repo||''; if(syncConfig.enabled) setSyncStatus('Synchro active'); } if(tgt==='inbox')fetchInbox(); }; });
 
   $('submit-task').onclick=addTask;
   addSection.addEventListener('keydown', e=>{ if(e.key==='Enter' && e.target.tagName!=='TEXTAREA'){ e.preventDefault(); addTask(); } });
@@ -7455,6 +7460,8 @@
   window.TodoPresent.init({ $, meetCopyShort, meetChangesBlock, MAP_PHASES, MEET_COLS, MEET_PHASES, MES_WEIGHTS, OPP_STAGES, PIPE_PHASES, WHO, WHO_COLORS, activeTasks, buildHistory, caractValue, daysInStage, escapeHtml, fmtKwc, fmtMwc, kwcNum, loadScript, meetBlockKey, meetBlockName, meetCopy, meetData, meetHiddenCols, meetPhasesOn, meetPick, meetPrint, meetTotal, meetVis, meetVisuals, meetXlsx, mesForecast, openOppDetail, openRequestDetail, oppName, oppStage, plainLinks, pqNum, prefsToNote, renderPipeline, stageLabel, stageTaskOf, toISO });   // js/present.js
   window.TodoPhone.init({ $, askConfirm, tell, contactDupKeys, ensureCompany, loadTesseract, openContactForm, parseSignatureText, pqFmtPhone, pqFold, renderContacts, saveCrm, toISO, touchCrm, get contacts(){ return contacts; } });   // js/phone.js
   window.TodoAI.init({ aiKey, $, CARACT_ROWS, caractKey, caractSet, caractValue, oppName, renderPipeline, saveCrm, touchCrm });   // js/ai.js
+  window.TodoWeek.init({ tasks:()=>tasks, URGENCY_META, openWeekTask, rescheduleTask });   // js/week.js
+  window.TodoInsights.init({ tasks:()=>tasks, opportunities:()=>opportunities, escapeHtml });   // js/insights.js
 })();
 
 if('serviceWorker' in navigator){

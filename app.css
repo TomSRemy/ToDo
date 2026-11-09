@@ -2545,3 +2545,40 @@ html.widget .dup-banner{ display:none; }
   .req-inst-caret{ font-size:10px; }
   .req-stage-hint{ margin:0 0 6px; font-size:12px; color:var(--tx3); }
   .drop-menu-all{ max-height:min(70vh, 520px); overflow-y:auto; }
+
+  /* ---------- Semaine, Bilan (tabs week-root, bilan-root) ---------- */
+  #week-root, #bilan-root{ padding:18px 22px; display:flex; flex-direction:column; gap:14px; }
+  .week-head{ display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px; }
+  .week-title{ display:flex; align-items:baseline; gap:10px; }
+  .week-title h2{ margin:0; font-size:17px; font-weight:700; color:var(--tx1); }
+  .week-range{ font:500 11.5px var(--font-mono); color:var(--tx3); background:var(--panel-2); border:1px solid var(--bd); border-radius:999px; padding:3px 9px; }
+  .week-nav{ display:flex; gap:7px; }
+  .week-nav-btn{ background:var(--panel-2); border:1px solid var(--bd); color:var(--tx2); border-radius:6px; padding:6px 12px; font:600 12px var(--font-ui); cursor:pointer; }
+  .week-nav-btn:hover{ border-color:var(--accent); color:var(--tx1); }
+  .week-hint{ display:flex; align-items:center; gap:7px; }
+  .week-grid{ display:grid; grid-template-columns:repeat(7, minmax(0,1fr)); gap:10px; }
+  .week-col{ display:flex; flex-direction:column; gap:8px; background:var(--panel); border:1px solid var(--bd-soft); border-radius:10px; padding:10px; min-height:140px; }
+  .week-col.is-today{ border-color:var(--accent); }
+  .week-col.drag-over{ background:var(--accent-dim); border-color:var(--accent); border-style:dashed; }
+  .week-col-head{ display:flex; align-items:baseline; justify-content:space-between; }
+  .week-dow{ font:700 12px var(--font-ui); color:var(--tx2); }
+  .week-dom{ font:500 11px var(--font-mono); color:var(--tx3); }
+  .week-card{ background:var(--panel-2); border:1px solid var(--bd-soft); border-radius:8px; padding:9px 10px; display:flex; flex-direction:column; gap:5px; cursor:grab; }
+  .week-card:hover{ border-color:var(--accent); }
+  .week-card.dragging{ opacity:.4; }
+  .week-card-title{ color:var(--tx1); font-size:12.5px; font-weight:600; }
+  .week-card-urg{ font:500 10.5px var(--font-mono); }
+
+  .bilan-stats{ display:grid; grid-template-columns:repeat(4, minmax(0,1fr)); gap:12px; }
+  .bilan-stat{ background:var(--panel-2); border:1px solid var(--bd-soft); border-radius:10px; padding:14px 16px; display:flex; flex-direction:column; gap:5px; }
+  .bilan-stat-label{ color:var(--tx3); font-size:11.5px; font-weight:600; }
+  .bilan-stat-value{ color:var(--tx1); font-size:24px; font-weight:700; font-family:var(--font-mono); }
+  .bilan-stat-sub{ color:var(--tx3); font-size:11px; }
+  .bilan-cols{ display:grid; grid-template-columns:1fr 1.3fr; gap:14px; }
+  .bilan-box{ background:var(--panel); border:1px solid var(--bd-soft); border-radius:10px; padding:16px 18px; display:flex; flex-direction:column; gap:12px; }
+  .bilan-box h3{ margin:0; font-size:13px; font-weight:700; color:var(--tx2); }
+  .bilan-bars{ display:flex; align-items:flex-end; gap:8px; height:96px; }
+  .bilan-bar-col{ display:flex; flex-direction:column; align-items:center; gap:6px; flex:1; height:100%; justify-content:flex-end; }
+  .bilan-bar{ width:100%; background:var(--accent); border-radius:4px; min-height:4px; }
+  .bilan-bar-col span{ color:var(--tx3); font-size:10.5px; }
+  @media (max-width:860px){ .week-grid{ grid-template-columns:repeat(2, minmax(0,1fr)); } .bilan-stats{ grid-template-columns:repeat(2, minmax(0,1fr)); } .bilan-cols{ grid-template-columns:1fr; } }
