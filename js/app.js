@@ -3057,7 +3057,7 @@
     if(!rows.length){ const e=document.createElement('p'); e.className='modal-hint'; e.textContent='Aucune installation'+(q?' pour cette recherche':'')+'.'; board.appendChild(e); }
   }
   // ----- Meeting view: what is coming, one line per installation, to share with the pricing team -----
-  const MEET_PHASES=[{ key:'qualif', label:'Qualification · à venir' }, { key:'offre', label:'Offre · pricing en cours' }, { key:'contrat', label:'Contrat · pricing ferme' }];
+  const MEET_PHASES=[{ key:'qualif', label:'Qualification · à venir' }, { key:'attente_prix', label:'Attente de prix · pricing indicatif' }, { key:'offre', label:'Offre · pricing en cours' }, { key:'contrat', label:'Contrat · pricing ferme' }];
   function meetHiddenCols(){ try{ const v=JSON.parse(localStorage.getItem('pipe-meet-cols')||'[]'); return Array.isArray(v)?v:[]; }catch(e){ return []; } }
   const meetVis=()=>{ const h=meetHiddenCols(); return MEET_COLS.map((c,i)=>i<2 || !h.includes(c)); };
   const meetPick=(arr, vis)=>arr.filter((_,i)=>vis[i]);
@@ -5539,7 +5539,7 @@
   }
   // gsTab : not yet defined at this point in the file (const, no hoisting) — deferred to call time, same way
   // openExcelSync is proxied in reverse at the top of this file
-  window.TodoExcelSync.init({ $, ON_PHONE, PQ_FIELDS, bddCells, bridgeCall, bridgeCheck, bridgeConfigured, cellToText, codeAffaire, copyToClipboard, gsTab:(...a)=>gsTab(...a), importParcFromBridge, isExited, openOppDetail, oppActionBtn, oppName, pipeCells, pqFold, pqPad, relanceOnMove, renderPipeline, saveCrm, setOppStage, softFail, stageIndex, stageLabel, suiviState, touchCrm, get bridgeState(){ return bridgeState; }, set bridgeState(v){ bridgeState=v; }, get opportunities(){ return opportunities; }, set opportunities(v){ opportunities=v; } });   // Envoi vers les Excel partagés et Excel ⇄ appli — js/excel-sync.js
+  window.TodoExcelSync.init({ $, ON_PHONE, PQ_FIELDS, bddCells, bridgeCall, bridgeCheck, bridgeConfigured, cellToText, closeOppDetail, codeAffaire, copyToClipboard, gsTab:(...a)=>gsTab(...a), importParcFromBridge, isExited, openOppDetail, oppActionBtn, oppName, pipeCells, pqFold, pqPad, relanceOnMove, renderPipeline, saveCrm, setOppStage, softFail, stageIndex, stageLabel, suiviState, touchCrm, get bridgeState(){ return bridgeState; }, set bridgeState(v){ bridgeState=v; }, get opportunities(){ return opportunities; }, set opportunities(v){ opportunities=v; } });   // Envoi vers les Excel partagés et Excel ⇄ appli — js/excel-sync.js
   function renderLists(){
     renderStorageGauge();
     renderClientList();
@@ -6706,7 +6706,7 @@
   let parcKpi=null, parcKpiSet=null, parcKpiLabel='';   // view = zoomed box in map units, null = all France
   // technology of a plant, for the map colours (muted, so the map stays quiet and the dots read first)
   const MAP_TECHS=[ ['PV','Solaire PV','#E3B448'], ['Eolien','Éolien','#8EC5E8'], ['Hydro','Hydro','#6E9CF0'], ['Biogaz','Biogaz','#9CC37A'], ['Autre','Autre','#8B95A5'] ];
-  const MAP_PHASES=[ ['qualif','Qualification','#7DA2CF'], ['offre','Offre','#E5B54F'], ['contrat','Contrat','#B49CFF'], ['onboarding','Onboarding','#5EEAD4'], ['actif','En service','#14D3A9'] ];
+  const MAP_PHASES=[ ['qualif','Qualification','#7DA2CF'], ['attente_prix','Attente de prix','#F2A541'], ['offre','Offre','#E5B54F'], ['contrat','Contrat','#B49CFF'], ['onboarding','Onboarding','#5EEAD4'], ['actif','En service','#14D3A9'] ];
   window.TodoParc.init({ $, MAP_PHASES, MAP_TECHS, PARC_CADRES, PARC_COLORS, allCompanyNames, askConfirm, celebrate, closeRenewalTask, coDupKey, copyToClipboard, createTask, ensureCompany, escapeHtml, fmtKwc, inProcess, isExited, loadParc, loadScript, loseOpps, lsSet, newOppId, openCompanySheet, openOppDetail, oppName, oppPhase, parcBars, parcNorm, parcTable, parcYearsShown, pqFold, pqIsoToFr, pqNum, prefsToNote, relanceOnMove, render, renderPipeline, saveCrm, saveTasks, stageLabel, toISO, touchCrm, get gsTab(){ return gsTab; }, get mapInPipe(){ return mapInPipe; }, set mapInPipe(v){ mapInPipe=v; }, get opportunities(){ return opportunities; }, set opportunities(v){ opportunities=v; }, get parcData(){ return parcData; }, set parcData(v){ parcData=v; }, get parcKpi(){ return parcKpi; }, set parcKpi(v){ parcKpi=v; }, get parcKpiLabel(){ return parcKpiLabel; }, set parcKpiLabel(v){ parcKpiLabel=v; }, get parcKpiSet(){ return parcKpiSet; }, set parcKpiSet(v){ parcKpiSet=v; }, get parcMapAll(){ return parcMapAll; }, set parcMapAll(v){ parcMapAll=v; }, get parcMapLayer(){ return parcMapLayer; }, set parcMapLayer(v){ parcMapLayer=v; }, get parcMapSel(){ return parcMapSel; }, set parcMapSel(v){ parcMapSel=v; }, get parcMapView(){ return parcMapView; }, set parcMapView(v){ parcMapView=v; }, get parcSyncNote(){ return parcSyncNote; }, set parcSyncNote(v){ parcSyncNote=v; }, get parcYear(){ return parcYear; }, set parcYear(v){ parcYear=v; }, get sameCo(){ return sameCo; }, get syncConfig(){ return syncConfig; }, set syncConfig(v){ syncConfig=v; }, get tasks(){ return tasks; }, set tasks(v){ tasks=v; } });   // Portefeuille : renouvellements, tableau et carte — js/parc.js
   // ---------- Excel source of the Portefeuille: link to open it, automatic refresh through the local Excel bridge ----------
   // A web page cannot read a file on SharePoint by itself (sign-in + the browser blocks it); the bridge reads the

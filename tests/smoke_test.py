@@ -1871,7 +1871,7 @@ with sync_playwright() as p:
     page.goto(URL); page.click('[data-tab="pipeline"]'); page.click("#pipe-meet-toggle")
     secs = page.eval_on_selector_all(".meet-table tr.meet-sec th", "els=>els.map(e=>e.innerText.replace(/\\s+/g,' ').trim())")
     names = page.eval_on_selector_all(".meet-table td.meet-name", "els=>els.map(e=>e.textContent)")
-    check(len(secs) == 3 and names == ["Toit Durand", "Parc des Crêtes", "CS du Moulin", "Hangar 2"] and "4,5 MWc" in page.inner_text(".meet-table") and "jusqu’au 31/12/2030" in page.inner_text(".meet-table"),
+    check(len(secs) == 4 and names == ["Toit Durand", "CS du Moulin", "Parc des Crêtes", "Hangar 2"] and "4,5 MWc" in page.inner_text(".meet-table") and "jusqu’au 31/12/2030" in page.inner_text(".meet-table"),
           f"meeting view: one line per installation, by phase, the most advanced first, lost ones left out ({secs}, {names})")
     viz = page.inner_text(".meet-viz")
     check(page.locator(".meet-kpi").count() == 5 and page.locator(".meet-step").count() == 4 and "Qui a la main".lower() in viz.lower() and page.locator(".meet-who-bar span").count() >= 2,
@@ -2303,7 +2303,7 @@ with sync_playwright() as p:
     page.goto(URL); page.click('[data-tab="pipeline"]'); page.click("#pipe-map-toggle")
     page.wait_for_selector("#pipeline-board svg.parc-map", timeout=8000)
     side = page.inner_text("#pipeline-board .parc-map-side")
-    check("Offre" in side and "Contrat" in side and "Maine-et-Loire" in side and page.locator("#pipeline-board circle.dot").count() == 2, f"pipeline map: the deals on the map, by phase ({side[:120]!r})")
+    check("Attente de prix" in side and "Contrat" in side and "Maine-et-Loire" in side and page.locator("#pipeline-board circle.dot").count() == 2, f"pipeline map: the deals on the map, by phase ({side[:120]!r})")
     page.click("#pipeline-board .map-color [data-c=techno]"); page.wait_for_timeout(200)
     check("Autre" in page.inner_text("#pipeline-board .parc-map-side") and "Contrat" not in page.inner_text("#pipeline-board .parc-map-side"), "pipeline map: dots by technology on demand")
     page.click("#pipeline-board .map-color [data-c=phase]"); page.wait_for_timeout(100)
@@ -2757,6 +2757,8 @@ Responsable technique
         if request.url.endswith("/status"):
             ok = request.headers.get("x-bridge-token") == "k1"
             return route.fulfill(status=200, headers=h, body=json.dumps({"ok": True, "version": "1.11", "authorized": ok, "pipe": {"name": "Pipe.xlsx", "found": True}, "bdd": {"name": "Suivi.xlsx", "found": True}}))
+        if request.method == "GET" and request.url.endswith("/read"):
+            return route.fulfill(status=200, headers=h, body=json.dumps({"ok": True, "sheets": {}, "allNames": []}))
         sent.append((request.url.rsplit("/", 2)[-2], json.loads(request.post_data)))
         return route.fulfill(status=200, headers=h, body=json.dumps({"ok": True, "results": [{"ok": True, "action": "ajoutée", "row": 12}]}))
     inst = [{"id": "i1", "kind": "installation", "company": "SCEA", "producteur": "SCEA", "centrale": "Les Vignes", "title": "Les Vignes", "stage": "pricing_indicatif",
@@ -2853,7 +2855,7 @@ Responsable technique
     page.click("#opp-detail-actions >> text=Envoyer au Pipe Excel")
     page.wait_for_selector("#tab-excel:not(.hidden)", timeout=5000)   # no separate popup : the conflict opens the same panel
     first = sent2[0]["rows"][0]
-    check(len(first["values"]) == 37 and first["prev"] is None and "ouvre-le avant" in page.inner_text("#bridge-msg"), "shared Excel: closed file reported")
+    check(len(first["values"]) == 37 and first["prev"] is None and "cases gardées" in page.inner_text("#bridge-msg"), "shared Excel: cells changed by a colleague are reported, kept")
     card = "#tab-excel .xl-lot[data-rid='solo-i1']"
     page.wait_for_selector(card, timeout=5000)
     page.click(card + " .xl-head")
@@ -2888,7 +2890,7 @@ Responsable technique
     page.route("http://127.0.0.1:8765/**", old_bridge)
     page.goto(URL); page.click('[data-tab="pipeline"]'); page.click(".pipe-card:has-text('Les Vignes')")
     page.click("#opp-detail-actions >> text=Envoyer au Pipe Excel"); page.wait_for_timeout(600)
-    check(not posts and "pas à jour" in page.inner_text("#bridge-msg") and "1.15 est disponible" in page.inner_text("#bridge-msg"), f"an older bridge is refused: nothing sent, update asked ({page.inner_text('#bridge-msg')[:120]!r})")
+    check(not posts and "pas à jour" in page.inner_text("#bridge-msg") and "1.28 est disponible" in page.inner_text("#bridge-msg"), f"an older bridge is refused: nothing sent, update asked ({page.inner_text('#bridge-msg')[:120]!r})")
     page.close()
 
     # --- Excel ⇄ panel, a lot : folded by default, a dense grid when opened — a column header decides that field for
@@ -2972,7 +2974,9 @@ Responsable technique
     inst6.append({"id": "lockreq", "kind": "request", "company": "GAEC", "label": "Lot verrouill\u00e9", "stage": "collecte", "createdAt": 1, "updatedAt": 1, "deleted": False})
     page, errors = new_page(browser, {"todo_todo-widget-opportunities": json.dumps(inst6), "todo_bridge-config": json.dumps({"port": 8765, "token": "k1"})}, viewport={"width": 1400, "height": 900})
     page.route("http://127.0.0.1:8765/**", bridge6)
-    page.goto(URL); page.click('[data-tab="pipeline"]'); page.click("#pipe-more-btn"); page.click("#pipe-xs-btn")
+    page.goto(URL)
+    if page.is_visible("#postit"): page.click("#postit-min")   # the note (open by default) floats bottom-right, over this test's buttons there
+    page.click('[data-tab="pipeline"]'); page.click("#pipe-more-btn"); page.click("#pipe-xs-btn")
     page.wait_for_function("document.querySelector('#tab-excel .xs-info').textContent.includes('relu le')", timeout=8000)
     page.click("#tab-excel .xl-head")
     page.click("#tab-excel .xl-colhead")

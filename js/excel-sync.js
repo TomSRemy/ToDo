@@ -7,7 +7,7 @@ window.TodoExcelSync=(function(){
   // what this part uses from js/app.js, given where its code used to stand in js/app.js (so it runs in the same order);
   // app.<name>: a value js/app.js defines further down or may replace, read when used
   api.init=function(app){
-    const { $, ON_PHONE, PQ_FIELDS, bddCells, bridgeCall, bridgeCheck, bridgeConfigured, cellToText, codeAffaire, copyToClipboard, gsTab, importParcFromBridge, isExited, openOppDetail, oppActionBtn, oppName, pipeCells, pqFold, pqPad, relanceOnMove, renderPipeline, saveCrm, setOppStage, softFail, stageIndex, stageLabel, suiviState, touchCrm }=app;
+    const { $, ON_PHONE, PQ_FIELDS, bddCells, bridgeCall, bridgeCheck, bridgeConfigured, cellToText, closeOppDetail, codeAffaire, copyToClipboard, gsTab, importParcFromBridge, isExited, openOppDetail, oppActionBtn, oppName, pipeCells, pqFold, pqPad, relanceOnMove, renderPipeline, saveCrm, setOppStage, softFail, stageIndex, stageLabel, suiviState, touchCrm }=app;
     Object.assign(api, { xsState, xsList, openExcelSync, showBridgeMsg, excelButtons });   // function declarations: ready before the code below runs
   // ---------- Sending to the shared Excel files: the safe part is written at once, the rest is shown to decide ----------
   // The bridge never overwrites what someone else typed: such cells are kept and reported, duplicates and plants lost
@@ -413,7 +413,7 @@ window.TodoExcelSync=(function(){
       if(questions.length) openXlReview(kind, questions);
       const ov=$('tab-excel');
       if(ov && !ov.classList.contains('hidden')) paintExcelSync();
-      else if(pending.length>questions.length){ gsTab('excel'); await openExcelSync({ noRead:true }); }   // a plain conflict, tab not open : show it there rather than nowhere
+      else if(pending.length>questions.length){ closeOppDetail(); gsTab('excel'); await openExcelSync({ noRead:true }); }   // a plain conflict, tab not open : close the sheet so the new tab isn't hidden under it, show it there rather than nowhere
       return true;
     }catch(e){
       if(btn){ btn.textContent=label; btn.disabled=false; }
