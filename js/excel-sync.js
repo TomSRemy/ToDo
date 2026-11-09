@@ -69,6 +69,10 @@ window.TodoExcelSync=(function(){
   // ---------- Synchro Excel : what was sent to the Pipe and to the Suivi (BDD), what changed since on either side ----------
   const xsHash=vals=>{ const t=(vals||[]).map(v=>cellToText(v)).join('␟'); let h=5381; for(let i=0;i<t.length;i++) h=((h*33)^t.charCodeAt(i))>>>0; return h.toString(36); };
   const xsNorm=v=>pqFold(String(v==null?'':v)).replace(/[^a-z0-9]/g,'');
+  // a phone number typed in a Pipe cell left as « Nombre » (not Text) loses its leading 0 in Excel's own storage —
+  // not a real difference to ask about each time, just how Excel keeps a number : 0624479922 reads back as 624479922
+  const xsDigits=v=>String(v||'').replace(/\D/g,'');
+  const xsPhoneEq=(a,b)=>{ const da=xsDigits(a), db=xsDigits(b); return !!da && !!db && (da===db || da==='0'+db || db==='0'+da); };
   const xsColIdx=letters=>String(letters||'').toUpperCase().split('').reduce((n,ch)=>n*26+(ch.charCodeAt(0)-64),0)-1;
   // one Excel cell as text, the way the app writes it (dates from Excel serials, numbers with a comma)
   const xsCellText=(v, dateish)=>{ if(v==null) return ''; if(typeof v==='number' && dateish && v>20000 && v<80000){ const d=new Date(Math.round((v-25569)*86400000)); return pqPad(d.getUTCDate())+'/'+pqPad(d.getUTCMonth()+1)+'/'+d.getUTCFullYear(); }
@@ -110,6 +114,7 @@ window.TodoExcelSync=(function(){
         const cols=kind==='pipe'?PQ_FIELDS.map(f=>({ i:xsColIdx(f.col), f, label:f.label, dateish:f.type==='date'||['mesPrev','mesEff','debut','fin'].includes(f.k) })):[{ i:24, label:'Statut' }];
         cols.forEach(c=>{ const ex=xsCellText(hit.vals[c.i], c.dateish), ap=cellToText(vals[c.i]), pv=cellToText(prev[c.i]);
           if(xsNorm(ex)===xsNorm(ap)) return;
+          if(c.f && c.f.k==='tel' && xsPhoneEq(ex, ap)) return;
           if(xsKept(kind, o, c.i, ex)) return;   // « Garder l'Excel » already answered for this value — same key as xsViOf, the real column index
           // changed in the Excel by someone (not what the app wrote last), or still to send from the app
           st.diffs.push({ col:c, excel:ex, app:ap, byExcel:!!ex && xsNorm(ex)!==xsNorm(pv) }); });
