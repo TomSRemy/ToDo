@@ -36,7 +36,7 @@
 param([int]$Port = 8765, [switch]$Reconfigurer, [switch]$Mock)
 
 $ErrorActionPreference = 'Stop'
-$Version = '1.30'
+$Version = '1.31'
 $Here = Split-Path -Parent $MyInvocation.MyCommand.Path
 $LibDir = Join-Path $Here 'lib'
 # the settings (the two files, the key) live in the Windows profile, not next to the script: a new download, in any folder,
@@ -564,7 +564,10 @@ function Upsert-Rows($kind, $rows) {
       $won = $isObj -and [bool]$row.won
       $target0 = if ($isObj) { $row.target } else { $null }
       $keyVals = @(); foreach ($kc in $keyCols) { $keyVals += (Norm $vals[$kc + $off - 1]) }
-      $keyText = (@($vals[$keyCols[0] + $off - 1], $vals[$keyCols[1] + $off - 1]) -join ' / ')
+      $codeShown = if ($codeCol) { Show-Value (Convert-Cell $vals[$codeCol + $off - 1]) } else { '' }
+      # the SPV name alone (key columns) doesn't say which affair : the code affaire, when there is one, is the
+      # thing actually recognisable in the journal and in Todo's own cards — shown in the logs for real this time
+      $keyText = (@($vals[$keyCols[0] + $off - 1], $vals[$keyCols[1] + $off - 1]) -join ' / ') + $(if ($codeShown) { ' [' + $codeShown + ']' } else { '' })
       $newCode = if ($codeCol) { Norm $vals[$codeCol + $off - 1] } else { '' }
       $prevCode = if ($codeCol -and ($codeCol + $off - 1) -lt $prev.Count) { Norm $prev[$codeCol + $off - 1] } else { '' }
       # a row's code is « ours » when empty, the code sent now, or the code the app wrote there last time
