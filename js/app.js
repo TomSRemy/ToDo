@@ -166,7 +166,7 @@
     if(seeded){ saveTasks(); saveClients(); saveProjects(); }
     if(crmSeeded){ saveCrm(); }
     await loadSyncConfig();
-    if(window.TodoTeam) window.TodoTeam.init().then(renderTeamStatus).catch(()=>{});   // bêta : inactif si pas configuré
+    if(window.TodoTeam) window.TodoTeam.init().then(async()=>{ await renderTeamStatus(); if(window.TodoTeam.isSignedIn()){ await teamSyncPull(); teamSyncSubscribe(); } }).catch(()=>{});   // bêta : inactif si pas configuré
     consolidateNotes(); rollDailyNote(); prefsInit();
     loadParc(); ensureRenewalTasks();
     if(migrateCompanyStars() | migrateContactCivility()) saveCrm();
@@ -249,7 +249,7 @@
         .map(([k,v])=>window.storage.set(k,JSON.stringify(v),false)));
     }catch(e){ console.error(e); }
   }
-  async function saveCrm(){ undoSchedule(); await saveCrmLocalOnly(); scheduleCrmSyncPush(); }
+  async function saveCrm(){ undoSchedule(); await saveCrmLocalOnly(); scheduleCrmSyncPush(); teamSyncPush(); }
   function touchCrm(o){
     o.updatedAt=Date.now();
     if(o && o.stage && (o.kind==='installation'||o.kind==='prequal'||o.kind==='request')){
@@ -6851,6 +6851,47 @@
   }
 
   // ---------- Synchro équipe (Supabase, bêta) : voir js/supabase-sync.js. Inactif sans config, aucun effet sur l'appli en service. ----------
+  const TEAM_TABLES=['opportunities','contacts','companies','meetings'];
+  let teamSnap={ opportunities:new Map(), contacts:new Map(), companies:new Map(), meetings:new Map() }, teamSubscribed=false;
+  const teamArrFor=table=>({ opportunities, contacts, companies, meetings }[table]);
+  function teamRefresh(){ render(); renderArchive(); renderLists(); renderToday(); renderContacts(); renderPipeline(); }
+  // pousse vers Supabase tout ce qui a changé depuis le dernier push/pull (comparaison JSON, pas de suivi champ par champ)
+  async function teamSyncPush(){
+    if(!(window.TodoTeam && window.TodoTeam.isSignedIn())) return;
+    for(const table of TEAM_TABLES){
+      for(const item of teamArrFor(table)){
+        const j=JSON.stringify(item); if(teamSnap[table].get(item.id)===j) continue;
+        try{ await window.TodoTeam.pushItem(table, item); teamSnap[table].set(item.id, j); }
+        catch(e){ console.error('[teamSyncPush]', table, item.id, e); }
+      }
+    }
+  }
+  // recharge tout depuis Supabase au démarrage/connexion : fusionne par id, la version la plus récente gagne
+  async function teamSyncPull(){
+    if(!(window.TodoTeam && window.TodoTeam.isSignedIn())) return;
+    for(const table of TEAM_TABLES){
+      let rows; try{ rows=await window.TodoTeam.pullAll(table); }catch(e){ console.error('[teamSyncPull]', table, e); continue; }
+      if(!rows) continue;
+      const arr=teamArrFor(table), by=new Map(arr.map(x=>[x.id,x]));
+      rows.forEach(r=>{ teamSnap[table].set(r.id, JSON.stringify(r)); const cur=by.get(r.id); if(!cur || (r.updatedAt||0)>=(cur.updatedAt||0)) by.set(r.id, r); });
+      arr.length=0; arr.push(...by.values());
+    }
+    await saveCrmLocalOnly();
+    teamRefresh();
+  }
+  // un collègue modifie quelque chose : reçu en direct, fusionné dans les tableaux en mémoire
+  function teamSyncSubscribe(){
+    if(teamSubscribed || !(window.TodoTeam && window.TodoTeam.isSignedIn())) return;
+    teamSubscribed=true;
+    TEAM_TABLES.forEach(table=>{
+      window.TodoTeam.subscribe(table, item=>{
+        teamSnap[table].set(item.id, JSON.stringify(item));
+        const arr=teamArrFor(table), i=arr.findIndex(x=>x.id===item.id);
+        if(i>=0) arr[i]=item; else arr.push(item);
+        saveCrmLocalOnly(); teamRefresh();
+      });
+    });
+  }
   async function renderTeamStatus(){
     const cfgEl=$('team-config-status'), authEl=$('team-auth-status');
     if(!cfgEl || !authEl || !window.TodoTeam) return;
@@ -6879,7 +6920,7 @@
       const email=$('team-email').value.trim(), pwd=$('team-password').value;
       if(!email || !pwd){ $('team-auth-status').textContent='Email et mot de passe requis.'; return; }
       $('team-auth-status').textContent='Connexion…';
-      try{ await window.TodoTeam.signIn(email, pwd); await renderTeamStatus(); $('team-password').value=''; }
+      try{ await window.TodoTeam.signIn(email, pwd); await renderTeamStatus(); $('team-password').value=''; await teamSyncPull(); teamSyncSubscribe(); }
       catch(e){ $('team-auth-status').textContent='Erreur : '+(e&&e.message||e); }
     };
     $('team-load-btn').onclick=async()=>{
