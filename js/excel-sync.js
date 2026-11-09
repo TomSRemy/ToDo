@@ -132,6 +132,11 @@ window.TodoExcelSync=(function(){
   // « jamais envoyé » d'après les repères de l'appli ne veut rien dire si l'Excel relu montre déjà exactement les
   // mêmes valeurs (st.excel==='present', aucune diff) : rien à écrire, ça ne doit pas ressortir comme « à traiter ».
   const xsTodo=st=>st.excel==='absent'||st.excel==='modifie'||st.excel==='statut'||(st.diffs||[]).length>0||((st.app==='jamais'||st.app==='modif') && st.excel!=='present');
+  // a diff the app can act on in the grid : Excel changed by someone (byExcel), or the app simply never had this
+  // field (app empty, Excel not) — not a conflict, but « Envoyer » can never fill it either (the bridge never
+  // writes a blank over a filled cell), so it has to be offered here too or the card is stuck on « pas envoyé »
+  // forever with nothing to click (found for real : « Ferme de Neuville st Jean », 3 date fields, byExcel false)
+  const xsActionable=d=>d.byExcel||!d.app;
   function xsList(){ return app.opportunities.filter(o=>!o.deleted && o.kind==='installation' && (!isExited(o) || (o.excelSent||o.pipeSentAt||o.bddSentAt))); }
   const xsBddApplies=o=>isExited(o) || stageIndex(o.stage)>=stageIndex('pricing_indicatif');
   // a value changed in the Pipe by a colleague, taken into the app
@@ -173,7 +178,7 @@ window.TodoExcelSync=(function(){
   let xsFileFilter='all';
   const xsFileOn=k=>xsFileFilter==='all'||xsFileFilter===k;
   // what « Envoyer » would send, and what « Copier » copies instead : the same list, so copying never misses a row sending would have caught
-  const xsPendingList=kind=>xsList().filter(xsInScope).filter(o=>(kind==='pipe'||xsBddApplies(o)) && xsTodo(xsState(kind,o)) && !((xsState(kind,o).diffs||[]).some(d=>d.byExcel)));
+  const xsPendingList=kind=>xsList().filter(xsInScope).filter(o=>(kind==='pipe'||xsBddApplies(o)) && xsTodo(xsState(kind,o)) && !((xsState(kind,o).diffs||[]).some(xsActionable)));
   // a real tab (js/app.js's tab system shows/hides #tab-excel), not a modal any more : no close button, no
   // backdrop-click-to-close, content built once into the panel instead of appended to <body>
   async function openExcelSync(opts){
@@ -265,7 +270,7 @@ window.TodoExcelSync=(function(){
     ov.querySelectorAll('.xs-scope button').forEach(b=>b.classList.toggle('on', b.dataset.s===xsScope));
     ov.querySelectorAll('.xl-filekind button').forEach(b=>b.classList.toggle('on', b.dataset.fk===xsFileFilter));
     const rows=xsList().filter(xsInScope).map(o=>{ const p=xsState('pipe',o), b=xsBddApplies(o)?xsState('bdd',o):null;
-      return { o, p, b, pDiffs:xsFileOn('pipe')?p.diffs.filter(d=>d.byExcel):[], bDiffs:(b && xsFileOn('bdd'))?b.diffs.filter(d=>d.byExcel):[] }; });
+      return { o, p, b, pDiffs:xsFileOn('pipe')?p.diffs.filter(xsActionable):[], bDiffs:(b && xsFileOn('bdd'))?b.diffs.filter(xsActionable):[] }; });
     const relevant=r=>(xsFileOn('pipe') && xsTodo(r.p)) || (xsFileOn('bdd') && r.b && xsTodo(r.b));
     const todo=rows.filter(relevant);
     const cntP=xsFileOn('pipe')?rows.filter(r=>xsTodo(r.p) && !r.pDiffs.length).length:0, cntB=xsFileOn('bdd')?rows.filter(r=>r.b && xsTodo(r.b) && !r.bDiffs.length).length:0;
