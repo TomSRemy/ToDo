@@ -110,7 +110,7 @@ window.TodoExcelSync=(function(){
         const cols=kind==='pipe'?PQ_FIELDS.map(f=>({ i:xsColIdx(f.col), f, label:f.label, dateish:f.type==='date'||['mesPrev','mesEff','debut','fin'].includes(f.k) })):[{ i:24, label:'Statut' }];
         cols.forEach(c=>{ const ex=xsCellText(hit.vals[c.i], c.dateish), ap=cellToText(vals[c.i]), pv=cellToText(prev[c.i]);
           if(xsNorm(ex)===xsNorm(ap)) return;
-          if(xsKept(kind, o, kind==='pipe'?PQ_FIELDS.indexOf(c.f):c.i, ex)) return;   // « Garder l'Excel » already answered for this value
+          if(xsKept(kind, o, c.i, ex)) return;   // « Garder l'Excel » already answered for this value — same key as xsViOf, the real column index
           // changed in the Excel by someone (not what the app wrote last), or still to send from the app
           st.diffs.push({ col:c, excel:ex, app:ap, byExcel:!!ex && xsNorm(ex)!==xsNorm(pv) }); });
         if(kind==='bdd') st.statut=xsCellText(hit.vals[24]);
@@ -134,7 +134,11 @@ window.TodoExcelSync=(function(){
   // A difference between the app and an Excel cell: « Garder l'appli » (written into the Excel) or « Garder l'Excel », then
   // « Mettre aussi l'appli à jour ? » (yes: the sheet takes the Excel's value; no: not asked again while the cell stays the same).
   // vi = index of the value in what the app sends (Pipe: field order; Suivi: column)
-  const xsViOf=(kind, d)=>kind==='pipe'?PQ_FIELDS.indexOf(d.col.f):d.col.i;
+  // d.col.i is the real Excel column index (xsColIdx) for both kinds — what the bridge expects force/seen/keep keyed
+  // by (Upsert-Rows walks vals by absolute index). Pipe used PQ_FIELDS.indexOf(d.col.f) instead : a field's position
+  // in that list, not its column — a choice landed on whatever unrelated column happened to share that number, so
+  // the real conflicting cell never got the decision and kept coming back as unresolved.
+  const xsViOf=(kind, d)=>d.col.i;
   function xsKeep(kind, o, vi, excel){ o.excelKeep=o.excelKeep||{}; o.excelKeep[kind]=Object.assign({}, o.excelKeep[kind]||{}, { [vi]:excel }); touchCrm(o); saveCrm(); }
   const xsKept=(kind, o, vi, excel)=>{ const k=o.excelKeep && o.excelKeep[kind] && o.excelKeep[kind][vi]; return k!=null && xsNorm(cellToText(k))===xsNorm(excel); };
   // what « aligner l'appli » does for this cell, or null when the app has no such field
