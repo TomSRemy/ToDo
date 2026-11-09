@@ -36,7 +36,7 @@
 param([int]$Port = 8765, [switch]$Reconfigurer, [switch]$Mock)
 
 $ErrorActionPreference = 'Stop'
-$Version = '1.31'
+$Version = '1.32'
 $Here = Split-Path -Parent $MyInvocation.MyCommand.Path
 $LibDir = Join-Path $Here 'lib'
 # the settings (the two files, the key) live in the Windows profile, not next to the script: a new download, in any folder,
@@ -137,6 +137,26 @@ if (-not $Config -or $Reconfigurer) {
   ($Config | ConvertTo-Json) | Set-Content -Path $ConfigPath -Encoding UTF8
 }
 if ($Config.origins) { $AllowedOrigins += @($Config.origins | ForEach-Object { [string]$_ }) }
+# the exact file chosen once can get renamed later (a date bumped by hand in the filename, a new version) : rather
+# than fail outright, look once more in the same folder for the obvious match before giving up. Only acts when the
+# configured path is actually missing ; never overrides a file that's still there, even if a newer one also exists.
+function Resolve-ConfigPath($kind) {
+  $path = [string]$Config.$kind
+  if ($Mock -or (-not $path) -or (Test-Path -LiteralPath $path)) { return $path }
+  $folder = Split-Path $path -Parent
+  if (-not $folder -or -not (Test-Path -LiteralPath $folder)) { return $path }
+  $kw = if ($kind -eq 'pipe') { 'pipe' } else { 'suivi' }
+  $cands = @(Get-ChildItem -LiteralPath $folder -Filter '*.xlsx' -File -ErrorAction SilentlyContinue |
+    Where-Object { $_.Name -notlike '~$*' -and (Norm $_.BaseName) -match $kw } | Sort-Object LastWriteTime -Descending)
+  if ($cands.Count -eq 1) {
+    Write-Info ("$($Kinds[$kind].label) : « " + (Split-Path $path -Leaf) + " » introuvable, retrouvé automatiquement dans le même dossier : « " + $cands[0].Name + " »") 'Yellow'
+    $Config.$kind = $cands[0].FullName
+    try { ($Config | ConvertTo-Json) | Set-Content -Path $ConfigPath -Encoding UTF8 } catch { }
+    return $Config.$kind
+  }
+  if ($cands.Count -gt 1) { Write-Info ("$($Kinds[$kind].label) : « " + (Split-Path $path -Leaf) + " » introuvable, plusieurs fichiers possibles dans le dossier (" + (($cands | ForEach-Object { $_.Name }) -join ', ') + ") : relance avec -Reconfigurer pour choisir.") 'Red' }
+  return $path
+}
 
 # ---------------- Table adapters (Excel via COM, or in-memory for -Mock) ----------------
 # An adapter exposes: Headers (string[]), FirstCol (sheet column of the table's first column), RowCount,
@@ -237,7 +257,7 @@ function Find-Table($wb, $kind) {
   throw ("Tableau « " + $k.label + " » introuvable dans l'onglet « " + $k.sheet + " » (colonne « " + $k.header + " ») : rien n'est écrit.")
 }
 function New-ComAdapter($kind) {
-  $path = $Config.$kind
+  $path = Resolve-ConfigPath $kind
   $book = Open-Book $path
   try { $lo = Find-Table $book.wb $kind } catch { Close-Book $book; throw }   # never leave the file open behind an error
   $hdr = $lo.HeaderRowRange.Value2
@@ -332,7 +352,7 @@ function Open-DirectPackage($path) {
 # d'erreur dit d'ouvrir le fichier toi-même, ce qui fait repasser la prochaine requête par New-ComAdapter.
 function New-DirectAdapter($kind) {
   Ensure-EPPlus
-  $path = $Config.$kind
+  $path = Resolve-ConfigPath $kind
   if (-not (Test-Path $path)) { throw "Fichier introuvable : $path" }
   $opened = Open-DirectPackage $path; $pkg = $opened.pkg; $ms = $opened.ms
   # anything in here failing must still release the in-memory package — not just the Find-DirectTable call itself
@@ -417,7 +437,7 @@ function New-MockAdapter($kind) {
 }
 function New-Adapter($kind) {
   if ($Mock) { return New-MockAdapter $kind }
-  if (Is-AlreadyOpen $Config.$kind) { return New-ComAdapter $kind }   # someone has it open : write into that session
+  if (Is-AlreadyOpen (Resolve-ConfigPath $kind)) { return New-ComAdapter $kind }   # someone has it open : write into that session
   try { return New-DirectAdapter $kind }
   catch { Write-Info ("Écriture directe impossible (" + $_.Exception.Message + ") : on passe par Excel.") 'DarkGray'; return New-ComAdapter $kind }
 }
@@ -700,7 +720,7 @@ function Upsert-Rows($kind, $rows) {
 # worst case it throws and Read-Sheets falls back to the Excel/COM path below.
 function Read-Sheets-Direct($kind) {
   Ensure-EPPlus
-  $path = $Config.$kind
+  $path = Resolve-ConfigPath $kind
   if (-not (Test-Path $path)) { throw "Fichier introuvable : $path" }
   $opened = Open-DirectPackage $path; $pkg = $opened.pkg
   try {
@@ -737,10 +757,10 @@ function Read-Sheets($kind) {
     $out[$Kinds[$kind].sheet] = $rows
     return @{ sheets = $out; allNames = @($Kinds[$kind].sheet) }
   }
-  if (-not (Is-AlreadyOpen $Config.$kind)) {
+  if (-not (Is-AlreadyOpen (Resolve-ConfigPath $kind))) {
     try { return Read-Sheets-Direct $kind } catch { Write-Info ("Lecture directe impossible (" + $_.Exception.Message + ") : on passe par Excel.") 'DarkGray' }
   }
-  $book = Open-Book $Config.$kind
+  $book = Open-Book (Resolve-ConfigPath $kind)
   try {
     # every worksheet's name, whether or not it matches : the only way the app can show what's really in the file
     # when the expected one isn't found, instead of a blind "aucun" that doesn't say what was actually there
@@ -807,8 +827,8 @@ function Handle($req) {
   $authorized = (Token-Matches $req.headers['x-bridge-token'] $Config.token)
   if ($req.path -eq '/status') {
     return @(200, @{ ok = $true; version = $Version; authorized = $authorized; mock = [bool]$Mock;
-        pipe = @{ name = [IO.Path]::GetFileName([string]$Config.pipe); found = ($Mock -or (Test-Path ([string]$Config.pipe))) };
-        bdd = @{ name = [IO.Path]::GetFileName([string]$Config.bdd); found = ($Mock -or (Test-Path ([string]$Config.bdd))) } })
+        pipe = @{ name = [IO.Path]::GetFileName([string](Resolve-ConfigPath 'pipe')); found = ($Mock -or (Test-Path ([string]$Config.pipe))) };
+        bdd = @{ name = [IO.Path]::GetFileName([string](Resolve-ConfigPath 'bdd')); found = ($Mock -or (Test-Path ([string]$Config.bdd))) } })
   }
   if (-not $authorized) { return @(401, @{ ok = $false; message = 'Clé du pont incorrecte : recopie la clé affichée dans la fenêtre du pont.' }) }
   if ($req.method -eq 'POST' -and $req.path -match '^/(pipe|bdd)/upsert$') {
@@ -880,8 +900,8 @@ if (-not $started) {
 }
 Write-Host ''
 Write-Host "Pont Excel pour Todo v$Version — http://127.0.0.1:$Port" -ForegroundColor Cyan
-Write-Host ('  Pipe : ' + $Config.pipe)
-Write-Host ('  BDD  : ' + $Config.bdd)
+Write-Host ('  Pipe : ' + (Resolve-ConfigPath 'pipe'))
+Write-Host ('  BDD  : ' + (Resolve-ConfigPath 'bdd'))
 Write-Host ('  Clé à recopier dans l''app (Réglages → Pont Excel) : ' + $Config.token) -ForegroundColor Yellow
 Write-Host '  Laisse cette fenêtre ouverte (tu peux la réduire). Ctrl+C pour arrêter.'
 Write-Host ''
