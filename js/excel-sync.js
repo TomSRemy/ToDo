@@ -4,6 +4,12 @@ window.TodoExcelSync=(function(){
   const api={};
   // a plain paper-plane, so « Envoyer »/« Appliquer » read as a send action at a glance, not just another button
   const XL_SEND_ICO='<svg class="xl-send-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>';
+  // a plain "open" arrow, next to an installation's name anywhere in Synchro Excel : its own fiche, one click away,
+  // instead of having to find it again in Pipeline — never bubbles (installs a stopPropagation, the surrounding row/
+  // header has its own click for something else : fold the card, cycle a cell's choice…)
+  const XL_OPEN_ICO='<svg class="xl-open-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>';
+  const xlOpenBtn=oid=>{ const b=document.createElement('button'); b.type='button'; b.className='xl-open'; b.title='Ouvrir la fiche'; b.innerHTML=XL_OPEN_ICO;
+    b.onclick=e=>{ e.stopPropagation(); openOppDetail(oid); }; return b; };
   // what this part uses from js/app.js, given where its code used to stand in js/app.js (so it runs in the same order);
   // app.<name>: a value js/app.js defines further down or may replace, read when used
   api.init=function(app){
@@ -248,8 +254,9 @@ window.TodoExcelSync=(function(){
   function paintExcelSync(){
     const ov=$('tab-excel'); if(!ov || ov.classList.contains('hidden')) return;
     const all=ov.querySelector('.xs-filter .on').dataset.f==='all', body=ov.querySelector('.xs-body'); body.innerHTML='';
+    const readAt=r=>r?'relu le '+new Date(r.at).toLocaleDateString('fr-FR')+' à '+new Date(r.at).toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'}):'pas encore relu';
     ov.querySelector('.xs-info').textContent=bridgeConfigured()
-      ? 'Pipe '+(xsRead.pipe?'relu le '+new Date(xsRead.pipe.at).toLocaleDateString('fr-FR')+' à '+new Date(xsRead.pipe.at).toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'}):'pas encore relu')+' · Suivi '+(xsRead.bdd?'relu':'pas encore relu')+'. Envoyer ne remplace jamais une case modifiée par un collègue : elle te sera demandée.'
+      ? 'Pipe '+readAt(xsRead.pipe)+' · Suivi '+readAt(xsRead.bdd)+'. Envoyer ne remplace jamais une case modifiée par un collègue : elle te sera demandée.'
       : 'Pont Excel non connecté sur cet ordinateur : la colonne « appli » dit ce qui a été envoyé ; le Suivi est relu depuis le Portefeuille (fichier chargé). Le pont se règle dans Réglages.';
     // a failed read stays shown here (not just a toast that disappears) until the next read succeeds : impossible to
     // miss that the Pipe or Suivi couldn't be read (a renamed tab, a moved file…), unlike a transient message
@@ -302,7 +309,7 @@ window.TodoExcelSync=(function(){
     const req=rid && app.opportunities.find(x=>x.id===rid);
     if(req && !req.deleted && req.label){ head.querySelector('.xl-name b').textContent=req.label; head.querySelector('.xl-name span').textContent=members.length+' installation'+(members.length>1?'s':''); }
     else if(members.length>1){ head.querySelector('.xl-name b').textContent='Lot de '+members.length+' installations'; head.querySelector('.xl-name span').textContent=''; }
-    else { const o=members[0].o; head.querySelector('.xl-name b').textContent=o.producteur||o.company||'(sans nom)'; head.querySelector('.xl-name span').textContent=codeAffaire(o); }
+    else { const o=members[0].o; head.querySelector('.xl-name b').textContent=o.producteur||o.company||'(sans nom)'; head.querySelector('.xl-name span').textContent=codeAffaire(o); head.querySelector('.xl-name').appendChild(xlOpenBtn(o.id)); }
     const meta=head.querySelector('.xl-meta');
     const targets=xsConflictTargets(members), nCells=targets.reduce((s,tg)=>s+tg.diffs.length, 0);
     const destLabel=kinds=>kinds.map(k=>k==='pipe'?'Pipe':'Suivi').join(' + ');
@@ -327,7 +334,7 @@ window.TodoExcelSync=(function(){
       head.onclick=()=>card.classList.toggle('open');
       const plain=document.createElement('div'); plain.className='xl-grid-wrap xl-plain';
       const ul=document.createElement('ul');
-      members.forEach(m=>{ const li=document.createElement('li'); li.textContent=(m.o.producteur||m.o.company||'(sans nom)')+' — '+codeAffaire(m.o); ul.appendChild(li); });
+      members.forEach(m=>{ const li=document.createElement('li'); li.append((m.o.producteur||m.o.company||'(sans nom)')+' — '+codeAffaire(m.o), xlOpenBtn(m.o.id)); ul.appendChild(li); });
       plain.appendChild(ul); card.appendChild(plain);
       return card;
     }
@@ -360,7 +367,7 @@ window.TodoExcelSync=(function(){
     members.forEach(m=>{
       const tr=document.createElement('tr'); tr.dataset.oid=m.o.id;
       const rh=document.createElement('th'); const rb=document.createElement('button'); rb.type='button'; rb.className='xl-rowhead'; rb.dataset.side='excel';
-      rb.innerHTML='<b></b><small></small>'; rb.querySelector('b').textContent=m.o.producteur||m.o.company||'(sans nom)'; rb.querySelector('small').textContent=codeAffaire(m.o); rh.appendChild(rb); tr.appendChild(rh);
+      rb.innerHTML='<b></b><small></small>'; rb.querySelector('b').textContent=m.o.producteur||m.o.company||'(sans nom)'; rb.querySelector('small').textContent=codeAffaire(m.o); rh.append(rb, xlOpenBtn(m.o.id)); tr.appendChild(rh);
       const rowCellKeys=[];
       cols.forEach(col=>{
         const td=document.createElement('td'); const item=col.items.find(it=>it.o.id===m.o.id);
