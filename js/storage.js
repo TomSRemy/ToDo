@@ -8,7 +8,8 @@
   if(!window.storage) (function(){
     const DB_KEYS=new Set(['todo-widget-tasks','todo-widget-companies','todo-widget-contacts','todo-widget-meetings','todo-widget-opportunities',
       'todo-widget-notes','todo-widget-clients','todo-widget-projects','todo-widget-company-types','sync-tasks-base','sync-crm-base','sync-notes-base',
-      'sync-conflicts','parc-data','inbox-seen-ids','contact-inbox-seen-ids']);
+      'sync-conflicts','parc-data','inbox-seen-ids','contact-inbox-seen-ids',
+      'todo-clips']);   // Clips (js/clips.js) : images collées sur une fiche, gardées en IndexedDB (place), jamais synchronisées sur GitHub (device-only, comme ai-key)
     const ENTITY_KEYS=new Set(['todo-widget-tasks','todo-widget-companies','todo-widget-contacts','todo-widget-meetings','todo-widget-opportunities','todo-widget-notes','sync-conflicts']);
     const SET_KEYS=new Set(['todo-widget-clients','todo-widget-projects','todo-widget-company-types','inbox-seen-ids','contact-inbox-seen-ids']);
     const cache=new Map();

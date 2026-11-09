@@ -1107,12 +1107,14 @@
       '<input type="url" class="e-link" placeholder="Mail" value="'+escapeHtml(t.link||'')+'"></div>'+
       '<div class="subtasks-edit"></div>'+
       '<button class="add-subtask-btn" type="button">+ sous-tâche</button>'+
+      '<div class="clips-mount"></div>'+
       '<div class="edit-btn-row"><button class="edit-del ghost-btn danger-btn" type="button">Supprimer</button><button class="edit-cancel" type="button">Annuler</button><button class="edit-save" type="button">Enregistrer</button></div>';
     row.appendChild(f);
     quickDates(f.querySelector('.e-due'));
     const focusBtn=document.createElement('button'); focusBtn.type='button'; focusBtn.className='ghost-btn edit-focus'; focusBtn.textContent='Focus';
     focusBtn.onclick=()=>window.TodoFocus.open(t);
     const btnRow=f.querySelector('.edit-btn-row'); btnRow.insertBefore(focusBtn, btnRow.firstChild);
+    window.TodoClips.mount(f.querySelector('.clips-mount'), t.id);
 
     const stWrap=f.querySelector('.subtasks-edit');
     let localSubs=(t.subtasks||[]).map(s=>({...s, text:s.text!=null?s.text:String(s.title||s.label||'')}));
@@ -7477,6 +7479,7 @@
   window.TodoFocus.init({ validateTask });   // js/focus.js
   window.TodoVoice.init({ openVoiceTask });   // js/voice.js
   window.TodoVoice.wire($('quick-add-voice'), quickAddInput);
+  window.TodoClips.init({});   // js/clips.js
 })();
 
 if('serviceWorker' in navigator){
