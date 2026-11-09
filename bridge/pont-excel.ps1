@@ -36,7 +36,7 @@
 param([int]$Port = 8765, [switch]$Reconfigurer, [switch]$Mock)
 
 $ErrorActionPreference = 'Stop'
-$Version = '1.29'
+$Version = '1.30'
 $Here = Split-Path -Parent $MyInvocation.MyCommand.Path
 $LibDir = Join-Path $Here 'lib'
 # the settings (the two files, the key) live in the Windows profile, not next to the script: a new download, in any folder,
@@ -452,6 +452,11 @@ function Same-Value($excel, $v) {
   if ($v -is [datetime]) { $e = To-Date $excel; return ($null -ne $e -and $e.Date -eq $v.Date) }
   if ($v -is [double]) { try { return ([math]::Abs([double]$excel - $v) -lt 1e-6) } catch { return $false } }
   if ($v -is [bool]) { return ([string]$excel).Trim().ToLowerInvariant() -eq ([string]$v).ToLowerInvariant() }
+  # the « seen » value (what the app had displayed, sent back to check nothing moved since) is always text — VRAI/FAUX
+  # for a checkbox column, never a real boolean. Without this, « True » (PowerShell's ToString of a bool) never equalled
+  # « VRAI », so a checkbox the app chose to replace always looked moved and was kept as a conflict instead : reported
+  # for real (K-helios, NEW column, « ligne déjà à jour » although « appli » had been chosen for it).
+  if ($excel -is [bool] -and $v -is [string]) { return ($v -match '^(?i:vrai|true|oui|1|x)$') -eq $excel }
   if (($excel -is [double] -or $excel -is [datetime]) -and $v -is [string]) {
     # a value kept earlier comes back as text: compare it as a date, else as a number
     $dv = To-Date $v; $de = To-Date $excel
