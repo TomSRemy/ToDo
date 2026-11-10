@@ -11,7 +11,7 @@ window.TodoExcelSync=(function(){
   // what this part uses from js/app.js, given where its code used to stand in js/app.js (so it runs in the same order);
   // app.<name>: a value js/app.js defines further down or may replace, read when used
   api.init=function(app){
-    const { $, ON_PHONE, PQ_FIELDS, bddCells, bridgeCall, bridgeCheck, bridgeConfigured, cellToText, closeOppDetail, codeAffaire, copyToClipboard, gsTab, importParcFromBridge, isExited, openOppDetail, oppActionBtn, oppName, pipeCells, pqFold, pqPad, relanceOnMove, renderPipeline, saveCrm, setOppStage, softFail, stageIndex, stageLabel, suiviState, touchCrm }=app;
+    const { $, ON_PHONE, PQ_FIELDS, bddCells, bridgeCall, bridgeCheck, bridgeConfigured, cellToText, closeOppDetail, codeAffaire, copyToClipboard, gsTab, importParcFromBridge, isExited, openOppDetail, oppActionBtn, pipeCells, pqFold, pqPad, relanceOnMove, renderPipeline, saveCrm, setOppStage, softFail, stageIndex, suiviState, touchCrm }=app;
     const xlOpenBtn=oid=>{ const b=document.createElement('button'); b.type='button'; b.className='xl-open'; b.title='Ouvrir la fiche'; b.innerHTML=XL_OPEN_ICO;
       b.onclick=e=>{ e.stopPropagation(); openOppDetail(oid); }; return b; };
     Object.assign(api, { xsState, xsList, openExcelSync, showBridgeMsg, excelButtons });   // function declarations: ready before the code below runs

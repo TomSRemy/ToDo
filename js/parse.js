@@ -779,6 +779,12 @@ window.TodoParse=(function(){
     pairs.forEach(([l,v])=>{ if(typeof l!=='string' || !l.trim() || v==='' || v==null) return; out[l.trim()]=v instanceof Date?pqCellDate(v):(typeof v==='number'?v:String(v).trim()); });
     return out;
   }
+  // a plant named in the column title ("Centrale du Moulin"), read upward from the first data row until a real name
+  // is found (skips generic headers like "Centrale n°1")
+  function xlCentraleAbove(rows, first, j){
+    for(let r=first-1;r>=0;r--){ const t=rows[r][j]; if(typeof t==='string' && t.trim() && !/^(centrale|installation|projet|site|parc)\s*n?°?\s*\d+$/i.test(pqFold(t).trim())) return t.trim(); }
+    return null;
+  }
   // layout « one column per plant »
   function xlVertical(rows){
     let best=[];
@@ -797,7 +803,7 @@ window.TodoParse=(function(){
         hits.forEach(h=>xlSet(inst, h.def, h.label, rows[h.ri][j]));
         inst.caract=xlRaw(rows.map(r=>[r[c], r[j]]));   // every line of the file, for the « Caractéristiques Centrales » sheet
         // a plant named in the column title ("Centrale du Moulin") when there is no name row
-        if(!inst.centrale){ for(let r=first-1;r>=0;r--){ const t=rows[r][j]; if(typeof t==='string' && t.trim() && !/^(centrale|installation|projet|site|parc)\s*n?°?\s*\d+$/i.test(pqFold(t).trim())){ inst.centrale=t.trim(); break; } } }
+        if(!inst.centrale){ const above=xlCentraleAbove(rows, first, j); if(above) inst.centrale=above; }
         plants.push(xlFinish(inst));
       }
       if(xlFilled(plants)>xlFilled(best)) best=plants;

@@ -962,7 +962,7 @@
   .parc-table-head{ display:flex; flex-wrap:wrap; align-items:center; gap:8px 12px; margin-bottom:8px; }
   .parc-table-head .parc-h{ margin:0; }
   .parc-search{ flex:1; min-width:180px; background:var(--panel); border:1px solid var(--bd); border-radius:6px; color:var(--tx1); font-size:12.5px; padding:6px 9px; }
-  .parc-table-wrap{ overflow-x:auto; max-height:520px; overflow-y:auto; }
+  .parc-table-wrap{ overflow-x:auto; }   /* pas de hauteur limitée : un seul scroll, celui de la page (audit : scroll imbriqué refusé) */
   .parc-table{ width:100%; border-collapse:collapse; font-size:12px; min-width:760px; }
   .parc-table th{ position:sticky; top:0; background:var(--panel-2); text-align:left; font-family:var(--font-mono); font-size:9.5px; font-weight:500; color:var(--tx3); text-transform:none; letter-spacing:.3px; padding:6px 8px; border-bottom:1px solid var(--bd); }
   .parc-table td{ padding:6px 8px; border-bottom:1px solid var(--bd-soft); color:var(--tx1); }
