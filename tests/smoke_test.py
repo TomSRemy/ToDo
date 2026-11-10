@@ -2643,7 +2643,7 @@ Responsable technique
     page.click("#tab-parc .map-zoom button >> nth=0"); page.wait_for_timeout(100)
     check(page.get_attribute("#tab-parc .parc-map", "viewBox") != vb0, "portefeuille: the map zooms in")
     for _ in range(3): page.click("#tab-parc .map-zoom button >> nth=0")
-    page.wait_for_function("document.querySelector('.parc-map').dataset.hd==='true'", timeout=10000)
+    page.wait_for_function("document.querySelector('#tab-parc .parc-map').dataset.hd==='true'", timeout=10000)
     check(len(page.get_attribute("#tab-parc .parc-map .reg-line", "d")) > 150000 and "zoomed" in page.get_attribute("#tab-parc .parc-map", "class"),
           "portefeuille: zoomed in, the detailed outlines are loaded and the shadow is dropped (sharp borders)")
     page.click("#tab-parc .map-zoom button >> nth=2")
