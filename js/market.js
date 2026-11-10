@@ -185,7 +185,7 @@ window.TodoMarket=(function(){
   // ---------- the Synthèse's market tiles : drawn by the app from PowerKlock's open data files (no embedded widget) ----------
   // fast, readable offline (last figures kept), the same look as the rest of the app ; a click opens the Marché page
   let tilesData=null, tilesLoading=null;
-  try{ tilesData=JSON.parse(localStorage.getItem('market-tiles')||'null'); }catch(e){}
+  try{ tilesData=JSON.parse(localStorage.getItem('market-tiles-v2')||'null'); }catch(e){}
   async function loadTiles(force){
     if(tilesLoading) return tilesLoading;
     if(!force && tilesData && Date.now()-tilesData.at<30*60000) return tilesData;
@@ -194,54 +194,72 @@ window.TodoMarket=(function(){
       const [fr, com, go, chain]=await Promise.all([get('fr_market.json').catch(()=>null), get('commodities.json').catch(()=>null), get('go_prices.csv').catch(()=>null), get('history/fr_market_calchain.json').catch(()=>null)]);
       try{ await loadMarket(); }catch(e){}
       const out=tilesFrom(fr, com, go, chain);
-      if(out.tiles.length){ tilesData=out; try{ localStorage.setItem('market-tiles', JSON.stringify(out)); }catch(e){} }
+      if(out.tiles.length){ tilesData=out; try{ localStorage.setItem('market-tiles-v2', JSON.stringify(out)); }catch(e){} }
       return tilesData; })();
     try{ return await tilesLoading; } finally { tilesLoading=null; }
   }
+  // one tile, PowerKlock's design : what (category, contract), the last value and its date, the trend, J-1 and 7 days,
+  // 60 days drawn as an area, one line of context underneath
+  const shortD=d=>d?new Date(d+'T12:00:00').toLocaleDateString('fr-FR',{ day:'numeric', month:'short' }).replace('.',''):'';
+  function tileFrom(id, cat, name, pts, unit, foot, dec){
+    pts=(pts||[]).filter(p=>p && p[1]!=null && !isNaN(p[1])); if(!pts.length) return null;
+    const last=pts[pts.length-1], lastMs=new Date(last[0]+'T12:00:00').getTime();
+    const at=days=>{ let v=null; for(const p of pts){ if(new Date(p[0]+'T12:00:00').getTime()<=lastMs-days*864e5) v=p[1]; else break; } return v; };
+    const pct=v=>v?(last[1]-v)/Math.abs(v)*100:null;
+    const d1=pts.length>1?pct(pts[pts.length-2][1]):null, d7=pct(at(7));
+    return { id, cat, name, v:last[1], u:unit, when:last[0], d1, d7, line:pts.slice(-60).map(p=>p[1]), n:Math.min(60, pts.length), foot:foot||'', dec };
+  }
+  const lastOf=pts=>pts && pts.length?pts[pts.length-1][1]:null;
   function tilesFrom(fr, com, go, chain){
-      const out={ at:Date.now(), tiles:[] }, T=out.tiles, last=a=>a[a.length-1];
-      const pct=(a,b)=>a!=null && b ? (a-b)/Math.abs(b)*100 : null;
-      const m=marketData;
-      if(m && m.spot) T.push({ id:'spot', k:'Spot France', v:m.spot.avg, u:'€/MWh', d:m.spot.vs!=null && m.spot.avg-m.spot.vs ? pct(m.spot.avg, m.spot.avg-m.spot.vs) : null, when:m.spot.day, line:(m.days||[]).map(x=>x.avg) });
-      else if(fr && fr.spot) T.push({ id:'spot', k:'Spot France', v:fr.spot.value, u:'€/MWh', d:null, when:fr.spot.date, line:[] });
-      const c=calTile(fr, chain); if(c) T.push(c);
-      const ser=(key, label, unit)=>{ const id=key; const x=com && com.series && com.series[key]; if(!x || !x.points || !x.points.length) return;
-        const pts=x.points.slice(-30), v=last(pts)[1], prev=pts.length>1?pts[pts.length-2][1]:null;
-        T.push({ id, k:label, v, u:unit, d:pct(v, prev), when:last(pts)[0], line:pts.map(p=>p[1]) }); };
-      ser('ttf','TTF (gaz)','€/MWh'); ser('eua','EUA (CO₂)','€/t'); ser('brent','Brent','$/bbl');
-      const g=goTile(go); if(g) T.push(g);
-      return out;
+    const y=new Date().getFullYear(), tiles=[...elecTiles(fr, chain, y), ...fuelTiles(com, y), goTile(go, y)].filter(Boolean);
+    return { at:Date.now(), tiles };
   }
-  function calTile(fr, chain){
-      const cal=fr && (fr.forwardCurve||[]).find(x=>x.tenor==='Y+1');
-      const calY=cal && ((cal.contract||'').match(/Cal(\d{4})/)||[])[1], calH=calY && chain && chain.FR && chain.FR.years && chain.FR.years[calY];
-      if(!cal) return null;
-      return ({ id:'cal', k:(cal.contract||'Cal').replace(/^FR /,'').replace(/ base$/,'').replace(/^Cal(\d{4})$/,'Cal $1')+' France', v:cal.value, u:'€/MWh', d:cal.varD1Pct, when:cal.date, line:calH?calH.values.slice(-30):[] });
+  const zipc=c=>c?c.dates.map((d,i)=>[d, c.values[i]]):[];
+  function elecTiles(fr, chain, y){
+    const T=[], add=t=>{ if(t) T.push(t); };
+    const m=marketData, spotPts=m && m.days && m.days.length ? m.days.map(x=>[x.d, x.avg]) : (fr && fr.spot ? [[fr.spot.date, fr.spot.value]] : []);
+    const avg30=m && m.days && m.days.length ? m.days.reduce((t,x)=>t+x.avg,0)/m.days.length : null;
+    add(tileFrom('spot', 'Électricité · France', 'Spot day-ahead', spotPts, '€/MWh', avg30!=null?'Moy. 30 j <b>'+mkNum(avg30)+'</b>'+(m.spot && m.spot.neg?' · <b>'+mkNum(m.spot.neg,1)+' h</b> négatives':''):''));
+    const ys=chain && chain.FR && chain.FR.years || {};
+    add(tileFrom('cal', 'Électricité · France', 'Cal '+(y+1), zipc(ys[y+1]), '€/MWh', [y+2, y+3].filter(k=>ys[k]).map(k=>'Cal '+String(k).slice(2)+' <b>'+mkNum(lastOf(zipc(ys[k])))+'</b>').join(' · ')));
+    return T;
   }
-  function goTile(go){
-      const last=a=>a[a.length-1], pct=(a,b)=>a!=null && b ? (a-b)/Math.abs(b)*100 : null;
-      if(go){ const y=new Date().getFullYear()+1, rows=go.trim().split('\n').slice(1).map(l=>l.split(',')).filter(c=>c[4]==='GO AIB Renewable' && +c[5]===y && c[6]);
-        rows.sort((a,b)=>a[1].localeCompare(b[1]));
-        const mid=c=>c[7]?(+c[6]+ +c[7])/2:+c[6];
-        if(rows.length){ const lr=last(rows), pv=rows.length>1?rows[rows.length-2]:null;
-          return { id:'go', k:'GO '+y, v:mid(lr), u:'€/MWh', d:pv?pct(mid(lr), mid(pv)):null, when:lr[1], line:rows.slice(-20).map(mid), dec:2 }; } }
-      return null;
+  function fuelTiles(com, y){
+    const T=[], add=t=>{ if(t) T.push(t); }, S=com && com.series || {};
+    const tc=com && com.calYears && com.calYears.ttf && com.calYears.ttf[y+1];
+    add(tileFrom('ttf', 'Gaz · Europe', 'TTF day-ahead', S.ttf && S.ttf.points, '€/MWh', [S.peg?'PEG <b>'+mkNum(lastOf(S.peg.points))+'</b>':'', tc?'Cal '+String(y+1).slice(2)+' <b>'+mkNum(lastOf(zipc(tc)))+'</b>':''].filter(Boolean).join(' · ')));
+    const yr=S.eua && S.eua.points.slice(-250).map(p=>p[1]);
+    add(tileFrom('eua', 'CO₂ · Europe', 'EUA déc.', S.eua && S.eua.points, '€/t', yr && yr.length?'12 mois <b>'+mkNum(Math.min(...yr))+'</b> – <b>'+mkNum(Math.max(...yr))+'</b>':''));
+    add(tileFrom('brent', 'Pétrole', 'Brent front-month', S.brent && S.brent.points, '$/bbl', S.eurusd?'EUR/USD <b>'+mkNum(lastOf(S.eurusd.points),3)+'</b>':''));
+    return T;
+  }
+  function goTile(go, y){
+    if(!go) return null;
+    const rows=go.trim().split('\n').slice(1).map(l=>l.split(',')).filter(c=>c[4]==='GO AIB Renewable' && c[6]);
+    const mid=c=>c[7]?(+c[6]+ +c[7])/2:+c[6], ser=Y=>rows.filter(c=>+c[5]===Y).sort((a,b)=>a[1].localeCompare(b[1])).map(c=>[c[1], mid(c)]);
+    return tileFrom('go', 'Garanties d’origine', 'GO '+(y+1)+' renouvelable', ser(y+1), '€/MWh', [y, y+2].map(Y=>{ const v=lastOf(ser(Y)); return v==null?'':'GO '+String(Y).slice(2)+' <b>'+mkNum(v,2)+'</b>'; }).filter(Boolean).join(' · '), 2);
   }
   function spark(vals){
     const v=(vals||[]).filter(x=>x!=null && !isNaN(x)); if(v.length<2) return '';
-    const mn=Math.min(...v), mx=Math.max(...v), W=100, H=50, sx=W/(v.length-1), y=x=>H-2-(mx===mn?.5:(x-mn)/(mx-mn))*(H-4);
-    const d=v.map((x,i)=>(i?'L':'M')+(i*sx).toFixed(1)+' '+y(x).toFixed(1)).join(' ');
-    return '<svg class="mkt-spark" viewBox="0 0 '+W+' '+H+'" preserveAspectRatio="none" aria-hidden="true"><path d="'+d+'"/></svg>';
+    const mn=Math.min(...v), mx=Math.max(...v), W=100, H=40, sx=W/(v.length-1), y=x=>H-1-(mx===mn?.5:(x-mn)/(mx-mn))*(H-6);
+    const d=v.map((x,i)=>(i?'L':'M')+(i*sx).toFixed(2)+' '+y(x).toFixed(2)).join(' ');
+    return '<svg class="mkt-spark" viewBox="0 0 '+W+' '+H+'" preserveAspectRatio="none" aria-hidden="true"><path class="a" d="'+d+' L'+W+' '+H+' L0 '+H+' Z"/><path class="l" d="'+d+'"/></svg>';
   }
   function paintTiles(root){
     const e=escapeHtml, d=tilesData;
-    if(!d || !d.tiles.length){ root.innerHTML='<p class="mkt-none">Chiffres du marché pas encore chargés (hors ligne ?).</p>'; return; }
+    if(!d || !d.tiles.length || d.tiles[0].cat==null){ root.innerHTML='<p class="mkt-none">Chiffres du marché pas encore chargés (hors ligne ?).</p>'; return; }
     root.innerHTML='';
+    const ch=(v,l)=>v==null || isNaN(v)?'':'<span class="'+(v>0.05?'up':v<-0.05?'down':'flat')+'">'+(v>0?'+':'')+mkNum(v,1)+' %</span> '+l;
     d.tiles.forEach(t=>{
+      const tr=t.d7==null?'':t.d7>2?'<em class="mkt-tr up">↑ haussier</em>':t.d7<-2?'<em class="mkt-tr down">↓ baissier</em>':'<em class="mkt-tr">→ neutre</em>';
       const b=document.createElement('button'); b.type='button'; b.className='mkt-tile';
-      const dd=t.d==null || isNaN(t.d)?'':'<i class="'+(t.d>0.05?'up':t.d<-0.05?'down':'flat')+'">'+(t.d>0.05?'▲ +':t.d<-0.05?'▼ ':'= ')+mkNum(t.d,1)+' %</i>';
-      b.innerHTML='<span class="mkt-k">'+e(t.k)+'</span><b>'+mkNum(t.v, t.dec==null?1:t.dec)+'<small> '+e(t.u)+'</small></b><span class="mkt-sub">'+dd+(t.when?'<span>'+e(pqIsoToFr(t.when))+'</span>':'')+'</span>'+spark(t.line);
-      b.title=t.k+' : voir le graphique (source PowerKlock)'; b.onclick=()=>openMarketChart(t.id||t.k, t);
+      b.innerHTML='<span class="mkt-top"><span class="mkt-cat">'+e(t.cat)+'</span><span class="mkt-date">'+e(shortD(t.when))+'</span></span>'
+        +'<span class="mkt-name">'+e(t.name)+'</span>'
+        +'<span class="mkt-row"><b>'+mkNum(t.v, t.dec==null?1:t.dec)+'<small> '+e(t.u)+'</small></b>'+tr+'</span>'
+        +'<span class="mkt-var">'+[ch(t.d1,'J-1'), ch(t.d7,'7 j')].filter(Boolean).join(' · ')+'</span>'
+        +spark(t.line)
+        +'<span class="mkt-foot"><span>'+(t.foot||'')+'</span><span class="mkt-n">'+t.n+' j ↗</span></span>';
+      b.title=t.name+' : voir le graphique (source PowerKlock)'; b.onclick=()=>openMarketChart(t.id, t);
       root.appendChild(b); });
   }
   // ---------- a tile opened : the history in a window (periods, series to tick, hover), from PowerKlock's open files ----------

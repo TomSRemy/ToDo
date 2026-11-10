@@ -352,15 +352,24 @@
   /* Synthèse (Aujourd'hui) : 6 marché, via PowerKlock, each a « solo » widget in its own iframe — the app
      never reads these numbers itself, just frames pages PowerKlock already serves for this (curated once there) */
   /* market tiles drawn by the app (js/market.js) : figure, change, 30-day line ; a click opens Marché */
-  .synth-market{ display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:10px; margin:14px 15px; }
-  .mkt-tile{ position:relative; display:flex; flex-direction:column; gap:3px; text-align:left; background:var(--panel); border:1px solid var(--bd); border-radius:var(--radius-xl); padding:10px 12px 8px; cursor:pointer; color:var(--tx1); font:inherit; overflow:hidden; transition:border-color .15s var(--ease-out); }
+  .synth-market{ display:grid; grid-template-columns:repeat(auto-fit,minmax(178px,1fr)); gap:8px; margin:14px 15px; }
+  .mkt-tile{ position:relative; display:flex; flex-direction:column; gap:2px; text-align:left; background:var(--panel); border:1px solid var(--bd); border-radius:var(--radius-xl); padding:10px 12px 8px; cursor:pointer; color:var(--tx1); font:inherit; overflow:hidden; transition:border-color .15s var(--ease-out); min-width:0; }
   .mkt-tile:hover{ border-color:var(--accent); }
-  .mkt-k{ font:600 10px var(--font-ui); letter-spacing:.08em; text-transform:uppercase; color:var(--tx3); }
-  .mkt-tile b{ font:700 20px var(--font-ui); font-variant-numeric:tabular-nums; } .mkt-tile b small{ font-size:11px; font-weight:500; color:var(--tx3); }
-  .mkt-sub{ display:flex; gap:8px; align-items:baseline; font-size:11px; color:var(--tx3); }
-  .mkt-sub i{ font-style:normal; font-weight:600; } .mkt-sub i.up{ color:#ED6965; } .mkt-sub i.down{ color:#14D3A9; } .mkt-sub i.flat{ color:var(--tx3); }
-  .mkt-sub span{ margin-left:auto; }
-  .mkt-spark{ width:100%; height:52px; margin-top:4px; } .mkt-spark path{ fill:none; stroke:var(--accent); stroke-width:1.5; vector-effect:non-scaling-stroke; opacity:.8; }
+  .mkt-top{ display:flex; align-items:baseline; gap:8px; }
+  .mkt-cat{ font:700 9.5px var(--font-ui); letter-spacing:.05em; text-transform:uppercase; color:#5FBF9F; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .mkt-date{ margin-left:auto; font-size:11px; color:var(--tx3); white-space:nowrap; }
+  .mkt-name{ font-size:13px; color:var(--accent); font-weight:600; }
+  .mkt-row{ display:flex; align-items:center; gap:6px; min-width:0; }
+  .mkt-row b{ font:700 19px var(--font-mono); letter-spacing:-.6px; font-variant-numeric:tabular-nums; white-space:nowrap; } .mkt-row b small{ font:500 11px var(--font-ui); letter-spacing:0; color:var(--tx3); }
+  .mkt-tr{ margin-left:auto; font:600 10px var(--font-mono); font-style:normal; padding:1px 5px; flex-shrink:0; border-radius:var(--radius); border:1px solid var(--bd); color:var(--tx3); white-space:nowrap; }
+  .mkt-tr.up{ color:#ED6965; border-color:#ED696555; } .mkt-tr.down{ color:#14D3A9; border-color:#14D3A955; }
+  .mkt-var{ font:500 10.5px var(--font-mono); color:var(--tx3); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .mkt-var .up{ color:#ED6965; } .mkt-var .down{ color:#7DB4F5; } .mkt-var .flat{ color:var(--tx2); }
+  .mkt-spark{ width:calc(100% + 24px); margin:6px -12px 0; height:44px; display:block; }
+  .mkt-spark .a{ fill:#14D3A9; opacity:.16; } .mkt-spark .l{ fill:none; stroke:#14D3A9; stroke-width:1.5; vector-effect:non-scaling-stroke; }
+  .mkt-foot{ display:flex; align-items:baseline; gap:6px; margin-top:6px; font-size:10.5px; color:var(--tx3); }
+  .mkt-foot > span:first-child{ overflow:hidden; text-overflow:ellipsis; white-space:nowrap; } .mkt-foot b{ color:var(--tx1); font-weight:600; font-family:var(--font-mono); }
+  .mkt-n{ margin-left:auto; color:#7DB4F5; white-space:nowrap; }
   .mkt-none{ grid-column:1/-1; margin:0; font-size:12.5px; color:var(--tx3); }
   /* desktop : the figures row and the old task table give way to the panels (the phone keeps them) */
   @media (min-width:761px){ #tab-today.synth-on > #today-stats-row, #tab-today.synth-on > .table-header, #tab-today.synth-on > #today-list{ display:none; } }
