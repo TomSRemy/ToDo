@@ -1,4 +1,5 @@
-# Security headers, applied by Cloudflare Pages (GitHub Pages ignores this file).
+# Security headers, applied by Cloudflare Pages (GitHub Pages ignores this file: index.html repeats the CSP in a <meta>,
+# kept identical by tests/csp_test.py — only frame-ancestors, which a <meta> cannot carry, stays Cloudflare-only).
 # The app's own code only; the few outside places it really uses are named one by one.
 #   scripts   : cdnjs (ExcelJS, Tesseract), jsdelivr (PowerPoint export, Tesseract's worker, Supabase client)
 #   requests  : GitHub API (sync, Boîte mail), the Excel bridge on this PC, PowerKlock (Marché),

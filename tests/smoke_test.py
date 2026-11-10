@@ -154,8 +154,10 @@ SYNC_ON = {"todo_sync-config": json.dumps({"owner": "o", "repo": "r", "token": "
 with sync_playwright() as p:
     browser = p.chromium.launch()
     _np, _nc = browser.new_page, browser.new_context
-    def _page(**k): pg = _np(**k); pg.add_init_script(DLG_JS); _PAGES.append(pg); return pg
-    def _ctx(**k): c = _nc(**k); c.add_init_script(DLG_JS); c.on("page", lambda pg: _PAGES.append(pg)); return c
+    # index.html carries its own CSP (<meta>, for GitHub Pages): it forbids eval, which wait_for_function("…") needs.
+    # These tests check behaviour; tests/csp_test.py checks the policy itself.
+    def _page(**k): pg = _np(**{"bypass_csp": True, **k}); pg.add_init_script(DLG_JS); _PAGES.append(pg); return pg
+    def _ctx(**k): c = _nc(**{"bypass_csp": True, **k}); c.add_init_script(DLG_JS); c.on("page", lambda pg: _PAGES.append(pg)); return c
     browser.new_page, browser.new_context = _page, _ctx
 
     # --- Tasks: create, validate (archive), delete -> Corbeille -> restore
@@ -2667,8 +2669,8 @@ Responsable technique
     check(not page.is_visible(".parc-kpi-filter") and page.locator(".parc-map .dot").count() == 2, "portefeuille: removing the filter shows everything again")
     page.click("#parc-source-btn"); page.fill("#parc-link", "https://example.sharepoint.com/sites/x/Suivi.xlsx"); page.click("#parc-link-save")
     check(page.get_attribute("#parc-open-link", "href") == "https://example.sharepoint.com/sites/x/Suivi.xlsx" and page.is_visible("#parc-open-link"), "portefeuille: Excel link saved, opens in one click")
-    page.hover(".parc-chart .hz >> nth=0")
-    check(eventually(lambda: page.is_visible(".parc-chart-wrap .chart-tip") and "GWh" in page.inner_text(".parc-chart-wrap .chart-tip"), 3000), "portefeuille: hovering a year of the chart shows its detail")
+    page.hover("#tab-parc .parc-chart .hz >> nth=0")   # the same chart is also drawn on Synthèse (a hidden tab here)
+    check(eventually(lambda: page.is_visible("#tab-parc .parc-chart-wrap .chart-tip") and "GWh" in page.inner_text("#tab-parc .parc-chart-wrap .chart-tip"), 3000), "portefeuille: hovering a year of the chart shows its detail")
     page.click(".parc-years .parc-global"); k = page.inner_text(".parc-kpis")
     check("50,5 GWh" in k and "%d–%d" % (TODAY.year, TODAY.year + 4) in k, f"portefeuille: global view sums the 5 years ({k[:70]!r})")
     page.click(".parc-years button:text-is('2026')")

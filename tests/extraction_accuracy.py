@@ -46,7 +46,7 @@ def main():
         SIGNATURES, EXCELS = SIGNATURES + SIGNATURES_HELDOUT, EXCELS + EXCELS_HELDOUT
     with sync_playwright() as p:
         browser = p.chromium.launch()
-        page = browser.new_page()
+        page = browser.new_page(bypass_csp=True)   # behaviour checks; the CSP itself: csp_test.py
         page.route("**/fonts.g*/**", lambda r: r.abort())
         page.add_init_script("window.TODO_TEST_HOOKS=true;")
         page.goto(URL)

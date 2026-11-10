@@ -41,10 +41,10 @@ SEED = {
                 "items": [{"statut": "Gagné", "inst": "Signé 1", "prod": "Prod A", "dev": "Prod A", "kwc": 1000, "vols": {"2026": 4000, "2027": 5000}, "fin": "2040-01-01", "enr": "PV", "dept": "44"}]},
 }
 def seed_js(seed):
-    return "if(!sessionStorage.getItem('s')){ for (const [k,v] of Object.entries(" + json.dumps({"todo_" + k: json.dumps(v) for k, v in seed.items()}) + ")) localStorage.setItem(k,v); sessionStorage.setItem('s','1'); }"
+    return "try{ if(!sessionStorage.getItem('s')){ for (const [k,v] of Object.entries(" + json.dumps({"todo_" + k: json.dumps(v) for k, v in seed.items()}) + ")) localStorage.setItem(k,v); sessionStorage.setItem('s','1'); } }catch(e){}"   # also injected into cross-origin frames (Marché), where storage is refused
 
 def new_page(b, seed=None, **ctx):
-    c = b.new_context(**ctx); page = c.new_page(); errors = []
+    c = b.new_context(**{"bypass_csp": True, **ctx}); page = c.new_page(); errors = []   # behaviour checks; the CSP itself: csp_test.py
     page.on("pageerror", lambda e: errors.append(str(e)))
     page.route("**/fonts.g*/**", lambda r: r.abort()); page.route("https://tomsremy.github.io/PowerKlock/**", lambda r: r.abort())
     if seed: page.add_init_script(seed_js(seed))

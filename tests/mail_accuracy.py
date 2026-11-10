@@ -33,7 +33,7 @@ def main():
     cases = HELDOUT if "--heldout" in sys.argv else HARD if "--hard" in sys.argv else CASES + HELDOUT + HARD if "--all" in sys.argv else CASES
     with sync_playwright() as p:
         browser = p.chromium.launch()
-        page = browser.new_page()
+        page = browser.new_page(bypass_csp=True)   # behaviour checks; the CSP itself: csp_test.py
         page.route("**/fonts.g*/**", lambda r: r.abort())
         page.add_init_script("window.TODO_TEST_HOOKS=true;")
         page.goto(URL)

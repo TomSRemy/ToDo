@@ -2,6 +2,9 @@
 <html lang="fr">
 <head>
 <meta charset="UTF-8">
+<!-- Same policy as _headers (Cloudflare Pages), for GitHub Pages which ignores that file. A <meta> cannot carry
+     frame-ancestors (anti-clickjacking): that one stays Cloudflare-only. tests/csp_test.py checks both stay identical. -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' blob: https://cdn.jsdelivr.net; connect-src 'self' https://api.github.com https://tomsremy.github.io http://127.0.0.1:8765 http://localhost:8765 https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://tessdata.projectnaptha.com https://api.anthropic.com https://*.supabase.co wss://*.supabase.co data: blob:; img-src 'self' data: blob: https:; style-src 'self' 'unsafe-inline'; font-src 'self' data:; media-src 'self' data: blob:; frame-src https://tomsremy.github.io; object-src 'none'; base-uri 'self'; form-action 'self'; manifest-src 'self'">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>ToDo Agrégation · tâches et affaires</title>
 <meta name="description" content="Le suivi des affaires d'agrégation : tâches du jour, pipeline par étape, portefeuille signé et point marché, au même endroit.">

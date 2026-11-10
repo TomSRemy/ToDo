@@ -66,6 +66,11 @@ with sync_playwright() as p:
 
     r = pg.goto(BASE + "index.html"); wait_for("document.querySelector('.tab.active')")
     check(r.headers.get("content-security-policy") == csp and r.headers.get("x-content-type-options") == "nosniff", "the page is served with the rules of _headers")
+    # index.html repeats the policy in a <meta> for GitHub Pages (which ignores _headers): both must say the same,
+    # minus frame-ancestors, which a <meta> cannot carry
+    meta = pg.evaluate("(document.querySelector('meta[http-equiv=\"Content-Security-Policy\"]')||{}).content||''")
+    dirs = lambda s: {d.strip() for d in s.split(";") if d.strip() and not d.strip().startswith("frame-ancestors")}
+    check(meta and dirs(meta) == dirs(csp), "index.html's <meta> CSP matches _headers (GitHub Pages gets the same rules)")
     check(pg.evaluate("window.TODO_LITE===false && !!window.storage"), "start-up script (js/boot.js) and storage run")
     for tab in ["today", "tasks", "inbox", "archive", "contacts", "pipeline", "parc", "network", "market", "lists"]:
         pg.click(f'[data-tab="{tab}"]'); pg.wait_for_timeout(250)

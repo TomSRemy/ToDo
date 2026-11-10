@@ -46,7 +46,7 @@ insts = [{"id": "e%d" % i, "kind": "installation", "company": "SCEA Essai", "pro
           "createdAt": 1, "updatedAt": 1, "deleted": False} for i in range(12)]
 try:
     with sync_playwright() as p:
-        b = p.chromium.launch(); page = b.new_page(viewport={"width": 1400, "height": 900}); errors = []; page.on("pageerror", lambda e: errors.append(str(e)))
+        b = p.chromium.launch(); page = b.new_page(viewport={"width": 1400, "height": 900}, bypass_csp=True); errors = []; page.on("pageerror", lambda e: errors.append(str(e)))
         page.route("**/fonts.g*/**", lambda r: r.abort())
         page.add_init_script("if(!sessionStorage.getItem('s')){ localStorage.setItem('todo_todo-widget-opportunities', %s); localStorage.setItem('todo_bridge-config', %s); sessionStorage.setItem('s','1'); }"
                              % (json.dumps(json.dumps(insts)), json.dumps(json.dumps({"port": PORT, "token": "mocktoken"}))))
