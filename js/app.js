@@ -3428,18 +3428,25 @@
   function paintPipeMore(){ const el=$('pipe-more-n'); if(!el) return; const dup=$('pipe-dup-btn'), xs=$('pipe-xs-btn');
     const n=(xs && getComputedStyle(xs).display!=='none'?pipeXsN:0)+(dup && !dup.hidden?dupCount():0);
     el.hidden=!n; el.textContent=n; el.title=n+' à vérifier : envois Synchro Excel et doublons possibles'; $('pipe-more-btn').setAttribute('aria-label','Plus d\u2019actions'+(n?' ('+n+' à vérifier)':'')); $('pipe-more-btn').classList.toggle('on', pipeShowExited); }
+  // l'infobulle de chaque vue (title) redite en clair sous la barre : « j'arrive pas à savoir leur utilité » (audit)
+  function updatePipeViewHint(){
+    const el=$('pipe-view-hint'); if(!el) return;
+    const on=document.querySelector('.pipe-seg button.on');
+    el.textContent=on?on.title:'';
+  }
   function renderPipelineInner(){
     if(normalizeOpps()) saveCrmLocalOnly();
     const board=$('pipeline-board');
     board.innerHTML=''; board.classList.remove('pipe-dash','pipe-meet','pipe-offers');
     $('pipe-offers-toggle').setAttribute('aria-pressed', String(pipeOffers)); $('pipe-offers-toggle').classList.toggle('on', pipeOffers);
     if(pipeOffers){ ['pipe-dash-toggle','pipe-cols-toggle','pipe-map-toggle','pipe-meet-toggle','pipe-list-toggle'].forEach(id=>{ $(id).setAttribute('aria-pressed','false'); $(id).classList.remove('on'); });
-      $('pipe-exited-toggle').classList.add('hidden'); window.TodoOffers.renderOffers(board, pqFold($('opp-search').value.trim())); return; }
+      $('pipe-exited-toggle').classList.add('hidden'); updatePipeViewHint(); window.TodoOffers.renderOffers(board, pqFold($('opp-search').value.trim())); return; }
     $('pipe-dash-toggle').setAttribute('aria-pressed', String(pipeDash)); $('pipe-dash-toggle').classList.toggle('on', pipeDash);
     { const cols=!pipeDash && !pipeMeet && !pipeMap && !pipeList; $('pipe-cols-toggle').setAttribute('aria-pressed', String(cols)); $('pipe-cols-toggle').classList.toggle('on', cols); }
     $('pipe-map-toggle').setAttribute('aria-pressed', String(pipeMap && !pipeDash && !pipeMeet)); $('pipe-map-toggle').classList.toggle('on', pipeMap && !pipeDash && !pipeMeet);
     $('pipe-meet-toggle').setAttribute('aria-pressed', String(pipeMeet)); $('pipe-meet-toggle').classList.toggle('on', pipeMeet);
     $('pipe-list-toggle').setAttribute('aria-pressed', String(pipeList && !pipeDash && !pipeMeet && !pipeMap)); $('pipe-list-toggle').classList.toggle('on', pipeList && !pipeDash && !pipeMeet && !pipeMap);
+    updatePipeViewHint();
     board.classList.remove('pipe-list');
     $('pipe-exited-toggle').classList.toggle('hidden', pipeDash||pipeMeet);
     if(pipeDash){ renderPipeDash(board); return; }
@@ -6064,7 +6071,7 @@
 
   const tabContacts=$('tab-contacts'), tabPipeline=$('tab-pipeline'), tabParc=$('tab-parc'), tabExcel=$('tab-excel');
   tabs.forEach(el=>{ el.onclick=()=>{
-    tabs.forEach(t=>t.classList.remove('active')); el.classList.add('active'); const tgt=el.dataset.tab; tabToday.classList.toggle('hidden',tgt!=='today'); tabTasks.classList.toggle('hidden',tgt!=='tasks'); tabInbox.classList.toggle('hidden',tgt!=='inbox'); tabArchive.classList.toggle('hidden',tgt!=='archive'); tabLists.classList.toggle('hidden',tgt!=='lists'); tabContacts.classList.toggle('hidden',tgt!=='contacts'); tabPipeline.classList.toggle('hidden',tgt!=='pipeline'); tabParc.classList.toggle('hidden',tgt!=='parc'); tabExcel.classList.toggle('hidden',tgt!=='excel'); if(tgt==='excel') openExcelSync(); $('tab-network').classList.toggle('hidden',tgt!=='network'); if(tgt==='network') showNetwork(); $('tab-market').classList.toggle('hidden',tgt!=='market'); if(tgt==='market') renderMarket(); if(tgt==='parc'){ renderParc(); $('parc-bridge-btn').classList.toggle('hidden', !bridgeConfigured()); renderParcSource(); if(bridgeConfigured() && parcSource().auto && (!parcData || Date.now()-(parcData.importedAt||0)>600000)) importParcFromBridge(true); } if(tgt==='today')renderToday(); if(tgt==='archive')renderArchive(); if(tgt==='contacts'){ refreshContactsTypeFilter(); renderContacts(); fetchContactInbox(); } if(tgt==='pipeline')renderPipeline(); if(tgt==='lists'){ if(bridgeConfigured()) bridgeCheck(); else renderBridgeStatus(); renderLists(); renderConflicts(); $('sync-owner').value=syncConfig.owner||''; $('sync-repo').value=syncConfig.repo||''; if(syncConfig.enabled) setSyncStatus('Synchro active'); } if(tgt==='inbox')fetchInbox(); }; });
+    tabs.forEach(t=>t.classList.remove('active')); el.classList.add('active'); const tgt=el.dataset.tab; tabToday.classList.toggle('hidden',tgt!=='today'); tabTasks.classList.toggle('hidden',tgt!=='tasks'); tabInbox.classList.toggle('hidden',tgt!=='inbox'); tabArchive.classList.toggle('hidden',tgt!=='archive'); tabLists.classList.toggle('hidden',tgt!=='lists'); tabContacts.classList.toggle('hidden',tgt!=='contacts'); tabPipeline.classList.toggle('hidden',tgt!=='pipeline'); tabParc.classList.toggle('hidden',tgt!=='parc'); tabExcel.classList.toggle('hidden',tgt!=='excel'); if(tgt==='excel') openExcelSync(); $('tab-network').classList.toggle('hidden',tgt!=='network'); if(tgt==='network') showNetwork(); $('tab-market').classList.toggle('hidden',tgt!=='market'); if(tgt==='market') renderMarket(); if(tgt==='parc'){ renderParc(); $('parc-bridge-btn').classList.toggle('hidden', !bridgeConfigured()); $('parc-load-label').classList.toggle('hidden', bridgeConfigured()); renderParcSource(); if(bridgeConfigured() && parcSource().auto && (!parcData || Date.now()-(parcData.importedAt||0)>600000)) importParcFromBridge(true); } if(tgt==='today')renderToday(); if(tgt==='archive')renderArchive(); if(tgt==='contacts'){ refreshContactsTypeFilter(); renderContacts(); fetchContactInbox(); } if(tgt==='pipeline')renderPipeline(); if(tgt==='lists'){ if(bridgeConfigured()) bridgeCheck(); else renderBridgeStatus(); renderLists(); renderConflicts(); $('sync-owner').value=syncConfig.owner||''; $('sync-repo').value=syncConfig.repo||''; if(syncConfig.enabled) setSyncStatus('Synchro active'); } if(tgt==='inbox')fetchInbox(); }; });
 
   $('submit-task').onclick=addTask;
   addSection.addEventListener('keydown', e=>{ if(e.key==='Enter' && e.target.tagName!=='TEXTAREA'){ e.preventDefault(); addTask(); } });
