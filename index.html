@@ -724,10 +724,12 @@
         <input type="password" id="sync-token" placeholder="Clé d'accès GitHub (fine-grained, droit Contents : lecture et écriture)" aria-label="Clé d'accès GitHub">
         <label class="sync-exp-row" for="sync-token-exp"><span>Le jeton expire le <span class="muted">(optionnel : pour être prévenu 15 jours avant)</span></span><input type="date" id="sync-token-exp"></label>
         <a class="sync-token-link" href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener">Créer ou renouveler un jeton sur GitHub ↗</a>
-        <button class="data-btn" id="sync-save-btn" style="width:100%;">Activer la synchro sur cet appareil</button>
-        <button class="data-btn" id="sync-now-btn" style="width:100%;">Synchroniser maintenant</button>
-        <button class="data-btn" id="sync-restore-btn" style="width:100%;" title="Revenir aux tâches, aux contacts et au pipeline, ou à la note, tels qu'ils étaient à une synchro passée (chaque synchro garde une version sur GitHub)">Restaurer une version…</button>
-        <button class="data-btn" id="sync-forget-btn" style="width:100%;" title="Retire le jeton GitHub de cet appareil (après un changement d'adresse, ou sur un appareil prêté). Les données restent ici et sur GitHub.">Oublier le jeton sur cet appareil</button>
+        <div class="set-actions">
+        <button class="data-btn" id="sync-save-btn">Activer la synchro sur cet appareil</button>
+        <button class="data-btn" id="sync-now-btn">Synchroniser maintenant</button>
+        <button class="data-btn" id="sync-restore-btn" title="Revenir aux tâches, aux contacts et au pipeline, ou à la note, tels qu'ils étaient à une synchro passée (chaque synchro garde une version sur GitHub)">Restaurer une version…</button>
+        <button class="data-btn set-link" id="sync-forget-btn" title="Retire le jeton GitHub de cet appareil (après un changement d'adresse, ou sur un appareil prêté). Les données restent ici et sur GitHub.">Oublier le jeton sur cet appareil</button>
+        </div>
         <span id="sync-status" style="font-size:11px; color:var(--tx3); font-family:var(--font-mono);"></span>
       </div>
     </div>
@@ -762,7 +764,7 @@
       </div>
       <div class="bridge-setup" style="display:flex; flex-direction:column; gap:8px;">
         <input type="password" id="bridge-token" placeholder="Clé affichée dans la fenêtre du pont" autocomplete="off">
-        <button class="data-btn" id="bridge-save-btn" style="width:100%;">Enregistrer et tester</button>
+        <div class="set-actions"><button class="data-btn set-primary" id="bridge-save-btn">Enregistrer et tester</button></div>
         <span id="bridge-status" class="bridge-status"></span>
       </div>
       <div class="parc-source" style="margin-top:14px;">
@@ -780,18 +782,18 @@
       <div style="display:flex; flex-direction:column; gap:8px;">
         <input type="text" id="team-url" placeholder="URL donnée par l'administrateur" autocomplete="off">
         <input type="password" id="team-key" placeholder="Clé donnée par l'administrateur" autocomplete="off">
-        <button class="data-btn" id="team-save-btn" style="width:100%;">Enregistrer la configuration</button>
+        <div class="set-actions"><button class="data-btn" id="team-save-btn">Enregistrer la configuration</button></div>
         <span id="team-config-status" class="bridge-status"></span>
       </div>
       <div style="display:flex; flex-direction:column; gap:8px; margin-top:10px;">
         <input type="email" id="team-email" placeholder="Ton email" autocomplete="off">
         <input type="password" id="team-password" placeholder="Mot de passe" autocomplete="current-password">
-        <button class="data-btn" id="team-login-btn" style="width:100%;">Se connecter</button>
+        <div class="set-actions"><button class="data-btn" id="team-login-btn">Se connecter</button></div>
         <span id="team-auth-status" class="bridge-status"></span>
       </div>
-      <div class="data-actions" style="margin-top:10px;">
-        <button class="data-btn" id="team-load-btn" type="button">Charger les données d'équipe (vérification)</button>
+      <div class="set-actions" style="margin-top:10px;">
         <button class="data-btn" id="team-migrate-btn" type="button">Migrer mes données locales →</button>
+        <button class="data-btn set-link" id="team-load-btn" type="button">Vérifier les données d'équipe</button>
       </div>
       <span id="team-action-status" class="bridge-status"></span>
     </div>
@@ -799,7 +801,7 @@
     <div class="list-manager" id="install-section" style="display:none;">
       <h2>Application</h2>
       <p class="list-hint">Installe la page comme application (icône, plein écran, hors-ligne).</p>
-      <button class="data-btn" id="install-btn" style="width:100%;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="2" width="14" height="20" rx="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg>Installer l'app</button>
+      <button class="data-btn set-primary" id="install-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="2" width="14" height="20" rx="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg>Installer l'app</button>
     </div>
     <div class="list-manager" id="ai-section">
       <h2>Claude pour compléter les fiches (facultatif)</h2>
@@ -807,7 +809,7 @@
       <div style="display:flex; flex-direction:column; gap:8px;">
         <input type="password" id="ai-key-input" placeholder="Clé API Claude (sk-ant-…)" autocomplete="off">
         <a class="sync-token-link" href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener">Créer une clé sur la console Anthropic ↗</a>
-        <button class="data-btn" id="ai-key-save" style="width:100%;">Enregistrer la clé sur cet appareil</button>
+        <div class="set-actions"><button class="data-btn set-primary" id="ai-key-save">Enregistrer la clé sur cet appareil</button></div>
         <span id="ai-key-status" style="font-size:11px; color:var(--tx3); font-family:var(--font-mono);"></span>
       </div>
     </div>

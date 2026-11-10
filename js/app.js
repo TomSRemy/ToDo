@@ -339,6 +339,7 @@
     const info=syncPillInfo();
     const ban=$('lite-sync-banner'); if(ban) ban.hidden=!window.TODO_LITE || !!syncConfig.enabled;
     ['sync-pill','sync-pill-lite','sync-pill-w'].forEach(id=>{ const el=$(id); if(!el) return; el.dataset.k=info.k; el.title=info.title; el.setAttribute('aria-label', info.label+'. '+info.title); el.querySelector('.sync-label').textContent=info.label; });
+    if($('sync-save-btn')) paintSettingsButtons();
   }
   function openSyncSettings(){
     if(window.TODO_LITE || window.TODO_WIDGET){ widgetOpenFull('index.html#sync'); return; }
@@ -1223,7 +1224,7 @@
     const e=document.createElement('div'); e.className='empty-state';
     if(searchQuery || tasks.some(t=>!t.deleted)){ e.textContent=searchQuery?'Aucun résultat.':'Rien ici.'; return e; }
     e.innerHTML='<p>Aucune tâche pour l’instant.</p>';
-    const b=document.createElement('button'); b.type='button'; b.className='data-btn'; b.textContent='Ajouter ma première tâche';
+    const b=document.createElement('button'); b.type='button'; b.className='data-btn set-primary'; b.textContent='Ajouter ma première tâche';
     b.onclick=()=>$('quick-add-input').focus(); e.appendChild(b);
     return e;
   }
@@ -6353,6 +6354,15 @@
     settingsPill('backup-section', ...backupState());
     settingsPill('bridge-section', ...bridgePillState());
     storageRatio().then(({ ratio })=>settingsPill('storage-section', Math.round(ratio*100)+' % utilisé', ratio>=.8?'warn':'')).catch(()=>{});
+    paintSettingsButtons();
+  }
+  // the green button of each block is the next thing to do: switch the sync on, then sync; set the team up, then sign in
+  function paintSettingsButtons(){
+    const on=!!syncConfig.enabled, prim=(id, yes)=>{ const b=$(id); if(b) b.classList.toggle('set-primary', !!yes); };
+    prim('sync-save-btn', !on); prim('sync-now-btn', on);
+    $('sync-save-btn').textContent=on?'Enregistrer les changements':'Activer la synchro sur cet appareil';
+    const T=window.TodoTeam, conf=!!(T && T.isConfigured && T.isConfigured()), inn=!!(T && T.isSignedIn && T.isSignedIn());
+    prim('team-save-btn', !conf); prim('team-login-btn', conf && !inn);
   }
   function paintSettingsToc(){ const nav=$('settings-toc'), main=document.querySelector('#tab-lists .settings-main'); if(!nav || !main) return; nav.innerHTML='';
     [...main.children].forEach(el=>{
@@ -6364,6 +6374,8 @@
       nav.appendChild(b); });
     // a group with nothing shown (Appli on a computer where the app is installed) loses its title too
     [...nav.children].forEach((x,k,all)=>{ if(x.className==='g' && (!all[k+1] || all[k+1].className==='g')) x.remove(); });
+    let grp=null, any=false; const close=()=>{ if(grp) grp.hidden=!any; };
+    [...main.children].forEach(el=>{ if(el.classList.contains('settings-group')){ close(); grp=el; any=false; } else if(el.id && SETTINGS_NAMES[el.id] && settingsShown(el)) any=true; }); close();
     paintSettingsState(); }
   document.querySelector('.tab[data-tab="lists"]').addEventListener('click', ()=>setTimeout(paintSettingsToc, 0));
   $('vcf-import-btn').onclick=phoneImportStart;
@@ -6921,6 +6933,7 @@
       authEl.textContent=window.TodoTeam.isConfigured()?'Non connecté.':'Configure d’abord la connexion ci-dessus.';
       authEl.className='bridge-status';
     }
+    paintSettingsButtons();
   }
   if($('team-section')){
     (async()=>{ const cfg=window.TodoTeam&&await window.TodoTeam.loadConfig(); if(cfg){ $('team-url').value=cfg.url||''; $('team-key').value=cfg.anonKey||''; } })();

@@ -276,9 +276,10 @@ window.TodoExcelSync=(function(){
     const cntP=xsFileOn('pipe')?rows.filter(r=>xsTodo(r.p) && !r.pDiffs.length).length:0, cntB=xsFileOn('bdd')?rows.filter(r=>r.b && xsTodo(r.b) && !r.bDiffs.length).length:0;
     ov.querySelectorAll('.xs-send').forEach(b=>{ const k=b.dataset.k, n=k==='pipe'?cntP:cntB; b.classList.toggle('hidden', !xsFileOn(k));
       if(xsSending[k]){ b.disabled=true; return; }   // a send in packets repaints between packets : never re-enable it mid-send (a second click would send the rest twice)
-      b.innerHTML=XL_SEND_ICO+'Envoyer au '+(k==='pipe'?'Pipe':'Suivi')+' ('+n+')'; b.disabled=!n || !bridgeConfigured(); b.title=bridgeConfigured()?'':'Pont Excel non connecté'; });
+      b.innerHTML=XL_SEND_ICO+'Envoyer au '+(k==='pipe'?'Pipe':'Suivi')+' ('+n+')'; b.disabled=!n || !bridgeConfigured(); b.classList.toggle('off', !bridgeConfigured()); b.title=bridgeConfigured()?'':'Pont Excel non connecté'; });
     // no bridge needed to copy (unlike « Envoyer ») : works even without the pont configured
-    ov.querySelectorAll('.xs-copy').forEach(b=>{ const k=b.dataset.k, n=k==='pipe'?cntP:cntB; b.classList.toggle('hidden', !xsFileOn(k)); b.textContent='Copier ('+n+')'; b.disabled=!n; });
+    ov.querySelectorAll('.xs-copy').forEach(b=>{ const k=b.dataset.k, n=k==='pipe'?cntP:cntB; b.classList.toggle('hidden', !xsFileOn(k)); // with the bridge, copying is the fallback (a grey link next to « Envoyer ») ; without it, it is the way to go
+      const br=bridgeConfigured(); b.classList.toggle('quiet', br); b.textContent=(br?'ou copier':'Copier pour le '+(k==='pipe'?'Pipe':'Suivi'))+' ('+n+')'; b.disabled=!n; });
     const shown=all?rows:todo;
     xsShownNow=shown;
     const nConflictCells=xsConflictTargets(shown).reduce((s,tg)=>s+tg.diffs.length, 0);
