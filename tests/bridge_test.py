@@ -131,7 +131,9 @@ try:
     r = send(row(["SOLARIS", "CS du Moulin", "En préparation", 58]))["results"][0]
     check(r["action"] == "en attente" and r["question"]["type"] == "recent-closed" and len(dump()) == 1, "recently lost: nothing written, the app asks")
     r = send(row(["SOLARIS", "CS du Moulin", "En préparation", 58], target=r["question"]["rows"][0]["row"]))["results"][0]
-    check(r["action"] == "mise à jour" and dump()[0][3] == "52" and r["conflicts"], "« reprendre la ligne » goes through the same protections")
+    # the line's other values are someone else's: kept and reported, nothing written — so « aucun changement », not
+    # « mise à jour » (which now only means a cell really changed, see pont-excel.ps1)
+    check(r["action"] == "aucun changement" and dump()[0][3] == "52" and r["conflicts"], "« reprendre la ligne » goes through the same protections")
     seed([["SOLARIS", "CS du Moulin", "Résilié", 52, fr(TODAY - datetime.timedelta(days=400)), "", ""]])
     r = send(row(["SOLARIS", "CS du Moulin", "En préparation", 58]))["results"][0]
     check(r["action"] == "ajoutée" and dump()[0][2] == "Résilié", "« Résilié » is a closed line too")
@@ -219,13 +221,20 @@ try:
     r = send(["SOLARIS", "Vieux format", "En préparation", 10])["results"][0]
     check(r["action"] == "ajoutée", "plain list rows from an older app still work")
 
-    # backups: one copy per writing request, only the last 3 kept; the closed-file warning
+    # backups (since v1.17): one copy per calendar day, the last 3 days kept — many sends the same day never crowd out
+    # the days before; the closed-file warning
+    bk = work / "Sauvegardes pont"
+    for p in bk.glob("mock-pipe-%s-*.json" % TODAY.strftime("%Y%m%d")): p.unlink()   # earlier steps already made today's
+    older = [(TODAY - datetime.timedelta(days=d)).strftime("%Y%m%d") for d in (1, 2, 3, 4)]
+    for day in older: (bk / ("mock-pipe-%s-090000.json" % day)).write_text("[]", encoding="utf-8")
     seed([], closed=True)
     res = None
     for k in range(5):
-        res = send(row(["SOLARIS", "Sauvegarde %d" % k, "En préparation", k + 1])); time.sleep(1.1)
-    kept = sorted(p.name for p in (work / "Sauvegardes pont").glob("mock-pipe-*.json"))
-    check(len(kept) == 3 and res["backup"] in kept and res["fileWasClosed"] is True, f"backup before writing, 3 kept ({len(kept)}), closed file reported")
+        res = send(row(["SOLARIS", "Sauvegarde %d" % k, "En préparation", k + 1]))
+    kept = sorted(p.name for p in bk.glob("mock-pipe-*.json"))
+    days = sorted({n.split("-")[2] for n in kept})
+    check(len(kept) == 3 and res["backup"] in kept and days == sorted([TODAY.strftime("%Y%m%d"), older[0], older[1]]) and res["fileWasClosed"] is True,
+          f"backup before writing: one per day, last 3 days kept ({kept}), closed file reported")
 
     # a second bridge started while this one runs: it says an older bridge holds the port (never two at once), and stops
     second = subprocess.run([PWSH, "-NoProfile", "-File", str(work / "pont-excel.ps1"), "-Mock", "-Port", str(PORT)], cwd=work, input=b"N\n",
