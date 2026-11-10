@@ -8,9 +8,9 @@ window.TodoOffers=(function(){
       touchCrm, saveCrm, renderPipeline, askText, notify, copyToClipboard, pqIsoToFr, toISO, lsSet }=app;
     // who has the deal at each step watched here
     const SECTIONS=[
-      { key:'ops', title:'Chez Ops : le prix est demandé', stages:['pricing_indicatif','pricing_ferme'], late:10 },
-      { key:'me', title:'À toi : l’offre est à remettre', stages:['offre_remise'], late:3 },
-      { key:'client', title:'Chez le producteur : sa réponse est attendue', stages:['offre_attente'], late:7 }
+      { key:'ops', title:'Chez Ops : le prix est demandé', short:'Chez Ops', sub:'prix demandé', stages:['pricing_indicatif','pricing_ferme'], late:10 },
+      { key:'me', title:'À toi : l’offre est à remettre', short:'À toi', sub:'offre à remettre', stages:['offre_remise'], late:3 },
+      { key:'client', title:'Chez le producteur : sa réponse est attendue', short:'Chez le producteur', sub:'réponse attendue', stages:['offre_attente'], late:7 }
     ];
     const opsMail=()=>{ try{ return localStorage.getItem('ops-mail')||''; }catch(e){ return ''; } };
     const lastOffer=list=>{ const all=list.flatMap(o=>o.offers||[]); return all.sort((a,b)=>(b.n||0)-(a.n||0) || String(b.at).localeCompare(String(a.at)))[0]||null; };
@@ -102,6 +102,28 @@ window.TodoOffers=(function(){
       });
     };
     api.offersOf=o=>(o.offers||[]).slice();
+    // the Synthèse's summary : the three sections, four lines each at most, a click opens the deal (or the Offres view)
+    api.offersSummary=function(openView){
+      const e=app.escapeHtml, box=document.createElement('section'); box.className='pd-card of-sum';
+      box.innerHTML='<h4 class="of-sum-h"><button type="button" class="of-sum-go">Offres</button></h4>';
+      box.querySelector('.of-sum-go').onclick=openView;
+      SECTIONS.forEach(sec=>{
+        const list=rows(sec, ''), late=list.filter(r=>r.days>=sec.late).length, kw=list.reduce((t,r)=>t+r.list.reduce((x,o)=>x+kwcNum(o),0),0);
+        const s=document.createElement('div'); s.className='of-sum-sec'; s.dataset.k=sec.key;
+        s.innerHTML='<div class="of-sum-t"><b>'+e(sec.short)+'</b><span>'+e(sec.sub)+'</span><em class="of-sum-n">'+list.length+' · '+e(kw?fmtMwc(kw):'0')+'</em>'+(late?'<em class="of-sum-late">'+late+' en retard</em>':'')+'</div>';
+        if(!list.length){ const p=document.createElement('p'); p.className='of-sum-empty'; p.textContent='Rien ici pour le moment.'; s.appendChild(p); }
+        list.slice(0,4).forEach(r=>{ const b=document.createElement('button'); b.type='button'; b.className='of-sum-row'+(r.days>=sec.late?' late':'');
+          const f=lastOffer(r.list);
+          b.innerHTML='<span class="c"></span><span class="w"></span><span class="p"></span><span class="o"></span><span class="d"></span>';
+          b.querySelector('.c').textContent=r.o.producteur||r.o.company||''; b.querySelector('.w').textContent=r.list.length>1?r.list.length+' installations':(r.o.centrale||oppName(r.o));
+          b.querySelector('.p').textContent=power(r); b.querySelector('.o').textContent=f&&f.prix?f.prix:'—'; b.querySelector('.d').textContent=r.days+' j';
+          b.title=what(r)+(f?' · '+offerText(f):'');
+          b.onclick=()=>{ if(r.list.length>1 && r.o.requestId) openRequestDetail(r.o.requestId); else openOppDetail(r.o.id); };
+          s.appendChild(b); });
+        if(list.length>4){ const m=document.createElement('button'); m.type='button'; m.className='of-sum-more'; m.textContent='+ '+(list.length-4)+' autre'+(list.length>5?'s':''); m.onclick=openView; s.appendChild(m); }
+        box.appendChild(s); });
+      return box;
+    };
   };
   return api;
 })();

@@ -356,11 +356,39 @@
   .synth-mkt-label{ font:700 9.5px var(--font-mono); letter-spacing:.05em; text-transform:uppercase; color:var(--tx3); margin-bottom:2px; }
   .synth-mkt-tile iframe{ width:100%; height:120px; border:0; display:block; background:transparent; }
   .synth-panels{ margin-bottom:14px; }
-  .synth-grid.pd-grid{ grid-template-columns:1fr; }   /* pleine largeur, empilés : les graphes ont besoin de place, pas de barre de scroll interne */
-  .synth-card{ cursor:pointer; }
-  .synth-grid .parc-chart-block{ cursor:default; background:var(--panel); padding:14px 16px; }
-  .synth-grid .parc-chart-block .parc-h{ margin-bottom:8px; }
-  .synth-grid .parc-chart{ min-width:0; max-width:none; }
+  /* Synthèse : les offres à gauche, la carte (portefeuille / offres / pipeline) à droite, en colonne */
+  .synth-grid{ display:grid; grid-template-columns:minmax(0,1.15fr) minmax(320px,1fr); gap:14px; align-items:start; }
+  @media (max-width:1100px){ .synth-grid{ grid-template-columns:1fr; } }
+  .synth-grid .synth-map{ margin:0; background:var(--panel); border:1px solid var(--bd); border-radius:var(--radius-xl); padding:14px 16px; }
+  .synth-map .parc-map-grid{ grid-template-columns:1fr; gap:12px; }
+  .synth-map .parc-map{ max-height:270px; }
+  /* market tiles : the PowerKlock widget, and a button over it that opens the Marché page */
+  .synth-mkt-tile{ position:relative; transition:border-color .15s var(--ease-out); }
+  .synth-mkt-tile:hover{ border-color:var(--accent); }
+  .synth-mkt-hit{ position:absolute; inset:0; background:none; border:0; padding:0; cursor:pointer; border-radius:inherit; }
+  .synth-mkt-hit:focus-visible{ outline:2px solid var(--accent); outline-offset:-2px; }
+  #today-stats-row button.stat-card{ text-align:left; font:inherit; color:inherit; cursor:pointer; transition:border-color .15s var(--ease-out); }
+  #today-stats-row button.stat-card:hover{ border-color:var(--accent); }
+  /* the offers' summary (same three sections as Pipeline › Offres) */
+  .of-sum{ background:var(--panel); border:1px solid var(--bd); border-radius:var(--radius-xl); padding:14px 16px; display:flex; flex-direction:column; gap:18px; }
+  .of-sum-h{ margin:0; }
+  .of-sum-go{ background:none; border:0; padding:0; cursor:pointer; font:700 11px var(--font-mono); letter-spacing:.08em; text-transform:uppercase; color:var(--tx1); }
+  .of-sum-go:hover{ color:var(--accent); }
+  .of-sum-sec{ border-left:3px solid var(--rail); padding-left:12px; display:flex; flex-direction:column; }
+  .of-sum-sec[data-k="ops"]{ --rail:#E5A23B; } .of-sum-sec[data-k="me"]{ --rail:var(--accent); } .of-sum-sec[data-k="client"]{ --rail:#5BA8F5; }
+  .of-sum-t{ display:flex; align-items:baseline; gap:8px; margin-bottom:4px; flex-wrap:wrap; }
+  .of-sum-t b{ font-size:13.5px; color:var(--tx1); } .of-sum-t span{ font-size:13px; color:var(--tx3); }
+  .of-sum-t em{ font:500 10.5px var(--font-mono); font-style:normal; padding:2px 7px; border-radius:var(--radius); border:1px solid var(--bd); color:var(--tx3); }
+  .of-sum-t .of-sum-n{ margin-left:auto; }
+  .of-sum-t .of-sum-late{ color:#ED6965; background:#ED696518; border-color:#ED696533; }
+  .of-sum-row{ display:grid; grid-template-columns:minmax(0,1.1fr) minmax(0,1.3fr) auto minmax(18px,auto) 44px; gap:10px; align-items:baseline; background:none; border:0; border-bottom:1px solid var(--bd-soft); padding:5px 0; text-align:left; cursor:pointer; color:var(--tx1); font:13px var(--font-ui); }
+  .of-sum-row:hover{ background:var(--panel-2); }
+  .of-sum-row .c, .of-sum-row .w{ overflow:hidden; text-overflow:ellipsis; white-space:nowrap; } .of-sum-row .w{ color:#8EA3BF; }
+  .of-sum-row .p{ font:500 12.5px var(--font-mono); text-align:right; } .of-sum-row .o{ color:var(--tx3); }
+  .of-sum-row .d{ font:600 13px var(--font-mono); text-align:right; color:#8EC5F5; } .of-sum-row.late .d{ color:#E5A23B; }
+  .of-sum-more{ align-self:flex-start; background:none; border:0; padding:6px 0 0; cursor:pointer; color:#8EA3BF; font-size:12px; }
+  .of-sum-more:hover{ color:var(--accent); }
+  .of-sum-empty{ margin:2px 0 0; font-size:12.5px; color:#8EA3BF; }
   @media (max-width:760px){ .synth-market, .synth-panels{ display:none; } }
   .stat-card{ flex:1; background:var(--panel-2); border:1px solid var(--bd); border-radius:var(--radius-md); padding:12px 14px; }
   .stat-card-num{ font-family:var(--font-mono); font-size:22px; font-weight:700; color:var(--tx1); line-height:1; margin-bottom:4px; }

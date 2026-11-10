@@ -1401,32 +1401,22 @@
     SYNTH_MARKET.forEach(([label, url])=>{
       const tile=document.createElement('div'); tile.className='synth-mkt-tile';
       const l=document.createElement('span'); l.className='synth-mkt-label'; l.textContent=label; tile.appendChild(l);
-      const f=document.createElement('iframe'); f.src=url; f.title=label; f.loading='lazy'; f.referrerPolicy='no-referrer';
-      tile.appendChild(f); root.appendChild(tile);
+      const f=document.createElement('iframe'); f.src=url; f.title=label; f.loading='lazy'; f.referrerPolicy='no-referrer'; f.tabIndex=-1;
+      tile.appendChild(f);
+      // the widget is an iframe (it would swallow the click) : a transparent button on top opens the Marché page
+      const hit=document.createElement('button'); hit.type='button'; hit.className='synth-mkt-hit'; hit.setAttribute('aria-label', label+' : ouvrir la page Marché'); hit.title='Ouvrir la page Marché';
+      hit.onclick=()=>gsTab('market'); tile.appendChild(hit);
+      root.appendChild(tile);
     });
   }
+  // the Synthèse's two panels : the offers (who has them, since when) and the map of the contracts, offers or pipeline
   function renderSynthPanels(){
     const root=$('synth-panels'); if(!root || ON_PHONE) return;
     root.innerHTML='';
-    const all=opportunities.filter(o=>!o.deleted && o.kind!=='request' && o.stage!=='converti');
-    const live=all.filter(o=>!isExited(o) && o.stage!=='actif');
-    const grid=document.createElement('div'); grid.className='pd-grid synth-grid';
-
+    const grid=document.createElement('div'); grid.className='synth-grid';
+    grid.appendChild(window.TodoOffers.offersSummary(()=>{ gsTab('pipeline'); setTimeout(()=>{ const b=$('pipe-offers-toggle'); if(b && b.getAttribute('aria-pressed')!=='true') b.click(); }, 30); }));
     if(parcData===null) loadParc();
-    if(parcData) grid.appendChild(window.TodoParc.parcChart(parcData.items.filter(p=>p.statut==='Gagné')));
-
-    const c3=document.createElement('section'); c3.className='pd-card';
-    const h3=document.createElement('h4'); h3.textContent='Affaires en cours · '+live.length; c3.appendChild(h3);
-    live.slice().sort((a,b)=>kwcNum(b)-kwcNum(a)).slice(0,8).forEach(o=>{
-      const r=document.createElement('button'); r.type='button'; r.className='tw-row';
-      r.innerHTML='<span class="k"><b></b><span></span></span><span class="v"></span>';
-      r.querySelector('b').textContent=oppName(o); r.querySelector('.k span').textContent=stageLabel(o.stage,o);
-      r.querySelector('.v').textContent=kwcNum(o)?fmtMwc(kwcNum(o)):'';
-      r.onclick=()=>{ gsTab('pipeline'); setTimeout(()=>openOppDetail(o.id),30); };
-      c3.appendChild(r);
-    });
-    if(!live.length){ const e=document.createElement('p'); e.className='pd-hint'; e.textContent='Aucune affaire en cours.'; c3.appendChild(e); }
-    grid.appendChild(c3);
+    const m=parcMap(); m.classList.add('synth-map'); grid.appendChild(m);
     root.appendChild(grid);
   }
   function synthSignedThisYear(year){
@@ -1457,13 +1447,14 @@
     const synthYear=new Date().getFullYear();
     const synthSignedKwc=synthSignedThisYear(synthYear);   // même source que le graphe Portefeuille juste en dessous (audit : les deux donnaient un chiffre différent)
     const cards=[
-      ['Pipeline en cours', synthLive.length, ''],
-      ['Bloqués', synthStalled.length, synthStalled.length?'crit':''],
-      ['Tâches en retard', overdueTasks.length, overdueTasks.length?'crit':''],
-      ['Portefeuille signé '+synthYear, fmtMwc(synthSignedKwc), '']
+      ['Pipeline en cours', synthLive.length, '', 'pipeline'],
+      ['Bloqués', synthStalled.length, synthStalled.length?'crit':'', 'pipeline'],
+      ['Tâches en retard', overdueTasks.length, overdueTasks.length?'crit':'', 'tasks'],
+      ['Portefeuille signé '+synthYear, fmtMwc(synthSignedKwc), '', 'parc']
     ];
-    cards.forEach(([label,num,cls])=>{
-      const card=document.createElement('div'); card.className='stat-card';
+    cards.forEach(([label,num,cls,go])=>{
+      // each figure opens its page
+      const card=document.createElement('button'); card.type='button'; card.className='stat-card clickable'; card.title='Ouvrir : '+label; card.onclick=()=>gsTab(go);
       const n=document.createElement('div'); n.className='stat-card-num'+(cls?' '+cls:''); n.textContent=num;
       const l=document.createElement('div'); l.className='stat-card-label'; l.textContent=label;
       card.appendChild(n); card.appendChild(l);
@@ -6816,7 +6807,7 @@
   // technology of a plant, for the map colours (muted, so the map stays quiet and the dots read first)
   const MAP_TECHS=[ ['PV','Solaire PV','#E3B448'], ['Eolien','Éolien','#8EC5E8'], ['Hydro','Hydro','#6E9CF0'], ['Biogaz','Biogaz','#9CC37A'], ['Autre','Autre','#8B95A5'] ];
   const MAP_PHASES=[ ['qualif','Qualification','#7DA2CF'], ['attente_prix','Attente de prix','#F2A541'], ['offre','Offre','#E5B54F'], ['contrat','Contrat','#B49CFF'], ['onboarding','Onboarding','#5EEAD4'], ['actif','En service','#14D3A9'] ];
-  window.TodoParc.init({ $, MAP_PHASES, MAP_TECHS, PARC_CADRES, PARC_COLORS, allCompanyNames, askConfirm, celebrate, closeRenewalTask, coDupKey, copyToClipboard, createTask, ensureCompany, escapeHtml, fmtKwc, inProcess, isExited, loadParc, loadScript, loseOpps, lsSet, newOppId, openCompanySheet, openOppDetail, oppName, oppPhase, parcBars, parcNorm, parcTable, parcYearsShown, pqFold, pqIsoToFr, pqNum, prefsToNote, relanceOnMove, render, renderPipeline, saveCrm, saveTasks, stageLabel, toISO, touchCrm, get gsTab(){ return gsTab; }, get mapInPipe(){ return mapInPipe; }, set mapInPipe(v){ mapInPipe=v; }, get opportunities(){ return opportunities; }, set opportunities(v){ opportunities=v; }, get parcData(){ return parcData; }, set parcData(v){ parcData=v; }, get parcKpi(){ return parcKpi; }, set parcKpi(v){ parcKpi=v; }, get parcKpiLabel(){ return parcKpiLabel; }, set parcKpiLabel(v){ parcKpiLabel=v; }, get parcKpiSet(){ return parcKpiSet; }, set parcKpiSet(v){ parcKpiSet=v; }, get parcMapAll(){ return parcMapAll; }, set parcMapAll(v){ parcMapAll=v; }, get parcMapLayer(){ return parcMapLayer; }, set parcMapLayer(v){ parcMapLayer=v; }, get parcMapSel(){ return parcMapSel; }, set parcMapSel(v){ parcMapSel=v; }, get parcMapView(){ return parcMapView; }, set parcMapView(v){ parcMapView=v; }, get parcSyncNote(){ return parcSyncNote; }, set parcSyncNote(v){ parcSyncNote=v; }, get parcYear(){ return parcYear; }, set parcYear(v){ parcYear=v; }, get sameCo(){ return sameCo; }, get syncConfig(){ return syncConfig; }, set syncConfig(v){ syncConfig=v; }, get tasks(){ return tasks; }, set tasks(v){ tasks=v; } });   // Portefeuille : renouvellements, tableau et carte — js/parc.js
+  window.TodoParc.init({ $, renderSynthPanels, MAP_PHASES, MAP_TECHS, PARC_CADRES, PARC_COLORS, allCompanyNames, askConfirm, celebrate, closeRenewalTask, coDupKey, copyToClipboard, createTask, ensureCompany, escapeHtml, fmtKwc, inProcess, isExited, loadParc, loadScript, loseOpps, lsSet, newOppId, openCompanySheet, openOppDetail, oppName, oppPhase, parcBars, parcNorm, parcTable, parcYearsShown, pqFold, pqIsoToFr, pqNum, prefsToNote, relanceOnMove, render, renderPipeline, saveCrm, saveTasks, stageLabel, toISO, touchCrm, get gsTab(){ return gsTab; }, get mapInPipe(){ return mapInPipe; }, set mapInPipe(v){ mapInPipe=v; }, get opportunities(){ return opportunities; }, set opportunities(v){ opportunities=v; }, get parcData(){ return parcData; }, set parcData(v){ parcData=v; }, get parcKpi(){ return parcKpi; }, set parcKpi(v){ parcKpi=v; }, get parcKpiLabel(){ return parcKpiLabel; }, set parcKpiLabel(v){ parcKpiLabel=v; }, get parcKpiSet(){ return parcKpiSet; }, set parcKpiSet(v){ parcKpiSet=v; }, get parcMapAll(){ return parcMapAll; }, set parcMapAll(v){ parcMapAll=v; }, get parcMapLayer(){ return parcMapLayer; }, set parcMapLayer(v){ parcMapLayer=v; }, get parcMapSel(){ return parcMapSel; }, set parcMapSel(v){ parcMapSel=v; }, get parcMapView(){ return parcMapView; }, set parcMapView(v){ parcMapView=v; }, get parcSyncNote(){ return parcSyncNote; }, set parcSyncNote(v){ parcSyncNote=v; }, get parcYear(){ return parcYear; }, set parcYear(v){ parcYear=v; }, get sameCo(){ return sameCo; }, get syncConfig(){ return syncConfig; }, set syncConfig(v){ syncConfig=v; }, get tasks(){ return tasks; }, set tasks(v){ tasks=v; } });   // Portefeuille : renouvellements, tableau et carte — js/parc.js
   // ---------- Excel source of the Portefeuille: link to open it, automatic refresh through the local Excel bridge ----------
   // A web page cannot read a file on SharePoint by itself (sign-in + the browser blocks it); the bridge reads the
   // synced copy on the computer instead. The link is kept to open the file in one click.
@@ -7715,7 +7706,7 @@
     todoNoteLinks: noteLinksForNetwork,
     todoNetworkInfo: networkInfo,
   });
-  window.TodoOffers.init({ oppName, stageLabel, daysInStage, fmtKwc, fmtMwc, kwcNum, isExited, sameCo, openOppDetail, openRequestDetail, touchCrm, saveCrm, renderPipeline, askText, notify, copyToClipboard, pqIsoToFr, toISO, lsSet, fold:pqFold,
+  window.TodoOffers.init({ escapeHtml, oppName, stageLabel, daysInStage, fmtKwc, fmtMwc, kwcNum, isExited, sameCo, openOppDetail, openRequestDetail, touchCrm, saveCrm, renderPipeline, askText, notify, copyToClipboard, pqIsoToFr, toISO, lsSet, fold:pqFold,
     get opportunities(){ return opportunities; }, get contacts(){ return contacts; } });
   window.TodoPresent.init({ $, meetCopyShort, meetChangesBlock, MAP_PHASES, MEET_COLS, MEET_PHASES, MES_WEIGHTS, OPP_STAGES, PIPE_PHASES, WHO, WHO_COLORS, activeTasks, buildHistory, caractValue, daysInStage, escapeHtml, fmtKwc, fmtMwc, kwcNum, loadScript, meetBlockKey, meetBlockName, meetCopy, meetData, meetHiddenCols, meetPhasesOn, meetPick, meetPrint, meetTotal, meetVis, meetVisuals, meetXlsx, mesForecast, openOppDetail, openRequestDetail, oppName, oppStage, plainLinks, pqNum, prefsToNote, renderPipeline, stageLabel, stageTaskOf, toISO });   // js/present.js
   window.TodoPhone.init({ $, askConfirm, tell, contactDupKeys, ensureCompany, loadTesseract, openContactForm, parseSignatureText, pqFmtPhone, pqFold, renderContacts, saveCrm, toISO, touchCrm, get contacts(){ return contacts; } });   // js/phone.js

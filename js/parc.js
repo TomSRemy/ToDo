@@ -284,11 +284,13 @@ window.TodoParc=(function(){
     openCompanySheet(pick||p.who||p.prod||'');
   }
   function mapColorBy(){ try{ return localStorage.getItem('map-color')==='techno'?'techno':'phase'; }catch(e){ return 'phase'; } }   // function: the map may draw before this line runs
-  function mapRerender(){ if(app.mapInPipe) renderPipeline(); else renderParc(); }
+  // the map also sits in the Synthèse : redraw it there when that is the page shown
+  const synthShown=()=>!$('tab-today').classList.contains('hidden') && !!document.querySelector('#synth-panels .parc-map-block');
+  function mapRerender(){ if(app.mapInPipe) renderPipeline(); else if(synthShown()) app.renderSynthPanels(); else renderParc(); }
   function parcMap(){
     if(!FR_MAP){
       const w=document.createElement('div'); w.className='parc-block parc-map-block'; w.innerHTML='<div class="parc-h">Carte</div><p class="parc-muted">Chargement de la carte…</p>';
-      loadFrMap().then(()=>{ if(app.mapInPipe){ if(!$('tab-pipeline').classList.contains('hidden')) renderPipeline(); } else if(!$('tab-parc').classList.contains('hidden')) mapRerender(); }).catch(()=>{ w.querySelector('p').textContent='Carte indisponible hors ligne (elle sera disponible après une ouverture avec réseau).'; });
+      loadFrMap().then(()=>{ if(app.mapInPipe){ if(!$('tab-pipeline').classList.contains('hidden')) renderPipeline(); } else if(!$('tab-parc').classList.contains('hidden') || synthShown()) mapRerender(); }).catch(()=>{ w.querySelector('p').textContent='Carte indisponible hors ligne (elle sera disponible après une ouverture avec réseau).'; });
       return w;
     }
     // the pipeline layer: dots by phase (where the deal is), else by technology
