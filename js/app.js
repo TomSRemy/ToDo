@@ -1419,6 +1419,10 @@
     grid.appendChild(c3);
     root.appendChild(grid);
   }
+  function synthSignedThisYear(year){
+    if(parcData===null) loadParc();
+    return (parcData?parcData.items:[]).filter(p=>p.statut==='Gagné' && (p.vols[year]||0)>0).reduce((s,p)=>s+(p.kwc||0),0);
+  }
   function renderToday(){
     renderSynthMarket();
     setTimeout(renderSynthPanels, 0);   // construit le graphe SVG : jamais sur le chemin critique du démarrage (ex. l'ouverture du post-it)
@@ -1440,13 +1444,13 @@
     const synthLive=synthAll.filter(o=>!isExited(o) && o.stage!=='actif');
     const synthNow=Date.now();
     const synthStalled=synthLive.filter(o=>(o.kind==='installation'||o.kind==='prequal') && lastMove(o)>1e12 && synthNow-lastMove(o)>=STALL_DAYS*864e5);
-    const synthYear=String(new Date().getFullYear());
-    const synthSignedYr=synthAll.filter(o=>!isExited(o) && stageIndex(o.stage)>=stageIndex('onboarding') && ((o.stageLog||[]).some(e=>(e.stage==='onboarding'||e.stage==='actif') && e.at && new Date(e.at).getFullYear()===+synthYear) || (!(o.stageLog||[]).length && o.updatedAt && new Date(o.updatedAt).getFullYear()===+synthYear)));
+    const synthYear=new Date().getFullYear();
+    const synthSignedKwc=synthSignedThisYear(synthYear);   // même source que le graphe Portefeuille juste en dessous (audit : les deux donnaient un chiffre différent)
     const cards=[
       ['Pipeline en cours', synthLive.length, ''],
       ['Bloqués', synthStalled.length, synthStalled.length?'crit':''],
       ['Tâches en retard', overdueTasks.length, overdueTasks.length?'crit':''],
-      ['Portefeuille signé '+synthYear, fmtMwc(synthSignedYr.reduce((s,o)=>s+kwcNum(o),0)), '']
+      ['Portefeuille signé '+synthYear, fmtMwc(synthSignedKwc), '']
     ];
     cards.forEach(([label,num,cls])=>{
       const card=document.createElement('div'); card.className='stat-card';
