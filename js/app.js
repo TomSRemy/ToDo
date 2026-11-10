@@ -1396,10 +1396,13 @@
     const left=document.createElement('div'); left.className='synth-left';
     const inner=document.createElement('div'); inner.className='synth-left-in'; left.appendChild(inner);
     const pipe=window.TodoOffers.offersSummary(()=>gsTab('pipeline')); pipe.querySelector('.of-sum-go').textContent='Pipeline'; inner.appendChild(pipe);
+    if(parcData===null) loadParc();
+    if(parcData){ const c=window.TodoParc.parcChart(parcData.items.filter(p=>p.statut==='Gagné')); c.classList.add('synth-parc'); c.querySelector('.parc-h').title='Ouvrir le Portefeuille'; c.querySelector('.parc-h').onclick=()=>gsTab('parc'); inner.appendChild(c); }
     inner.appendChild(synthTasksCard());
     grid.appendChild(left);
-    if(parcData===null) loadParc();
-    const m=parcMap(); m.classList.add('synth-map'); grid.appendChild(m);
+    const right=document.createElement('div'); right.className='synth-right';
+    const m=parcMap(); m.classList.add('synth-map'); right.appendChild(m);
+    grid.appendChild(right);
     root.appendChild(grid);
     requestAnimationFrame(synthFitTasks);
   }

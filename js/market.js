@@ -192,8 +192,9 @@ window.TodoMarket=(function(){
     const get=async f=>{ const r=await fetch(MK_BASE+f, { cache:'no-cache' }); if(!r.ok) throw new Error(f+' '+r.status); return f.endsWith('.csv')?r.text():r.json(); };
     tilesLoading=(async()=>{
       const [fr, com, go, chain]=await Promise.all([get('fr_market.json').catch(()=>null), get('commodities.json').catch(()=>null), get('go_prices.csv').catch(()=>null), get('history/fr_market_calchain.json').catch(()=>null)]);
+      const jp=await spotDay(1).catch(()=>null);
       try{ await loadMarket(); }catch(e){}
-      const out=tilesFrom(fr, com, go, chain);
+      const out=tilesFrom(fr, com, go, chain); const nt=negTile(jp); if(nt) out.tiles.splice(1, 0, nt);
       if(out.tiles.length){ tilesData=out; try{ localStorage.setItem('market-tiles-v2', JSON.stringify(out)); }catch(e){} }
       return tilesData; })();
     try{ return await tilesLoading; } finally { tilesLoading=null; }
@@ -230,20 +231,41 @@ window.TodoMarket=(function(){
     add(tileFrom('ttf', 'Gaz · Europe', 'TTF day-ahead', S.ttf && S.ttf.points, '€/MWh', [S.peg?'PEG <b>'+mkNum(lastOf(S.peg.points))+'</b>':'', tc?'Cal '+String(y+1).slice(2)+' <b>'+mkNum(lastOf(zipc(tc)))+'</b>':''].filter(Boolean).join(' · ')));
     const yr=S.eua && S.eua.points.slice(-250).map(p=>p[1]);
     add(tileFrom('eua', 'CO₂ · Europe', 'EUA déc.', S.eua && S.eua.points, '€/t', yr && yr.length?'12 mois <b>'+mkNum(Math.min(...yr))+'</b> – <b>'+mkNum(Math.max(...yr))+'</b>':''));
-    add(tileFrom('brent', 'Pétrole', 'Brent front-month', S.brent && S.brent.points, '$/bbl', S.eurusd?'EUR/USD <b>'+mkNum(lastOf(S.eurusd.points),3)+'</b>':''));
+    add(tileFrom('brent', 'Pétrole', 'Brent', S.brent && S.brent.points, '$/bbl', S.eurusd?'EUR/USD <b>'+mkNum(lastOf(S.eurusd.points),3)+'</b>':''));
     return T;
+  }
+  // ---------- the spot of one day, by quarter of an hour (J = the last day published, J-1, J+1 once out) ----------
+  const isoAdd=(iso, n)=>{ const d=new Date(iso+'T12:00:00'); d.setDate(d.getDate()+n); return d.toISOString().slice(0,10); };
+  const spotJ=()=>marketData && marketData.spot && marketData.spot.day || new Date().toISOString().slice(0,10);
+  function spotDay(n){ const iso=isoAdd(spotJ(), n);
+    return getHist('history/daily/'+iso+'.json').then(d=>{ const z=d && d.zones && d.zones.FR; if(!z || !z.hourly || !z.hourly.length) throw new Error('vide'); return { iso, q:z.hourly, avg:z.avg, min:z.min, max:z.max, neg:z.negH||0 }; }); }
+  const qHours=(q, f)=>(q||[]).filter(v=>v!=null && f(v)).length/4;
+  const fmtH=x=>(x%1?mkNum(x,2).replace(/0+$/,''):mkNum(x,0))+' h';
+  // the negative prices : today's hours, tomorrow's once the auction is out, the last 30 days drawn
+  function negTile(jp){
+    const m=marketData; if(!m || !m.spot) return null;
+    const q=m.spot.q||[], h=fmtH;
+    return { id:'neg', cat:'Électricité · France', name:'Prix négatifs', v:m.spot.neg||0, u:'h', dec:(m.spot.neg||0)%1?2:0, when:m.spot.day,
+      varTxt:'<span class="flat">'+h(qHours(q, v=>v<=0))+'</span> à 0 € ou moins · <span class="up">'+h(qHours(q, v=>v>=200))+'</span> ≥ 200 €',
+      line:(m.days||[]).map(x=>x.neg), n:(m.days||[]).length, bars:true,
+      foot:jp?'J+1 '+shortD(jp.iso)+' <b>'+h(jp.neg)+'</b> négatives':'J+1 pas encore publié' };
   }
   function goTile(go, y){
     if(!go) return null;
     const rows=go.trim().split('\n').slice(1).map(l=>l.split(',')).filter(c=>c[4]==='GO AIB Renewable' && c[6]);
     const mid=c=>c[7]?(+c[6]+ +c[7])/2:+c[6], ser=Y=>rows.filter(c=>+c[5]===Y).sort((a,b)=>a[1].localeCompare(b[1])).map(c=>[c[1], mid(c)]);
-    return tileFrom('go', 'Garanties d’origine', 'GO '+(y+1)+' renouvelable', ser(y+1), '€/MWh', [y, y+2].map(Y=>{ const v=lastOf(ser(Y)); return v==null?'':'GO '+String(Y).slice(2)+' <b>'+mkNum(v,2)+'</b>'; }).filter(Boolean).join(' · '), 2);
+    return tileFrom('go', 'GO · renouvelable', 'GO '+(y+1), ser(y+1), '€/MWh', [y, y+2].map(Y=>{ const v=lastOf(ser(Y)); return v==null?'':'GO '+String(Y).slice(2)+' <b>'+mkNum(v,2)+'</b>'; }).filter(Boolean).join(' · '), 2);
   }
   function spark(vals){
     const v=(vals||[]).filter(x=>x!=null && !isNaN(x)); if(v.length<2) return '';
     const mn=Math.min(...v), mx=Math.max(...v), W=100, H=40, sx=W/(v.length-1), y=x=>H-1-(mx===mn?.5:(x-mn)/(mx-mn))*(H-6);
     const d=v.map((x,i)=>(i?'L':'M')+(i*sx).toFixed(2)+' '+y(x).toFixed(2)).join(' ');
     return '<svg class="mkt-spark" viewBox="0 0 '+W+' '+H+'" preserveAspectRatio="none" aria-hidden="true"><path class="a" d="'+d+' L'+W+' '+H+' L0 '+H+' Z"/><path class="l" d="'+d+'"/></svg>';
+  }
+  function sparkBars(vals){
+    const v=(vals||[]).map(x=>x||0); if(!v.length) return '';
+    const mx=Math.max(1,...v), W=100, H=40, bw=W/v.length;
+    return '<svg class="mkt-spark" viewBox="0 0 '+W+' '+H+'" preserveAspectRatio="none" aria-hidden="true">'+v.map((x,i)=>x?'<rect class="nb" x="'+(i*bw+bw*.15).toFixed(2)+'" width="'+(bw*.7).toFixed(2)+'" y="'+(H-x/mx*(H-4)).toFixed(2)+'" height="'+(x/mx*(H-4)).toFixed(2)+'"/>':'').join('')+'<line class="nb0" x1="0" x2="'+W+'" y1="'+(H-.5)+'" y2="'+(H-.5)+'"/></svg>';
   }
   function paintTiles(root){
     const e=escapeHtml, d=tilesData;
@@ -253,15 +275,15 @@ window.TodoMarket=(function(){
     d.tiles.forEach(t=>{
       // as on PowerKlock (js/morning.js, tone/pill) : the move over 7 days, neutral under ±0.5 % ; the contract's name takes the same colour
       const tn=t.d7==null || Math.abs(t.d7)<0.5?'':t.d7>0?'up':'down';
-      const tr=t.d7==null?'':'<em class="mkt-tr'+(tn?' '+tn:'')+'" title="Évolution sur 7 jours">'+(tn==='up'?'↑ haussier':tn==='down'?'↓ baissier':'→ neutre')+'</em>';
+      const tr=t.d7==null?'':'<em class="mkt-tr'+(tn?' '+tn:'')+'" title="Évolution sur 7 jours">'+(tn==='up'?'↑<span> haussier</span>':tn==='down'?'↓<span> baissier</span>':'→<span> neutre</span>')+'</em>';
       const b=document.createElement('button'); b.type='button'; b.className='mkt-tile';
       b.innerHTML='<span class="mkt-top"><span class="mkt-cat">'+e(t.cat)+'</span><span class="mkt-date">'+e(shortD(t.when))+'</span></span>'
         +'<span class="mkt-name'+(tn?' '+tn:'')+'">'+e(t.name)+'</span>'
         +'<span class="mkt-row"><b>'+mkNum(t.v, t.dec==null?1:t.dec)+'<small> '+e(t.u)+'</small></b>'+tr+'</span>'
-        +'<span class="mkt-var">'+[ch(t.d1,'J-1'), ch(t.d7,'7 j')].filter(Boolean).join(' · ')+'</span>'
-        +spark(t.line)
+        +'<span class="mkt-var">'+(t.varTxt||[ch(t.d1,'J-1'), ch(t.d7,'7 j')].filter(Boolean).join(' · '))+'</span>'
+        +(t.bars?sparkBars(t.line):spark(t.line))
         +'<span class="mkt-foot"><span>'+(t.foot||'')+'</span><span class="mkt-n">'+t.n+' j ↗</span></span>';
-      b.title=t.name+' : voir le graphique (source PowerKlock)'; b.onclick=()=>openMarketChart(t.id, t);
+      b.title=t.name+' : voir le graphique (source PowerKlock)'; b.onclick=()=>t.id==='spot' || t.id==='neg' ? openSpotChart(t.id==='neg'?'day':'month') : openMarketChart(t.id, t);
       root.appendChild(b); });
   }
   // ---------- a tile opened : the history in a window (periods, series to tick, hover), from PowerKlock's open files ----------
@@ -287,6 +309,88 @@ window.TodoMarket=(function(){
   const RANGES=[['1m','1 mois',31],['6m','6 mois',183],['1y','1 an',366],['3y','3 ans',1096],['all','Tout',0]];
   const dms=d=>new Date(d+'T12:00:00').getTime();
   function valAt(pts, ms){ let v=null; for(const p of pts){ if(dms(p[0])<=ms) v=p[1]; else break; } return v; }
+  // ---------- the spot opened : by month (13 months), by day, day J by quarter of an hour (J-1 discreet, J+1 once out) ----------
+  async function spotMonths(){
+    const now=new Date(), keys=[]; for(let i=12; i>=0; i--){ const d=new Date(now.getFullYear(), now.getMonth()-i, 1); keys.push(d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')); }
+    const files=await Promise.all(keys.map(k=>getHist('history/monthly/'+k+'.json').catch(()=>null)));
+    const months=[], days=[];
+    files.forEach((f,i)=>{ const z=f && f.zones && f.zones.FR; if(!z || !z.length) return;
+      z.forEach(x=>days.push([x.d, x.avg]));
+      months.push({ k:keys[i], avg:z.reduce((t,x)=>t+(x.avg||0),0)/z.length, neg:z.reduce((t,x)=>t+(x.negH||0),0), n:z.length }); });
+    return { months, days };
+  }
+  function overlayShell(label){
+    let ov=$('mkc-overlay'); if(ov) ov.remove();
+    ov=document.createElement('div'); ov.id='mkc-overlay'; ov.className='modal-overlay mkc-ov';
+    ov.innerHTML='<div class="mkc" role="dialog" aria-modal="true" aria-label="'+escapeHtml(label)+'"><button type="button" class="mkc-x" aria-label="Fermer">×</button><div class="mkc-body"><p class="mkc-load">Chargement…</p></div></div>';
+    document.body.appendChild(ov);
+    const onKey=e=>{ if(e.key==='Escape') close(); }, close=()=>{ ov.remove(); document.removeEventListener('keydown', onKey); };
+    document.addEventListener('keydown', onKey); ov.addEventListener('click', e=>{ if(e.target===ov) close(); }); ov.querySelector('.mkc-x').onclick=close;
+    return ov.querySelector('.mkc-body');
+  }
+  async function openSpotChart(sheet){
+    const body=overlayShell('Spot France');
+    const [mo, J, Jm, Jp]=await Promise.all([spotMonths().catch(()=>null), spotDay(0).catch(()=>null), spotDay(-1).catch(()=>null), spotDay(1).catch(()=>null)]);
+    if(!mo && !J){ body.innerHTML='<p class="mkc-load">Historique indisponible (hors ligne ?).</p>'; return; }
+    const tabs=[['month','Par mois'],['days','Par jour'],['day','Jour J']].concat(Jp?[['next','J+1 · '+shortD(Jp.iso)]]:[]);
+    body.innerHTML='<div class="mkc-t">Spot France (day-ahead) · ENTSO-E, via PowerKlock</div><div class="mkc-tabs" role="tablist">'+tabs.map(t=>'<button type="button" role="tab" data-s="'+t[0]+'">'+escapeHtml(t[1])+'</button>').join('')+'</div><div class="mkc-sheet"></div>';
+    const sh=body.querySelector('.mkc-sheet');
+    const show=k=>{ body.querySelectorAll('.mkc-tabs button').forEach(b=>{ b.classList.toggle('on', b.dataset.s===k); b.setAttribute('aria-selected', String(b.dataset.s===k)); });
+      if(k==='month') spotMonthSheet(sh, mo); else if(k==='days') spotDaysSheet(sh, mo); else if(k==='next') spotDaySheet(sh, Jp, J, 'J'); else spotDaySheet(sh, J, Jm, 'J-1'); };
+    body.querySelectorAll('.mkc-tabs button').forEach(b=>b.onclick=()=>show(b.dataset.s));
+    show(sheet==='day' && J?'day':'month');
+  }
+  function spotMonthSheet(sh, mo){
+    if(!mo || !mo.months.length){ sh.innerHTML='<p class="mkc-load">Pas de moyennes mensuelles.</p>'; return; }
+    const M=mo.months, cur=M[M.length-1], past=M.slice(-13,-1), avg12=past.length?past.reduce((t,x)=>t+x.avg,0)/past.length:cur.avg, d=(cur.avg-avg12)/Math.abs(avg12||1)*100;
+    const yr=String(new Date().getFullYear()), negY=M.filter(x=>x.k.startsWith(yr)).reduce((t,x)=>t+x.neg,0);
+    const W=900, H=280, L=40, R=10, T=12, B=48, mx=Math.max(...M.map(x=>x.avg), avg12)*1.08, bw=(W-L-R)/M.length, Y=v=>T+(1-v/mx)*(H-T-B);
+    let g='<svg viewBox="0 0 '+W+' '+H+'" class="mkc-svg">';
+    const step=mx>300?100:mx>150?50:mx>60?20:10; for(let v=0; v<=mx; v+=step) g+='<line x1="'+L+'" x2="'+(W-R)+'" y1="'+Y(v)+'" y2="'+Y(v)+'" class="gl"/><text x="'+(L-6)+'" y="'+(Y(v)+4)+'" class="yl">'+v+'</text>';
+    M.forEach((x,i)=>{ const bx=L+i*bw+bw*.18, top=Y(x.avg);
+      g+='<rect x="'+bx+'" width="'+(bw*.64)+'" y="'+top+'" height="'+(Y(0)-top)+'" rx="2" class="'+(x.avg>avg12?'bh':'bl')+'"><title>'+mkMonth(x.k)+' : '+mkNum(x.avg)+' €/MWh · '+mkNum(x.neg,0)+' h négatives'+(x.k===cur.k?' (mois en cours, '+x.n+' jours)':'')+'</title></rect>'
+        +'<text x="'+(bx+bw*.32)+'" y="'+(H-B+16)+'" class="xl">'+mkMonth(x.k).replace(/ \d{4}$/,'')+'</text><text x="'+(bx+bw*.32)+'" y="'+(H-B+34)+'" class="xl ng">'+mkNum(x.neg,0)+'</text>'; });
+    g+='<line x1="'+L+'" x2="'+(W-R)+'" y1="'+Y(avg12)+'" y2="'+Y(avg12)+'" class="avg"/><text x="'+(L+2)+'" y="'+(H-B+34)+'" class="xl ng" text-anchor="start">h nég.</text></svg>';
+    sh.innerHTML='<div class="mkc-v"><b>'+mkNum(cur.avg)+'</b> €/MWh <span class="mkc-sub">'+mkMonth(cur.k)+' à date</span></div>'
+      +'<div class="mkc-chips"><span class="mkc-chip">vs moyenne 12 mois <b class="'+(d>0?'up':'down')+'">'+(d>0?'+':'')+mkNum(d,1)+' %</b></span><span class="mkc-chip">moyenne 12 mois <b>'+mkNum(avg12)+'</b></span><span class="mkc-chip">heures négatives '+yr+' <b>'+mkNum(negY,0)+' h</b></span></div>'
+      +'<div class="mkc-chart">'+g+'</div><p class="mkc-src"><i class="lg bl"></i> sous la moyenne 12 mois <i class="lg bh"></i> au-dessus · pointillés : moyenne 12 mois · ligne du bas : heures à prix négatif.</p>';
+  }
+  function spotDaysSheet(sh, mo){
+    if(!mo || !mo.days.length){ sh.innerHTML='<p class="mkc-load">Pas de prix journaliers.</p>'; return; }
+    const data={ unit:'€/MWh', series:[{ n:'Prix moyen du jour', pts:mo.days, on:true }] };
+    let range='1m';
+    sh.innerHTML='<div class="mkc-ctl"><div class="mkc-rng">'+[['1m','1 mois'],['6m','6 mois'],['1y','1 an']].map(r=>'<button type="button" data-r="'+r[0]+'">'+r[1]+'</button>').join('')+'</div></div><div class="mkc-chart"></div>';
+    const draw=()=>{ sh.querySelectorAll('.mkc-rng button').forEach(b=>b.classList.toggle('on', b.dataset.r===range)); drawChart(sh.querySelector('.mkc-chart'), data, range, 1); };
+    sh.querySelectorAll('.mkc-rng button').forEach(b=>b.onclick=()=>{ range=b.dataset.r; draw(); }); draw();
+  }
+  function spotDaySheet(sh, D, ref, refLabel){
+    if(!D){ sh.innerHTML='<p class="mkc-load">Pas encore de prix pour ce jour.</p>'; return; }
+    const q=D.q, hh=i=>String(Math.floor(i/4)).padStart(2,'0')+'h'+String(i%4*15).padStart(2,'0'), h=fmtH;
+    const iMin=q.indexOf(Math.min(...q)), iMax=q.indexOf(Math.max(...q));
+    const all=q.concat(ref?ref.q:[]), lo=Math.min(0,...all), hi=Math.max(...all)*1.05, W=900, H=300, L=44, R=12, T=12, B=26;
+    const X=i=>L+i*(W-L-R)/(q.length-1), Y=v=>T+(hi-v)/((hi-lo)||1)*(H-T-B);
+    const path=a=>a.map((v,i)=>(i?'L':'M')+X(i).toFixed(1)+' '+Y(v).toFixed(1)).join(' ');
+    let g='<svg viewBox="0 0 '+W+' '+H+'" class="mkc-svg">';
+    const span=hi-lo, step=span>300?100:span>120?50:span>60?20:10; for(let v=Math.ceil(lo/step)*step; v<=hi; v+=step) g+='<line x1="'+L+'" x2="'+(W-R)+'" y1="'+Y(v)+'" y2="'+Y(v)+'" class="gl'+(v===0?' z':'')+'"/><text x="'+(L-6)+'" y="'+(Y(v)+4)+'" class="yl">'+v+'</text>';
+    [0,3,6,9,12,15,18,21].forEach(t=>{ const x=X(Math.min(q.length-1,t*4)); g+='<line x1="'+x+'" x2="'+x+'" y1="'+T+'" y2="'+(H-B)+'" class="gl v"/><text x="'+x+'" y="'+(H-8)+'" class="xl">'+String(t).padStart(2,'0')+'h</text>'; });
+    if(ref) g+='<path d="'+path(ref.q)+'" class="ln ref"/>';
+    g+='<path d="'+path(q)+' L'+X(q.length-1)+' '+Y(lo)+' L'+X(0)+' '+Y(lo)+' Z" class="ar"/><path d="'+path(q)+'" class="ln" style="stroke:#14D3A9"/>';
+    g+='<line x1="'+L+'" x2="'+(W-R)+'" y1="'+Y(D.avg)+'" y2="'+Y(D.avg)+'" class="avg"/>';
+    g+='<circle cx="'+X(iMax)+'" cy="'+Y(q[iMax])+'" r="4" class="pmax"/><circle cx="'+X(iMin)+'" cy="'+Y(q[iMin])+'" r="4" class="pmin"/>';
+    g+='<line class="hv" x1="0" x2="0" y1="'+T+'" y2="'+(H-B)+'" visibility="hidden"/></svg><div class="mkc-tip" hidden></div>';
+    const lbl=new Date(D.iso+'T12:00:00').toLocaleDateString('fr-FR',{ weekday:'long', day:'numeric', month:'long' });
+    sh.innerHTML='<div class="mkc-v"><b>'+mkNum(D.avg,2)+'</b> €/MWh <span class="mkc-sub">moyenne du '+escapeHtml(lbl)+'</span></div>'
+      +'<div class="mkc-chips"><span class="mkc-chip">min <b class="down">'+mkNum(q[iMin],2)+' € à '+hh(iMin)+'</b></span><span class="mkc-chip">max <b class="up">'+mkNum(q[iMax],2)+' € à '+hh(iMax)+'</b></span>'
+      +'<span class="mkc-chip">heures négatives <b>'+h(qHours(q, v=>v<0))+'</b></span><span class="mkc-chip">à 0 € ou moins <b>'+h(qHours(q, v=>v<=0))+'</b></span><span class="mkc-chip">≥ 200 € <b>'+h(qHours(q, v=>v>=200))+'</b></span>'
+      +(ref?'<span class="mkc-chip">vs '+refLabel+' <b class="'+(D.avg>ref.avg?'up':'down')+'">'+(D.avg>ref.avg?'+':'')+mkNum((D.avg-ref.avg)/Math.abs(ref.avg||1)*100,1)+' %</b></span>':'')+'</div>'
+      +'<div class="mkc-chart">'+g+'</div><p class="mkc-src"><i class="lg ln1"></i> '+escapeHtml(lbl)+(ref?' <i class="lg ln2"></i> '+refLabel+' ('+escapeHtml(shortD(ref.iso))+'), en discret':'')+' · pointillés : moyenne du jour. Heure de Paris, quarts d’heure.</p>';
+    const svg=sh.querySelector('svg'), hv=svg.querySelector('.hv'), tip=sh.querySelector('.mkc-tip');
+    svg.addEventListener('mousemove', ev=>{ const r=svg.getBoundingClientRect(), sx=(ev.clientX-r.left)*W/r.width; if(sx<L || sx>W-R){ hv.setAttribute('visibility','hidden'); tip.hidden=true; return; }
+      const i=Math.round((sx-L)/(W-L-R)*(q.length-1)); hv.setAttribute('x1', X(i)); hv.setAttribute('x2', X(i)); hv.setAttribute('visibility','visible');
+      tip.innerHTML='<b>'+hh(i)+'</b><span><i style="background:#14D3A9"></i>'+escapeHtml(shortD(D.iso))+' <em>'+mkNum(q[i],2)+'</em></span>'+(ref && ref.q[i]!=null?'<span><i style="background:#6B7480"></i>'+refLabel+' <em>'+mkNum(ref.q[i],2)+'</em></span>':'');
+      tip.hidden=false; tip.style.left=Math.min(X(i)/W*r.width+12, r.width-tip.offsetWidth-4)+'px'; });
+    svg.addEventListener('mouseleave', ()=>{ hv.setAttribute('visibility','hidden'); tip.hidden=true; });
+  }
   async function openMarketChart(id, tile){
     let ov=$('mkc-overlay'); if(ov) ov.remove();
     ov=document.createElement('div'); ov.id='mkc-overlay'; ov.className='modal-overlay mkc-ov';
@@ -352,5 +456,5 @@ window.TodoMarket=(function(){
     paintTiles(root);
   }
   window.todoExtraCommands=(window.todoExtraCommands||[]).concat([{ t:'Marché : prix spot, M0, captures', k:'marche prix spot m0 cre capture powerklock electricite', go:()=>gsTab('market') }]);
-  return { init:a=>{ app=a; }, renderMarket, loadMarket, marketLine, renderTiles, openMarketChart };
+  return { init:a=>{ app=a; }, renderMarket, loadMarket, marketLine, renderTiles, openMarketChart, openSpotChart };
 })();

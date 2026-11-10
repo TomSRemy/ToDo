@@ -352,7 +352,7 @@
   /* Synthèse (Aujourd'hui) : 6 marché, via PowerKlock, each a « solo » widget in its own iframe — the app
      never reads these numbers itself, just frames pages PowerKlock already serves for this (curated once there) */
   /* market tiles drawn by the app (js/market.js) : figure, change, 30-day line ; a click opens Marché */
-  .synth-market{ display:grid; grid-template-columns:repeat(auto-fit,minmax(178px,1fr)); gap:8px; margin:14px 15px; }
+  .synth-market{ display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:8px; margin:14px 15px; }
   .mkt-tile{ position:relative; display:flex; flex-direction:column; gap:2px; text-align:left; background:var(--panel); border:1px solid var(--bd); border-radius:var(--radius-xl); padding:10px 12px 8px; cursor:pointer; color:var(--tx1); font:inherit; overflow:hidden; transition:border-color .15s var(--ease-out); min-width:0; }
   .mkt-tile:hover{ border-color:var(--accent); }
   .mkt-top{ display:flex; align-items:baseline; gap:8px; }
@@ -2773,3 +2773,25 @@ html.widget .dup-banner{ display:none; }
 .mkc-take{ margin:12px 0 2px; padding-top:10px; border-top:1px solid var(--bd); font-size:13.5px; color:var(--tx1); }
 .mkc-src{ margin:0; font-size:11px; color:var(--tx3); }
 @media (max-width:760px){ .mkc{ padding:16px; } .mkc-ser{ margin-left:0; } }
+/* the spot window : sheets by month / by day / day J */
+.mkc-tabs{ display:flex; gap:2px; border-bottom:1px solid var(--bd); margin:10px 0 14px; }
+.mkc-tabs button{ background:none; border:none; border-bottom:2px solid transparent; color:var(--tx2); font:600 13px var(--font-ui); padding:8px 14px 7px; cursor:pointer; margin-bottom:-1px; }
+.mkc-tabs button.on{ color:var(--accent); border-bottom-color:var(--accent); }
+.mkc-sub{ font-size:12.5px; color:var(--tx3); margin-left:6px; }
+.mkc-svg .bl{ fill:#14D3A9; } .mkc-svg .bh{ fill:#ED6965; }
+.mkc-svg .avg{ stroke:var(--tx2); stroke-width:1; stroke-dasharray:4 4; }
+.mkc-svg .xl.ng{ fill:#7DB4F5; }
+.mkc-svg .gl.z{ stroke:var(--tx3); }
+.mkc-svg .ln.ref{ stroke:#6B7480; stroke-width:1.5; opacity:.7; }
+.mkc-svg .ar{ fill:#14D3A9; opacity:.1; }
+.mkc-svg .pmax{ fill:#ED6965; } .mkc-svg .pmin{ fill:#14D3A9; stroke:var(--panel); stroke-width:1.5; }
+.mkc-src .lg{ display:inline-block; width:10px; height:10px; border-radius:2px; vertical-align:-1px; margin:0 3px 0 8px; }
+.mkc-src .lg.bl{ background:#14D3A9; } .mkc-src .lg.bh{ background:#ED6965; } .mkc-src .lg.ln1{ height:3px; background:#14D3A9; } .mkc-src .lg.ln2{ height:3px; background:#6B7480; }
+.mkt-spark .nb{ fill:#7DB4F5; opacity:.8; } .mkt-spark .nb0{ stroke:var(--bd); stroke-width:1; vector-effect:non-scaling-stroke; }
+.synth-right{ display:flex; flex-direction:column; gap:14px; min-width:0; }
+.synth-parc{ margin:0; background:var(--panel); border:1px solid var(--bd); border-radius:var(--radius-xl); padding:14px 16px; }
+.synth-parc .parc-h{ cursor:pointer; } .synth-parc .parc-h:hover{ color:var(--accent); } .synth-parc{ flex-shrink:0; }
+.synth-parc .parc-chart{ min-width:0; max-width:none; }
+/* medium screens : seven tiles on one line, the trend badge keeps its arrow only (the word on hover) */
+@media (max-width:1700px){ .mkt-tr span{ display:none; } .mkt-tr{ padding:1px 4px; } }
+.st-card{ min-height:120px; }
