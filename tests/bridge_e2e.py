@@ -54,8 +54,10 @@ try:
         page.wait_for_selector("#tab-excel .xs-send[data-k=pipe]:not([disabled])", timeout=20000)
         page.click("#tab-excel .xs-send[data-k=pipe]")
         page.wait_for_function("document.querySelector('#tab-excel .xs-send[data-k=pipe]').textContent.startsWith('Envoyer')", timeout=60000)
+        sent_msg = page.evaluate("(document.getElementById('bridge-msg')||{}).textContent||''")
         rows = dump("pipe")
         mine = [r for r in rows if r[6] == "SCEA Essai"]
+        if len(rows) != 13: print("app message after the send:", sent_msg)
         check(len(rows) == 13 and len(mine) == 12 and rows[0][6] == "AUTRE PROD", f"12 lines added after the colleague's one, nothing else moved ({len(rows)} lines: {[r[19] for r in rows]})")
         if len(rows) != 13: print((work / "bridge.log").read_text(encoding="utf-8", errors="replace")[-3000:])
         r0 = next(r for r in mine if r[19] == "Toit 0")
