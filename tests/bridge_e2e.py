@@ -64,23 +64,34 @@ try:
         check(r0[22] == "100" and r0[1] == "True" and r0[36] == "True", f"each value in its column (kWc in W, New in B, Qualification in AK): {r0[22]!r} {r0[1]!r} {r0[36]!r}")
         snap = dump("pipe")
         page.click("#tab-excel .xs-read"); page.wait_for_timeout(1500)
-        check("Tout est à jour" in page.inner_text("#tab-excel .xs-body") or page.locator("#tab-excel .xs-diff").count() == 0, "after the send and a new reading: nothing left to do on the Pipe")
-        # a colleague writes a comment in two lines
+        check(page.locator("#tab-excel .xl-tag.todo").count() == 0, "after the send and a new reading: no cell left to decide")
+        # a colleague writes a comment in two lines (the panel is a grid per card since nov. 2: open the card, pick
+        # « Excel » (the default) or « Appli » per cell, then the card's button)
         idx = {r[19]: i for i, r in enumerate(rows)}
         call("POST", "/mock/edit/pipe", {"op": "set", "row": idx["Toit 1"] + 1, "col": 36, "value": "Vu par Paul"})
         call("POST", "/mock/edit/pipe", {"op": "set", "row": idx["Toit 2"] + 1, "col": 36, "value": "Rappeler en mars"})
-        page.click("#tab-excel .xs-read"); page.wait_for_selector("#tab-excel .xs-diff:has-text('Vu par Paul')", timeout=20000)
-        # Toit 1: the app has no comment → « reprendre … dans l'appli » (never an empty value written over the colleague's)
-        d1 = "#tab-excel tr:has-text('Toit 1') .xs-diff"
-        check("L’appli n’a rien ici" in page.inner_text(d1) and page.locator(d1 + " .xs-choice:has-text('l’appli «')").count() == 0, "the app has nothing: no « keep the app (empty) » choice")
-        page.click(d1 + " .xs-choice:has-text('reprendre')"); page.wait_for_timeout(500)
-        e1 = next(o for o in json.loads(page.evaluate("window.storage.peek('todo-widget-opportunities')")) if o["id"] == "e1")
-        check(e1.get("commentaires") == "Vu par Paul", f"« reprendre … dans l'appli »: the app takes the colleague's comment ({e1.get('commentaires')!r})")
-        # Toit 2: the app wrote « Note appli », a colleague replaced it → « Garder l'appli » writes it back (the value seen is still there)
-        d2 = "#tab-excel tr:has-text('Toit 2') .xs-diff"
-        page.click(d2 + " .xs-choice:has-text('l’appli «')"); page.wait_for_timeout(3000)
-        t2 = next(r for r in dump("pipe") if r[19] == "Toit 2")
-        check(t2[35] == "Note appli", f"« Garder l'appli »: the app's value is back in the Excel ({t2[35]!r})")
+        c1, c2 = "#tab-excel .xl-lot[data-rid='solo-e1']", "#tab-excel .xl-lot[data-rid='solo-e2']"
+        page.click("#tab-excel .xs-read"); page.wait_for_selector(c1 + " .xl-tag.todo", timeout=20000)
+        # Toit 1: the app had no comment, a colleague wrote one → keeping the Excel (default) brings it into the app
+        page.click(c1 + " .xl-head")
+        check("Vu par Paul" in page.inner_text(c1 + " .xl-grid"), "a colleague's comment shows up in its card")
+        page.click(c1 + " .xl-foot button")
+        e1 = lambda: next(o for o in json.loads(page.evaluate("window.storage.peek('todo-widget-opportunities')")) if o["id"] == "e1")
+        ok = False
+        for _ in range(60):
+            if e1().get("commentaires") == "Vu par Paul": ok = True; break
+            page.wait_for_timeout(100)
+        check(ok, f"keeping the Excel: the app takes the colleague's comment ({e1().get('commentaires')!r})")
+        # Toit 2: the app wrote « Note appli », a colleague replaced it → picking « Appli » writes it back (the value seen is still there)
+        page.wait_for_selector(c2 + " .xl-head", timeout=10000)
+        page.click(c2 + " .xl-head")
+        page.click(c2 + " .xl-cell button:has-text('Note appli')")
+        page.click(c2 + " .xl-foot button")
+        t2 = lambda: next(r for r in dump("pipe") if r[19] == "Toit 2")[35]
+        for _ in range(60):
+            if t2() == "Note appli": break
+            page.wait_for_timeout(100)
+        check(t2() == "Note appli", f"picking the app's value: it is back in the Excel ({t2()!r})")
         # the Suivi: from the pricing on; read back on its real key columns
         page.click("#tab-excel .xs-send[data-k=bdd]"); page.wait_for_timeout(3000)
         brows = dump("bdd")
