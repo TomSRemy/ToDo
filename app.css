@@ -366,7 +366,7 @@
   .kanban-col-body{ overflow-y:auto; flex:1; min-height:80px; }
   .kanban-col .task-title-compact{ font-size:12.5px; }
 
-  .table-header{ display:grid; grid-template-columns:22px 22px minmax(38%,1fr) minmax(38px,120px) minmax(38px,96px) minmax(48px,74px) minmax(44px,70px) minmax(38px,56px) 28px; gap:10px; align-items:center; padding:9px 14px; border-bottom:1px solid var(--bd); flex-shrink:0; position:sticky; top:0; background:var(--panel); z-index:5; }
+  .table-header{ display:grid; grid-template-columns:22px 22px minmax(38%,1fr) minmax(38px,120px) minmax(38px,96px) minmax(48px,74px) minmax(44px,70px) minmax(38px,56px) 28px 28px; gap:10px; align-items:center; padding:9px 14px; border-bottom:1px solid var(--bd); flex-shrink:0; position:sticky; top:0; background:var(--panel); z-index:5; }
   .table-header.archive-table-header{ grid-template-columns:22px 22px minmax(38%,1fr) minmax(38px,120px) minmax(38px,96px) minmax(48px,74px) minmax(44px,70px) minmax(38px,56px) 28px 60px; }
   .th-col{ font-family:var(--font-mono); font-size:9.5px; color:var(--tx3); text-transform:none; letter-spacing:.4px; cursor:pointer; user-select:none; display:flex; align-items:center; justify-content:center; gap:3px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; min-width:0; }
   .th-col:hover{ color:var(--tx1); }
@@ -379,7 +379,7 @@
 
   /* Wide layout: real aligned columns, like a spreadsheet row */
   .task-row-grid{
-    display:grid; grid-template-columns:22px 22px minmax(38%,1fr) minmax(38px,120px) minmax(38px,96px) minmax(48px,74px) minmax(44px,70px) minmax(38px,56px) 28px;
+    display:grid; grid-template-columns:22px 22px minmax(38%,1fr) minmax(38px,120px) minmax(38px,96px) minmax(48px,74px) minmax(44px,70px) minmax(38px,56px) 28px 28px;
     gap:10px; align-items:center; padding:10px 14px;
   }
   .task-row-grid.archive-row-grid{ grid-template-columns:22px 22px minmax(38%,1fr) minmax(38px,120px) minmax(38px,96px) minmax(48px,74px) minmax(44px,70px) minmax(38px,56px) 28px 60px; }
@@ -410,9 +410,11 @@
     .task-row-grid:not(.archive-row-grid) > *:nth-child(4),
     .task-row-grid:not(.archive-row-grid) > *:nth-child(5),
     .task-row-grid:not(.archive-row-grid) > *:nth-child(6),
+    .task-row-grid:not(.archive-row-grid) > *:nth-child(10),
     .table-header:not(.archive-table-header) > *:nth-child(4),
     .table-header:not(.archive-table-header) > *:nth-child(5),
-    .table-header:not(.archive-table-header) > *:nth-child(6){ display:none; }
+    .table-header:not(.archive-table-header) > *:nth-child(6),
+    .table-header:not(.archive-table-header) > *:nth-child(10){ display:none; }
   }
   #todo-panel.hide-col-client .task-row-grid:not(.archive-row-grid) > *:nth-child(4),
   #todo-panel.hide-col-client .table-header:not(.archive-table-header) > *:nth-child(4){ display:none; }
