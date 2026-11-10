@@ -6318,7 +6318,7 @@
   // « Réglages »: a table of contents at the top, one click to each part (UX audit TD3)
   // « Réglages » (UX audit TD3): four groups, a table of contents beside them, and each part's state on its title
   const SETTINGS_NAMES={ 'clients-section':'Clients', 'projects-section':'Projets', 'sync-section':'Synchro GitHub', 'conflicts-section':'Conflits', 'backup-section':'Sauvegarde',
-    'storage-section':'Stockage', 'bridge-section':'Pont Excel', 'install-section':'Installer l\u2019appli', 'ai-section':'Claude (facultatif)' };
+    'storage-section':'Stockage', 'bridge-section':'Pont Excel', 'team-section':'\u00c9quipe (b\u00eata)', 'install-section':'Installer l\u2019appli', 'ai-section':'Claude (facultatif)' };
   const settingsShown=s=>!s.classList.contains('hidden') && !s.hidden && s.style.display!=='none';
   function settingsPill(id, text, kind){ const s=$(id); if(!s) return; const h=s.querySelector('h2'); if(!h) return;
     let p=h.querySelector('.settings-pill'); if(!text){ if(p) p.remove(); return; }
