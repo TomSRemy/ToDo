@@ -1218,6 +1218,15 @@
     });
   }
 
+  // vraiment aucune tâche nulle part (pas juste ce filtre-ci) : même accueil que la Synthèse à vide, sinon le message générique
+  function taskEmptyState(){
+    const e=document.createElement('div'); e.className='empty-state';
+    if(searchQuery || tasks.some(t=>!t.deleted)){ e.textContent=searchQuery?'Aucun résultat.':'Rien ici.'; return e; }
+    e.innerHTML='<p>Aucune tâche pour l’instant.</p>';
+    const b=document.createElement('button'); b.type='button'; b.className='data-btn'; b.textContent='Ajouter ma première tâche';
+    b.onclick=()=>$('quick-add-input').focus(); e.appendChild(b);
+    return e;
+  }
   function render(){
     if(window.__widgetCount) window.__widgetCount();
     const list=listForCurrentView();
@@ -1226,7 +1235,7 @@
     rowCounter=1;
     tableHeader.style.display=currentView==='bloc'?'none':'grid';
     updateSortHeaderUI();
-    if(list.length===0&&currentView!=='bloc'){ const e=document.createElement('div'); e.className='empty-state'; e.textContent=searchQuery?'Aucun résultat.':'Rien ici.'; taskList.appendChild(e); }
+    if(list.length===0&&currentView!=='bloc') taskList.appendChild(taskEmptyState());
     else if(currentView==='liste') renderListView(list);
     else if(currentView==='client') renderGrouped(list,t=>t.client,clientColor,'Sans client');
     else if(currentView==='projet') renderGrouped(list,t=>t.project,projectColor,'Sans projet');
