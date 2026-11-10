@@ -1872,9 +1872,12 @@
   function notify(msg, action){
     let el=$('app-toast');
     if(!el){ el=document.createElement('div'); el.id='app-toast'; el.className='app-toast'; el.setAttribute('role','status'); document.body.appendChild(el); }
+    // a message with an action (« La voir », « Annuler »…) is not wiped by a plain one: the plain one waits for it to close
+    if(!action && el._act && el.classList.contains('show')){ el._next=msg; return; }
+    const hide=()=>{ el.classList.remove('show'); el._act=false; const n=el._next; el._next=null; if(n) notify(n); };
     el.innerHTML=''; const s=document.createElement('span'); s.textContent=msg; el.appendChild(s);
-    if(action){ const b=document.createElement('button'); b.type='button'; b.textContent=action.label; b.onclick=()=>{ el.classList.remove('show'); action.fn(); }; el.appendChild(b); }
-    el.classList.add('show'); clearTimeout(el._t); el._t=setTimeout(()=>el.classList.remove('show'), action?10000:4000);
+    if(action){ const b=document.createElement('button'); b.type='button'; b.textContent=action.label; b.onclick=()=>{ clearTimeout(el._t); hide(); action.fn(); }; el.appendChild(b); }
+    el._act=!!action; el.classList.add('show'); clearTimeout(el._t); el._t=setTimeout(hide, action?10000:4000);
   }
   function renderArchive(){
     // drawn when it is shown (the tab click draws it again): validating a task stays quick with a long archive
