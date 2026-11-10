@@ -1884,32 +1884,65 @@ body.postit-open #pipeline-board.pipe-list{ padding-bottom:300px; }
 /* Synchro Excel : a real tab (#tab-excel, in the sidebar) since it stopped being a popup window */
 html.no-bridge #pipe-xs-btn{ display:none; }
 #tab-excel{ padding:18px max(18px, env(safe-area-inset-right,0px)) 28px max(18px, env(safe-area-inset-left,0px)); overflow-y:auto; }
-.xs-top-row{ display:flex; align-items:center; gap:14px; flex-wrap:wrap; margin-bottom:6px; }
+.xs-top-row{ display:flex; align-items:center; gap:14px; flex-wrap:wrap; margin-bottom:12px; }
 .xs-top-row h1{ margin:0; font-size:17px; font-weight:700; color:var(--tx1); }
-.xs-info{ font-size:12.5px; color:var(--tx2); line-height:1.5; margin:0 0 10px; }
-.xs-filter{ display:flex; gap:6px; margin-left:auto; }
-.xs-filter button{ background:var(--panel-2); border:1px solid var(--bd); border-radius:999px; color:var(--tx2); font:500 12px var(--font-ui); padding:3px 11px; cursor:pointer; }
-.xs-filter button.on{ color:var(--accent); border-color:var(--accent); }
-/* which file : real tabs (underline), not a pill filter — the thing people couldn't tell apart at a glance */
-.xl-filekind{ display:flex; gap:2px; border-bottom:1px solid var(--bd); margin-bottom:12px; }
-.xl-filekind button{ background:none; border:none; border-bottom:2px solid transparent; color:var(--tx2); font:600 13px var(--font-ui); padding:8px 14px 7px; cursor:pointer; margin-bottom:-1px; }
-.xl-filekind button[data-fk="bdd"]{ --fk:#E88FD0; } .xl-filekind button[data-fk="pipe"]{ --fk:#5BA8F5; } .xl-filekind button[data-fk="all"]{ --fk:var(--accent); }
-.xl-filekind button.on{ color:var(--fk, var(--accent)); border-bottom-color:var(--fk, var(--accent)); }
-.xl-filekind button:hover:not(.on){ color:var(--tx1); }
-.xs-tools{ display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin:8px 0 10px; }
-.xs-tools button{ font:600 12.5px var(--font-ui); padding:7px 14px; border-radius:var(--radius); border:1px solid var(--bd); background:var(--panel-2); color:var(--tx1); cursor:pointer; }
-.xs-tools .xs-send{ background:var(--accent); border-color:var(--accent); color:#04070C; }
+/* how fresh the Excel reading is, with « Relire » next to it (top right) */
+.xs-fresh{ margin-left:auto; display:flex; align-items:center; gap:10px; }
+.xs-info{ font-size:12px; color:var(--tx3); }
+.xs-read{ font:600 12px var(--font-ui); padding:5px 12px; border-radius:var(--radius); border:1px solid var(--bd); background:none; color:var(--tx1); cursor:pointer; }
+.xs-read:hover{ border-color:var(--tx3); }
+/* one row of filters : À faire / Tout · the files (switches) · which installations (folded) */
+.xs-bar{ display:flex; align-items:center; gap:10px; flex-wrap:wrap; padding-bottom:12px; margin-bottom:12px; border-bottom:1px solid var(--bd); }
+.xs-filter{ display:flex; padding:2px; border:1px solid var(--bd); border-radius:var(--radius-md); background:var(--panel-2); }
+.xs-filter button{ background:none; border:none; border-radius:var(--radius); color:var(--tx2); font:600 12.5px var(--font-ui); padding:5px 12px; cursor:pointer; }
+.xs-filter button.on{ background:var(--panel); color:var(--tx1); box-shadow:0 0 0 1px var(--bd); }
+.xs-filter .xs-n{ font:400 11px var(--font-mono); font-style:normal; color:var(--tx3); margin-left:3px; }
+.xs-filter button.on .xs-n{ color:var(--accent); }
+.xs-sep{ width:1px; height:20px; background:var(--bd); }
+.xl-filekind{ display:flex; gap:6px; }
+.xl-filekind button[data-fk="bdd"]{ --fk:#E88FD0; } .xl-filekind button[data-fk="pipe"]{ --fk:#5BA8F5; }
+.xl-filekind button{ display:inline-flex; align-items:center; gap:6px; background:none; border:1px solid var(--bd); border-radius:999px; color:var(--tx3); font:600 12.5px var(--font-ui); padding:4px 12px; cursor:pointer; }
+.xl-filekind button::before{ content:''; width:7px; height:7px; border-radius:50%; border:1.5px solid var(--fk); box-sizing:border-box; }
+.xl-filekind button.on{ color:var(--tx1); border-color:var(--fk); background:color-mix(in srgb, var(--fk) 12%, transparent); }
+.xl-filekind button.on::before{ background:var(--fk); }
+.xs-hint{ font-size:12px; color:var(--tx3); }
+.xs-scope-wrap{ position:relative; margin-left:auto; }
+.xs-scope-btn{ font:500 12.5px var(--font-ui); color:var(--tx2); background:var(--panel-2); border:1px solid var(--bd); border-radius:var(--radius); padding:5px 12px; cursor:pointer; }
+.xs-scope-btn b{ color:var(--tx1); font-weight:600; }
+.xs-scope{ position:absolute; right:0; top:calc(100% + 6px); z-index:30; min-width:230px; display:flex; flex-direction:column; gap:2px; padding:6px; background:var(--panel); border:1px solid var(--bd); border-radius:var(--radius-lg); box-shadow:0 10px 30px #0008; }
+.xs-scope[hidden]{ display:none; }
+.xs-scope button{ display:flex; flex-direction:column; align-items:flex-start; gap:1px; text-align:left; background:none; border:none; border-radius:var(--radius-md); padding:7px 10px; cursor:pointer; color:var(--tx1); font:600 13px var(--font-ui); }
+.xs-scope button span{ font:400 11.5px var(--font-ui); color:var(--tx3); }
+.xs-scope button:hover{ background:var(--panel-2); }
+.xs-scope button.on{ background:var(--accent-dim); color:var(--accent); }
+.xs-note{ font-size:12.5px; color:var(--tx2); line-height:1.5; margin:0 0 10px; }
+/* one card per file : its name, how many lines are waiting, ONE green button */
+.xs-cards{ display:grid; grid-template-columns:repeat(auto-fit, minmax(300px, 1fr)); gap:10px; margin-bottom:10px; }
+.xs-card{ display:flex; align-items:center; gap:10px; padding:10px 14px; background:var(--panel); border:1px solid var(--bd); border-left:3px solid var(--fk); border-radius:var(--radius-lg); }
+.xs-card[data-k="pipe"]{ --fk:#5BA8F5; } .xs-card[data-k="bdd"]{ --fk:#E88FD0; }
+.xs-card[hidden]{ display:none; }
+.xs-card-t{ display:flex; flex-direction:column; gap:2px; margin-right:auto; min-width:0; }
+.xs-card-t b{ font-size:13.5px; color:var(--tx1); }
+.xs-card-n{ font-size:12px; color:var(--tx3); }
+.xs-card.done .xs-card-n{ color:var(--accent); }
+.xs-card button{ font:600 12.5px var(--font-ui); padding:7px 14px; border-radius:var(--radius); border:1px solid var(--bd); background:var(--panel-2); color:var(--tx1); cursor:pointer; }
+.xs-card .xs-send{ display:inline-flex; align-items:center; gap:6px; background:var(--accent); border-color:var(--accent); color:#04070C; }
 .xl-send-ico{ width:12px; height:12px; flex-shrink:0; }
-.xs-tools .xs-send, .xl-lot .pq-link, .xl-foot button{ display:inline-flex; align-items:center; gap:6px; }   /* icon + label, not just text : reads as a send action */
-.xs-tools .xs-copy{ border-color:var(--accent); color:var(--accent); background:none; }   /* stood out too little next to the solid green "Envoyer" */
-.xs-tools .xs-copy:hover{ background:var(--accent-dim); }
-.xs-tools .xs-send.off{ background:var(--panel-2); border-color:var(--bd); color:var(--tx2); }   /* no bridge : not the action to take, « Copier » is */
-.xs-tools .xs-copy:not(.quiet){ background:var(--accent); border-color:var(--accent); color:#04070C; }
-.xs-tools .xs-copy.quiet{ background:none; border:none; padding:7px 4px; color:var(--tx3); font:400 10.5px var(--font-mono); text-decoration:underline; text-underline-offset:3px; }
-.xs-tools .xs-copy.quiet:hover{ background:none; color:var(--accent); }
-.xs-tools button:disabled{ opacity:.45; cursor:default; }
-/* bulk decisions : every diverging cell shown (parc) or every one in a pricing lot (group header in the table) */
-.xs-bulk-group{ display:flex; gap:8px; margin-left:auto; padding-left:8px; border-left:1px solid var(--bd); flex-wrap:wrap; }
+.xl-lot .pq-link, .xl-foot button{ display:inline-flex; align-items:center; gap:6px; }   /* icon + label, not just text : reads as a send action */
+.xs-card .xs-send.off{ background:var(--panel-2); border-color:var(--bd); color:var(--tx2); }   /* no bridge : not the action to take, « Copier » is */
+.xs-card .xs-copy:not(.quiet){ background:var(--accent); border-color:var(--accent); color:#04070C; }
+.xs-card .xs-copy.quiet{ background:none; border:none; padding:7px 2px; color:var(--tx3); font:400 11.5px var(--font-ui); text-decoration:underline; text-underline-offset:3px; }
+.xs-card .xs-copy.quiet:hover{ color:var(--accent); }
+.xs-card button:disabled{ opacity:.45; cursor:default; }
+.xs-card.done button{ display:none; }
+/* the bulk decisions : only when cells differ */
+.xs-conflicts{ display:flex; align-items:center; gap:10px; flex-wrap:wrap; padding:8px 12px; margin-bottom:10px; border:1px dashed #E5B54F66; background:#E5B54F0D; border-radius:var(--radius-lg); font-size:12.5px; color:var(--tx2); }
+.xs-conflicts[hidden]{ display:none; }
+.xs-conf-txt b{ color:#E5B54F; }
+.xs-bulk-group{ display:flex; gap:8px; margin-left:auto; flex-wrap:wrap; }
+.xs-bulk{ font:600 12px var(--font-ui); padding:5px 12px; border-radius:var(--radius); border:1px solid var(--bd); background:var(--panel-2); color:var(--tx1); cursor:pointer; }
+.xs-bulk:disabled{ opacity:.45; cursor:default; }
+@media (max-width:760px){ .xs-hint{ display:none; } .xs-scope-wrap{ margin-left:0; } }
 
 /* a lot (several installations sent together for one pricing request) : folded by default like a directory ;
    opened, a dense grid — click a column header to decide that field for the whole lot, a row name for the whole line */
@@ -1937,6 +1970,7 @@ html.no-bridge #pipe-xs-btn{ display:none; }
 .xl-tag.warn{ color:var(--warn); border-color:#E5B54F55; }
 .xl-tag.ok{ color:var(--accent); border-color:#14D3A955; }
 .xl-dest{ font:600 10.5px var(--font-mono); padding:2px 8px; border-radius:var(--radius-md); background:var(--panel-3); color:var(--tx2); white-space:nowrap; }   /* which file(s) : Pipe, Suivi, or both */
+.xl-dest[data-k="pipe"]{ color:#5BA8F5; background:#5BA8F51A; } .xl-dest[data-k="bdd"]{ color:#E88FD0; background:#E88FD01A; }
 .xl-quick{ display:flex; gap:6px; }
 .xl-quick button{ font:600 10.5px var(--font-ui); padding:4px 9px; border-radius:var(--radius-md); border:1px solid var(--bd); background:var(--panel-2); color:var(--tx1); cursor:pointer; }
 .xl-quick button:hover{ border-color:var(--accent); color:var(--accent); }
@@ -2220,7 +2254,6 @@ details.req-compare:not([open]) > .req-compare-h::before{ transform:none; }
 details.req-compare > .req-compare-h{ font-size:12.5px; }
 .req-inst-name b{ font-size:12.5px; }
 @media (max-width:760px){ .sp-actions .sp-next{ font-size:14px; padding:12px 14px; } }
-.xs-scope{ margin-left:auto; }
 /* « Compléter avec l'IA » */
 .req-ai{ margin-left:auto; background:none; border:1px solid #B49CFF; color:#B49CFF; border-radius:999px; font:600 11.5px var(--font-ui); padding:3px 11px; cursor:pointer; }
 .req-ai:hover{ background:color-mix(in srgb, #B49CFF 14%, transparent); }
