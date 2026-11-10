@@ -275,6 +275,7 @@ window.TodoExcelSync=(function(){
     const todo=rows.filter(relevant);
     const cntP=xsFileOn('pipe')?rows.filter(r=>xsTodo(r.p) && !r.pDiffs.length).length:0, cntB=xsFileOn('bdd')?rows.filter(r=>r.b && xsTodo(r.b) && !r.bDiffs.length).length:0;
     ov.querySelectorAll('.xs-send').forEach(b=>{ const k=b.dataset.k, n=k==='pipe'?cntP:cntB; b.classList.toggle('hidden', !xsFileOn(k));
+      if(xsSending[k]){ b.disabled=true; return; }   // a send in packets repaints between packets : never re-enable it mid-send (a second click would send the rest twice)
       b.innerHTML=XL_SEND_ICO+'Envoyer au '+(k==='pipe'?'Pipe':'Suivi')+' ('+n+')'; b.disabled=!n || !bridgeConfigured(); b.title=bridgeConfigured()?'':'Pont Excel non connecté'; });
     // no bridge needed to copy (unlike « Envoyer ») : works even without the pont configured
     ov.querySelectorAll('.xs-copy').forEach(b=>{ const k=b.dataset.k, n=k==='pipe'?cntP:cntB; b.classList.toggle('hidden', !xsFileOn(k)); b.textContent='Copier ('+n+')'; b.disabled=!n; });
@@ -415,6 +416,7 @@ window.TodoExcelSync=(function(){
     apply.onclick=async()=>{ apply.disabled=true; apply.textContent='Envoi…'; await xsApplyLotGrid(targets, cellChoice); };
     return card;
   }
+  const xsSending={ pipe:false, bdd:false };   // a send in progress, per file (several packets, repaints in between)
   let xsShownNow=[];   // what paintExcelSync last drew, for the « Tout garder … » buttons (read at click time)
   // extra : one { force, seen } shared by every installation in « list », or (for a mix of per-installation choices,
   // as in a lot) one array matching « list » one-for-one. Sent as a single request (packets of 8 Excel rows) : the
@@ -424,9 +426,11 @@ window.TodoExcelSync=(function(){
     if(ON_PHONE) return true;
     const label=btn?btn.textContent:'';
     if(btn){ btn.disabled=true; btn.textContent='Envoi…'; }
+    xsSending[kind]=true;
     try{
       const rows=list.map((o,i)=>xlRowFor(kind, o, Array.isArray(extra)?extra[i]:extra));
       const { res, results, pending }=await xlSend(kind, list, rows, (k,n)=>{ if(btn && n>XL_PACKET) btn.textContent='Envoi '+k+'/'+n+'…'; });
+      xsSending[kind]=false;
       const msg=xlSummary(kind, results, res);
       try{ await xsReadFile(kind); }catch(e){ softFail('relecture de l’Excel', e); }
       // a cell the bridge could not write (changed by someone else) is not asked about here a second time : the fresh
@@ -441,6 +445,7 @@ window.TodoExcelSync=(function(){
       else if(pending.length>questions.length){ closeOppDetail(); gsTab('excel'); await openExcelSync({ noRead:true }); }   // a plain conflict, tab not open : close the sheet so the new tab isn't hidden under it, show it there rather than nowhere
       return true;
     }catch(e){
+      xsSending[kind]=false;
       if(btn){ btn.textContent=label; btn.disabled=false; }
       // a brand new line needs someone to have the file open (bridge limitation) : a clear thing to go do, shown
       // long enough to actually open the file and come back, instead of a message that fades before that
