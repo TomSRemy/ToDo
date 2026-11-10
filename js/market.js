@@ -249,13 +249,14 @@ window.TodoMarket=(function(){
     const e=escapeHtml, d=tilesData;
     if(!d || !d.tiles.length || d.tiles[0].cat==null){ root.innerHTML='<p class="mkt-none">Chiffres du marché pas encore chargés (hors ligne ?).</p>'; return; }
     root.innerHTML='';
-    const ch=(v,l)=>v==null || isNaN(v)?'':'<span class="'+(v>0.05?'up':v<-0.05?'down':'flat')+'">'+(v>0?'+':'')+mkNum(v,1)+' %</span> '+l;
+    const ch=(v,l)=>v==null || isNaN(v)?'':'<span class="'+(v>=0.5?'up':v<=-0.5?'down':'flat')+'">'+(v>0?'+':'')+mkNum(v,1)+' %</span> '+l;
     d.tiles.forEach(t=>{
-      // the trend reads the last session (J-1), as on PowerKlock : beyond ±1 %, up or down, else neutral
-      const tr=t.d1==null?'':t.d1>1?'<em class="mkt-tr up" title="Plus de +1 % sur la dernière séance">↑ haussier</em>':t.d1<-1?'<em class="mkt-tr down" title="Plus de −1 % sur la dernière séance">↓ baissier</em>':'<em class="mkt-tr" title="Moins de 1 % de variation sur la dernière séance">→ neutre</em>';
+      // as on PowerKlock (js/morning.js, tone/pill) : the move over 7 days, neutral under ±0.5 % ; the contract's name takes the same colour
+      const tn=t.d7==null || Math.abs(t.d7)<0.5?'':t.d7>0?'up':'down';
+      const tr=t.d7==null?'':'<em class="mkt-tr'+(tn?' '+tn:'')+'" title="Évolution sur 7 jours">'+(tn==='up'?'↑ haussier':tn==='down'?'↓ baissier':'→ neutre')+'</em>';
       const b=document.createElement('button'); b.type='button'; b.className='mkt-tile';
       b.innerHTML='<span class="mkt-top"><span class="mkt-cat">'+e(t.cat)+'</span><span class="mkt-date">'+e(shortD(t.when))+'</span></span>'
-        +'<span class="mkt-name">'+e(t.name)+'</span>'
+        +'<span class="mkt-name'+(tn?' '+tn:'')+'">'+e(t.name)+'</span>'
         +'<span class="mkt-row"><b>'+mkNum(t.v, t.dec==null?1:t.dec)+'<small> '+e(t.u)+'</small></b>'+tr+'</span>'
         +'<span class="mkt-var">'+[ch(t.d1,'J-1'), ch(t.d7,'7 j')].filter(Boolean).join(' · ')+'</span>'
         +spark(t.line)

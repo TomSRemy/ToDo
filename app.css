@@ -358,7 +358,7 @@
   .mkt-top{ display:flex; align-items:baseline; gap:8px; }
   .mkt-cat{ font:700 9.5px var(--font-ui); letter-spacing:.05em; text-transform:uppercase; color:#5FBF9F; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
   .mkt-date{ margin-left:auto; font-size:11px; color:var(--tx3); white-space:nowrap; }
-  .mkt-name{ font-size:13px; color:var(--accent); font-weight:600; }
+  .mkt-name{ font-size:13px; color:var(--tx1); font-weight:600; } .mkt-name.down{ color:var(--accent); } .mkt-name.up{ color:#ED6965; }
   .mkt-row{ display:flex; align-items:center; gap:6px; min-width:0; }
   .mkt-row b{ font:700 19px var(--font-mono); letter-spacing:-.6px; font-variant-numeric:tabular-nums; white-space:nowrap; } .mkt-row b small{ font:500 11px var(--font-ui); letter-spacing:0; color:var(--tx3); }
   .mkt-tr{ margin-left:auto; font:600 10px var(--font-mono); font-style:normal; padding:1px 5px; flex-shrink:0; border-radius:var(--radius); border:1px solid var(--bd); color:var(--tx3); white-space:nowrap; }
