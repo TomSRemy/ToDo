@@ -2334,7 +2334,8 @@
     const typeFilter=$('contacts-type-filter').value;
     let items=activeContacts().filter(c=>{
       if(q && !(c.firstName+' '+c.lastName+' '+(c.company||'')+' '+(c.role||'')).toLowerCase().includes(q)) return false;
-      if(typeFilter){
+      if(typeFilter==='__private' || typeFilter==='__shared'){ if(!!c.private !== (typeFilter==='__private')) return false; }
+      else if(typeFilter){
         const co=c.company?companies.find(x=>x.name===c.company):null;
         if(!co || co.type!==typeFilter) return false;
       }
@@ -2561,6 +2562,17 @@
   }
 
   let expandedContacts=new Set();
+  // shared with the team by default ; « privé » keeps a contact on my devices (and my GitHub), never sent to the team base
+  const LOCK_ICO='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>';
+  function setContactPrivate(c, priv){ c.private=!!priv; touchCrm(c); saveCrm(); renderContacts(); paintTeamShare(); }
+  function contactShareBtn(c){
+    const b=document.createElement('button'); b.type='button'; b.className='ct-share'+(c.private?' on':'');
+    b.innerHTML=LOCK_ICO+(c.private?'<span>Privé</span>':'');
+    b.title=c.private?'Privé : reste chez toi, pas partagé avec l\u2019équipe. Cliquer pour le partager.':'Partagé avec l\u2019équipe. Cliquer pour le garder privé.';
+    b.setAttribute('aria-label', c.private?'Contact privé, cliquer pour le partager':'Contact partagé, cliquer pour le rendre privé');
+    b.onclick=e=>{ e.stopPropagation(); setContactPrivate(c, !c.private); };
+    return b;
+  }
   function buildContactRow(c, rowNum){
     const row=document.createElement('div'); row.className='contact-row'+((rowNum%2===0)?' tint-alt':''); row.dataset.cid=c.id;
 
@@ -2586,6 +2598,7 @@
       noteIcon.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:11px;height:11px;"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>';
       name.appendChild(noteIcon);
     }
+    name.appendChild(contactShareBtn(c));
     const sub=document.createElement('div'); sub.className='contact-sub'; sub.textContent=c.role||'';
     main.appendChild(name); main.appendChild(sub);
     row.appendChild(main);
@@ -2776,6 +2789,7 @@
     $('ct-phone2').value=src?src.phone2||'':'';
     $('ct-meeting').value='';
     $('ct-comment').value=src?src.comment||'':'';
+    $('ct-private').checked=!!(src && src.private);
     setRelevancePicker(c?c.relevance||0:0);
     $('ct-first').focus({preventScroll:true});
   }
@@ -2814,6 +2828,7 @@
     c.firstName=firstName; c.lastName=lastName; c.role=$('ct-role').value.trim();
     c.email=$('ct-email').value.trim(); c.phone1=$('ct-phone1').value.trim(); c.phone2=$('ct-phone2').value.trim();
     c.comment=$('ct-comment').value.trim();
+    c.private=$('ct-private').checked;
     c.relevance=parseInt($('ct-relevance-picker').dataset.value||'0',10);
     if(companyName){
       const existing=findExistingCI(clientsList, companyName);
@@ -6338,7 +6353,7 @@
   // « Réglages »: a table of contents at the top, one click to each part (UX audit TD3)
   // « Réglages » (UX audit TD3): four groups, a table of contents beside them, and each part's state on its title
   const SETTINGS_NAMES={ 'clients-section':'Clients', 'projects-section':'Projets', 'sync-section':'Synchro GitHub', 'conflicts-section':'Conflits', 'backup-section':'Sauvegarde',
-    'storage-section':'Stockage', 'bridge-section':'Pont Excel', 'team-section':'\u00c9quipe (b\u00eata)', 'install-section':'Installer l\u2019appli', 'ai-section':'Claude (facultatif)' };
+    'storage-section':'Stockage', 'bridge-section':'Pont Excel', 'team-section':'Synchro \u00e9quipe', 'install-section':'Installer l\u2019appli', 'ai-section':'Claude (facultatif)' };
   const settingsShown=s=>!s.classList.contains('hidden') && !s.hidden && s.style.display!=='none';
   function settingsPill(id, text, kind){ const s=$(id); if(!s) return; const h=s.querySelector('h2'); if(!h) return;
     let p=h.querySelector('.settings-pill'); if(!text){ if(p) p.remove(); return; }
@@ -6354,7 +6369,7 @@
     settingsPill('backup-section', ...backupState());
     settingsPill('bridge-section', ...bridgePillState());
     storageRatio().then(({ ratio })=>settingsPill('storage-section', Math.round(ratio*100)+' % utilisé', ratio>=.8?'warn':'')).catch(()=>{});
-    paintSettingsButtons();
+    paintSettingsButtons(); paintTeamShare();
   }
   // the green button of each block is the next thing to do: switch the sync on, then sync; set the team up, then sign in
   function paintSettingsButtons(){
@@ -6455,8 +6470,9 @@
   function refreshContactsTypeFilter(){
     const sel=$('contacts-type-filter');
     const current=sel.value;
-    sel.innerHTML='<option value="">Tous les types</option>' + companyTypesList.slice().sort().map(t=>'<option value="'+escapeHtml(t)+'">'+escapeHtml(t)+'</option>').join('');
-    if(companyTypesList.includes(current)) sel.value=current;
+    sel.innerHTML='<option value="">Tous les contacts</option><optgroup label="Partage"><option value="__shared">Partagés avec l\u2019équipe</option><option value="__private">Privés (à moi)</option></optgroup>'
+      + (companyTypesList.length?'<optgroup label="Type de société">'+companyTypesList.slice().sort().map(t=>'<option value="'+escapeHtml(t)+'">'+escapeHtml(t)+'</option>').join('')+'</optgroup>':'');
+    if(companyTypesList.includes(current) || current==='__shared' || current==='__private') sel.value=current;
   }
   $('contacts-type-filter').addEventListener('change', renderContacts);
   document.querySelectorAll('.contacts-header-row .sort').forEach(el=>el.addEventListener('click', ()=>{
@@ -6883,12 +6899,24 @@
   const teamArrFor=table=>({ opportunities, contacts, companies, meetings }[table]);
   function teamRefresh(){ render(); renderArchive(); renderLists(); renderToday(); renderContacts(); renderPipeline(); }
   // pousse vers Supabase tout ce qui a changé depuis le dernier push/pull (comparaison JSON, pas de suivi champ par champ)
+  // a private contact never goes to the team base ; one made private after being shared is removed from it
+  const teamPrivate=(table, item)=>table==='contacts' && !!(item && item.private);
+  let teamSeen=null;   // ids of contacts already seen in the team base (kept on this device) : one gone from it was made private by a colleague
+  async function teamSeenLoad(){ if(teamSeen) return teamSeen; try{ const r=await window.storage.get('team-seen-contacts'); teamSeen=new Set(r&&r.value?JSON.parse(r.value):[]); }catch(e){ teamSeen=new Set(); } return teamSeen; }
+  function teamSeenSave(){ try{ window.storage.set('team-seen-contacts', JSON.stringify([...teamSeen])); }catch(e){ softFail('team-seen', e); } }
+  async function teamDropPrivate(id, seen){
+    if(!teamSnap.contacts.has(id) && !seen.has(id)) return;   // never sent : nothing to take back
+    try{ await window.TodoTeam.removeItem('contacts', id); teamSnap.contacts.delete(id); seen.delete(id); teamSeenSave(); }
+    catch(e){ console.error('[teamSyncPush] retrait contact privé', id, e); }
+  }
   async function teamSyncPush(){
     if(!(window.TodoTeam && window.TodoTeam.isSignedIn())) return;
+    const seen=await teamSeenLoad();
     for(const table of TEAM_TABLES){
       for(const item of teamArrFor(table)){
+        if(teamPrivate(table, item)){ await teamDropPrivate(item.id, seen); continue; }
         const j=JSON.stringify(item); if(teamSnap[table].get(item.id)===j) continue;
-        try{ await window.TodoTeam.pushItem(table, item); teamSnap[table].set(item.id, j); }
+        try{ await window.TodoTeam.pushItem(table, item); teamSnap[table].set(item.id, j); if(table==='contacts' && !seen.has(item.id)){ seen.add(item.id); teamSeenSave(); } }
         catch(e){ console.error('[teamSyncPush]', table, item.id, e); }
       }
     }
@@ -6900,7 +6928,13 @@
       let rows; try{ rows=await window.TodoTeam.pullAll(table); }catch(e){ console.error('[teamSyncPull]', table, e); continue; }
       if(!rows) continue;
       const arr=teamArrFor(table), by=new Map(arr.map(x=>[x.id,x]));
-      rows.forEach(r=>{ teamSnap[table].set(r.id, JSON.stringify(r)); const cur=by.get(r.id); if(!cur || (r.updatedAt||0)>=(cur.updatedAt||0)) by.set(r.id, r); });
+      rows.forEach(r=>{ const cur=by.get(r.id); if(teamPrivate(table, cur)) return;   // mine and private : the push below takes it out of the team base
+        teamSnap[table].set(r.id, JSON.stringify(r)); if(!cur || (r.updatedAt||0)>=(cur.updatedAt||0)) by.set(r.id, r); });
+      if(table==='contacts'){   // seen in the team base before, gone now, not mine-private : a colleague made it private
+        const seen=await teamSeenLoad(), onServer=new Set(rows.map(r=>r.id));
+        [...by.keys()].forEach(id=>{ if(seen.has(id) && !onServer.has(id) && !teamPrivate(table, by.get(id))) by.delete(id); });
+        teamSeen=new Set(rows.map(r=>r.id)); teamSeenSave();
+      }
       arr.length=0; arr.push(...by.values());
     }
     await saveCrmLocalOnly();
@@ -6911,15 +6945,26 @@
     if(teamSubscribed || !(window.TodoTeam && window.TodoTeam.isSignedIn())) return;
     teamSubscribed=true;
     TEAM_TABLES.forEach(table=>{
-      window.TodoTeam.subscribe(table, item=>{
-        teamSnap[table].set(item.id, JSON.stringify(item));
+      window.TodoTeam.subscribe(table, (item, kind)=>{
         const arr=teamArrFor(table), i=arr.findIndex(x=>x.id===item.id);
+        if(i>=0 && teamPrivate(table, arr[i])) return;   // my private copy stays as it is
+        if(kind==='DELETE'){ teamSnap[table].delete(item.id); if(i>=0) arr.splice(i,1); if(teamSeen) teamSeen.delete(item.id); saveCrmLocalOnly(); teamRefresh(); return; }
+        teamSnap[table].set(item.id, JSON.stringify(item));
+        if(table==='contacts' && teamSeen && !teamSeen.has(item.id)){ teamSeen.add(item.id); teamSeenSave(); }
         if(i>=0) arr[i]=item; else arr.push(item);
         saveCrmLocalOnly(); teamRefresh();
       });
     });
   }
+  function paintTeamShare(){
+    const el=$('team-share-summary'); if(!el) return;
+    const act=activeContacts(), priv=act.filter(c=>c.private).length;
+    el.innerHTML='<b>Partagé avec l\u2019équipe</b> : le pipeline, les sociétés, les rendez-vous et '+(act.length-priv)+' contact'+(act.length-priv>1?'s':'')+'.'
+      +' <b>Reste à toi</b> : tes tâches, la note, et '+priv+' contact'+(priv>1?'s':'')+' privé'+(priv>1?'s':'')+'.'
+      +' Un contact est partagé par défaut ; le cadenas dans Contacts le garde pour toi.';
+  }
   async function renderTeamStatus(){
+    paintTeamShare();
     const cfgEl=$('team-config-status'), authEl=$('team-auth-status');
     if(!cfgEl || !authEl || !window.TodoTeam) return;
     const cfg=await window.TodoTeam.loadConfig();

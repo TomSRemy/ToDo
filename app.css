@@ -2637,3 +2637,14 @@ html.widget .dup-banner{ display:none; }
   .app-sidebar-head{ padding-bottom:4px; }
 }
 @media (max-height: 640px) and (max-width: 760px){ .app-sidebar .tab{ padding:5px 0; } }
+
+/* ---------- contacts : partagé avec l'équipe par défaut, cadenas = privé ---------- */
+.ct-share{ display:inline-flex; align-items:center; gap:4px; background:none; border:1px solid transparent; border-radius:999px; padding:1px 6px; color:var(--tx3); cursor:pointer; font:600 10.5px var(--font-ui); opacity:0; flex-shrink:0; }
+.ct-share svg{ width:11px; height:11px; }
+.contact-row:hover .ct-share, .ct-share:focus-visible{ opacity:.7; }
+.ct-share:hover{ opacity:1; color:var(--tx1); border-color:var(--bd); }
+.ct-share.on{ opacity:1; color:#E5B54F; border-color:#E5B54F55; background:#E5B54F14; }
+@media (hover:none){ .ct-share{ opacity:.6; } }
+.ct-private-row{ display:flex; align-items:center; gap:8px; margin:2px 0 10px; font-size:12.5px; color:var(--tx2); cursor:pointer; }
+.team-share{ color:var(--tx2); }
+.team-share b{ color:var(--tx1); font-weight:600; }

@@ -92,6 +92,14 @@ window.TodoTeam=(function(){
     return true;
   }
 
+  // vraie suppression (pas `deleted:true`) : un contact rendu privé ne doit plus rester dans la base d'équipe
+  async function removeItem(table, id){
+    if(!client) return false;
+    const { error }=await client.from(table).delete().eq('id', id);
+    if(error) throw error;
+    return true;
+  }
+
   // un canal temps réel par table ; onChange(item, 'INSERT'|'UPDATE'|'DELETE') pour fusionner dans
   // les tableaux en mémoire et redessiner, sans attendre un rechargement
   function subscribe(table, onChange){
@@ -115,11 +123,12 @@ window.TodoTeam=(function(){
       const r=await window.storage.get(map[table]);
       const items=r&&r.value?JSON.parse(r.value):[];
       let ok=0, fail=0;
-      for(const item of items){ try{ await pushItem(table, item); ok++; }catch(e){ fail++; console.error('[migrateFromLocal]', table, item.id, e); } }
+      for(const item of items){ if(table==='contacts' && item.private) continue;   // privé : jamais envoyé à l'équipe
+        try{ await pushItem(table, item); ok++; }catch(e){ fail++; console.error('[migrateFromLocal]', table, item.id, e); } }
       report[table]={ total:items.length, ok, fail };
     }
     return report;
   }
 
-  return { TABLES, init, loadConfig, saveConfig, isConfigured, isSignedIn, currentUser, signIn, signOut, pullAll, pushItem, subscribe, migrateFromLocal };
+  return { TABLES, init, loadConfig, saveConfig, isConfigured, isSignedIn, currentUser, signIn, signOut, pullAll, pushItem, removeItem, subscribe, migrateFromLocal };
 })();

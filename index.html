@@ -291,8 +291,8 @@
         <button class="view-icon-btn" data-view="groupe" title="Par société"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></button>
         <button class="view-icon-btn active" data-view="liste" title="Liste (sans regroupement)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg></button>
       </div>
-      <select id="contacts-type-filter" class="type-filter-select" aria-label="Type de société">
-        <option value="">Tous les types</option>
+      <select id="contacts-type-filter" class="type-filter-select" aria-label="Filtrer les contacts">
+        <option value="">Tous les contacts</option>
       </select>
     </div>
     <div class="contacts-header-row">
@@ -328,6 +328,7 @@
       <div class="crm-form-row">
         <textarea id="ct-comment" placeholder="Commentaire (contexte, notes…)" style="width:100%;min-height:70px;background:var(--panel-2);border:1px solid var(--bd);border-radius:var(--radius);color:var(--tx1);font-family:var(--font-ui);font-size:12.5px;padding:9px 10px;box-sizing:border-box;resize:vertical;"></textarea>
       </div>
+      <label class="ct-private-row"><input type="checkbox" id="ct-private"> Privé : garder ce contact pour moi (pas partagé avec l’équipe)</label>
       <div class="crm-form-actions">
         <button id="contact-save-btn" type="button">Enregistrer</button>
         <button id="contact-cancel-btn" type="button" class="ghost-btn">Annuler</button>
@@ -714,9 +715,32 @@
       <div class="chip-row" id="project-chip-row"></div>
       <div class="add-item-row"><input type="text" id="new-project-input" placeholder="Nouveau projet"><button id="add-project-btn">Ajouter</button></div>
     </div>
-    <h3 class="settings-group" id="grp-data">Données</h3>
+    <h3 class="settings-group" id="grp-team">Équipe : partagé</h3>
+    <div class="list-manager" id="team-section">
+      <h2>Synchro équipe (bêta)</h2>
+      <p class="list-hint team-share" id="team-share-summary"></p>
+      <p class="list-hint">Le pipeline, les contacts, les sociétés et les rendez-vous partagés avec l'équipe en temps réel, au lieu de rester chacun sur sa propre copie. <b>En bêta</b> : demande à ton administrateur (Tom) l'URL + la clé ci-dessous à coller une fois, puis ton compte (email + mot de passe) — c'est lui qui le crée, pas besoin de t'inscrire toi-même.</p>
+      <div style="display:flex; flex-direction:column; gap:8px;">
+        <input type="text" id="team-url" placeholder="URL donnée par l'administrateur" autocomplete="off">
+        <input type="password" id="team-key" placeholder="Clé donnée par l'administrateur" autocomplete="off">
+        <div class="set-actions"><button class="data-btn" id="team-save-btn">Enregistrer la configuration</button></div>
+        <span id="team-config-status" class="bridge-status"></span>
+      </div>
+      <div style="display:flex; flex-direction:column; gap:8px; margin-top:10px;">
+        <input type="email" id="team-email" placeholder="Ton email" autocomplete="off">
+        <input type="password" id="team-password" placeholder="Mot de passe" autocomplete="current-password">
+        <div class="set-actions"><button class="data-btn" id="team-login-btn">Se connecter</button></div>
+        <span id="team-auth-status" class="bridge-status"></span>
+      </div>
+      <div class="set-actions" style="margin-top:10px;">
+        <button class="data-btn" id="team-migrate-btn" type="button">Migrer mes données locales →</button>
+        <button class="data-btn set-link" id="team-load-btn" type="button">Vérifier les données d'équipe</button>
+      </div>
+      <span id="team-action-status" class="bridge-status"></span>
+    </div>
+    <h3 class="settings-group" id="grp-data">Perso : mes appareils</h3>
     <div class="list-manager" id="sync-section">
-      <h2>Synchronisation multi-appareils</h2>
+      <h2>Synchro GitHub (tes appareils)</h2>
       <p class="list-hint">À configurer une fois par appareil. Une fois activée, toutes les tâches (pas seulement celles d'Outlook) se synchronisent via ton repo GitHub. ⚠️ Utilise un repo <strong>privé</strong> : les données (dont les contacts/CRM) y sont stockées en clair.</p>
       <div style="display:flex; flex-direction:column; gap:8px;">
         <input type="text" id="sync-owner" placeholder="Ton nom d'utilisateur GitHub" aria-label="Nom d'utilisateur GitHub">
@@ -774,28 +798,6 @@
         <div class="parc-source-row"><input type="file" id="rs-bdd-file" accept=".xlsx" class="hidden"><button type="button" class="pipe-bar-btn" id="rs-bdd-file-btn">Parcourir…</button><span id="rs-bdd-file-name" class="rs-file-name"></span></div>
         <p class="parc-source-hint">Juste pour vérifier le nom du fichier que tu utilises — un navigateur ne peut pas retenir son emplacement réel ni l'ouvrir directement (sécurité). Pour un vrai bouton « Ouvrir », passe par un lien SharePoint/OneDrive à la place.</p>
       </div>
-    </div>
-    <h3 class="settings-group" id="grp-team">Équipe (bêta)</h3>
-    <div class="list-manager" id="team-section">
-      <h2>Synchro équipe</h2>
-      <p class="list-hint">Le pipeline, les contacts, les sociétés et les rendez-vous partagés avec l'équipe en temps réel, au lieu de rester chacun sur sa propre copie. <b>En bêta</b> : demande à ton administrateur (Tom) l'URL + la clé ci-dessous à coller une fois, puis ton compte (email + mot de passe) — c'est lui qui le crée, pas besoin de t'inscrire toi-même.</p>
-      <div style="display:flex; flex-direction:column; gap:8px;">
-        <input type="text" id="team-url" placeholder="URL donnée par l'administrateur" autocomplete="off">
-        <input type="password" id="team-key" placeholder="Clé donnée par l'administrateur" autocomplete="off">
-        <div class="set-actions"><button class="data-btn" id="team-save-btn">Enregistrer la configuration</button></div>
-        <span id="team-config-status" class="bridge-status"></span>
-      </div>
-      <div style="display:flex; flex-direction:column; gap:8px; margin-top:10px;">
-        <input type="email" id="team-email" placeholder="Ton email" autocomplete="off">
-        <input type="password" id="team-password" placeholder="Mot de passe" autocomplete="current-password">
-        <div class="set-actions"><button class="data-btn" id="team-login-btn">Se connecter</button></div>
-        <span id="team-auth-status" class="bridge-status"></span>
-      </div>
-      <div class="set-actions" style="margin-top:10px;">
-        <button class="data-btn" id="team-migrate-btn" type="button">Migrer mes données locales →</button>
-        <button class="data-btn set-link" id="team-load-btn" type="button">Vérifier les données d'équipe</button>
-      </div>
-      <span id="team-action-status" class="bridge-status"></span>
     </div>
     <h3 class="settings-group" id="grp-app">Appli</h3>
     <div class="list-manager" id="install-section" style="display:none;">
