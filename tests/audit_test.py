@@ -158,9 +158,11 @@ with sync_playwright() as p:
     page.click("#pipeline-board .pipe-noresult button")
     check(eventually(page, lambda: page.input_value("#opp-search") == ""), "« Effacer la recherche » clears it")
     # 8b. a task being typed survives a reload
-    page.click('[data-tab="tasks"]'); page.click("#quick-add-more"); page.fill("#f-title", "Rappeler Hélio Loire"); page.fill("#f-description", "pour le RDV 2"); page.wait_for_timeout(700)
+    page.click('[data-tab="tasks"]'); page.click("#quick-add-more"); page.fill("#f-title", "Rappeler Hélio Loire"); page.fill("#f-description", "pour le RDV 2")
+    # the draft is written 400 ms after the last keystroke: wait for it rather than a fixed pause (slow CI machines)
+    eventually(page, lambda: "pour le RDV 2" in (page.evaluate("localStorage.getItem('draft-task')") or ""), 5000)
     page.goto(URL); page.wait_for_selector(".tab.active")
-    check(eventually(page, lambda: "Une tâche en cours de saisie" in page.inner_text("#app-toast")), "after a reload: the task being typed is offered back")
+    check(eventually(page, lambda: "Une tâche en cours de saisie" in page.inner_text("#app-toast"), 8000), "after a reload: the task being typed is offered back")
     page.click("#app-toast button")
     check(eventually(page, lambda: page.input_value("#f-title") == "Rappeler Hélio Loire" and page.input_value("#f-description") == "pour le RDV 2"), "the typed task is back in the form")
     page.click("#cancel-task"); page.wait_for_timeout(200)
