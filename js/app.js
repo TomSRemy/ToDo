@@ -1414,7 +1414,7 @@
   }
   // the market tiles : drawn by js/market.js from PowerKlock's open data (spot, Cal, TTF, EUA, Brent, GO), a click opens Marché
   function renderSynthMarket(){
-    const root=$('synth-market'); if(!root || ON_PHONE) return;
+    const root=$('synth-market'); if(!root) return;   // on the phone too : the tiles wrap two by two
     if(!root.dataset.built || Date.now()-(+root.dataset.built)>30*60000){ root.dataset.built=String(Date.now()); window.TodoMarket.renderTiles(root); }
   }
   // the Synthèse : on the left the pipeline (who has the offers) and the urgent tasks, on the right the map ;

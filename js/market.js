@@ -229,9 +229,6 @@ window.TodoMarket=(function(){
     const T=[], add=t=>{ if(t) T.push(t); }, S=com && com.series || {};
     const tc=com && com.calYears && com.calYears.ttf && com.calYears.ttf[y+1];
     add(tileFrom('ttf', 'Gaz · Europe', 'TTF day-ahead', S.ttf && S.ttf.points, '€/MWh', [S.peg?'PEG <b>'+mkNum(lastOf(S.peg.points))+'</b>':'', tc?'Cal '+String(y+1).slice(2)+' <b>'+mkNum(lastOf(zipc(tc)))+'</b>':''].filter(Boolean).join(' · ')));
-    const yr=S.eua && S.eua.points.slice(-250).map(p=>p[1]);
-    add(tileFrom('eua', 'CO₂ · Europe', 'EUA déc.', S.eua && S.eua.points, '€/t', yr && yr.length?'12 mois <b>'+mkNum(Math.min(...yr))+'</b> – <b>'+mkNum(Math.max(...yr))+'</b>':''));
-    add(tileFrom('brent', 'Pétrole', 'Brent', S.brent && S.brent.points, '$/bbl', S.eurusd?'EUR/USD <b>'+mkNum(lastOf(S.eurusd.points),3)+'</b>':''));
     return T;
   }
   // ---------- the spot of one day, by quarter of an hour (J = the last day published, J-1, J+1 once out) ----------

@@ -352,7 +352,7 @@
   /* Synthèse (Aujourd'hui) : 6 marché, via PowerKlock, each a « solo » widget in its own iframe — the app
      never reads these numbers itself, just frames pages PowerKlock already serves for this (curated once there) */
   /* market tiles drawn by the app (js/market.js) : figure, change, 30-day line ; a click opens Marché */
-  .synth-market{ display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:8px; margin:14px 15px; }
+  .synth-market{ display:grid; grid-template-columns:repeat(auto-fill,minmax(205px,1fr)); gap:8px; margin:14px 15px; }   /* five tiles : one line on a large screen, two or three lines on a small one, never squeezed */
   .mkt-tile{ position:relative; display:flex; flex-direction:column; gap:2px; text-align:left; background:var(--panel); border:1px solid var(--bd); border-radius:var(--radius-xl); padding:10px 12px 8px; cursor:pointer; color:var(--tx1); font:inherit; overflow:hidden; transition:border-color .15s var(--ease-out); min-width:0; }
   .mkt-tile:hover{ border-color:var(--accent); }
   .mkt-top{ display:flex; align-items:baseline; gap:8px; }
@@ -420,7 +420,7 @@
   .of-sum-more{ align-self:flex-start; background:none; border:0; padding:6px 0 0; cursor:pointer; color:#8EA3BF; font-size:12px; }
   .of-sum-more:hover{ color:var(--accent); }
   .of-sum-empty{ margin:2px 0 0; font-size:12.5px; color:#8EA3BF; }
-  @media (max-width:760px){ .synth-market, .synth-panels{ display:none; } }
+  @media (max-width:760px){ .synth-panels{ display:none; } .synth-market{ grid-template-columns:repeat(2,minmax(0,1fr)); margin:10px; } }
   .stat-card{ flex:1; background:var(--panel-2); border:1px solid var(--bd); border-radius:var(--radius-md); padding:12px 14px; }
   .stat-card-num{ font-family:var(--font-mono); font-size:22px; font-weight:700; color:var(--tx1); line-height:1; margin-bottom:4px; }
   .stat-card-num.crit{ color:var(--crit); }
@@ -2793,7 +2793,7 @@ html.widget .dup-banner{ display:none; }
 .synth-parc .parc-h{ cursor:pointer; } .synth-parc .parc-h:hover{ color:var(--accent); } .synth-parc{ flex-shrink:0; }
 .synth-parc .parc-chart{ min-width:0; max-width:none; }
 /* medium screens : seven tiles on one line, the trend badge keeps its arrow only (the word on hover) */
-@media (max-width:1700px){ .mkt-tr span{ display:none; } .mkt-tr{ padding:1px 4px; } }
+@media (max-width:420px){ .mkt-tr span{ display:none; } .mkt-tr{ padding:1px 4px; } }
 .st-card{ min-height:120px; }
 /* « Ouvrir le mail » : copies the PowerShell command that opens the Outlook mail */
 .mail-open-btn{ display:inline-flex; align-items:center; gap:5px; background:none; border:1px solid transparent; border-radius:var(--radius); padding:2px 4px; color:var(--tx3); cursor:pointer; font:500 11.5px var(--font-ui); }
