@@ -191,27 +191,32 @@ window.TodoMarket=(function(){
     if(!force && tilesData && Date.now()-tilesData.at<30*60000) return tilesData;
     const get=async f=>{ const r=await fetch(MK_BASE+f, { cache:'no-cache' }); if(!r.ok) throw new Error(f+' '+r.status); return f.endsWith('.csv')?r.text():r.json(); };
     tilesLoading=(async()=>{
-      const [fr, com, go]=await Promise.all([get('fr_market.json').catch(()=>null), get('commodities.json').catch(()=>null), get('go_prices.csv').catch(()=>null)]);
+      const [fr, com, go, chain]=await Promise.all([get('fr_market.json').catch(()=>null), get('commodities.json').catch(()=>null), get('go_prices.csv').catch(()=>null), get('history/fr_market_calchain.json').catch(()=>null)]);
       try{ await loadMarket(); }catch(e){}
-      const out=tilesFrom(fr, com, go);
+      const out=tilesFrom(fr, com, go, chain);
       if(out.tiles.length){ tilesData=out; try{ localStorage.setItem('market-tiles', JSON.stringify(out)); }catch(e){} }
       return tilesData; })();
     try{ return await tilesLoading; } finally { tilesLoading=null; }
   }
-  function tilesFrom(fr, com, go){
+  function tilesFrom(fr, com, go, chain){
       const out={ at:Date.now(), tiles:[] }, T=out.tiles, last=a=>a[a.length-1];
       const pct=(a,b)=>a!=null && b ? (a-b)/Math.abs(b)*100 : null;
       const m=marketData;
       if(m && m.spot) T.push({ id:'spot', k:'Spot France', v:m.spot.avg, u:'€/MWh', d:m.spot.vs!=null && m.spot.avg-m.spot.vs ? pct(m.spot.avg, m.spot.avg-m.spot.vs) : null, when:m.spot.day, line:(m.days||[]).map(x=>x.avg) });
       else if(fr && fr.spot) T.push({ id:'spot', k:'Spot France', v:fr.spot.value, u:'€/MWh', d:null, when:fr.spot.date, line:[] });
-      const cal=fr && (fr.forwardCurve||[]).find(x=>x.tenor==='Y+1');
-      if(cal) T.push({ id:'cal', k:(cal.contract||'Cal').replace(/^FR /,'').replace(/ base$/,'').replace(/^Cal(\d{4})$/,'Cal $1')+' France', v:cal.value, u:'€/MWh', d:cal.varD1Pct, when:cal.date, line:[] });
+      const c=calTile(fr, chain); if(c) T.push(c);
       const ser=(key, label, unit)=>{ const id=key; const x=com && com.series && com.series[key]; if(!x || !x.points || !x.points.length) return;
         const pts=x.points.slice(-30), v=last(pts)[1], prev=pts.length>1?pts[pts.length-2][1]:null;
         T.push({ id, k:label, v, u:unit, d:pct(v, prev), when:last(pts)[0], line:pts.map(p=>p[1]) }); };
       ser('ttf','TTF (gaz)','€/MWh'); ser('eua','EUA (CO₂)','€/t'); ser('brent','Brent','$/bbl');
       const g=goTile(go); if(g) T.push(g);
       return out;
+  }
+  function calTile(fr, chain){
+      const cal=fr && (fr.forwardCurve||[]).find(x=>x.tenor==='Y+1');
+      const calY=cal && ((cal.contract||'').match(/Cal(\d{4})/)||[])[1], calH=calY && chain && chain.FR && chain.FR.years && chain.FR.years[calY];
+      if(!cal) return null;
+      return ({ id:'cal', k:(cal.contract||'Cal').replace(/^FR /,'').replace(/ base$/,'').replace(/^Cal(\d{4})$/,'Cal $1')+' France', v:cal.value, u:'€/MWh', d:cal.varD1Pct, when:cal.date, line:calH?calH.values.slice(-30):[] });
   }
   function goTile(go){
       const last=a=>a[a.length-1], pct=(a,b)=>a!=null && b ? (a-b)/Math.abs(b)*100 : null;
@@ -224,7 +229,7 @@ window.TodoMarket=(function(){
   }
   function spark(vals){
     const v=(vals||[]).filter(x=>x!=null && !isNaN(x)); if(v.length<2) return '';
-    const mn=Math.min(...v), mx=Math.max(...v), W=100, H=26, sx=W/(v.length-1), y=x=>H-2-(mx===mn?.5:(x-mn)/(mx-mn))*(H-4);
+    const mn=Math.min(...v), mx=Math.max(...v), W=100, H=50, sx=W/(v.length-1), y=x=>H-2-(mx===mn?.5:(x-mn)/(mx-mn))*(H-4);
     const d=v.map((x,i)=>(i?'L':'M')+(i*sx).toFixed(1)+' '+y(x).toFixed(1)).join(' ');
     return '<svg class="mkt-spark" viewBox="0 0 '+W+' '+H+'" preserveAspectRatio="none" aria-hidden="true"><path d="'+d+'"/></svg>';
   }
