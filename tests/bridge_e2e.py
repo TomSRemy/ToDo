@@ -48,7 +48,7 @@ try:
     with sync_playwright() as p:
         b = p.chromium.launch(); page = b.new_page(viewport={"width": 1400, "height": 900}, bypass_csp=True); errors = []; page.on("pageerror", lambda e: errors.append(str(e)))
         page.route("**/fonts.g*/**", lambda r: r.abort())
-        page.add_init_script("if(!sessionStorage.getItem('s')){ localStorage.setItem('todo_todo-widget-opportunities', %s); localStorage.setItem('todo_bridge-config', %s); sessionStorage.setItem('s','1'); }"
+        page.add_init_script("try{ if(!sessionStorage.getItem('s')){ localStorage.setItem('todo_todo-widget-opportunities', %s); localStorage.setItem('todo_bridge-config', %s); sessionStorage.setItem('s','1'); } }catch(e){}"
                              % (json.dumps(json.dumps(insts)), json.dumps(json.dumps({"port": PORT, "token": "mocktoken"}))))
         page.goto(URL); page.click('[data-tab="pipeline"]'); page.click("#pipe-more-btn"); page.click("#pipe-xs-btn")
         page.wait_for_selector("#tab-excel .xs-send[data-k=pipe]:not([disabled])", timeout=20000)
@@ -56,7 +56,8 @@ try:
         page.wait_for_function("document.querySelector('#tab-excel .xs-send[data-k=pipe]').textContent.startsWith('Envoyer')", timeout=60000)
         rows = dump("pipe")
         mine = [r for r in rows if r[6] == "SCEA Essai"]
-        check(len(rows) == 13 and len(mine) == 12 and rows[0][6] == "AUTRE PROD", f"12 lines added after the colleague's one, nothing else moved ({len(rows)} lines)")
+        check(len(rows) == 13 and len(mine) == 12 and rows[0][6] == "AUTRE PROD", f"12 lines added after the colleague's one, nothing else moved ({len(rows)} lines: {[r[19] for r in rows]})")
+        if len(rows) != 13: print((work / "bridge.log").read_text(encoding="utf-8", errors="replace")[-3000:])
         r0 = next(r for r in mine if r[19] == "Toit 0")
         check(r0[22] == "100" and r0[1] == "True" and r0[36] == "True", f"each value in its column (kWc in W, New in B, Qualification in AK): {r0[22]!r} {r0[1]!r} {r0[36]!r}")
         snap = dump("pipe")
