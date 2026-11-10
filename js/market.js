@@ -251,7 +251,8 @@ window.TodoMarket=(function(){
     root.innerHTML='';
     const ch=(v,l)=>v==null || isNaN(v)?'':'<span class="'+(v>0.05?'up':v<-0.05?'down':'flat')+'">'+(v>0?'+':'')+mkNum(v,1)+' %</span> '+l;
     d.tiles.forEach(t=>{
-      const tr=t.d7==null?'':t.d7>2?'<em class="mkt-tr up">↑ haussier</em>':t.d7<-2?'<em class="mkt-tr down">↓ baissier</em>':'<em class="mkt-tr">→ neutre</em>';
+      // the trend reads the last session (J-1), as on PowerKlock : beyond ±1 %, up or down, else neutral
+      const tr=t.d1==null?'':t.d1>1?'<em class="mkt-tr up" title="Plus de +1 % sur la dernière séance">↑ haussier</em>':t.d1<-1?'<em class="mkt-tr down" title="Plus de −1 % sur la dernière séance">↓ baissier</em>':'<em class="mkt-tr" title="Moins de 1 % de variation sur la dernière séance">→ neutre</em>';
       const b=document.createElement('button'); b.type='button'; b.className='mkt-tile';
       b.innerHTML='<span class="mkt-top"><span class="mkt-cat">'+e(t.cat)+'</span><span class="mkt-date">'+e(shortD(t.when))+'</span></span>'
         +'<span class="mkt-name">'+e(t.name)+'</span>'
