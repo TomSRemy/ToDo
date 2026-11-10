@@ -769,7 +769,35 @@
   // registered protocol handler. The new Outlook client doesn't register it,
   // so browsers just navigate to a blank page. Fall back to a "copy subject"
   // button so the mail can be found via Outlook's own search instead.
-  function makeLinkOrCopyBtn(t){
+  // The Outlook mail of a task : its raw EntryID (and StoreID) from the VBA capture, or, for older tasks, the ID
+  // inside « outlook:<EntryID> ». Hex only : nothing else ever goes into the PowerShell command.
+  function mailIds(t){
+    const hex=v=>/^[0-9A-Fa-f]{16,}$/.test(v||'')?v:'';
+    const entry=hex(t.mailEntryId) || (/^outlook:/i.test(t.link||'') ? hex(t.link.replace(/^outlook:(\/\/)?/i,'').trim()) : '');
+    return entry?{ entry, store:hex(t.mailStoreId) }:null;
+  }
+  // the outlook: link does not open on the work PC ; Outlook's COM object does, from a plain (non-admin) PowerShell
+  function mailCommand(ids){
+    return '$ol = New-Object -ComObject Outlook.Application; $ns = $ol.GetNamespace("MAPI"); $ns.GetItemFromID("'+ids.entry+'"'+(ids.store?', "'+ids.store+'"':'')+').Display()';
+  }
+  function copyMailCommand(t){
+    const ids=mailIds(t); if(!ids) return;
+    const cmd=mailCommand(ids), done=()=>notify('Commande copiée : colle-la dans PowerShell (clic droit), puis Entrée. Outlook doit être ouvert.');
+    const manual=()=>{ askText('Copie impossible automatiquement : sélectionne la commande ci-dessous (Ctrl+A, Ctrl+C), puis colle-la dans PowerShell.', cmd, 'Fermer'); };
+    if(navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(cmd).then(done).catch(()=>{ if(copyFallback(cmd)) done(); else manual(); });
+    else if(copyFallback(cmd)) done(); else manual();
+  }
+  const MAIL_ICO='<svg class="meta-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>';
+  function makeMailBtn(t, withLabel){
+    const b=document.createElement('button'); b.type='button'; b.className='mail-open-btn'+(withLabel?' labelled':'');
+    b.title='Ouvrir le mail : copie la commande PowerShell qui l’ouvre dans Outlook';
+    b.setAttribute('aria-label', 'Ouvrir le mail dans Outlook (copie une commande PowerShell)');
+    b.innerHTML=MAIL_ICO+(withLabel?'<span>Ouvrir le mail</span>':'');
+    b.onclick=e=>{ e.stopPropagation(); copyMailCommand(t); };
+    return b;
+  }
+  function makeLinkOrCopyBtn(t, withLabel){
+    if(mailIds(t)) return makeMailBtn(t, withLabel);
     if(t.link.indexOf('outlook:') === 0 || !isSafeHref(t.link)){
       const btn=document.createElement('button'); btn.type='button';
       btn.title="Copier l'objet (Ctrl+E dans Outlook pour chercher)";
@@ -871,7 +899,7 @@
     if(t.client) meta.appendChild(makeTag(t.client, clientColor(t.client), 'dot'));
     if(t.project) meta.appendChild(makeTag(t.project, projectColor(t.project), 'flag'));
     if(t.due){ const st=dueStatus(t.due); const d=document.createElement('span'); d.className='meta-date-compact'+(st?' '+st:''); d.textContent=fmtDateShort(t.due); meta.appendChild(d); }
-    if(t.link){ meta.appendChild(makeLinkOrCopyBtn(t)); }
+    if(t.link || t.mailEntryId){ meta.appendChild(makeLinkOrCopyBtn(t, true)); }
     body.appendChild(meta);
 
     row.appendChild(body);
@@ -1067,7 +1095,7 @@
     grid.appendChild(dateTag);
 
     const mailWrap=document.createElement('span'); mailWrap.className='task-mail-icon';
-    if(t.link){ mailWrap.appendChild(makeLinkOrCopyBtn(t)); }
+    if(t.link || t.mailEntryId){ mailWrap.appendChild(makeLinkOrCopyBtn(t)); }
     grid.appendChild(mailWrap);
 
     row.appendChild(grid);
@@ -1345,6 +1373,8 @@
       title: it.title,
       description: it.description || '',
       link: it.link || '',
+      mailEntryId: it.mailEntryId || '',
+      mailStoreId: it.mailStoreId || '',
       client: it.client || '',
       project: it.project || '',
       urgency: it.urgency || 'moyenne',
@@ -1955,7 +1985,7 @@
     grid.appendChild(dateTag);
 
     const mailWrap=document.createElement('span'); mailWrap.className='task-mail-icon';
-    if(t.link){ mailWrap.appendChild(makeLinkOrCopyBtn(t)); }
+    if(t.link || t.mailEntryId){ mailWrap.appendChild(makeLinkOrCopyBtn(t)); }
     grid.appendChild(mailWrap);
 
     const actions=document.createElement('div'); actions.className='task-actions-compact'; actions.style.opacity='.7';
@@ -5875,6 +5905,7 @@
 
   function createTask(f){
     const task={ id:'task_'+Date.now()+'_'+Math.random().toString(36).slice(2,7), title:f.title, description:f.description||'', client:f.client||'', project:f.project||'', urgency:f.urgency||'moyenne', status:f.status||'a_faire', due:f.due||'', reminder:f.reminder||'', link:f.link||'', recur:f.recur||null, subtasks:[], archived:false, archivedAt:null, deleted:false, createdAt:Date.now(), updatedAt:Date.now() };
+    if(f.mailEntryId){ task.mailEntryId=f.mailEntryId; task.mailStoreId=f.mailStoreId||''; }   // the Outlook mail behind the task (VBA capture)
     if(task.client){
       const existing=findExistingCI(clientsList, task.client);
       if(existing){ task.client=existing; } else { clientsList.push(task.client); saveClients(); }

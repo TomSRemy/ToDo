@@ -73,6 +73,15 @@ Public Sub ProcessFlaggedMail(ByVal mail As Outlook.MailItem)
     Dim mailLink As String
     mailLink = "outlook:" & mail.EntryID
 
+    ' Identifiants bruts du mail (sans prefixe) : l'appli s'en sert pour
+    ' rouvrir le mail via PowerShell (GetItemFromID). Le StoreID dit dans
+    ' quelle boite il est ; s'il est illisible, on continue sans.
+    Dim mailEntryId As String, mailStoreId As String
+    mailEntryId = mail.EntryID
+    On Error Resume Next
+    mailStoreId = mail.Parent.StoreID
+    On Error GoTo Fail
+
     Dim itemId As String
     itemId = "inbox_" & Format(Now, "yyyymmddhhnnss") & "_" & Left(mail.EntryID, 8)
 
@@ -87,6 +96,8 @@ Public Sub ProcessFlaggedMail(ByVal mail As Outlook.MailItem)
         """urgency"":""" & modJson.JsonEscape(taskUrgency) & """," & _
         """due"":""" & modJson.JsonEscape(dueStr) & """," & _
         """link"":""" & modJson.JsonEscape(mailLink) & """," & _
+        """mailEntryId"":""" & modJson.JsonEscape(mailEntryId) & """," & _
+        """mailStoreId"":""" & modJson.JsonEscape(mailStoreId) & """," & _
         """receivedAt"":""" & modJson.JsonEscape(Format(mail.ReceivedTime, "yyyy-mm-dd hh:nn")) & """," & _
         """importedAt"":""" & modJson.JsonEscape(Format(Now, "yyyy-mm-dd hh:nn:ss")) & """" & _
         "}"

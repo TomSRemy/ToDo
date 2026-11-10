@@ -2795,3 +2795,8 @@ html.widget .dup-banner{ display:none; }
 /* medium screens : seven tiles on one line, the trend badge keeps its arrow only (the word on hover) */
 @media (max-width:1700px){ .mkt-tr span{ display:none; } .mkt-tr{ padding:1px 4px; } }
 .st-card{ min-height:120px; }
+/* « Ouvrir le mail » : copies the PowerShell command that opens the Outlook mail */
+.mail-open-btn{ display:inline-flex; align-items:center; gap:5px; background:none; border:1px solid transparent; border-radius:var(--radius); padding:2px 4px; color:var(--tx3); cursor:pointer; font:500 11.5px var(--font-ui); }
+.mail-open-btn:hover{ color:var(--accent); border-color:var(--bd); }
+.mail-open-btn.labelled{ border-color:var(--bd); padding:2px 8px; color:var(--tx2); }
+.mail-open-btn.labelled:hover{ border-color:var(--accent); }
