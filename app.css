@@ -12,8 +12,15 @@
     --font-ui: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
     --font-mono: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, monospace;
     --note-accent:#C9A55A;
+    --ease-out: cubic-bezier(.23,1,.32,1);
   }
   *{box-sizing:border-box;}
+  /* feedback au clic + transitions de base (audit design) : posé une fois, tôt dans la cascade — toute règle plus
+     bas qui précise déjà une transition ou un :active sur un élément précis garde la main dessus */
+  button, .data-btn, .pipe-card, .pd-card, .stat-card, .tab, .tw-row, .task-check, a.data-btn, [role="button"]{
+    transition: background-color 150ms ease, border-color 150ms ease, color 150ms ease, transform 120ms var(--ease-out);
+  }
+  button:not(:disabled):active, .data-btn:active, .pipe-card:active, .stat-card.clickable:active, .tw-row:active{ transform:scale(.97); }
   body{ margin:0; min-height:100vh; font-family:var(--font-ui); background:var(--bg); color:var(--tx1); }
 
   .app-shell{ display:flex; min-height:100vh; }
