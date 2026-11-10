@@ -308,7 +308,7 @@ with sync_playwright() as p:
     legacy = [{"id": "n1", "text": "Rappeler Sophie", "kind": "demain", "forDate": TOMORROW, "createdAt": 1, "updatedAt": 1, "deleted": False}]
     page, errors = new_page(browser, {"todo_todo-widget-notes": json.dumps(legacy)}, viewport={"width": 1300, "height": 850})
     page.goto(URL)
-    check(page.is_visible("#postit"), "post-it open by default on desktop")
+    check(eventually(lambda: page.is_visible("#postit"), 3000), "post-it open by default on desktop")   # opened at the end of the async start-up, not at the load event
     check(page.input_value("#postit-text") == "Demain : Rappeler Sophie", "old multi-post-it notes folded into the post-it")
     postit_edit(page); page.keyboard.press("End")
     page.keyboard.type("\nEnvoyer offre PPA\nidée : webinar ACC")
