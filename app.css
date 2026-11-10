@@ -2677,7 +2677,8 @@ html.widget .dup-banner{ display:none; }
 .contact-row:hover .ct-share, .ct-share:focus-visible{ opacity:.7; }
 .ct-share:hover{ opacity:1; color:var(--tx1); border-color:var(--bd); }
 .ct-share.on{ opacity:1; color:#E5B54F; border-color:#E5B54F55; background:#E5B54F14; }
-@media (hover:none){ .ct-share{ opacity:.6; } }
+/* touch screens : a tap on the name must open the card, never flip the sharing by accident ; there the lock only tells, the card's box changes it */
+@media (hover:none){ .ct-share{ pointer-events:none; } .ct-share:not(.on){ display:none; } }
 .ct-private-row{ display:flex; align-items:center; gap:8px; margin:2px 0 10px; font-size:12.5px; color:var(--tx2); cursor:pointer; }
 .team-share{ color:var(--tx2); }
 .team-share b{ color:var(--tx1); font-weight:600; }
