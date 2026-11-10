@@ -791,13 +791,15 @@
         <div class="set-actions"><button class="data-btn set-primary" id="bridge-save-btn">Enregistrer et tester</button></div>
         <span id="bridge-status" class="bridge-status"></span>
       </div>
-      <div class="parc-source" style="margin-top:14px;">
+      <details class="set-adv"><summary>Avancé : vérifier le nom des fichiers Pipe et Suivi</summary>
+      <div class="parc-source" style="margin-top:10px;">
         <label for="rs-pipe-file">Fichier « Pipe Agrégation »</label>
         <div class="parc-source-row"><input type="file" id="rs-pipe-file" accept=".xlsx" class="hidden"><button type="button" class="pipe-bar-btn" id="rs-pipe-file-btn">Parcourir…</button><span id="rs-pipe-file-name" class="rs-file-name"></span></div>
         <label for="rs-bdd-file" style="margin-top:10px; display:block;">Fichier « Suivi Agrégation »</label>
         <div class="parc-source-row"><input type="file" id="rs-bdd-file" accept=".xlsx" class="hidden"><button type="button" class="pipe-bar-btn" id="rs-bdd-file-btn">Parcourir…</button><span id="rs-bdd-file-name" class="rs-file-name"></span></div>
         <p class="parc-source-hint">Juste pour vérifier le nom du fichier que tu utilises — un navigateur ne peut pas retenir son emplacement réel ni l'ouvrir directement (sécurité). Pour un vrai bouton « Ouvrir », passe par un lien SharePoint/OneDrive à la place.</p>
       </div>
+      </details>
     </div>
     <h3 class="settings-group" id="grp-app">Appli</h3>
     <div class="list-manager" id="install-section" style="display:none;">

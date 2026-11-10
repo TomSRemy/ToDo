@@ -265,6 +265,13 @@ window.TodoExcelSync=(function(){
       return { kind:tg.kind, o:tg.o, plan:xsBuildRowPlan(tg.kind, tg.o, tg.diffs, choices, aligns) }; });
     await xsSendPlans(plans);
   }
+  function paintReadErr(ov){
+    // the same error for both files (the bridge is down) : said once, with « Réessayer » next to it
+    const ek=['pipe','bdd'].filter(k=>xsReadError[k]), same=ek.length===2 && xsReadError.pipe===xsReadError.bdd;
+    const errs=same?[xsReadError.pipe]:ek.map(k=>(k==='pipe'?'Pipe':'Suivi')+' : '+xsReadError[k]);
+    const errEl=ov.querySelector('.xs-read-err'); errEl.hidden=!errs.length; errEl.textContent=errs.join(' · ');
+    if(errs.length && bridgeConfigured()){ const r=document.createElement('button'); r.type='button'; r.className='bridge-retry'; r.textContent='Réessayer'; r.onclick=()=>ov.querySelector('.xs-read').click(); errEl.appendChild(document.createTextNode(' ')); errEl.appendChild(r); }
+  }
   function paintExcelSync(){
     const ov=$('tab-excel'); if(!ov || ov.classList.contains('hidden')) return;
     const all=ov.querySelector('.xs-filter .on').dataset.f==='all', body=ov.querySelector('.xs-body'); body.innerHTML='';
@@ -276,8 +283,7 @@ window.TodoExcelSync=(function(){
     note.textContent='Sans le pont, la colonne « appli » dit ce qui a été envoyé, et le Suivi est relu depuis le Portefeuille (fichier chargé). Le pont se règle dans Réglages.';
     // a failed read stays shown here (not just a toast that disappears) until the next read succeeds : impossible to
     // miss that the Pipe or Suivi couldn't be read (a renamed tab, a moved file…), unlike a transient message
-    const errs=['pipe','bdd'].filter(k=>xsReadError[k]).map(k=>(k==='pipe'?'Pipe':'Suivi')+' : '+xsReadError[k]);
-    const errEl=ov.querySelector('.xs-read-err'); errEl.hidden=!errs.length; errEl.textContent=errs.join(' · ');
+    paintReadErr(ov);
     ov.querySelectorAll('.xs-scope button').forEach(b=>{ b.classList.toggle('on', b.dataset.s===xsScope); b.setAttribute('aria-checked', String(b.dataset.s===xsScope)); });
     ov.querySelector('.xs-scope-btn b').textContent=(XS_SCOPES.find(x=>x[0]===xsScope)||XS_SCOPES[0])[1];
     ov.querySelectorAll('.xl-filekind button').forEach(b=>{ const on=xsFileOn(b.dataset.fk); b.classList.toggle('on', on); b.setAttribute('aria-pressed', String(on)); });

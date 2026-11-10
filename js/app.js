@@ -2388,6 +2388,11 @@
     });
     if(!items.length){
       const e=document.createElement('div'); e.className='empty-state'; e.textContent=(q||typeFilter)?'Aucun résultat.':'Aucun contact pour le moment.';
+      // nothing yet : the two ways to start, right here (the same as the toolbar's)
+      if(!q && !typeFilter){ const acts=document.createElement('div'); acts.className='empty-acts';
+        const a=document.createElement('button'); a.type='button'; a.className='data-btn set-primary'; a.textContent='Ajouter mon premier contact'; a.onclick=()=>$('contact-add-btn').click();
+        const b=document.createElement('button'); b.type='button'; b.className='data-btn'; b.textContent='Importer depuis Excel'; b.onclick=()=>$('contact-import-btn').click();
+        acts.append(a, b); e.appendChild(acts); }
       list.appendChild(e);
       return;
     }
@@ -5655,10 +5660,12 @@
       return data;
     }catch(e){
       if(e.name==='AbortError') throw new Error('Le pont Excel ne répond pas (délai dépassé).');
-      if(e instanceof TypeError) throw new Error('Pont Excel introuvable : lance « Lancer-pont-excel.bat » sur l\u2019ordinateur.');
+      if(e instanceof TypeError) throw new Error(BRIDGE_DOWN);
       throw e;
     }finally{ clearTimeout(t); }
   }
+  // one wording for « the bridge isn't there », in Réglages and in Synchro Excel alike
+  const BRIDGE_DOWN='Pont Excel injoignable : lance « Lancer-pont-excel.bat » sur ton ordinateur et laisse sa fenêtre ouverte, puis « Réessayer ».';
   async function bridgeCheck(){
     try{ const s=await bridgeCall('GET','/status',null,2500); bridgeState={ ok:true, authorized:!!s.authorized, checkedAt:Date.now(), info:s }; }
     catch(e){ bridgeState={ ok:false, authorized:false, checkedAt:Date.now(), info:null, error:e.message }; }
@@ -5672,7 +5679,8 @@
     const el=$('bridge-status'); if(!el) return;
     const s=bridgeState;
     if(!bridgeConfigured()){ el.textContent='Pas encore configuré sur ce navigateur.'; el.className='bridge-status'; return; }
-    if(!s.ok){ el.textContent=s.error||'Pont non détecté.'; el.className='bridge-status off'; return; }
+    if(!s.ok){ el.textContent=s.error||BRIDGE_DOWN; el.className='bridge-status off';
+      const r=document.createElement('button'); r.type='button'; r.className='bridge-retry'; r.textContent='Réessayer'; r.onclick=()=>{ el.textContent='Test…'; bridgeCheck(); }; el.appendChild(document.createTextNode(' ')); el.appendChild(r); return; }
     if(!s.authorized){ el.textContent='Pont détecté, mais la clé ne correspond pas.'; el.className='bridge-status off'; return; }
     el.textContent='Connecté · Pipe : '+(s.info.pipe.found?s.info.pipe.name:'fichier introuvable')+' · BDD : '+(s.info.bdd.found?s.info.bdd.name:'fichier introuvable')
       +(window.TodoExcelSync.bridgeLatest(s.info)?' · pont v'+s.info.version:bridgeUpToDate(s.info)?' · pont v'+s.info.version+' (la '+window.TodoExcelSync.BRIDGE_LATEST+' est disponible, plus sûre : télécharge pont-excel.ps1 ci-dessus quand tu veux)':' · ⚠ ton pont est en version '+(s.info.version||'?')+', la '+window.TodoExcelSync.BRIDGE_LATEST+' est disponible : télécharge pont-excel.ps1 ci-dessus, remplace l\u2019ancien fichier et relance le pont');
