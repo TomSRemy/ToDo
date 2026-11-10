@@ -6455,7 +6455,9 @@
   $('pipe-views-btn').onclick=e=>{ e.stopPropagation(); openViewsMenu('pipeline', e.currentTarget); };
   $('pipe-meet-toggle').onclick=()=>{ pipeOffers=false; pipeMeet=!pipeMeet; meetStuckOnly=false; if(pipeMeet){ pipeDash=false; pipeMap=false; } renderPipeline(); };
   $('pipe-xs-btn').onclick=()=>openExcelSync({ scope:'pipe' });
-  if($('ai-section')) $('ai-section').hidden=!aiOn();
+  if($('ai-section-body')) $('ai-section-body').hidden=!aiOn();
+  if($('ai-feature-toggle')){ $('ai-feature-toggle').checked=aiOn();
+    $('ai-feature-toggle').onchange=e=>{ try{ localStorage.setItem('feat-ai', e.target.checked?'1':'0'); }catch(err){} location.reload(); }; }
   { const st=()=>{ const k=aiKey(); $('ai-key-status').textContent=k?'Clé enregistrée (…'+k.slice(-4)+'). Vide le champ et enregistre pour l\u2019oublier.':'Pas de clé : créer une clé gratuite sur Google AI Studio.'; };
     if($('ai-key-save')){ $('ai-key-save').onclick=()=>{ const v=$('ai-key-input').value.trim(); try{ if(v) localStorage.setItem('ai-key', v); else localStorage.removeItem('ai-key'); }catch(e){} $('ai-key-input').value=''; st(); }; st(); } }
   { const st=()=>{ $('claude-relay-status').textContent=claudeRelayConfigured()?'Clé enregistrée. « Demander via le relais local » apparaît dans Compléter avec l’IA.':'Pas de clé : lance bridge/Lancer-relais-claude.bat.'; };
