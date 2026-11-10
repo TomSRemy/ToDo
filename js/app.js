@@ -1382,43 +1382,62 @@
     b.querySelector('.bk-go').onclick=()=>{ exportData(); renderBackupBanner(); };
     b.querySelector('.bk-later').onclick=()=>{ lsSet('backup-snooze-until', String(Date.now()+7*864e5)); renderBackupBanner(); };
   }
-  // 6 widgets curated once on PowerKlock (« Mon tableau »-style solo links, stable server-side — not a code
-  // decoded from the URL) : each its own iframe, so they can be read, reordered or dropped without touching
-  // the rest of the dashboard. Built once ; renderToday() runs often (every task change), reloading 6 iframes
-  // every time would be wasteful and would flash the widgets empty.
-  // ?bare&theme=dark : just the number/variation/mini-curve PowerKlock itself renders for this — no title bar, no
-  // Expliquer/PowerPoint buttons, transparent background (so our own panel shows through, not theirs)
-  const SYNTH_MARKET=[
-    ['Spot France', 'https://tomsremy.github.io/PowerKlock/index.html?bare&theme=dark#solo=r32f858d9b99644'],
-    ['Cal 2027 France', 'https://tomsremy.github.io/PowerKlock/index.html?bare&theme=dark#solo=rca6f65bc3b519e'],
-    ['TTF (Gaz)', 'https://tomsremy.github.io/PowerKlock/index.html?bare&theme=dark#solo=rc6b0978829b146'],
-    ['EUA (CO₂)', 'https://tomsremy.github.io/PowerKlock/index.html?bare&theme=dark#solo=re5a2afed952b78'],
-    ['Brent (Pétrole)', 'https://tomsremy.github.io/PowerKlock/index.html?bare&theme=dark#solo=rfce01959ad5f8a'],
-    ['GO 2027', 'https://tomsremy.github.io/PowerKlock/index.html?bare&theme=dark#solo=r33a322a3b47f7f']
-  ];
+  // the market tiles : drawn by js/market.js from PowerKlock's open data (spot, Cal, TTF, EUA, Brent, GO), a click opens Marché
   function renderSynthMarket(){
-    const root=$('synth-market'); if(!root || root.dataset.built || ON_PHONE) return; root.dataset.built='1';
-    SYNTH_MARKET.forEach(([label, url])=>{
-      const tile=document.createElement('div'); tile.className='synth-mkt-tile';
-      const l=document.createElement('span'); l.className='synth-mkt-label'; l.textContent=label; tile.appendChild(l);
-      const f=document.createElement('iframe'); f.src=url; f.title=label; f.loading='lazy'; f.referrerPolicy='no-referrer'; f.tabIndex=-1;
-      tile.appendChild(f);
-      // the widget is an iframe (it would swallow the click) : a transparent button on top opens the Marché page
-      const hit=document.createElement('button'); hit.type='button'; hit.className='synth-mkt-hit'; hit.setAttribute('aria-label', label+' : ouvrir la page Marché'); hit.title='Ouvrir la page Marché';
-      hit.onclick=()=>gsTab('market'); tile.appendChild(hit);
-      root.appendChild(tile);
-    });
+    const root=$('synth-market'); if(!root || ON_PHONE) return;
+    if(!root.dataset.built || Date.now()-(+root.dataset.built)>30*60000){ root.dataset.built=String(Date.now()); window.TodoMarket.renderTiles(root); }
   }
-  // the Synthèse's two panels : the offers (who has them, since when) and the map of the contracts, offers or pipeline
+  // the Synthèse : on the left the pipeline (who has the offers) and the urgent tasks, on the right the map ;
+  // the left column stops where the map ends (the tasks that don't fit : « + N autres »)
   function renderSynthPanels(){
     const root=$('synth-panels'); if(!root || ON_PHONE) return;
     root.innerHTML='';
     const grid=document.createElement('div'); grid.className='synth-grid';
-    grid.appendChild(window.TodoOffers.offersSummary(()=>{ gsTab('pipeline'); setTimeout(()=>{ const b=$('pipe-offers-toggle'); if(b && b.getAttribute('aria-pressed')!=='true') b.click(); }, 30); }));
+    const left=document.createElement('div'); left.className='synth-left';
+    const inner=document.createElement('div'); inner.className='synth-left-in'; left.appendChild(inner);
+    const pipe=window.TodoOffers.offersSummary(()=>gsTab('pipeline')); pipe.querySelector('.of-sum-go').textContent='Pipeline'; inner.appendChild(pipe);
+    inner.appendChild(synthTasksCard());
+    grid.appendChild(left);
     if(parcData===null) loadParc();
     const m=parcMap(); m.classList.add('synth-map'); grid.appendChild(m);
     root.appendChild(grid);
+    requestAnimationFrame(synthFitTasks);
   }
+  function synthTasksCard(){
+    const open=activeTasks(), od=sortedTasks(open.filter(t=>dueStatus(t.due)==='overdue'));
+    const now=new Date(); now.setHours(0,0,0,0);
+    const td=sortedTasks(open.filter(t=>t.due && new Date(t.due+'T00:00:00').getTime()===now.getTime()));
+    const c=document.createElement('section'); c.className='pd-card st-card';
+    c.innerHTML='<h4 class="st-h"><button type="button" class="of-sum-go st-go"></button><button type="button" class="st-week">Ma semaine →</button></h4><div class="st-rows"></div>';
+    c.querySelector('.st-go').textContent='Tâches urgentes'+(od.length+td.length?' · '+(od.length+td.length):'');
+    c.querySelector('.st-go').onclick=()=>gsTab('tasks');
+    c.querySelector('.st-week').onclick=()=>openWeek('this');
+    const rows=c.querySelector('.st-rows');
+    if(!od.length && !td.length){
+      const nx=sortedTasks(open.filter(t=>t.due && dueStatus(t.due)!=='overdue')).sort((a,b)=>a.due.localeCompare(b.due))[0];
+      const p=document.createElement('p'); p.className='of-sum-empty'; p.textContent='Rien en retard ni dû aujourd\u2019hui.'+(nx?' Prochaine : '+plainLinks(nx.title)+', '+new Date(nx.due+'T00:00:00').toLocaleDateString('fr-FR',{ weekday:'long', day:'numeric', month:'long' })+'.':'');
+      rows.appendChild(p); return c;
+    }
+    od.concat(td).forEach(t=>{
+      const late=dueStatus(t.due)==='overdue', days=Math.round((now-new Date(t.due+'T00:00:00'))/864e5);
+      const r=document.createElement('button'); r.type='button'; r.className='st-row';
+      r.innerHTML='<span class="tag"></span><span class="t"></span><span class="c"></span>';
+      const tg=r.querySelector('.tag'); tg.textContent=late?'\u2212'+days+' j':'auj.'; tg.classList.add(late?'r':'a');
+      r.querySelector('.t').textContent=plainLinks(t.title); r.querySelector('.c').textContent=t.client||'';
+      r.onclick=()=>{ gsTab('tasks'); setTimeout(()=>openEdit(t.id), 30); };
+      rows.appendChild(r); });
+    return c;
+  }
+  // as many task lines as the map's height allows, the rest behind « + N autres »
+  function synthFitTasks(){
+    const left=document.querySelector('#synth-panels .synth-left'), rows=left && left.querySelector('.st-rows'); if(!rows) return;
+    const all=[...rows.querySelectorAll('.st-row')]; rows.querySelectorAll('.of-sum-more').forEach(x=>x.remove()); all.forEach(x=>{ x.hidden=false; });
+    if(getComputedStyle(left.querySelector('.synth-left-in')).position!=='absolute' || !all.length) return;   // one column (narrow window) : everything shown
+    const limit=left.getBoundingClientRect().bottom-30;
+    let hidden=0; all.forEach(x=>{ if(x.getBoundingClientRect().bottom>limit){ x.hidden=true; hidden++; } });
+    if(hidden){ const m=document.createElement('button'); m.type='button'; m.className='of-sum-more'; m.textContent='+ '+hidden+' autre'+(hidden>1?'s':'')+' dans Tâches'; m.onclick=()=>gsTab('tasks'); rows.appendChild(m); }
+  }
+  window.addEventListener('resize', ()=>{ if(!$('tab-today').classList.contains('hidden')) synthFitTasks(); });
   function synthSignedThisYear(year){
     if(parcData===null) loadParc();
     return (parcData?parcData.items:[]).filter(p=>p.statut==='Gagné' && (p.vols[year]||0)>0).reduce((s,p)=>s+(p.kwc||0),0);
@@ -1471,7 +1490,9 @@
     list.innerHTML='';
     renderTodayWatch(weekTasks);
     // an empty app: say what it is and where to start (cold audit: « TASKS · 0 / Rien d'urgent » left newcomers lost)
-    if(!tasks.some(t=>!t.deleted) && !opportunities.some(o=>!o.deleted) && !contacts.some(c=>!c.deleted)){ statsRow.innerHTML=''; list.appendChild(welcomeBlock()); return; }
+    const appEmpty=!tasks.some(t=>!t.deleted) && !opportunities.some(o=>!o.deleted) && !contacts.some(c=>!c.deleted);
+    $('tab-today').classList.toggle('synth-on', !ON_PHONE && !appEmpty);
+    if(appEmpty){ statsRow.innerHTML=''; list.appendChild(welcomeBlock()); return; }
     if(overdueTasks.length===0 && todayTasks.length===0){
       const e=document.createElement('div'); e.className='today-empty';
       const nx=sortedTasks(open.filter(t=>t.due && dueStatus(t.due)!=='overdue')).sort((a,b)=>a.due.localeCompare(b.due))[0];

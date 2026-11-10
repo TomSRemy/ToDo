@@ -182,6 +182,150 @@ window.TodoMarket=(function(){
       h+='<section class="mk-card"><h3>Spot chez les voisins · même jour (€/MWh)</h3><div class="mk-zones">'+m.zones.map(z=>'<div class="mk-zone'+(z.c==='FR'?' fr':'')+'"><span>'+e(z.n)+'</span><i style="width:'+Math.max(2,Math.abs(z.avg)/mx*100)+'%"></i><b>'+mkNum(z.avg)+'</b>'+(z.neg?'<em>'+mkNum(z.neg,1)+' h nég.</em>':'<em></em>')+'</div>').join('')+'</div>'+src(MK_SRC.spot)+'</section>'; }
     root.insertAdjacentHTML('beforeend', '<div class="mk-cards">'+h+'</div>');
   }
+  // ---------- the Synthèse's market tiles : drawn by the app from PowerKlock's open data files (no embedded widget) ----------
+  // fast, readable offline (last figures kept), the same look as the rest of the app ; a click opens the Marché page
+  let tilesData=null, tilesLoading=null;
+  try{ tilesData=JSON.parse(localStorage.getItem('market-tiles')||'null'); }catch(e){}
+  async function loadTiles(force){
+    if(tilesLoading) return tilesLoading;
+    if(!force && tilesData && Date.now()-tilesData.at<30*60000) return tilesData;
+    const get=async f=>{ const r=await fetch(MK_BASE+f, { cache:'no-cache' }); if(!r.ok) throw new Error(f+' '+r.status); return f.endsWith('.csv')?r.text():r.json(); };
+    tilesLoading=(async()=>{
+      const [fr, com, go]=await Promise.all([get('fr_market.json').catch(()=>null), get('commodities.json').catch(()=>null), get('go_prices.csv').catch(()=>null)]);
+      try{ await loadMarket(); }catch(e){}
+      const out=tilesFrom(fr, com, go);
+      if(out.tiles.length){ tilesData=out; try{ localStorage.setItem('market-tiles', JSON.stringify(out)); }catch(e){} }
+      return tilesData; })();
+    try{ return await tilesLoading; } finally { tilesLoading=null; }
+  }
+  function tilesFrom(fr, com, go){
+      const out={ at:Date.now(), tiles:[] }, T=out.tiles, last=a=>a[a.length-1];
+      const pct=(a,b)=>a!=null && b ? (a-b)/Math.abs(b)*100 : null;
+      const m=marketData;
+      if(m && m.spot) T.push({ id:'spot', k:'Spot France', v:m.spot.avg, u:'€/MWh', d:m.spot.vs!=null && m.spot.avg-m.spot.vs ? pct(m.spot.avg, m.spot.avg-m.spot.vs) : null, when:m.spot.day, line:(m.days||[]).map(x=>x.avg) });
+      else if(fr && fr.spot) T.push({ id:'spot', k:'Spot France', v:fr.spot.value, u:'€/MWh', d:null, when:fr.spot.date, line:[] });
+      const cal=fr && (fr.forwardCurve||[]).find(x=>x.tenor==='Y+1');
+      if(cal) T.push({ id:'cal', k:(cal.contract||'Cal').replace(/^FR /,'').replace(/ base$/,'').replace(/^Cal(\d{4})$/,'Cal $1')+' France', v:cal.value, u:'€/MWh', d:cal.varD1Pct, when:cal.date, line:[] });
+      const ser=(key, label, unit)=>{ const id=key; const x=com && com.series && com.series[key]; if(!x || !x.points || !x.points.length) return;
+        const pts=x.points.slice(-30), v=last(pts)[1], prev=pts.length>1?pts[pts.length-2][1]:null;
+        T.push({ id, k:label, v, u:unit, d:pct(v, prev), when:last(pts)[0], line:pts.map(p=>p[1]) }); };
+      ser('ttf','TTF (gaz)','€/MWh'); ser('eua','EUA (CO₂)','€/t'); ser('brent','Brent','$/bbl');
+      const g=goTile(go); if(g) T.push(g);
+      return out;
+  }
+  function goTile(go){
+      const last=a=>a[a.length-1], pct=(a,b)=>a!=null && b ? (a-b)/Math.abs(b)*100 : null;
+      if(go){ const y=new Date().getFullYear()+1, rows=go.trim().split('\n').slice(1).map(l=>l.split(',')).filter(c=>c[4]==='GO AIB Renewable' && +c[5]===y && c[6]);
+        rows.sort((a,b)=>a[1].localeCompare(b[1]));
+        const mid=c=>c[7]?(+c[6]+ +c[7])/2:+c[6];
+        if(rows.length){ const lr=last(rows), pv=rows.length>1?rows[rows.length-2]:null;
+          return { id:'go', k:'GO '+y, v:mid(lr), u:'€/MWh', d:pv?pct(mid(lr), mid(pv)):null, when:lr[1], line:rows.slice(-20).map(mid), dec:2 }; } }
+      return null;
+  }
+  function spark(vals){
+    const v=(vals||[]).filter(x=>x!=null && !isNaN(x)); if(v.length<2) return '';
+    const mn=Math.min(...v), mx=Math.max(...v), W=100, H=26, sx=W/(v.length-1), y=x=>H-2-(mx===mn?.5:(x-mn)/(mx-mn))*(H-4);
+    const d=v.map((x,i)=>(i?'L':'M')+(i*sx).toFixed(1)+' '+y(x).toFixed(1)).join(' ');
+    return '<svg class="mkt-spark" viewBox="0 0 '+W+' '+H+'" preserveAspectRatio="none" aria-hidden="true"><path d="'+d+'"/></svg>';
+  }
+  function paintTiles(root){
+    const e=escapeHtml, d=tilesData;
+    if(!d || !d.tiles.length){ root.innerHTML='<p class="mkt-none">Chiffres du marché pas encore chargés (hors ligne ?).</p>'; return; }
+    root.innerHTML='';
+    d.tiles.forEach(t=>{
+      const b=document.createElement('button'); b.type='button'; b.className='mkt-tile';
+      const dd=t.d==null || isNaN(t.d)?'':'<i class="'+(t.d>0.05?'up':t.d<-0.05?'down':'flat')+'">'+(t.d>0.05?'▲ +':t.d<-0.05?'▼ ':'= ')+mkNum(t.d,1)+' %</i>';
+      b.innerHTML='<span class="mkt-k">'+e(t.k)+'</span><b>'+mkNum(t.v, t.dec==null?1:t.dec)+'<small> '+e(t.u)+'</small></b><span class="mkt-sub">'+dd+(t.when?'<span>'+e(pqIsoToFr(t.when))+'</span>':'')+'</span>'+spark(t.line);
+      b.title=t.k+' : voir le graphique (source PowerKlock)'; b.onclick=()=>openMarketChart(t.id||t.k, t);
+      root.appendChild(b); });
+  }
+  // ---------- a tile opened : the history in a window (periods, series to tick, hover), from PowerKlock's open files ----------
+  const histCache={};
+  const getHist=f=>histCache[f]||(histCache[f]=fetch(MK_BASE+f, { cache:'no-cache' }).then(r=>{ if(!r.ok) throw new Error(f+' '+r.status); return f.endsWith('.csv')?r.text():r.json(); }).catch(e=>{ delete histCache[f]; throw e; }));
+  const COLORS=['#14D3A9','#7DB4F5','#C9A55A','#E5B54F','#E88FD0'];
+  const zip=(dates, vals)=>dates.map((d,i)=>[d, vals[i]]).filter(p=>p[1]!=null && !isNaN(p[1]));
+  async function chartSeries(id){
+    const y=new Date().getFullYear();
+    if(id==='spot'){ const s=await getHist('history/fr_market_series.json'); return { unit:'€/MWh', title:'Spot France (day-ahead)', src:MK_SRC.spot, series:[{ n:'Spot France', pts:zip(s.dates, s.spot), on:true }] }; }
+    if(id==='cal'){ const [c, com]=await Promise.all([getHist('history/fr_market_calchain.json'), getHist('history/commodities_series.json').catch(()=>null)]);
+      const ys=c.FR.years, out=Object.keys(ys).sort().filter(k=>+k>y).slice(0,3).map((k,i)=>({ n:'Cal '+k, pts:zip(ys[k].dates, ys[k].values), on:true }));
+      if(com && com.series.ttf) out.push({ n:'Gaz TTF, €/MWh (axe droit)', pts:com.series.ttf.points, on:false, right:true });
+      return { unit:'€/MWh', title:(out[0]||{}).n+' France', src:'SEFE Energy Market Insights, via PowerKlock', series:out }; }
+    if(id==='go'){ const csv=await getHist('go_prices.csv'), rows=csv.trim().split('\n').slice(1).map(l=>l.split(','));
+      const out=[y+1, y, y+2].map(Y=>({ n:'GO '+Y, pts:rows.filter(c=>c[4]==='GO AIB Renewable' && +c[5]===Y && c[6]).map(c=>[c[1], c[7]?(+c[6]+ +c[7])/2:+c[6]]).sort((a,b)=>a[0].localeCompare(b[0])), on:Y===y+1 })).filter(x=>x.pts.length);
+      return { unit:'€/MWh', title:'Garanties d’origine (AIB renouvelable)', src:'Commerg, via PowerKlock', series:out, dec:2 }; }
+    const com=await getHist('history/commodities_series.json'), x=com.series[id]; if(!x) throw new Error(id);
+    const out=[{ n:x.name, pts:x.points, on:true }];
+    if(id==='ttf' && com.calYears && com.calYears.ttf) Object.keys(com.calYears.ttf).sort().slice(0,3).forEach(k=>{ const c=com.calYears.ttf[k]; out.push({ n:'TTF Cal '+k, pts:zip(c.dates, c.values||[]), on:false }); });
+    return { unit:x.unit, title:x.name, src:com.source+', via PowerKlock', series:out };
+  }
+  const RANGES=[['1m','1 mois',31],['6m','6 mois',183],['1y','1 an',366],['3y','3 ans',1096],['all','Tout',0]];
+  const dms=d=>new Date(d+'T12:00:00').getTime();
+  function valAt(pts, ms){ let v=null; for(const p of pts){ if(dms(p[0])<=ms) v=p[1]; else break; } return v; }
+  async function openMarketChart(id, tile){
+    let ov=$('mkc-overlay'); if(ov) ov.remove();
+    ov=document.createElement('div'); ov.id='mkc-overlay'; ov.className='modal-overlay mkc-ov';
+    ov.innerHTML='<div class="mkc" role="dialog" aria-modal="true" aria-label="Graphique"><button type="button" class="mkc-x" aria-label="Fermer">×</button><div class="mkc-body"><p class="mkc-load">Chargement de l’historique…</p></div></div>';
+    document.body.appendChild(ov);
+    const close=()=>{ ov.remove(); document.removeEventListener('keydown', onKey); };
+    const onKey=e=>{ if(e.key==='Escape') close(); };
+    document.addEventListener('keydown', onKey);
+    ov.addEventListener('click', e=>{ if(e.target===ov) close(); }); ov.querySelector('.mkc-x').onclick=close;
+    let data; try{ data=await chartSeries(id); }catch(e){ ov.querySelector('.mkc-body').innerHTML='<p class="mkc-load">Historique indisponible (hors ligne ?).</p>'; return; }
+    let range='1y';
+    const body=ov.querySelector('.mkc-body'), e=escapeHtml, dec=data.dec==null?1:data.dec;
+    const main=data.series[0], last=main.pts[main.pts.length-1], lastMs=dms(last[0]);
+    const chg=days=>{ const v=valAt(main.pts, lastMs-days*864e5); return v?(last[1]-v)/Math.abs(v)*100:null; };
+    const yr=main.pts.filter(p=>dms(p[0])>=lastMs-365*864e5).map(p=>p[1]), mn=Math.min(...yr), mx=Math.max(...yr);
+    const chip=(l,v)=>'<span class="mkc-chip">'+l+' <b class="'+(v==null?'':v>0?'up':'down')+'">'+(v==null?'—':(v>0?'+':'')+mkNum(v,1)+' %')+'</b></span>';
+    const pos=(last[1]-mn)/((mx-mn)||1), y1=chg(365);
+    const take=(pos>.85?'Dans le haut de sa fourchette des 12 derniers mois':pos<.15?'Dans le bas de sa fourchette des 12 derniers mois':'Dans sa fourchette des 12 derniers mois')+(y1!=null?' ; '+(y1>0?'+':'')+mkNum(y1,0)+' % sur un an':'')+'.';
+    body.innerHTML='<div class="mkc-t">'+e(data.title)+' · dernière valeur '+e(new Date(lastMs).toLocaleDateString('fr-FR',{ weekday:'short', day:'numeric', month:'short' }))+'</div>'
+      +'<div class="mkc-v"><b>'+mkNum(last[1],dec)+'</b> '+e(data.unit)+'</div>'
+      +'<div class="mkc-chips">'+chip('1 sem.',chg(7))+chip('1 mois',chg(30))+chip('1 an',y1)+'<span class="mkc-chip">12 mois <b>min '+mkNum(mn,dec)+' · max '+mkNum(mx,dec)+'</b></span></div>'
+      +'<div class="mkc-ctl"><div class="mkc-rng">'+RANGES.map(r=>'<button type="button" data-r="'+r[0]+'">'+r[1]+'</button>').join('')+'</div><div class="mkc-ser">'
+      +data.series.map((x,i)=>'<label><input type="checkbox" data-i="'+i+'"'+(x.on?' checked':'')+'><i style="background:'+COLORS[i%COLORS.length]+'"></i>'+e(x.n)+'</label>').join('')+'</div></div>'
+      +'<div class="mkc-chart"></div><p class="mkc-take">'+e(take)+'</p><p class="mkc-src">Source : '+e(data.src)+'.</p>';
+    const draw=()=>{ body.querySelectorAll('.mkc-rng button').forEach(b=>b.classList.toggle('on', b.dataset.r===range));
+      drawChart(body.querySelector('.mkc-chart'), data, range, dec); };
+    body.querySelectorAll('.mkc-rng button').forEach(b=>b.onclick=()=>{ range=b.dataset.r; draw(); });
+    body.querySelectorAll('.mkc-ser input').forEach(c=>c.onchange=()=>{ data.series[+c.dataset.i].on=c.checked; draw(); });
+    draw();
+  }
+  function drawChart(box, data, range, dec){
+    const W=Math.max(320, box.clientWidth||880), H=340, L=46, R=data.series.some(s=>s.on && s.right)?46:12, T=10, B=26;
+    const days=(RANGES.find(r=>r[0]===range)||[])[2];
+    const on=data.series.map((s,i)=>({ s, i })).filter(x=>x.s.on);
+    const maxMs=Math.max(...data.series.map(s=>s.pts.length?dms(s.pts[s.pts.length-1][0]):0)), minMs=days?maxMs-days*864e5:Math.min(...on.map(x=>x.s.pts.length?dms(x.s.pts[0][0]):maxMs));
+    const vis=on.map(x=>({ ...x, pts:x.s.pts.filter(p=>{ const t=dms(p[0]); return t>=minMs && t<=maxMs; }) })).filter(x=>x.pts.length>1);
+    if(!vis.length){ box.innerHTML='<p class="mkc-load">Rien à afficher sur cette période.</p>'; return; }
+    const ext=list=>{ const v=list.flatMap(x=>x.pts.map(p=>p[1])); if(!v.length) return null; let a=Math.min(...v), b=Math.max(...v); const pad=(b-a)*.06||1; return [a-pad, b+pad]; };
+    const yl=ext(vis.filter(x=>!x.s.right))||ext(vis), yr=ext(vis.filter(x=>x.s.right));
+    const X=t=>L+(t-minMs)/((maxMs-minMs)||1)*(W-L-R), Y=(v,ax)=>T+(1-(v-ax[0])/((ax[1]-ax[0])||1))*(H-T-B);
+    const ticks=ax=>{ const span=ax[1]-ax[0], step=Math.pow(10, Math.floor(Math.log10(span/5))), m=[1,2,2.5,5,10].find(k=>span/(step*k)<=6)*step, out=[]; for(let v=Math.ceil(ax[0]/m)*m; v<=ax[1]; v+=m) out.push(+v.toFixed(6)); return out; };
+    let g='<svg viewBox="0 0 '+W+' '+H+'" class="mkc-svg">';
+    ticks(yl).forEach(v=>{ const y=Y(v,yl); g+='<line x1="'+L+'" x2="'+(W-R)+'" y1="'+y+'" y2="'+y+'" class="gl"/><text x="'+(L-6)+'" y="'+(y+4)+'" class="yl">'+mkNum(v, v%1?1:0)+'</text>'; });
+    if(yr) ticks(yr).forEach(v=>{ g+='<text x="'+(W-R+6)+'" y="'+(Y(v,yr)+4)+'" class="yl r">'+mkNum(v, v%1?1:0)+'</text>'; });
+    const spanD=(maxMs-minMs)/864e5, stepM=spanD<=62?0:spanD<=200?1:spanD<=400?2:spanD<=1200?6:12;
+    const d0=new Date(minMs); d0.setDate(1); d0.setMonth(d0.getMonth()+1);
+    if(stepM===0){ for(let t=minMs; t<=maxMs; t+=7*864e5){ const x=X(t); g+='<line x1="'+x+'" x2="'+x+'" y1="'+T+'" y2="'+(H-B)+'" class="gl v"/><text x="'+x+'" y="'+(H-8)+'" class="xl">'+new Date(t).toLocaleDateString('fr-FR',{ day:'numeric', month:'short' })+'</text>'; } }
+    else for(let d=new Date(d0); d.getTime()<=maxMs; d.setMonth(d.getMonth()+stepM)){ const x=X(d.getTime()); g+='<line x1="'+x+'" x2="'+x+'" y1="'+T+'" y2="'+(H-B)+'" class="gl v"/><text x="'+x+'" y="'+(H-8)+'" class="xl">'+d.toLocaleDateString('fr-FR',{ month:'short', year:'2-digit' }).replace('.','')+'</text>'; }
+    vis.forEach(x=>{ const ax=x.s.right?yr:yl; g+='<path d="'+x.pts.map((p,i)=>(i?'L':'M')+X(dms(p[0])).toFixed(1)+' '+Y(p[1],ax).toFixed(1)).join(' ')+'" style="stroke:'+COLORS[x.i%COLORS.length]+'" class="ln"/>'; });
+    g+='<line class="hv" x1="0" x2="0" y1="'+T+'" y2="'+(H-B)+'" visibility="hidden"/></svg><div class="mkc-tip" hidden></div>';
+    box.innerHTML=g;
+    const svg=box.querySelector('svg'), hv=svg.querySelector('.hv'), tip=box.querySelector('.mkc-tip');
+    svg.addEventListener('mousemove', ev=>{ const r=svg.getBoundingClientRect(), sx=(ev.clientX-r.left)*W/r.width; if(sx<L || sx>W-R){ hv.setAttribute('visibility','hidden'); tip.hidden=true; return; }
+      const t=minMs+(sx-L)/(W-L-R)*(maxMs-minMs);
+      hv.setAttribute('x1', sx); hv.setAttribute('x2', sx); hv.setAttribute('visibility','visible');
+      tip.innerHTML='<b>'+new Date(t).toLocaleDateString('fr-FR',{ day:'numeric', month:'short', year:'numeric' })+'</b>'+vis.map(x=>{ const v=valAt(x.pts, t); return v==null?'':'<span><i style="background:'+COLORS[x.i%COLORS.length]+'"></i>'+escapeHtml(x.s.n)+' <em>'+mkNum(v,dec)+'</em></span>'; }).join('');
+      tip.hidden=false; const px=(sx/W)*r.width; tip.style.left=Math.min(px+12, r.width-tip.offsetWidth-4)+'px'; });
+    svg.addEventListener('mouseleave', ()=>{ hv.setAttribute('visibility','hidden'); tip.hidden=true; });
+  }
+  async function renderTiles(root){
+    if(!root) return; paintTiles(root);
+    try{ await loadTiles(); }catch(e){}
+    paintTiles(root);
+  }
   window.todoExtraCommands=(window.todoExtraCommands||[]).concat([{ t:'Marché : prix spot, M0, captures', k:'marche prix spot m0 cre capture powerklock electricite', go:()=>gsTab('market') }]);
-  return { init:a=>{ app=a; }, renderMarket, loadMarket, marketLine };
+  return { init:a=>{ app=a; }, renderMarket, loadMarket, marketLine, renderTiles, openMarketChart };
 })();

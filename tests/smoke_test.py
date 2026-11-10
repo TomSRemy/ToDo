@@ -426,7 +426,7 @@ with sync_playwright() as p:
     page, errors = new_page(browser, {"todo_todo-widget-opportunities": json.dumps(wk_opps),
                                       "todo_todo-widget-tasks": json.dumps([task("wd", "Envoyer le KYC à [[Ventus]]", archived=True, archivedAt=recent), task("wn", "Préparer RDV", due=(TODAY + datetime.timedelta(days=2)).isoformat())])},
                             viewport={"width": 1300, "height": 850})
-    page.goto(URL); page.wait_for_timeout(400); page.click(".wk-card")
+    page.goto(URL); page.wait_for_timeout(400); page.click(".st-week")   # « Ma semaine » now sits on the urgent tasks block of the Synthèse
     check(page.is_visible("#week-overlay"), "my week: the Today page opens the weekly summary")
     body = page.inner_text("#week-overlay")
     check("Parc Est" in body and "4,2 MWc" in body, f"my week: signed this week, with the MWc ({body[:200]!r})")
@@ -2622,14 +2622,14 @@ Responsable technique
     page.set_input_files("#parc-file", str(parc)); page.wait_for_function("document.getElementById('parc-info').textContent.includes('lignes')", timeout=20000)
     years = page.eval_on_selector_all(".parc-years button:not(.parc-global)", "els=>els.map(e=>e.textContent)")
     check(years == [str(TODAY.year + i) for i in range(5)], f"portefeuille: 5 years from the current one ({years})")
-    page.wait_for_selector(".parc-map .dep", timeout=10000)   # the map file is loaded on demand
-    check(page.locator(".parc-map .dot").count() == 2 and page.locator(".parc-map .dep").count() == 96, "portefeuille: map of the 96 départements, one dot per signed plant")
-    page.hover(".parc-map .dot[data-dep='30']")
-    check(eventually(lambda: page.is_visible(".parc-map-wrap .parc-map-tip") and "CS DU MOULIN" in page.inner_text(".parc-map-wrap .parc-map-tip") and "Solaire PV" in page.inner_text(".parc-map-wrap .parc-map-tip"), 3000), "portefeuille: hovering a dot shows the plant and its technology")
-    page.click(".parc-map .dot[data-dep='30']")
-    check(eventually(lambda: "gard" in page.inner_text(".parc-map-side").lower(), 3000), "portefeuille: a plant is placed where it is (Département2), not at the contract's département")
-    check(page.inner_text(".parc-map-side .map-row.two .map-p") == "SOLARIS", "portefeuille: each installation of the département shows its producer")
-    page.click(".parc-map-side .map-plant"); page.wait_for_timeout(200)
+    page.wait_for_selector("#tab-parc .parc-map .dep", timeout=10000)   # the map file is loaded on demand
+    check(page.locator("#tab-parc .parc-map .dot").count() == 2 and page.locator("#tab-parc .parc-map .dep").count() == 96, "portefeuille: map of the 96 départements, one dot per signed plant")
+    page.hover("#tab-parc .parc-map .dot[data-dep='30']")
+    check(eventually(lambda: page.is_visible("#tab-parc .parc-map-wrap .parc-map-tip") and "CS DU MOULIN" in page.inner_text("#tab-parc .parc-map-wrap .parc-map-tip") and "Solaire PV" in page.inner_text("#tab-parc .parc-map-wrap .parc-map-tip"), 3000), "portefeuille: hovering a dot shows the plant and its technology")
+    page.click("#tab-parc .parc-map .dot[data-dep='30']")
+    check(eventually(lambda: "gard" in page.inner_text("#tab-parc .parc-map-side").lower(), 3000), "portefeuille: a plant is placed where it is (Département2), not at the contract's département")
+    check(page.inner_text("#tab-parc .parc-map-side .map-row.two .map-p") == "SOLARIS", "portefeuille: each installation of the département shows its producer")
+    page.click("#tab-parc .parc-map-side .map-plant"); page.wait_for_timeout(200)
     pt = page.inner_text("#opp-detail-title") if page.is_visible("#opp-detail-overlay") else ""
     check("CS DU MOULIN" in pt and page.evaluate("document.querySelector('#opp-detail-body details.req-compare').open"), f"map: a plant opens its own sheet, its characteristics open ({pt!r})")
     made = [o for o in stored(page, "todo-widget-opportunities") if o.get("fromSuivi")]
@@ -2639,34 +2639,34 @@ Responsable technique
     check(eventually(lambda: "CS DU MOULIN" in page.inner_text("#opp-detail-title") and len([o for o in stored(page, "todo-widget-opportunities") if o.get("fromSuivi")]) == 1, 3000),
           "portefeuille: a line of the table opens the same sheet (no second one made)")
     page.keyboard.press("Escape"); page.click('[data-tab="parc"]'); page.wait_for_timeout(100)
-    vb0 = page.get_attribute(".parc-map", "viewBox")
-    page.click(".map-zoom button >> nth=0"); page.wait_for_timeout(100)
-    check(page.get_attribute(".parc-map", "viewBox") != vb0, "portefeuille: the map zooms in")
-    for _ in range(3): page.click(".map-zoom button >> nth=0")
+    vb0 = page.get_attribute("#tab-parc .parc-map", "viewBox")
+    page.click("#tab-parc .map-zoom button >> nth=0"); page.wait_for_timeout(100)
+    check(page.get_attribute("#tab-parc .parc-map", "viewBox") != vb0, "portefeuille: the map zooms in")
+    for _ in range(3): page.click("#tab-parc .map-zoom button >> nth=0")
     page.wait_for_function("document.querySelector('.parc-map').dataset.hd==='true'", timeout=10000)
-    check(len(page.get_attribute(".parc-map .reg-line", "d")) > 150000 and "zoomed" in page.get_attribute(".parc-map", "class"),
+    check(len(page.get_attribute("#tab-parc .parc-map .reg-line", "d")) > 150000 and "zoomed" in page.get_attribute("#tab-parc .parc-map", "class"),
           "portefeuille: zoomed in, the detailed outlines are loaded and the shadow is dropped (sharp borders)")
-    page.click(".map-zoom button >> nth=2")
-    check(eventually(lambda: page.get_attribute(".parc-map", "viewBox").startswith("-14 -14 "), 3000), "portefeuille: reset shows all France again")
+    page.click("#tab-parc .map-zoom button >> nth=2")
+    check(eventually(lambda: page.get_attribute("#tab-parc .parc-map", "viewBox").startswith("-14 -14 "), 3000), "portefeuille: reset shows all France again")
     def centre(code):
-        bb = page.locator(f".parc-map path.dep[data-dep='{code}']").bounding_box(); return bb["x"] + bb["width"] / 2, bb["y"] + bb["height"] / 2
+        bb = page.locator(f"#tab-parc .parc-map path.dep[data-dep='{code}']").bounding_box(); return bb["x"] + bb["width"] / 2, bb["y"] + bb["height"] / 2
     x, y = centre("29"); page.mouse.move(x, y)
     for _ in range(3): page.mouse.wheel(0, -100); page.wait_for_timeout(60)
     x, y = centre("29"); page.mouse.click(x, y); page.wait_for_timeout(200)
-    vb_zoomed = page.get_attribute(".parc-map", "viewBox")
-    check("finistère" in page.inner_text(".parc-map-side .map-eyebrow").lower() and not vb_zoomed.startswith("-14 -14 "),
+    vb_zoomed = page.get_attribute("#tab-parc .parc-map", "viewBox")
+    check("finistère" in page.inner_text("#tab-parc .parc-map-side .map-eyebrow").lower() and not vb_zoomed.startswith("-14 -14 "),
           "portefeuille: on a zoomed map, a click on a département opens it (the press used to pan the map and swallow the click)")
     x, y = centre("22"); page.mouse.click(x, y)
-    check(eventually(lambda: "finistère" in page.inner_text(".parc-map-side .map-eyebrow").lower() and page.get_attribute(".parc-map", "viewBox") == vb_zoomed, 3000),
+    check(eventually(lambda: "finistère" in page.inner_text("#tab-parc .parc-map-side .map-eyebrow").lower() and page.get_attribute("#tab-parc .parc-map", "viewBox") == vb_zoomed, 3000),
           "portefeuille: a click on a département without plants keeps the selection and the zoom")
-    page.click(".map-zoom button >> nth=2"); page.click(".map-back"); page.wait_for_timeout(100)
+    page.click("#tab-parc .map-zoom button >> nth=2"); page.click("#tab-parc .map-back"); page.wait_for_timeout(100)
     page.hover(".parc-kpis .stat-card >> nth=1")
     check(eventually(lambda: page.is_visible(".parc-kpis .chart-tip") and "Solaire PV" in page.inner_text(".parc-kpis .chart-tip"), 3000), "portefeuille: hovering a figure shows its detail")
     page.click(".parc-kpis .stat-card >> nth=2")
-    check(eventually(lambda: page.is_visible(".parc-kpi-filter") and page.locator(".parc-map .dot").count() == 1 and page.locator(".parc-table tbody tr").count() == 1, 3000),
+    check(eventually(lambda: page.is_visible(".parc-kpi-filter") and page.locator("#tab-parc .parc-map .dot").count() == 1 and page.locator(".parc-table tbody tr").count() == 1, 3000),
           "portefeuille: clicking « fins de contrat » filters the map and the table")
     page.click(".parc-kpi-filter button"); page.wait_for_timeout(150)
-    check(not page.is_visible(".parc-kpi-filter") and page.locator(".parc-map .dot").count() == 2, "portefeuille: removing the filter shows everything again")
+    check(not page.is_visible(".parc-kpi-filter") and page.locator("#tab-parc .parc-map .dot").count() == 2, "portefeuille: removing the filter shows everything again")
     page.click("#parc-source-btn"); page.fill("#parc-link", "https://example.sharepoint.com/sites/x/Suivi.xlsx"); page.click("#parc-link-save")
     check(page.get_attribute("#parc-open-link", "href") == "https://example.sharepoint.com/sites/x/Suivi.xlsx" and page.is_visible("#parc-open-link"), "portefeuille: Excel link saved, opens in one click")
     page.hover("#tab-parc .parc-chart .hz >> nth=0")   # the same chart is also drawn on Synthèse (a hidden tab here)
