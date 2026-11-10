@@ -2616,3 +2616,24 @@ html.widget .dup-banner{ display:none; }
   .req-inst-caret{ font-size:10px; }
   .req-stage-hint{ margin:0 0 6px; font-size:12px; color:var(--tx3); }
   .drop-menu-all{ max-height:min(70vh, 520px); overflow-y:auto; }
+
+/* ---------- a laptop screen (window under ~800 px high): the side menu fits without scrolling ---------- */
+@media (max-height: 820px){
+  .app-sidebar{ padding:12px 0; }
+  .app-sidebar-head{ padding-bottom:8px; }
+  .tab{ padding:6px 10px; }
+  .tab-sec{ padding:8px 10px 2px; }
+  .tab-div{ margin:4px 2px; }
+  .tabs-bottom{ margin-top:6px; padding-top:6px; }
+  .gs-open, .sync-pill{ margin-top:8px; padding-top:5px; padding-bottom:5px; }
+  .app-sidebar-back{ padding-top:8px; }
+  .app-sidebar-widget{ padding-top:2px; }
+}
+/* very short (zoomed in, small laptop) */
+@media (max-height: 640px){
+  .app-sidebar .tabs{ gap:1px; }
+  .app-sidebar .tab-sec{ padding-top:5px; }
+  .app-sidebar .tab{ padding:5px 10px; }
+  .app-sidebar-head{ padding-bottom:4px; }
+}
+@media (max-height: 640px) and (max-width: 760px){ .app-sidebar .tab{ padding:5px 0; } }
