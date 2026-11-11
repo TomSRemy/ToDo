@@ -60,7 +60,8 @@ window.TodoTeam=(function(){
   function cleanConfig(cfg){
     if(!cfg) return null;
     const url=clean(cfg.url).replace(/\/+$/,''), anonKey=clean(cfg.anonKey);
-    return /^https:\/\/[a-z0-9-]+\.supabase\.co$/i.test(url) && /^[\w-]+\.[\w-]+\.[\w-]+$/.test(anonKey) ? { url, anonKey } : null;
+    const adminEmail=/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(cfg.adminEmail||'').trim()) ? String(cfg.adminEmail).trim() : '';   // the colleagues' way back when they lose their code
+    return /^https:\/\/[a-z0-9-]+\.supabase\.co$/i.test(url) && /^[\w-]+\.[\w-]+\.[\w-]+$/.test(anonKey) ? { url, anonKey, adminEmail } : null;
   }
   function isConfigured(){ return !!client; }
   function isSignedIn(){ return !!session; }
@@ -165,6 +166,20 @@ window.TodoTeam=(function(){
     return still && still.length ? 'refused' : 'gone';
   }
 
+  // administration (Tom) : the members and their second factor, a reset for a lost phone. Functions of the base that
+  // check, themselves, that the caller is an administrator validated by his own second factor ; null : not an admin
+  async function adminMembers(){
+    if(!client || !session) return null;
+    const { data, error }=await client.rpc('admin_list_members');
+    if(error) return null;
+    return data||[];
+  }
+  async function adminResetMfa(email){
+    const { data, error }=await client.rpc('admin_reset_mfa', { target_email:email });
+    if(error) throw error;
+    return data;
+  }
+
   // the history of one row (written by the database itself) : the last changes, with who made them
   let names=null;
   async function history(table, id, limit){
@@ -232,5 +247,5 @@ window.TodoTeam=(function(){
     return report;
   }
 
-  return { TABLES, init, loadConfig, saveConfig, isConfigured, isSignedIn, currentUser, signIn, signOut, mfaState, mfaVerify, mfaEnroll, mfaConfirm, mfaCount, pullAll, getItem, pushItem, removeItem, history, reportError, teamErrors, subscribe, liveState:()=>Object.assign({}, liveState), cleanConfig, migrateFromLocal };
+  return { TABLES, init, loadConfig, saveConfig, isConfigured, isSignedIn, currentUser, signIn, signOut, mfaState, mfaVerify, mfaEnroll, mfaConfirm, mfaCount, adminMembers, adminResetMfa, pullAll, getItem, pushItem, removeItem, history, reportError, teamErrors, subscribe, liveState:()=>Object.assign({}, liveState), cleanConfig, migrateFromLocal };
 })();

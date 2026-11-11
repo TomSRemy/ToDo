@@ -279,3 +279,47 @@ create policy change_log_mfa on public.change_log as restrictive for select to a
 -- Réinitialiser la double authentification d'un collègue (téléphone perdu) : supprimer ses facteurs, il en recrée un
 -- à la prochaine connexion. Remplacer l'email :
 --   delete from auth.mfa_factors where user_id = (select id from auth.users where email = 'collegue@exemple.fr');
+
+-- 2026-11-11 · Administration : l'administrateur (et lui seul, validé par sa double authentification) voit les membres
+-- et réinitialise la double authentification d'un collègue qui a perdu son téléphone. Personne ne peut se déclarer
+-- administrateur lui-même : seule la colonne display_name reste modifiable par chacun.
+alter table public.profiles add column if not exists is_admin boolean not null default false;
+revoke update on public.profiles from authenticated;
+grant update (display_name) on public.profiles to authenticated;
+
+create or replace function public.is_team_admin() returns boolean
+language sql stable security definer set search_path = public as $$
+  select coalesce((select is_admin from public.profiles where id = auth.uid()), false) and (auth.jwt()->>'aal') = 'aal2'
+$$;
+
+create or replace function public.admin_list_members()
+returns table(email text, display_name text, is_admin boolean, mfa_factors int, is_self boolean)
+language plpgsql security definer set search_path = public, auth as $$
+begin
+  if not public.is_team_admin() then raise exception 'Réservé à l''administrateur'; end if;
+  return query
+    select u.email::text, p.display_name, coalesce(p.is_admin, false),
+           (select count(*)::int from auth.mfa_factors f where f.user_id = u.id and f.status = 'verified'),
+           u.id = auth.uid()
+    from auth.users u left join public.profiles p on p.id = u.id order by u.email;
+end $$;
+
+create or replace function public.admin_reset_mfa(target_email text) returns int
+language plpgsql security definer set search_path = public, auth as $$
+declare n int;
+begin
+  if not public.is_team_admin() then raise exception 'Réservé à l''administrateur'; end if;
+  delete from auth.mfa_factors where user_id = (select id from auth.users where lower(email) = lower(target_email));
+  get diagnostics n = row_count;
+  return n;
+end $$;
+
+revoke all on function public.is_team_admin() from public, anon;
+revoke all on function public.admin_list_members() from public, anon;
+revoke all on function public.admin_reset_mfa(text) from public, anon;
+grant execute on function public.is_team_admin() to authenticated;
+grant execute on function public.admin_list_members() to authenticated;
+grant execute on function public.admin_reset_mfa(text) to authenticated;
+
+-- toi comme administrateur (remplace par l'email de ton compte d'équipe) :
+-- update public.profiles set is_admin = true where id = (select id from auth.users where email = 'TON_EMAIL_EQUIPE');

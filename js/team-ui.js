@@ -160,7 +160,7 @@ window.TodoTeamUI=(function(){
         +' Un contact est partagé par défaut ; le cadenas dans Contacts le garde pour toi.';
     }
     // ---- double authentification : a code from an authenticator app, asked once per session ; required by the base ----
-    let mfaNeeded=false, mfaFactor=null, mfaPending='';
+    let mfaNeeded=false, mfaFactor=null, mfaPending='', teamAdminEmail='';
     async function paintMfa(){
       const box=$('team-mfa'); if(!box || !window.TodoTeam) return;
       const T=window.TodoTeam; if(!T.isSignedIn()){ box.hidden=true; return; }
@@ -168,10 +168,29 @@ window.TodoTeamUI=(function(){
       mfaNeeded=st!=='ok'; mfaPending=st; box.hidden=false; mfaFactor=null;   // the base answers only at aal2 : no sync before
       $('team-mfa-qr').hidden=true; $('team-mfa-status').textContent='';
       $('team-mfa-code-row').hidden=st!=='need'; $('team-mfa-enroll').hidden=st!=='none'; $('team-mfa-spare').hidden=st!=='ok';
+      // lost code : a mail to the administrator, ready to send (his address comes with the team settings, never in the code)
+      const lost=$('team-mfa-lost'), me=(T.currentUser()||{}).email||''; lost.hidden=st!=='need' || !teamAdminEmail;
+      lost.href='mailto:'+encodeURIComponent(teamAdminEmail)+'?subject='+encodeURIComponent('ToDo : réinitialiser ma double authentification')+'&body='+encodeURIComponent('Bonjour,\n\nJ\u2019ai perdu l\u2019accès à mon code de double authentification. Peux-tu le réinitialiser pour le compte '+me+' (Réglages › Équipe › Administration) ?\n\nMerci');
+      if(st==='ok') paintAdmin();
       $('team-mfa-text').textContent=st==='ok' ? 'Double authentification active. Garde un second appareil (ou ton gestionnaire de mots de passe) en secours : sans code, l\u2019accès à l\u2019équipe est bloqué jusqu\u2019à une réinitialisation par l\u2019administrateur.'
         : st==='need' ? 'Saisis le code à 6 chiffres de ton appli d\u2019authentification pour accéder aux données de l\u2019équipe.'
         : 'Obligatoire pour l\u2019équipe : un code à 6 chiffres d\u2019une appli d\u2019authentification (Microsoft Authenticator, Google Authenticator, ou ton gestionnaire de mots de passe) en plus du mot de passe.';
       paintTeamAlert();
+    }
+    // administration : visible only when the base says this account is an administrator (with its second factor)
+    async function paintAdmin(){
+      const box=$('team-admin-box'), list=$('team-admin-list'); if(!box) return;
+      const rows=await window.TodoTeam.adminMembers().catch(()=>null); box.hidden=!rows; if(!rows) return;
+      list.innerHTML='';
+      rows.forEach(m=>{ const d=document.createElement('div'); d.className='hist-row';
+        d.innerHTML='<span class="hw"></span><span class="ht"></span><span class="hd"></span><span class="hb"></span>';
+        d.querySelector('.hw').textContent=m.display_name||m.email; d.querySelector('.ht').textContent=m.email+(m.is_admin?' · administrateur':'');
+        d.querySelector('.hd').textContent=m.mfa_factors?'double authentification active':'pas encore activée';
+        if(m.mfa_factors && !m.is_self){ const b=document.createElement('button'); b.type='button'; b.className='hist-back'; b.style.opacity=1; b.textContent='Réinitialiser';
+          b.onclick=async()=>{ if(!await askConfirm('Réinitialiser la double authentification de '+m.email+' ?\n\nSes codes actuels ne marcheront plus ; à sa prochaine connexion, il en active une nouvelle.', 'Réinitialiser')) return;
+            try{ await window.TodoTeam.adminResetMfa(m.email); notify('Double authentification réinitialisée pour '+m.email+'.'); paintAdmin(); }catch(e){ notify('Réinitialisation impossible : '+(e&&e.message||e)); } };
+          d.querySelector('.hb').appendChild(b); }
+        list.appendChild(d); });
     }
     async function mfaStart(label){
       const st=$('team-mfa-status'); st.textContent='Préparation…';
@@ -209,13 +228,13 @@ window.TodoTeamUI=(function(){
       paintSettingsButtons();
     }
     if($('team-section')){
-      (async()=>{ const cfg=window.TodoTeam&&await window.TodoTeam.loadConfig(); if(cfg){ $('team-url').value=cfg.url||''; $('team-key').value=cfg.anonKey||''; } })();
+      (async()=>{ const cfg=window.TodoTeam&&await window.TodoTeam.loadConfig(); if(cfg){ $('team-url').value=cfg.url||''; $('team-key').value=cfg.anonKey||''; $('team-admin').value=cfg.adminEmail||''; teamAdminEmail=cfg.adminEmail||''; } })();
       $('team-save-btn').onclick=async()=>{
         const url=$('team-url').value.trim(), key=$('team-key').value.trim();
         if(!url || !key){ $('team-config-status').textContent='URL et clé requises.'; return; }
         // un header HTTP n'accepte que de l'ISO-8859-1 : un caractère collé par erreur (guillemet
         // typographique, espace invisible…) donne sinon une erreur fetch cryptique bien plus tard
-        const cfg=window.TodoTeam.cleanConfig({ url, anonKey:key });
+        const cfg=window.TodoTeam.cleanConfig({ url, anonKey:key, adminEmail:$('team-admin').value });
         if(!cfg){ $('team-config-status').textContent='URL ou clé non reconnue : l\u2019URL ressemble à https://xxxx.supabase.co, la clé à trois blocs séparés par des points. Recopie-les sans rien autour.'; return; }
         await window.TodoTeam.saveConfig(cfg);
         $('team-config-status').textContent='Enregistré, rechargement…';

@@ -725,6 +725,7 @@
       <div style="display:flex; flex-direction:column; gap:8px;">
         <input type="text" id="team-url" placeholder="URL donnée par l'administrateur" autocomplete="off">
         <input type="text" id="team-key" placeholder="Clé donnée par l'administrateur" autocomplete="off" spellcheck="false" data-lpignore="true">
+        <input type="email" id="team-admin" placeholder="Email de l'administrateur (à prévenir si tu perds ton code)" autocomplete="off">
         <div class="set-actions"><button class="data-btn" id="team-save-btn">Enregistrer la configuration</button></div>
         <span id="team-config-status" class="bridge-status"></span>
       </div>
@@ -738,7 +739,12 @@
           <div class="team-mfa-qr" id="team-mfa-qr" hidden><img id="team-mfa-img" alt="QR code à scanner avec ton appli d’authentification" width="180" height="180"><code id="team-mfa-secret"></code></div>
           <div class="set-actions" id="team-mfa-code-row" hidden><input type="text" id="team-mfa-code" inputmode="numeric" autocomplete="one-time-code" maxlength="8" placeholder="Code à 6 chiffres"><button class="data-btn set-primary" id="team-mfa-ok" type="button">Valider</button></div>
           <div class="set-actions"><button class="data-btn" id="team-mfa-enroll" type="button" hidden>Activer la double authentification</button><button class="data-btn set-link" id="team-mfa-spare" type="button" hidden>Ajouter un appareil de secours</button></div>
+          <a class="sync-token-link" id="team-mfa-lost" hidden>Code perdu (téléphone perdu ou changé) ? Prévenir l’administrateur</a>
           <span id="team-mfa-status" class="bridge-status"></span>
+        </div>
+        <div id="team-admin-box" class="team-mfa" hidden>
+          <p class="list-hint"><b>Administration</b> · les membres de l’équipe et leur double authentification. Un collègue qui a perdu son téléphone : « Réinitialiser », il en recrée une à sa prochaine connexion.</p>
+          <div id="team-admin-list" class="hist-rows"></div>
         </div>
       </div>
       <div class="set-actions" style="margin-top:10px;">
