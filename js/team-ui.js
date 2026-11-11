@@ -3,7 +3,7 @@
 window.TodoTeamUI=(function(){
   const api={};
   api.init=function(app){
-    const { $, notify, softFail, askConfirm, render, renderArchive, renderLists, renderToday, renderContacts, renderPipeline, saveCrmLocalOnly, touchCrm, activeContacts, paintSettingsButtons }=app, gsTab=(...a)=>app.gsTab(...a);
+    const { $, notify, softFail, askConfirm, askChoice, saveCrm, fieldLabel, fieldValue, render, renderArchive, renderLists, renderToday, renderContacts, renderPipeline, saveCrmLocalOnly, touchCrm, activeContacts, paintSettingsButtons }=app, gsTab=(...a)=>app.gsTab(...a);
     const contactsArr=()=>app.contacts;
     // ---------- Synchro équipe (Supabase, bêta) : voir js/supabase-sync.js. Inactif sans config, aucun effet sur l'appli en service. ----------
     const TEAM_TABLES=['opportunities','contacts','companies','meetings'];
@@ -65,15 +65,46 @@ window.TodoTeamUI=(function(){
     // ---- field by field : two colleagues changing different fields of the same sheet both keep their change ----
     // teamSnap holds, per row, the last version seen on the base (the « base » of a three-way merge) : what I changed
     // since is mine and goes on top of the base's current version, everything else comes from the base.
-    const META=new Set(['updatedAt','createdAt']), same=(a,b)=>JSON.stringify(a)===JSON.stringify(b);
+    const META=new Set(['updatedAt','createdAt','_by']), same=(a,b)=>JSON.stringify(a)===JSON.stringify(b);
+    const QUIET=/^(stageLog|xs|xsSeen|xsKeep)/;   // bookkeeping fields : no question asked, mine goes on top as before
     // a form saves every field, empty ones included : an empty field where there was nothing is not a change
     const blank=v=>v==null || v==='' || (Array.isArray(v) && !v.length), sameVal=(a,b)=>(blank(a) && blank(b)) || same(a,b);
-    function merge3(base, local, server){
+    // the same field changed here AND by a colleague, to different values : the colleague's value stays for now and the
+    // clash is listed in `clashes` (when given), so that the user chooses ; nothing is replaced without being seen
+    function merge3(base, local, server, clashes){
       if(!base) return (local.updatedAt||0)>(server.updatedAt||0) ? Object.assign({}, server, local) : Object.assign({}, local, server);
       const out=Object.assign({}, server);
-      new Set([...Object.keys(base), ...Object.keys(local)]).forEach(k=>{ if(META.has(k) || sameVal(local[k], base[k])) return; if(local[k]===undefined) delete out[k]; else out[k]=local[k]; });
-      out.updatedAt=Math.max(local.updatedAt||0, server.updatedAt||0);
+      new Set([...Object.keys(base), ...Object.keys(local)]).forEach(k=>{ if(META.has(k) || sameVal(local[k], base[k])) return;
+        if(clashes && !QUIET.test(k) && !sameVal(server[k], base[k]) && !sameVal(server[k], local[k])){ clashes.push({ field:k, mine:local[k], theirs:server[k] }); return; }
+        if(local[k]===undefined) delete out[k]; else out[k]=local[k]; });
+      out.updatedAt=Math.max(local.updatedAt||0, server.updatedAt||0); delete out._by;
       return out;
+    }
+    // ---- two people, the same field, different values : asked, one sheet at a time ----
+    const clashQueue=[]; let clashOpen=false;
+    function noteClashes(table, id, server, list){ if(!list.length) return; clashQueue.push({ table, id, by:server._by, at:server.updatedAt, list }); showClashes(); }
+    async function showClashes(){
+      if(clashOpen) return; clashOpen=true;
+      try{ while(clashQueue.length) await askClash(clashQueue.shift()); }catch(e){ softFail('modifications simultanées', e); }
+      clashOpen=false;
+    }
+    const sheetName=(table, o)=>table==='contacts' ? [o.firstName, o.lastName].filter(Boolean).join(' ') : table==='opportunities' ? (o.centrale||o.title||o.producteur||o.company||'') : (o.name||o.label||'');
+    function clashText(c, o, who){
+      const mins=c.at ? Math.max(0, Math.round((Date.now()-c.at)/60000)) : null, when=mins==null ? '' : mins<1 ? ' à l\u2019instant' : mins<60 ? ' il y a '+mins+' min' : ' à '+new Date(c.at).toLocaleTimeString('fr-FR', { hour:'2-digit', minute:'2-digit' });
+      const lines=c.list.map(f=>'\u2022 '+fieldLabel(f.field)+' : '+who+' a mis \u00ab '+fieldValue(f.field, f.theirs)+' \u00bb'+when+', toi \u00ab '+fieldValue(f.field, f.mine)+' \u00bb.');
+      return (sheetName(c.table, o) ? '\u00ab '+sheetName(c.table, o)+' \u00bb\n\n' : '')+lines.join('\n')+'\n\nPour l\u2019instant, la fiche garde '+(c.list.length>1?'ses valeurs':'sa valeur')+'.';
+    }
+    async function askClash(c){
+      const o=teamArrFor(c.table).find(x=>x.id===c.id); if(!o) return;
+      c.list=c.list.filter(f=>sameVal(o[f.field], f.theirs)); if(!c.list.length) return;   // changed again since : nothing left to choose
+      let who=''; try{ who=window.TodoTeam.nameOf ? await window.TodoTeam.nameOf(c.by) : ''; }catch(e){ who=''; }
+      const named=!!who && who!=='Toi', of=who==='Toi' ? 'de l\u2019autre appareil' : named ? 'de '+who : 'du collègue';
+      who=who==='Toi' ? 'Toi (sur un autre appareil)' : who||'Un collègue';
+      const many=c.list.length>1;
+      const v=await askChoice('Modifié en même temps', clashText(c, o, who), [{ label:many?'Garder les miennes':'Garder la mienne', value:'mine' }, { label:'Garder '+(many?'celles ':'celle ')+of, value:'theirs', ghost:true }], { cancel:false });
+      if(v!=='mine'){ notify('Valeur'+(many?'s ':' ')+of+' gardée'+(many?'s':'')+'.'); return; }
+      c.list.forEach(f=>{ if(f.mine===undefined) delete o[f.field]; else o[f.field]=f.mine; });
+      touchCrm(o); await saveCrm(); teamRefresh(); notify('Ta valeur est remise et envoyée à l\u2019équipe. L\u2019autre reste dans l\u2019historique.');
     }
     // the same object kept (an open sheet holds it), its content replaced
     function assignInPlace(o, m){ Object.keys(o).forEach(k=>{ if(!(k in m)) delete o[k]; }); Object.assign(o, m); }
@@ -81,10 +112,11 @@ window.TodoTeamUI=(function(){
     // one changed row : merged onto the base's current version (field by field), then sent ; 'sent' / 'merged' / 'failed'
     async function teamPushOne(table, item, seen){
       try{
-        const base=snapOf(table, item.id), server=base ? await window.TodoTeam.getItem(table, item.id) : null;
-        const out=server ? merge3(base, item, server) : item, merged=!!server && !same(out, item);
+        const base=snapOf(table, item.id), server=base ? await window.TodoTeam.getItem(table, item.id) : null, clash=[];
+        const out=server ? merge3(base, item, server, clash) : item, merged=!!server && !same(out, item);
         if(merged) assignInPlace(item, out);   // a colleague's change came in with mine
         await window.TodoTeam.pushItem(table, item); teamSnap[table].set(item.id, JSON.stringify(item));
+        if(clash.length) noteClashes(table, item.id, server, clash);
         if(table==='contacts' && !seen.has(item.id)){ seen.add(item.id); teamSeenSave(); }
         return merged ? 'merged' : 'sent';
       }catch(e){ console.error('[teamSyncPush]', table, item.id, e); return 'failed'; }
@@ -107,7 +139,7 @@ window.TodoTeamUI=(function(){
       const j=teamSnap[table].get(r.id), localEdits=cur && j && JSON.stringify(cur)!==j;
       teamSnap[table].set(r.id, JSON.stringify(r));
       if(!cur) return r;
-      if(localEdits){ assignInPlace(cur, merge3(JSON.parse(j), cur, r)); return cur; }   // mine not sent yet : kept, sent by the next push
+      if(localEdits){ const clash=[]; assignInPlace(cur, merge3(JSON.parse(j), cur, r, clash)); noteClashes(table, cur.id, r, clash); return cur; }   // mine not sent yet : kept, sent by the next push (a clash : asked)
       if(j || (r.updatedAt||0)>=(cur.updatedAt||0)) assignInPlace(cur, r);
       return cur;
     }

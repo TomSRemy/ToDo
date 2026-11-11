@@ -121,7 +121,9 @@ window.TodoTeam=(function(){
     meetings: o=>({ contact_id:o.contactId||null })
   };
   function rowToItem(row){
-    return Object.assign({}, row.data, { id:row.id, deleted:!!row.deleted, updatedAt:+new Date(row.updated_at), createdAt:+new Date(row.created_at) });
+    const it=Object.assign({}, row.data, { id:row.id, deleted:!!row.deleted, updatedAt:+new Date(row.updated_at), createdAt:+new Date(row.created_at) });
+    Object.defineProperty(it, '_by', { value:row.updated_by||null, enumerable:false });   // who saved it last : read when two changes clash, never sent back
+    return it;
   }
   function itemToRow(table, item){
     const rest=Object.assign({}, item);   // le reste (tout sauf les colonnes posées par la base) part dans `data`
@@ -191,6 +193,14 @@ window.TodoTeam=(function(){
     return (data||[]).map(x=>Object.assign({}, x, { who:x.changed_by===me?'Toi':(names[x.changed_by]||'Un collègue') }));
   }
 
+  // the name shown for a team member (« Toi » for the account signed in here)
+  async function nameOf(uid){
+    if(!client || !session || !uid) return '';
+    if(session.user && uid===session.user.id) return 'Toi';
+    if(!names){ const r=await client.from('profiles').select('id, display_name'); names={}; (r.data||[]).forEach(p=>{ names[p.id]=p.display_name||''; }); }
+    return names[uid]||'';
+  }
+
   // an error met on a colleague's device, sent to the team base (client_errors) so that it can be seen and fixed
   async function reportError(row){
     if(!client || !session) return false;
@@ -247,5 +257,5 @@ window.TodoTeam=(function(){
     return report;
   }
 
-  return { TABLES, init, loadConfig, saveConfig, isConfigured, isSignedIn, currentUser, signIn, signOut, mfaState, mfaVerify, mfaEnroll, mfaConfirm, mfaCount, adminMembers, adminResetMfa, pullAll, getItem, pushItem, removeItem, history, reportError, teamErrors, subscribe, liveState:()=>Object.assign({}, liveState), cleanConfig, migrateFromLocal };
+  return { TABLES, init, loadConfig, saveConfig, isConfigured, isSignedIn, currentUser, signIn, signOut, mfaState, mfaVerify, mfaEnroll, mfaConfirm, mfaCount, adminMembers, adminResetMfa, pullAll, getItem, pushItem, removeItem, history, nameOf, reportError, teamErrors, subscribe, liveState:()=>Object.assign({}, liveState), cleanConfig, migrateFromLocal };
 })();

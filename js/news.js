@@ -1,6 +1,7 @@
 // Todo — « Nouveautés » : what changed in the tool, in plain words, newest first (Réglages › Nouveautés, and a word
 // once when something new came out). Written by hand at each change worth knowing ; the technical history is on GitHub.
 window.TodoNews=[
+  { d:'2026-11-11', t:'Modifications opposées : tu choisis', x:'Si un collègue et toi changez le même champ d\u2019une fiche avec des valeurs différentes, rien n\u2019est remplacé en silence : une fenêtre montre qui a mis quoi et quand, et tu choisis « Garder la mienne » ou « Garder celle de … ». En attendant, la fiche garde la valeur du collègue.' },
   { d:'2026-11-11', t:'Code de double authentification perdu', x:'Sous la saisie du code, « Code perdu ? Prévenir l\u2019administrateur » prépare un mail à l\u2019administrateur, qui réinitialise ta double authentification depuis Réglages › Équipe › Administration.' },
   { d:'2026-11-11', t:'Synchro GitHub chiffrée', x:'Réglages › Synchro GitHub › « Chiffrer la synchro » : ton dépôt ne contient plus que des données chiffrées, illisibles même si ton jeton fuit. Une phrase secrète pour l\u2019usage courant, et un kit de secours (code à garder hors de l\u2019ordinateur) si tu l\u2019oublies. Sur un autre appareil : « Déverrouiller ».' },
   { d:'2026-11-11', t:'Sauvegardes de l\u2019équipe chiffrées', x:'Les sauvegardes automatiques de la base équipe sont chiffrées avec une phrase secrète ; un script de secours les déchiffre.' },

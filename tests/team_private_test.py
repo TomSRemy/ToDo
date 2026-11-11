@@ -15,6 +15,9 @@ def check(cond, msg):
     print(("ok   " if cond else "FAIL ") + msg)
     if not cond: failures.append(msg)
 
+def window_last(page):
+    return page.evaluate("window.__team.last && window.__team.last.c3 && window.__team.last.c3.comment")
+
 def ct(i, first, private=False, upd=1000):
     return {"id": i, "firstName": first, "lastName": "Test", "company": "", "createdAt": 1, "updatedAt": upd, "deleted": False, **({"private": True} if private else {})}
 
@@ -28,7 +31,7 @@ window.TodoTeam = {
   currentUser: ()=>({ email:'t@x' }), signIn: async()=>{}, signOut: async()=>{},
   pullAll: async t=>{ if(window.__team.down) throw new TypeError('Failed to fetch'); return JSON.parse(JSON.stringify(window.__team.server[t]||[])); },
   pushItem: async (t, it)=>{ if(window.__team.down) throw new TypeError('Failed to fetch'); window.__team.pushed.push([t, it.id]); (window.__team.last=window.__team.last||{})[it.id]=JSON.parse(JSON.stringify(it)); const L=(window.__team.server[t]=window.__team.server[t]||[]), i=L.findIndex(x=>x.id===it.id); if(i>=0) L[i]=JSON.parse(JSON.stringify(it)); else L.push(JSON.parse(JSON.stringify(it))); return true; },
-  getItem: async (t, id)=>{ if(window.__team.down) throw new TypeError('Failed to fetch'); const now=(window.__team.now||{})[id]; if(now) return JSON.parse(JSON.stringify(now)); const r=(window.__team.server[t]||[]).find(x=>x.id===id); return r ? JSON.parse(JSON.stringify(r)) : null; },
+  getItem: async (t, id)=>{ if(window.__team.down) throw new TypeError('Failed to fetch'); const now=(window.__team.now||{})[id]; if(now){ const o=JSON.parse(JSON.stringify(now)); if(now._by) Object.defineProperty(o, '_by', { value:now._by, enumerable:false }); return o; } const r=(window.__team.server[t]||[]).find(x=>x.id===id); return r ? JSON.parse(JSON.stringify(r)) : null; },
   removeItem: async (t, id)=>{ if(window.__team.down) throw new TypeError('Failed to fetch'); window.__team.removed.push([t, id]); return (window.__team.refuse||[]).includes(id) ? 'refused' : 'deleted'; },
   mfaState: async ()=>window.__team.mfa||'ok',
   adminMembers: async ()=>window.__team.admin ? [{ email:'admin@exemple.fr', display_name:'Tom', is_admin:true, mfa_factors:2, is_self:true }, { email:'paul@exemple.fr', display_name:'Paul', is_admin:false, mfa_factors:1, is_self:false }] : null,
@@ -39,6 +42,7 @@ window.TodoTeam = {
   mfaCount: async ()=>1,
   teamErrors: async ()=>[{ at:'2026-11-11T10:00:00Z', where_:'synchro', message:'Échec réseau', who:'Paul' }, { at:'2026-11-11T09:00:00Z', where_:'synchro', message:'Échec réseau', who:'Paul' }, { at:'2026-11-10T09:00:00Z', where_:'page', message:'x is undefined', who:'Toi' }],
   history: async (t, id)=>[{ field:'phone1', old_value:'0600', new_value:'0611', who:'Paul', changed_at:'2026-11-10T13:32:00Z' }, { field:'(création)', who:'Toi', changed_at:'2026-11-01T09:00:00Z' }],
+  nameOf: async uid=>uid==='u-paul' ? 'Paul' : '',
     subscribe: (t, fn)=>{ (window.__subs=window.__subs||{})[t]=fn; return ()=>{}; }, migrateFromLocal: async()=>({})
 };
 Object.defineProperty(window, 'TodoTeam', { value: window.TodoTeam, writable: false });
@@ -84,6 +88,16 @@ with sync_playwright() as p:
         last = page.evaluate("window.__team.last && window.__team.last.c3")
         check(bool(last) and last.get("phone1") == "0699" and last.get("comment") == "Vu au salon", f"two people, two fields : the colleague's phone and my comment both reach the base ({last!r})")
         check(contacts()["c3"].get("phone1") == "0699", "… and the colleague's phone shows up here too")
+        # two people, the SAME field, different values : nothing replaced unseen, the user chooses
+        page.evaluate("(()=>{ const n=JSON.parse(JSON.stringify(window.__team.last.c3)); n.comment='Rappeler mardi'; n.updatedAt=Date.now()-120000; window.__team.now={ c3:n }; Object.defineProperty(n, '_by', { value:'u-paul', enumerable:false }); })()")
+        page.evaluate("""(()=>{ const btn=[...document.querySelectorAll('.contact-detail-links button')].find(b=>/Modifier/.test(b.textContent)); if(btn) btn.click(); })()"""); page.wait_for_timeout(200)
+        page.fill("#ct-comment", "Vu au salon, rappeler en janvier"); page.click("#contact-save-btn"); page.wait_for_timeout(800)
+        ask = page.inner_text("#choice-overlay") if page.is_visible("#choice-overlay") else ""
+        check("Paul a mis « Rappeler mardi »" in ask and "il y a 2 min" in ask and "Vu au salon, rappeler en janvier" in ask, f"the same field changed by both : the user is asked, with who, when and both values ({ask!r})")
+        check(contacts()["c3"].get("comment") == "Rappeler mardi" and window_last(page) == "Rappeler mardi", "… meanwhile the colleague's value stays, here and on the base")
+        page.evaluate("window.__team.now=null")
+        page.click("#choice-btns button:has-text('Garder la mienne')"); page.wait_for_timeout(800)
+        check(contacts()["c3"].get("comment") == "Vu au salon, rappeler en janvier" and window_last(page) == "Vu au salon, rappeler en janvier", "« Garder la mienne » : my value comes back and is sent")
     else:
         check(False, "the contact form opened to edit c3")
     # the base goes down (paused, no network) : a banner says so, what waits stays here, « Réessayer » sends it once it is back
