@@ -29,7 +29,8 @@ window.TodoTeam = {
   pullAll: async t=>JSON.parse(JSON.stringify(window.__team.server[t]||[])),
   pushItem: async (t, it)=>{ window.__team.pushed.push([t, it.id]); return true; },
   removeItem: async (t, id)=>{ window.__team.removed.push([t, id]); return (window.__team.refuse||[]).includes(id) ? 'refused' : 'deleted'; },
-  subscribe: (t, fn)=>{ (window.__subs=window.__subs||{})[t]=fn; return ()=>{}; }, migrateFromLocal: async()=>({})
+  history: async (t, id)=>[{ field:'phone1', old_value:'0600', new_value:'0611', who:'Paul', changed_at:'2026-11-10T13:32:00Z' }, { field:'(création)', who:'Toi', changed_at:'2026-11-01T09:00:00Z' }],
+    subscribe: (t, fn)=>{ (window.__subs=window.__subs||{})[t]=fn; return ()=>{}; }, migrateFromLocal: async()=>({})
 };
 Object.defineProperty(window, 'TodoTeam', { value: window.TodoTeam, writable: false });
 """ % json.dumps(server)
@@ -72,6 +73,11 @@ with sync_playwright() as p:
     check(contacts()["c2"]["firstName"] == "Bob", "a live change from the team does not touch my private copy")
     page.evaluate("window.__subs.contacts({ id:'c3' }, 'DELETE')"); page.wait_for_timeout(300)
     check("c3" not in contacts(), "a contact removed from the team base live disappears here")
+    page.select_option("#contacts-type-filter", ""); page.wait_for_timeout(200)
+    page.locator(".contact-row[data-cid='c1'] .contact-avatar").click(); page.wait_for_timeout(200)
+    page.locator(".hist-block summary").first.click(); page.wait_for_timeout(400)
+    hist = page.inner_text(".hist-block")
+    check("Paul" in hist and "Téléphone : 0600 → 0611" in hist and "création" in hist, f"a shared contact's card shows who changed what ({hist!r})")
     page.click('[data-tab="lists"]'); page.wait_for_timeout(400)
     check("1 contact privé" in page.inner_text("#team-share-summary"), f"Réglages says what is shared and what stays mine ({page.inner_text('#team-share-summary')!r})")
     check(not errors, f"no page errors ({errors})")

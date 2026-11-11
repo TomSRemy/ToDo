@@ -2826,3 +2826,12 @@ html.widget .dup-banner{ display:none; }
 .view-seg-lbl{ margin-left:auto; } #view-switch.view-seg{ margin-left:6px !important; }
 /* an empty app : the welcome, not empty panels */
 @media (min-width:761px){ #tab-today:not(.synth-on) > .synth-panels{ display:none; } }
+/* history of a shared sheet */
+.hist-block{ margin-top:14px; border-top:1px solid var(--bd); padding-top:10px; }
+.hist-block > summary{ cursor:pointer; font:600 12.5px var(--font-ui); color:var(--tx2); }
+.hist-block > summary:hover{ color:var(--accent); }
+.hist-rows{ display:flex; flex-direction:column; margin-top:6px; max-height:none; }
+.hist-row{ display:grid; grid-template-columns:110px minmax(0,1fr) auto; gap:10px; padding:4px 0; border-bottom:1px solid var(--bd-soft); font-size:12.5px; }
+.hist-row .hw{ color:var(--accent); font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.hist-row .ht{ color:var(--tx1); overflow-wrap:anywhere; } .hist-row .hd{ color:var(--tx3); font:11px var(--font-mono); white-space:nowrap; }
+.hist-empty{ margin:4px 0; font-size:12px; color:var(--tx3); }

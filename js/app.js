@@ -2822,6 +2822,7 @@
     links.appendChild(delLink);
     card.appendChild(links);
 
+    { const hb=c.private?null:historyBlock('contacts', c.id); if(hb) card.appendChild(hb); }
     return card;
   }
 
@@ -4633,6 +4634,7 @@
     }
     actions.appendChild(oppActionBtn('Voir dans le réseau', ()=>{ closeOppDetail(); openInNetwork('op:'+o.id); }, 'ghost-btn opp-net-btn lite-keep'));
     { const mb=mentionsBlock('op:'+o.id); if(mb) $('opp-detail-body').appendChild(mb); }
+    { const hb=historyBlock('opportunities', o.id); if(hb) $('opp-detail-body').appendChild(hb); }
     actions.appendChild(oppActionBtn('Supprimer', async ()=>{ if(!await askConfirm('Supprimer cette fiche du pipeline ? (récupérable ensuite dans Archive → Corbeille)', 'Supprimer')) return; o.deleted=true; touchCrm(o); saveCrm(); closeOppDetail(); renderPipeline();
       notify('Fiche « '+oppName(o)+' » supprimée', { label:'Annuler', fn:()=>{ o.deleted=false; touchCrm(o); saveCrm(); renderPipeline(); } }); }, 'ghost-btn danger-btn'));
     actions.appendChild(oppActionBtn('Fermer', closeOppDetail, 'ghost-btn lite-keep'));
@@ -7260,6 +7262,37 @@
     activeContacts().filter(c=>c.comment && has(c.comment)).forEach(c=>out.push({ label:[c.firstName,c.lastName].filter(Boolean).join(' '), sub:'Commentaire du contact', open:()=>openContactEverywhere(c.id) }));
     opportunities.filter(o=>!o.deleted && o.commentaires && has(o.commentaires)).forEach(o=>out.push({ label:oppName(o), sub:'Commentaire pipeline', open:()=>{ gsTab('pipeline'); setTimeout(()=>openOppDetail(o.id),30); } }));
     return out;
+  }
+  // ---------- history of a shared sheet (team base) : who changed what, when ----------
+  const HIST_LABELS={ stage:'Étape', kwc:'Puissance (kWc)', company:'Société', producteur:'Producteur', centrale:'Centrale', title:'Nom', dept:'Département', commentaires:'Commentaires', comment:'Commentaire',
+    firstName:'Prénom', lastName:'Nom', email:'Email', phone1:'Téléphone', phone2:'Téléphone 2', role:'Rôle', relevance:'Pertinence', private:'Privé', offers:'Offres', dateOffre:'Date d\u2019offre', signDate:'Date de signature',
+    name:'Nom', type:'Type', website:'Site', whatTheyDo:'Activité', label:'Rendez-vous', date:'Date', requestId:'Demande', new:'Nouveau', qualification:'Qualification', stageLog:'Journal des étapes' };
+  function histValue(field, v){
+    if(v==null || v==='') return '(vide)';
+    if(field==='stage') return stageLabel(v);
+    if(typeof v==='boolean') return v?'oui':'non';
+    if(typeof v==='object') return Array.isArray(v)?v.length+' élément'+(v.length>1?'s':''):'(modifié)';
+    const t=String(v); return t.length>60?t.slice(0,57)+'…':t;
+  }
+  function historyBlock(table, id){
+    if(!(window.TodoTeam && window.TodoTeam.isSignedIn())) return null;
+    const d=document.createElement('details'); d.className='hist-block';
+    d.innerHTML='<summary>Historique (équipe)</summary><div class="hist-rows"><p class="hist-empty">Chargement…</p></div>';
+    let done=false;
+    d.addEventListener('toggle', async ()=>{ if(!d.open || done) return; done=true; const box=d.querySelector('.hist-rows');
+      try{
+        const rows=(await window.TodoTeam.history(table, id)||[]).filter(r=>!/^(updatedAt|createdAt|stageLog|xs|xsSeen|xsKeep)/.test(r.field));
+        if(!rows.length){ box.innerHTML='<p class="hist-empty">Aucun changement enregistré depuis la mise en place de l\u2019historique.</p>'; return; }
+        box.innerHTML='';
+        rows.forEach(r=>{ const line=document.createElement('div'); line.className='hist-row';
+          const when=new Date(r.changed_at).toLocaleString('fr-FR',{ day:'numeric', month:'short', hour:'2-digit', minute:'2-digit' });
+          const what=/^\(/.test(r.field)?r.field.slice(1,-1):(HIST_LABELS[r.field]||r.field)+' : '+histValue(r.field, r.old_value)+' → '+histValue(r.field, r.new_value);
+          line.innerHTML='<span class="hw"></span><span class="ht"></span><span class="hd"></span>';
+          line.querySelector('.hw').textContent=r.who; line.querySelector('.ht').textContent=what; line.querySelector('.hd').textContent=when;
+          box.appendChild(line); });
+      }catch(e){ box.innerHTML='<p class="hist-empty">Historique indisponible (hors ligne ?).</p>'; softFail('historique', e); }
+    });
+    return d;
   }
   function mentionsBlock(id){
     const list=mentionsOf(id); if(!list.length) return null;

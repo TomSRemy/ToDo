@@ -117,6 +117,17 @@ window.TodoTeam=(function(){
     return still && still.length ? 'refused' : 'gone';
   }
 
+  // the history of one row (written by the database itself) : the last changes, with who made them
+  let names=null;
+  async function history(table, id, limit){
+    if(!client || !session) return null;
+    const { data, error }=await client.from('change_log').select('field, old_value, new_value, changed_by, changed_at').eq('entity_type', table).eq('entity_id', id).order('changed_at', { ascending:false }).limit(limit||40);
+    if(error) throw error;
+    if(!names){ const r=await client.from('profiles').select('id, display_name'); names={}; (r.data||[]).forEach(p=>{ names[p.id]=p.display_name||''; }); }
+    const me=session.user && session.user.id;
+    return (data||[]).map(x=>Object.assign({}, x, { who:x.changed_by===me?'Toi':(names[x.changed_by]||'Un collègue') }));
+  }
+
   // un canal temps réel par table ; onChange(item, 'INSERT'|'UPDATE'|'DELETE') pour fusionner dans
   // les tableaux en mémoire et redessiner, sans attendre un rechargement
   function subscribe(table, onChange){
@@ -156,5 +167,5 @@ window.TodoTeam=(function(){
     return report;
   }
 
-  return { TABLES, init, loadConfig, saveConfig, isConfigured, isSignedIn, currentUser, signIn, signOut, pullAll, pushItem, removeItem, subscribe, liveState:()=>Object.assign({}, liveState), cleanConfig, migrateFromLocal };
+  return { TABLES, init, loadConfig, saveConfig, isConfigured, isSignedIn, currentUser, signIn, signOut, pullAll, pushItem, removeItem, history, subscribe, liveState:()=>Object.assign({}, liveState), cleanConfig, migrateFromLocal };
 })();
