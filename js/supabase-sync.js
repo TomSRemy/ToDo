@@ -11,7 +11,8 @@ window.TodoTeam=(function(){
   const CONFIG_KEY='team-config';   // { url, anonKey } — jamais commité, saisi dans Réglages, gardé par window.storage
   const TABLES=['opportunities','contacts','companies','meetings','team_settings'];
   let client=null, session=null, sdkPromise=null;
-  const liveState={};   // table -> SUBSCRIBED / CHANNEL_ERROR / TIMED_OUT / CLOSED
+  const liveState={};
+  const IDLE_MS=7*864e5;   // signed out of the team after 7 days without opening the app on this device   // table -> SUBSCRIBED / CHANNEL_ERROR / TIMED_OUT / CLOSED
 
   async function loadConfig(){
     try{ const r=await window.storage.get(CONFIG_KEY); return r&&r.value?JSON.parse(r.value):null; }catch(e){ return null; }
@@ -40,6 +41,12 @@ window.TodoTeam=(function(){
     client=window.supabase.createClient(cfg.url, cfg.anonKey, { auth:{ persistSession:true, autoRefreshToken:true } });
     const { data }=await client.auth.getSession();
     session=data && data.session;
+    // a device not used for 7 days : signed out of the team (a forgotten or lost computer doesn't stay open on the base)
+    try{
+      const last=Number(localStorage.getItem('team-last-use')||0);
+      if(session && last && Date.now()-last>IDLE_MS){ await client.auth.signOut(); session=null; localStorage.setItem('team-idle-out', String(Date.now())); }
+      localStorage.setItem('team-last-use', String(Date.now()));
+    }catch(e){}
     if(session) client.realtime.setAuth(session.access_token);
     // the live channels read with the signed-in person's rights (the tables are closed to anonymous readers) :
     // they get the token at sign-in and at each refresh, not only the anonymous key
@@ -69,6 +76,39 @@ window.TodoTeam=(function(){
     session=data && data.session;
     return session;
   }
+  // ---- second factor (TOTP : a 6-digit code from an authenticator app) ----
+  // 'none' : no factor yet ; 'need' : a factor exists, the code isn't given in this session ; 'ok' : aal2
+  async function mfaState(){
+    if(!client || !session) return 'none';
+    const { data, error }=await client.auth.mfa.getAuthenticatorAssuranceLevel();
+    if(error) throw error;
+    if(data.currentLevel==='aal2') return 'ok';
+    return data.nextLevel==='aal2' ? 'need' : 'none';
+  }
+  async function mfaVerify(code){
+    const { data:f, error:e1 }=await client.auth.mfa.listFactors(); if(e1) throw e1;
+    const factor=(f.totp||[]).find(x=>x.status==='verified'); if(!factor) throw new Error('Aucune double authentification enregistrée');
+    const { error }=await client.auth.mfa.challengeAndVerify({ factorId:factor.id, code:String(code).replace(/\s/g,'') });
+    if(error) throw error;
+    const { data }=await client.auth.getSession(); session=data && data.session; if(session) client.realtime.setAuth(session.access_token);
+    return true;
+  }
+  // a new authenticator (the first, or a spare one) : returns { id, qr, secret } to show, then mfaConfirm(id, code)
+  async function mfaEnroll(label){
+    const { data:f }=await client.auth.mfa.listFactors();
+    for(const x of (f && f.all || [])) if(x.status!=='verified') await client.auth.mfa.unenroll({ factorId:x.id });   // an enrolment left half way
+    const { data, error }=await client.auth.mfa.enroll({ factorType:'totp', friendlyName:(label||'Appli')+' '+new Date().toISOString().slice(0,16) });
+    if(error) throw error;
+    return { id:data.id, qr:data.totp.qr_code, secret:data.totp.secret };
+  }
+  async function mfaConfirm(factorId, code){
+    const { error }=await client.auth.mfa.challengeAndVerify({ factorId, code:String(code).replace(/\s/g,'') });
+    if(error) throw error;
+    const { data }=await client.auth.getSession(); session=data && data.session; if(session) client.realtime.setAuth(session.access_token);
+    return true;
+  }
+  async function mfaCount(){ if(!client || !session) return 0; const { data }=await client.auth.mfa.listFactors(); return (data && data.totp || []).filter(x=>x.status==='verified').length; }
+
   async function signOut(){ if(client) await client.auth.signOut(); session=null; }
 
   // app <-> ligne de table : les champs connus restent des colonnes (filtrage/index), le reste
@@ -192,5 +232,5 @@ window.TodoTeam=(function(){
     return report;
   }
 
-  return { TABLES, init, loadConfig, saveConfig, isConfigured, isSignedIn, currentUser, signIn, signOut, pullAll, getItem, pushItem, removeItem, history, reportError, teamErrors, subscribe, liveState:()=>Object.assign({}, liveState), cleanConfig, migrateFromLocal };
+  return { TABLES, init, loadConfig, saveConfig, isConfigured, isSignedIn, currentUser, signIn, signOut, mfaState, mfaVerify, mfaEnroll, mfaConfirm, mfaCount, pullAll, getItem, pushItem, removeItem, history, reportError, teamErrors, subscribe, liveState:()=>Object.assign({}, liveState), cleanConfig, migrateFromLocal };
 })();

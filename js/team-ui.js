@@ -41,18 +41,24 @@ window.TodoTeamUI=(function(){
     async function teamRetry(){ try{ await teamSyncPull(); if(!health.down) await teamSyncPush(); }catch(e){ setTeamDown(true); } }
     function teamAlertText(off){
       const n=teamPending(), keep=n?' '+n+' modification'+(n>1?'s':'')+' en attente, gardée'+(n>1?'s':'')+' sur cet appareil.':' Tes modifications restent sur cet appareil.';
-      return off ? 'Synchro équipe arrêtée : tu n\u2019es plus connecté.'+keep
+      const idle=(()=>{ try{ return Number(localStorage.getItem('team-idle-out')||0)>Date.now()-864e5; }catch(e){ return false; } })();
+      return off ? 'Synchro équipe arrêtée : tu n\u2019es plus connecté'+(idle?' (déconnexion automatique après 7 jours sans utilisation sur cet appareil)':'')+'.'+keep
         : 'Synchro équipe interrompue depuis '+new Date(health.since).toLocaleTimeString('fr-FR',{ hour:'2-digit', minute:'2-digit' })+' (base injoignable : en pause ou pas de réseau).'+keep+' L\u2019envoi reprendra tout seul.';
+    }
+    function goTeamForm(){ gsTab('lists'); setTimeout(()=>{ const t=$('team-section'); if(t) t.scrollIntoView({ behavior:'smooth', block:'start' }); const f=$(mfaPending==='none'?'team-mfa-enroll':mfaNeeded?'team-mfa-code':'team-email'); if(f) f.focus({ preventScroll:true }); }, 80); }
+    // what the banner says : 'off' (signed out), 'mfa' (code awaited), 'down' (base unreachable), or nothing
+    function teamAlertKind(){
+      const T=window.TodoTeam, conf=T.isConfigured && T.isConfigured(), inn=T.isSignedIn && T.isSignedIn();
+      if(conf && !inn) return 'off';
+      if(!inn) return '';
+      return mfaNeeded ? 'mfa' : health.down ? 'down' : '';
     }
     function paintTeamAlert(){
       const el=$('team-alert'); if(!el || !window.TodoTeam) return;
-      const T=window.TodoTeam, conf=T.isConfigured && T.isConfigured(), inn=T.isSignedIn && T.isSignedIn();
-      const off=conf && !inn, show=!health.closed && (off || (inn && health.down));
-      el.hidden=!show; if(!show) return;
-      el.querySelector('span').textContent=teamAlertText(off);
-      const go=el.querySelector('.ta-go'); go.textContent=off?'Se connecter':'Réessayer';
-      go.onclick=off ? ()=>{ gsTab('lists'); setTimeout(()=>{ const t=$('team-section'); if(t) t.scrollIntoView({ behavior:'smooth', block:'start' }); const f=$('team-email'); if(f) f.focus({ preventScroll:true }); }, 80); }
-        : ()=>{ go.textContent='…'; teamRetry(); };
+      const k=teamAlertKind(); el.hidden=!k || health.closed; if(el.hidden) return;
+      el.querySelector('span').textContent=k==='mfa' ? (mfaPending==='none' ? 'Synchro équipe en attente : active la double authentification (Réglages › Équipe).' : 'Synchro équipe en attente : saisis le code de double authentification.') : teamAlertText(k==='off');
+      const go=el.querySelector('.ta-go'); go.textContent={ off:'Se connecter', mfa:mfaPending==='none'?'L\u2019activer':'Saisir le code', down:'Réessayer' }[k];
+      go.onclick=k==='down' ? ()=>{ go.textContent='…'; teamRetry(); } : goTeamForm;
       el.querySelector('.ta-x').onclick=()=>{ health.closed=true; el.hidden=true; };
     }
     window.addEventListener('online', ()=>{ if(health.down) teamRetry(); });
@@ -84,7 +90,7 @@ window.TodoTeamUI=(function(){
       }catch(e){ console.error('[teamSyncPush]', table, item.id, e); return 'failed'; }
     }
     async function teamSyncPush(){
-      if(!(window.TodoTeam && window.TodoTeam.isSignedIn())) return;
+      if(!(window.TodoTeam && window.TodoTeam.isSignedIn()) || mfaNeeded) return;
       const seen=await teamSeenLoad(); let merged=false, failed=false;
       for(const table of TEAM_TABLES){
         for(const item of teamArrFor(table)){
@@ -108,6 +114,7 @@ window.TodoTeamUI=(function(){
     // recharge tout depuis Supabase au démarrage/connexion : fusionne par id, la version la plus récente gagne
     async function teamSyncPull(){
       if(!(window.TodoTeam && window.TodoTeam.isSignedIn())) return;
+      if(mfaNeeded){ paintTeamAlert(); return; }   // the base answers only with the second factor : asked in Réglages
       teamPulledAt=Date.now(); let pullFailed=false; const wasDown=health.down;
       for(const table of TEAM_TABLES){
         let rows; try{ rows=await window.TodoTeam.pullAll(table); }catch(e){ console.error('[teamSyncPull]', table, e); pullFailed=true; continue; }
@@ -115,7 +122,7 @@ window.TodoTeamUI=(function(){
         const arr=teamArrFor(table), by=new Map(arr.map(x=>[x.id,x]));
         rows.forEach(r=>{ const cur=by.get(r.id); if(teamPrivate(table, cur)) return;   // mine and private : the push below takes it out of the team base
           by.set(r.id, teamTakeRow(table, cur, r)); });
-        if(table==='contacts'){   // seen in the team base before, gone now, not mine-private : a colleague made it private
+        if(table==='contacts' && rows.length){   // seen in the team base before, gone now, not mine-private : a colleague made it private (never on an empty answer : a base refusing access answers empty)
           const seen=await teamSeenLoad(), onServer=new Set(rows.map(r=>r.id));
           [...by.keys()].forEach(id=>{ if(seen.has(id) && !onServer.has(id) && !teamPrivate(table, by.get(id))) by.delete(id); });
           teamSeen=new Set(rows.map(r=>r.id)); teamSeenSave();
@@ -152,8 +159,39 @@ window.TodoTeamUI=(function(){
         +' <b>Reste à toi</b> : tes tâches, la note, et '+priv+' contact'+(priv>1?'s':'')+' privé'+(priv>1?'s':'')+'.'
         +' Un contact est partagé par défaut ; le cadenas dans Contacts le garde pour toi.';
     }
+    // ---- double authentification : a code from an authenticator app, asked once per session ; required by the base ----
+    let mfaNeeded=false, mfaFactor=null, mfaPending='';
+    async function paintMfa(){
+      const box=$('team-mfa'); if(!box || !window.TodoTeam) return;
+      const T=window.TodoTeam; if(!T.isSignedIn()){ box.hidden=true; return; }
+      let st='none'; try{ st=await T.mfaState(); }catch(e){ softFail('double authentification', e); }
+      mfaNeeded=st!=='ok'; mfaPending=st; box.hidden=false; mfaFactor=null;   // the base answers only at aal2 : no sync before
+      $('team-mfa-qr').hidden=true; $('team-mfa-status').textContent='';
+      $('team-mfa-code-row').hidden=st!=='need'; $('team-mfa-enroll').hidden=st!=='none'; $('team-mfa-spare').hidden=st!=='ok';
+      $('team-mfa-text').textContent=st==='ok' ? 'Double authentification active. Garde un second appareil (ou ton gestionnaire de mots de passe) en secours : sans code, l\u2019accès à l\u2019équipe est bloqué jusqu\u2019à une réinitialisation par l\u2019administrateur.'
+        : st==='need' ? 'Saisis le code à 6 chiffres de ton appli d\u2019authentification pour accéder aux données de l\u2019équipe.'
+        : 'Obligatoire pour l\u2019équipe : un code à 6 chiffres d\u2019une appli d\u2019authentification (Microsoft Authenticator, Google Authenticator, ou ton gestionnaire de mots de passe) en plus du mot de passe.';
+      paintTeamAlert();
+    }
+    async function mfaStart(label){
+      const st=$('team-mfa-status'); st.textContent='Préparation…';
+      try{ const r=await window.TodoTeam.mfaEnroll(label); mfaFactor=r.id;
+        $('team-mfa-img').src=r.qr; $('team-mfa-secret').textContent=r.secret; $('team-mfa-qr').hidden=false; $('team-mfa-code-row').hidden=false;
+        $('team-mfa-text').textContent='1. Scanne ce QR code avec ton appli d\u2019authentification (ou recopie la clé affichée). 2. Saisis le code à 6 chiffres qu\u2019elle donne, puis « Valider ».';
+        st.textContent=''; $('team-mfa-code').focus();
+      }catch(e){ st.textContent='Erreur : '+(e&&e.message||e); }
+    }
+    async function mfaSubmit(){
+      const code=$('team-mfa-code').value.trim(), st=$('team-mfa-status'); if(!/^\d{6}$/.test(code.replace(/\s/g,''))){ st.textContent='Le code fait 6 chiffres.'; return; }
+      st.textContent='Vérification…';
+      try{ if(mfaFactor) await window.TodoTeam.mfaConfirm(mfaFactor, code); else await window.TodoTeam.mfaVerify(code);
+        $('team-mfa-code').value=''; st.textContent='Code accepté.'; mfaNeeded=false; await paintMfa(); await teamSyncPull(); teamSyncSubscribe();
+      }catch(e){ st.textContent='Code refusé : vérifie l\u2019heure de ton téléphone et réessaie avec le code suivant.'; }
+    }
+    if($('team-mfa-ok')){ $('team-mfa-ok').onclick=mfaSubmit; $('team-mfa-code').addEventListener('keydown', e=>{ if(e.key==='Enter') mfaSubmit(); });
+      $('team-mfa-enroll').onclick=()=>mfaStart('Appli'); $('team-mfa-spare').onclick=()=>mfaStart('Secours'); }
     async function renderTeamStatus(){
-      paintTeamShare(); paintTeamAlert();
+      paintTeamShare(); await paintMfa();
       const cfgEl=$('team-config-status'), authEl=$('team-auth-status');
       if(!cfgEl || !authEl || !window.TodoTeam) return;
       const cfg=await window.TodoTeam.loadConfig();

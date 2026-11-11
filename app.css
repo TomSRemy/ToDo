@@ -2857,3 +2857,10 @@ html.widget .dup-banner{ display:none; }
 /* the team sync stopped : at the bottom of every page (the top belongs to the storage alert) */
 .storage-alert.team-alert{ top:auto; bottom:calc(env(safe-area-inset-bottom, 0px) + 16px); }
 .storage-alert.team-alert .ta-x{ border:none; padding:4px 6px; }
+/* double authentification */
+.team-mfa{ margin-top:12px; padding:12px; border:1px solid var(--bd); border-radius:var(--radius-lg); background:var(--panel-2); display:flex; flex-direction:column; gap:8px; }
+.team-mfa[hidden], .team-mfa [hidden]{ display:none !important; }
+.team-mfa-qr{ display:flex; align-items:center; gap:14px; flex-wrap:wrap; }
+.team-mfa-qr img{ background:#fff; padding:8px; border-radius:var(--radius-md); }
+.team-mfa-qr code{ font:500 12px var(--font-mono); color:var(--tx2); word-break:break-all; max-width:320px; }
+#team-mfa-code{ width:150px; letter-spacing:.2em; font:600 15px var(--font-mono); }

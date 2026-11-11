@@ -733,6 +733,13 @@
         <input type="password" id="team-password" placeholder="Mot de passe" autocomplete="current-password">
         <div class="set-actions"><button class="data-btn" id="team-login-btn">Se connecter</button></div>
         <span id="team-auth-status" class="bridge-status"></span>
+        <div id="team-mfa" class="team-mfa" hidden>
+          <p class="list-hint" id="team-mfa-text"></p>
+          <div class="team-mfa-qr" id="team-mfa-qr" hidden><img id="team-mfa-img" alt="QR code à scanner avec ton appli d’authentification" width="180" height="180"><code id="team-mfa-secret"></code></div>
+          <div class="set-actions" id="team-mfa-code-row" hidden><input type="text" id="team-mfa-code" inputmode="numeric" autocomplete="one-time-code" maxlength="8" placeholder="Code à 6 chiffres"><button class="data-btn set-primary" id="team-mfa-ok" type="button">Valider</button></div>
+          <div class="set-actions"><button class="data-btn" id="team-mfa-enroll" type="button" hidden>Activer la double authentification</button><button class="data-btn set-link" id="team-mfa-spare" type="button" hidden>Ajouter un appareil de secours</button></div>
+          <span id="team-mfa-status" class="bridge-status"></span>
+        </div>
       </div>
       <div class="set-actions" style="margin-top:10px;">
         <button class="data-btn" id="team-migrate-btn" type="button">Migrer mes données locales →</button>

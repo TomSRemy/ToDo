@@ -30,6 +30,11 @@ window.TodoTeam = {
   pushItem: async (t, it)=>{ if(window.__team.down) throw new TypeError('Failed to fetch'); window.__team.pushed.push([t, it.id]); (window.__team.last=window.__team.last||{})[it.id]=JSON.parse(JSON.stringify(it)); const L=(window.__team.server[t]=window.__team.server[t]||[]), i=L.findIndex(x=>x.id===it.id); if(i>=0) L[i]=JSON.parse(JSON.stringify(it)); else L.push(JSON.parse(JSON.stringify(it))); return true; },
   getItem: async (t, id)=>{ if(window.__team.down) throw new TypeError('Failed to fetch'); const now=(window.__team.now||{})[id]; if(now) return JSON.parse(JSON.stringify(now)); const r=(window.__team.server[t]||[]).find(x=>x.id===id); return r ? JSON.parse(JSON.stringify(r)) : null; },
   removeItem: async (t, id)=>{ if(window.__team.down) throw new TypeError('Failed to fetch'); window.__team.removed.push([t, id]); return (window.__team.refuse||[]).includes(id) ? 'refused' : 'deleted'; },
+  mfaState: async ()=>window.__team.mfa||'ok',
+  mfaVerify: async code=>{ if(code!=='123456') throw new Error('bad'); window.__team.mfa='ok'; return true; },
+  mfaEnroll: async ()=>({ id:'f1', qr:'data:image/svg+xml;utf8,<svg xmlns=%%22http://www.w3.org/2000/svg%%22 width=%%2210%%22 height=%%2210%%22/>', secret:'JBSWY3DPEHPK3PXP' }),
+  mfaConfirm: async (id, code)=>{ if(code!=='654321') throw new Error('bad'); window.__team.mfa='ok'; return true; },
+  mfaCount: async ()=>1,
   teamErrors: async ()=>[{ at:'2026-11-11T10:00:00Z', where_:'synchro', message:'Échec réseau', who:'Paul' }, { at:'2026-11-11T09:00:00Z', where_:'synchro', message:'Échec réseau', who:'Paul' }, { at:'2026-11-10T09:00:00Z', where_:'page', message:'x is undefined', who:'Toi' }],
   history: async (t, id)=>[{ field:'phone1', old_value:'0600', new_value:'0611', who:'Paul', changed_at:'2026-11-10T13:32:00Z' }, { field:'(création)', who:'Toi', changed_at:'2026-11-01T09:00:00Z' }],
     subscribe: (t, fn)=>{ (window.__subs=window.__subs||{})[t]=fn; return ()=>{}; }, migrateFromLocal: async()=>({})
@@ -111,6 +116,18 @@ with sync_playwright() as p:
     page.wait_for_selector("#errlog-team-list .hist-row", timeout=5000)
     te = page.inner_text("#errlog-team-list")
     check("2 × [synchro] Échec réseau" in te and "Paul" in te and "x is undefined" in te, f"Réglages lists the team's errors, the same one grouped ({te!r})")
+    # double authentification : a code awaited -> banner, no data read ; the right code -> back to normal
+    page.evaluate("window.__team.mfa='need'; window.TodoTeamUI.renderTeamStatus()"); page.wait_for_timeout(400)
+    check("double authentification" in page.inner_text("#team-alert") and page.is_visible("#team-mfa-code"), "a second factor awaited : the banner says so and Réglages asks the code")
+    page.fill("#team-mfa-code", "000000"); page.click("#team-mfa-ok"); page.wait_for_timeout(300)
+    check("refusé" in page.inner_text("#team-mfa-status"), "a wrong code is refused")
+    page.fill("#team-mfa-code", "123456"); page.click("#team-mfa-ok"); page.wait_for_timeout(600)
+    check(not page.is_visible("#team-alert") and "active" in page.inner_text("#team-mfa-text"), "the right code : the team sync goes on, « active » shown")
+    page.evaluate("window.__team.mfa='none'; window.TodoTeamUI.renderTeamStatus()"); page.wait_for_timeout(400)
+    page.click("#team-mfa-enroll"); page.wait_for_timeout(300)
+    check(page.is_visible("#team-mfa-img") and "JBSWY3DPEHPK3PXP" in page.inner_text("#team-mfa-secret"), "first time : a QR code and its key to set up the authenticator app")
+    page.fill("#team-mfa-code", "654321"); page.click("#team-mfa-ok"); page.wait_for_timeout(600)
+    check("active" in page.inner_text("#team-mfa-text") and page.is_visible("#team-mfa-spare"), "set up : active, with « Ajouter un appareil de secours »")
     check("1 contact privé" in page.inner_text("#team-share-summary"), f"Réglages says what is shared and what stays mine ({page.inner_text('#team-share-summary')!r})")
     check(not errors, f"no page errors ({errors})")
     b.close()

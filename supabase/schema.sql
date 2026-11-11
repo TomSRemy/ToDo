@@ -262,3 +262,20 @@ create policy client_errors_insert on public.client_errors for insert to authent
 create index if not exists change_log_changed_by_idx on public.change_log (changed_by);
 create index if not exists client_errors_user_id_idx on public.client_errors (user_id);
 create index if not exists team_settings_updated_by_idx on public.team_settings (updated_by);
+
+-- 2026-11-11 · Double authentification obligatoire pour les données d'équipe (à appliquer APRÈS avoir activé ta
+-- propre double authentification dans l'appli, Réglages › Équipe). Règles « restrictives » : elles s'ajoutent aux
+-- autres, et la base ne répond qu'à une session validée par le code (aal2).
+do $$
+declare t text;
+begin
+  foreach t in array array['opportunities','contacts','companies','meetings','team_settings'] loop
+    execute format('drop policy if exists %I_mfa on public.%I;', t, t);
+    execute format('create policy %I_mfa on public.%I as restrictive for all to authenticated using ((select auth.jwt()->>''aal'') = ''aal2'') with check ((select auth.jwt()->>''aal'') = ''aal2'');', t, t);
+  end loop;
+end $$;
+drop policy if exists change_log_mfa on public.change_log;
+create policy change_log_mfa on public.change_log as restrictive for select to authenticated using ((select auth.jwt()->>'aal') = 'aal2');
+-- Réinitialiser la double authentification d'un collègue (téléphone perdu) : supprimer ses facteurs, il en recrée un
+-- à la prochaine connexion. Remplacer l'email :
+--   delete from auth.mfa_factors where user_id = (select id from auth.users where email = 'collegue@exemple.fr');
