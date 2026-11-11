@@ -780,9 +780,19 @@
   function mailCommand(ids){
     return '$ol = New-Object -ComObject Outlook.Application; $ns = $ol.GetNamespace("MAPI"); $ns.GetItemFromID("'+ids.entry+'"'+(ids.store?', "'+ids.store+'"':'')+').Display()';
   }
-  function copyMailCommand(t){
+  // the Excel bridge (v1.33+) opens the mail itself in Outlook, in one click ; without it, the command to paste
+  async function openMail(t){
     const ids=mailIds(t); if(!ids) return;
-    const cmd=mailCommand(ids), done=()=>notify('Commande copiée : colle-la dans PowerShell (clic droit), puis Entrée. Outlook doit être ouvert.');
+    const info=bridgeState && bridgeState.ok && bridgeState.info;
+    if(bridgeConfigured() && info && window.TodoExcelSync.verAtLeast(info, '1.33')){
+      try{ await bridgeCall('POST', '/mail/open', { entryId:ids.entry, storeId:ids.store||'' }, 15000); notify('Mail ouvert dans Outlook.'); return; }
+      catch(e){ notify(e.message+' La commande PowerShell est copiée à la place.'); copyMailCommand(t, true); return; }
+    }
+    copyMailCommand(t);
+  }
+  function copyMailCommand(t, quiet){
+    const ids=mailIds(t); if(!ids) return;
+    const cmd=mailCommand(ids), done=()=>{ if(!quiet) notify('Commande copiée : colle-la dans PowerShell (clic droit), puis Entrée. Outlook doit être ouvert.'+(bridgeConfigured()?'':' Avec le pont Excel lancé, le mail s\u2019ouvre directement.')); };
     const manual=()=>{ askText('Copie impossible automatiquement : sélectionne la commande ci-dessous (Ctrl+A, Ctrl+C), puis colle-la dans PowerShell.', cmd, 'Fermer'); };
     if(navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(cmd).then(done).catch(()=>{ if(copyFallback(cmd)) done(); else manual(); });
     else if(copyFallback(cmd)) done(); else manual();
@@ -790,10 +800,10 @@
   const MAIL_ICO='<svg class="meta-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>';
   function makeMailBtn(t, withLabel){
     const b=document.createElement('button'); b.type='button'; b.className='mail-open-btn'+(withLabel?' labelled':'');
-    b.title='Ouvrir le mail : copie la commande PowerShell qui l’ouvre dans Outlook';
+    b.title='Ouvrir le mail dans Outlook (par le pont Excel, sinon copie la commande PowerShell)';
     b.setAttribute('aria-label', 'Ouvrir le mail dans Outlook (copie une commande PowerShell)');
     b.innerHTML=MAIL_ICO+(withLabel?'<span>Ouvrir le mail</span>':'');
-    b.onclick=e=>{ e.stopPropagation(); copyMailCommand(t); };
+    b.onclick=e=>{ e.stopPropagation(); openMail(t); };
     return b;
   }
   function makeLinkOrCopyBtn(t, withLabel){

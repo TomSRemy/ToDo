@@ -50,7 +50,7 @@ window.TodoExcelSync=(function(){
   // writing, and keeps a journal of every cell; an older one is refused
   // the bridge published with this app (bridge/pont-excel.ps1 $Version; tests/bridge_test.py checks they match). Writing needs it:
   // 1.4 writes only in « Pipe Agrégation » / « BDD Agrégation », 1.7 adds new lines in a table with calculated columns
-  const BRIDGE_LATEST='1.32', BRIDGE_MIN='1.11';   // writing needs BRIDGE_MIN; a newer one is only offered
+  const BRIDGE_LATEST='1.33', BRIDGE_MIN='1.11';   // writing needs BRIDGE_MIN; a newer one is only offered
   const verAtLeast=(info, want)=>{ const v=String(info&&info.version||'0').split('.').map(Number), l=want.split('.').map(Number); return v[0]>l[0] || (v[0]===l[0] && (v[1]||0)>=l[1]); };
   const bridgeUpToDate=info=>verAtLeast(info, BRIDGE_MIN), bridgeLatest=info=>verAtLeast(info, BRIDGE_LATEST);
   // sent by packets of 8 lines (Excel takes a few seconds per line): no request runs long enough to be cut, and progress shows
@@ -538,7 +538,7 @@ window.TodoExcelSync=(function(){
     if(!ON_PHONE) actions.appendChild(oppActionBtn(list.length>1?'Envoyer au Pipe Excel ('+list.length+')':'Envoyer au Pipe Excel', e=>sendToExcel('pipe', list, e.target)));
     if(!ON_PHONE && list.some(o=>o.goDate || stageIndex(o.stage)>=stageIndex('pricing_indicatif'))) actions.appendChild(oppActionBtn(list.length>1?'Envoyer à la BDD Excel ('+list.length+')':'Envoyer à la BDD Excel', e=>sendToExcel('bdd', list.filter(o=>o.goDate || stageIndex(o.stage)>=stageIndex('pricing_indicatif')), e.target)));
   }
-    Object.assign(api, { bridgeUpToDate, bridgeLatest, xsTodo, xsBddApplies, BRIDGE_LATEST });
+    Object.assign(api, { bridgeUpToDate, bridgeLatest, verAtLeast, xsTodo, xsBddApplies, BRIDGE_LATEST });
   };
   return api;
 })();

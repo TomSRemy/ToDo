@@ -15,6 +15,7 @@ import subprocess
 import sys
 import tempfile
 import time
+import urllib.error
 import urllib.request
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
@@ -242,6 +243,13 @@ try:
     out = second.stdout.decode("utf-8", "replace")
     check(second.returncode != 0 and "Un pont Excel tourne déjà (version" in out and "ferme la fenêtre de l'ancien pont" in out, f"a second bridge on the same port explains what to do ({out[-200:]!r})")
     check(call("GET", "/status")["ok"], "the first bridge keeps running")
+    # v1.33 : « Ouvrir le mail » — a hexadecimal Outlook ID is accepted (mock : nothing opened), anything else refused
+    check(call("POST", "/mail/open", {"entryId": "00000000A1B2C3D4E5F6071829", "storeId": "0000000038A1BB10"}).get("ok") is True, "mail/open : a hexadecimal EntryID (and StoreID) is accepted")
+    try:
+        call("POST", "/mail/open", {"entryId": "abc\"; Remove-Item C:\\ -Recurse"}); bad = None
+    except urllib.error.HTTPError as e:
+        bad = e.code
+    check(bad == 400, f"mail/open : anything but a hexadecimal ID is refused ({bad})")
 finally:
     proc.terminate()
     try:

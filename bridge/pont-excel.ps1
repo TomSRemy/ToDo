@@ -36,7 +36,7 @@
 param([int]$Port = 8765, [switch]$Reconfigurer, [switch]$Mock)
 
 $ErrorActionPreference = 'Stop'
-$Version = '1.32'
+$Version = '1.33'
 $Here = Split-Path -Parent $MyInvocation.MyCommand.Path
 $LibDir = Join-Path $Here 'lib'
 # the settings (the two files, the key) live in the Windows profile, not next to the script: a new download, in any folder,
@@ -864,6 +864,24 @@ function Handle($req) {
   if ($Mock -and $req.method -eq 'GET' -and $req.path -match '^/mock/dump/(pipe|bdd)$') {
     $t = $script:mockTables[$Matches[1]]
     return @(200, @{ ok = $true; headers = $t.headers; rows = @($t.rows | ForEach-Object { ,@($_ | ForEach-Object { Show-Value $_ }) }) })
+  }
+  # v1.33 : open a mail in Outlook from the app (« Ouvrir le mail » of a task) : the outlook: link doesn't open on a
+  # managed PC, Outlook's own COM object does (GetItemFromID). Only hexadecimal IDs are accepted.
+  if ($req.method -eq 'POST' -and $req.path -eq '/mail/open') {
+    $d = $req.body | ConvertFrom-Json
+    $entry = [string]$d.entryId; $store = [string]$d.storeId
+    if ($entry -notmatch '^[0-9A-Fa-f]{16,}$' -or ($store -and $store -notmatch '^[0-9A-Fa-f]{16,}$')) { return @(400, @{ ok = $false; message = 'Identifiant de mail invalide.' }) }
+    if ($Mock) { $script:mockOpened = $entry; return @(200, @{ ok = $true; mock = $true }) }
+    try {
+      $ol = New-Object -ComObject Outlook.Application
+      $ns = $ol.GetNamespace('MAPI')
+      $mail = if ($store) { $ns.GetItemFromID($entry, $store) } else { $ns.GetItemFromID($entry) }
+      $mail.Display()
+      try { $mail.GetInspector.Activate() } catch { }   # in front of the browser
+      return @(200, @{ ok = $true })
+    } catch {
+      return @(404, @{ ok = $false; message = 'Mail introuvable dans Outlook (déplacé, archivé ou supprimé ?), ou Outlook fermé.' })
+    }
   }
   if ($req.method -eq 'GET' -and $req.path -match '^/(pipe|bdd)/read$') {
     $r = Read-Sheets $Matches[1]
