@@ -1,4 +1,4 @@
-"""Sauvegarde locale : the app writes its whole backup through the Excel bridge (stubbed here), once a day, encrypted
+"""Sauvegarde locale, and the team's Excel journal : the app writes its whole backup through the Excel bridge (stubbed here), once a day, encrypted
 when the GitHub sync is ; « Restaurer… » lists the bridge's files, shows what one holds, and puts it back.
     python tests/local_backup_test.py
 """
@@ -10,6 +10,7 @@ def check(c, m):
     if not c: failures.append(m)
 URL = (pathlib.Path(__file__).resolve().parent.parent / "index.html").as_uri()
 files = {}   # name -> content, what the stubbed bridge holds
+who, asked = ["tom.remy"], []
 def task(i, title): return {"id": i, "title": title, "status": "a_faire", "urgency": "normale", "createdAt": 1, "updatedAt": 1, "deleted": False, "archived": False}
 
 def bridge(route):
@@ -17,7 +18,11 @@ def bridge(route):
     body = json.loads(req.post_data or "null") if req.method == "POST" else None
     h = {"Access-Control-Allow-Origin": "*", "Content-Type": "application/json"}
     if req.method == "OPTIONS": return route.fulfill(status=204, headers={**h, "Access-Control-Allow-Headers": "Content-Type, X-Bridge-Token"})
-    if path == "/status": out = {"ok": True, "version": "1.34", "authorized": True, "pipe": {"name": "Pipe.xlsx", "found": True}, "bdd": {"name": "Suivi.xlsx", "found": True}}
+    if path == "/status": out = {"ok": True, "version": "1.34", "authorized": True, "who": who[0], "pipe": {"name": "Pipe.xlsx", "found": True}, "bdd": {"name": "Suivi.xlsx", "found": True}}
+    elif path == "/journal/read":
+        asked.append(body["key"])
+        out = {"ok": True, "rows": [{"at": "2026-11-10T14:32:00", "file": "Pipe agrégation", "column": "Statut", "key": "SOLARIS / Toit", "old": "Pricing", "new": "Offre remise", "why": "case mise à jour", "who": "Paul"}]}
+    elif path == "/journal/name": who[0] = body["name"]; out = {"ok": True, "who": who[0]}
     elif path == "/backup/write":
         import datetime
         name = "todo-" + datetime.date.today().isoformat() + (".json.enc" if body["encrypted"] else ".json")
@@ -60,6 +65,19 @@ with sync_playwright() as p:
     pg.click("#lb-save-btn"); pg.wait_for_timeout(1500)
     enc = [n for n in files if n.endswith(".enc")]
     check(len(enc) == 1 and json.loads(files[enc[0]]).get("enc") == "todo-aesgcm-1" and "Tâche de janvier" not in files[enc[0]], f"encrypted sync : the local backup is encrypted ({enc})")
+    # the team's journal in a pipeline sheet : who wrote what in the Pipe, through the bridge
+    pg.evaluate("""(()=>{ const o={ id:'o1', kind:'installation', company:'SOLARIS', producteur:'SOLARIS', centrale:'Toit', stage:'offre_attente', createdAt:1, updatedAt:1, deleted:false };
+      window.storage.set('todo-widget-opportunities', JSON.stringify([o])); })()""")
+    pg.reload(); pg.wait_for_timeout(4000)
+    pg.evaluate("location.hash='fiche/o1'"); pg.wait_for_timeout(800)
+    pg.locator("#opp-detail-body .hist-block summary").last.click(); pg.wait_for_timeout(600)
+    hist = pg.inner_text("#opp-detail-body .hist-block >> nth=-1")
+    check("Paul" in hist and "Statut : Pricing → Offre remise" in hist and asked[-1:] == ["SOLARIS / Toit"], f"a sheet shows the team's Excel journal for its plant ({hist!r}, {asked})")
+    pg.evaluate("document.querySelectorAll('.modal-overlay').forEach(x=>x.classList.add('hidden'))")
+    pg.click('[data-tab="lists"]'); pg.wait_for_timeout(800)
+    check(pg.input_value("#bridge-who") == "tom.remy", "Réglages › Pont Excel shows the name signed in the journal")
+    pg.fill("#bridge-who", "Tom Rémy"); pg.click("#bridge-who-save"); pg.wait_for_timeout(400)
+    check(who[0] == "Tom Rémy", f"… and changes it ({who[0]!r})")
     check(not err, f"no page errors ({err})")
     b.close()
 print(f"\n{len(failures)} failure(s)"); sys.exit(1 if failures else 0)

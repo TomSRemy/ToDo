@@ -4607,7 +4607,7 @@
     }
     actions.appendChild(oppActionBtn('Voir dans le réseau', ()=>{ closeOppDetail(); openInNetwork('op:'+o.id); }, 'ghost-btn opp-net-btn lite-keep'));
     { const mb=mentionsBlock('op:'+o.id); if(mb) $('opp-detail-body').appendChild(mb); }
-    { const hb=historyBlock('opportunities', o.id); if(hb) $('opp-detail-body').appendChild(hb); }
+    { const hb=historyBlock('opportunities', o.id) || window.TodoJournal.block(o); if(hb) $('opp-detail-body').appendChild(hb); }
     actions.appendChild(oppActionBtn('Supprimer', async ()=>{ if(!await askConfirm('Supprimer cette fiche du pipeline ? (récupérable ensuite dans Archive → Corbeille)', 'Supprimer')) return; o.deleted=true; touchCrm(o); saveCrm(); closeOppDetail(); renderPipeline();
       notify('Fiche « '+oppName(o)+' » supprimée', { label:'Annuler', fn:()=>{ o.deleted=false; touchCrm(o); saveCrm(); renderPipeline(); } }); }, 'ghost-btn danger-btn'));
     actions.appendChild(oppActionBtn('Fermer', closeOppDetail, 'ghost-btn lite-keep'));
@@ -5645,7 +5645,7 @@
     try{ const s=await bridgeCall('GET','/status',null,2500); bridgeState={ ok:true, authorized:!!s.authorized, checkedAt:Date.now(), info:s };
       if(s.authorized && window.TodoExcelSync.verAtLeast(s, '1.34')) window.TodoLocalBackup.auto(); }
     catch(e){ bridgeState={ ok:false, authorized:false, checkedAt:Date.now(), info:null, error:e.message }; }
-    renderBridgeStatus();
+    renderBridgeStatus(); window.TodoJournal.paintName();
     if($('rs-pipe-file-name')) renderExcelLinks();
     return bridgeState;
   }
@@ -5665,6 +5665,7 @@
   // gsTab : not yet defined at this point in the file (const, no hoisting) — deferred to call time, same way
   // openExcelSync is proxied in reverse at the top of this file
   window.TodoExcelSync.init({ $, ON_PHONE, PQ_FIELDS, bddCells, bridgeCall, bridgeCheck, bridgeConfigured, cellToText, closeOppDetail, codeAffaire, copyToClipboard, gsTab:(...a)=>gsTab(...a), importParcFromBridge, isExited, openOppDetail, oppActionBtn, oppName, pipeCells, pqFold, pqPad, relanceOnMove, renderPipeline, saveCrm, setOppStage, softFail, stageIndex, stageLabel, suiviState, touchCrm, get bridgeState(){ return bridgeState; }, set bridgeState(v){ bridgeState=v; }, get opportunities(){ return opportunities; }, set opportunities(v){ opportunities=v; } });   // Envoi vers les Excel partagés et Excel ⇄ appli — js/excel-sync.js
+  window.TodoJournal.init({ $, bridgeCall, bridgeConfigured, bridgeInfo:()=>bridgeState.ok && bridgeState.authorized ? bridgeState.info : null, notify });
   window.TodoLocalBackup.init({ $, bridgeCall, bridgeConfigured, backupPayload:()=>backupPayload(), importJson, notify, askChoice });
   if(bridgeConfigured()) setTimeout(()=>bridgeCheck(), 2500);   // the bridge looked for once at start : the day's local backup leaves then
   function renderLists(){

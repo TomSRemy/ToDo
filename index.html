@@ -823,6 +823,7 @@
         <input type="password" id="bridge-token" placeholder="Clé affichée dans la fenêtre du pont" autocomplete="off">
         <div class="set-actions"><button class="data-btn set-primary" id="bridge-save-btn">Enregistrer et tester</button></div>
         <span id="bridge-status" class="bridge-status"></span>
+        <div id="bridge-who-row" class="set-actions" hidden><label for="bridge-who" class="list-hint" style="margin:0">Ton nom dans le journal de l’équipe (qui a écrit quoi dans les Excel)</label><input type="text" id="bridge-who" autocomplete="name" style="max-width:220px"><button class="data-btn" id="bridge-who-save" type="button">Enregistrer</button></div>
       </div>
       <details class="set-adv"><summary>Avancé : vérifier le nom des fichiers Pipe et Suivi</summary>
       <div class="parc-source" style="margin-top:10px;">
@@ -913,6 +914,7 @@
 <script src="js/parc.js"></script>
 <script src="js/sync-crypto.js"></script>
 <script src="js/local-backup.js"></script>
+<script src="js/excel-journal.js"></script>
 <script src="js/news.js"></script>
 <script src="js/health.js"></script>
 <script src="js/team-ui.js"></script>

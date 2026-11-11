@@ -280,6 +280,20 @@ try:
     except urllib.error.HTTPError as e:
         code = e.code
     check(code == 400, f"backup/dir : a relative path is refused ({code})")
+    # v1.34 : the team's journal — who wrote what, one file per person next to the Pipe ; read back by plant
+    shared = work / "mock-sharepoint" / "Journal ToDo"
+    files_before = sorted(x.name for x in shared.glob("journal-*.csv")) if shared.exists() else []
+    check(len(files_before) == 1 and shared.joinpath(files_before[0]).read_text(encoding="utf-8-sig").startswith("Date;Fichier;Ligne;Colonne;Centrale;Ancienne valeur;Nouvelle valeur;Pourquoi;Qui"),
+          f"journal : the bridge's writes also go to the team's journal, in its own file, with a « Qui » column ({files_before})")
+    jr = call("POST", "/journal/read", {"key": "SOLARIS / Toit"})
+    check(len(jr["rows"]) > 0 and all("solaris" in r["key"].lower() for r in jr["rows"]) and jr["rows"][0]["at"] >= jr["rows"][-1]["at"], f"journal/read : the lines about one plant, the most recent first ({len(jr['rows'])})")
+    nm = call("POST", "/journal/name", {"name": "Tom Rémy"})
+    check(nm.get("who") == "Tom Rémy" and call("GET", "/status").get("who") == "Tom Rémy", f"journal/name : the name written in the journal is set from the app ({nm})")
+    bseed([["2729 - SOLARIS_Toit - A", "SOLARIS", "Toit", "En préparation", "", "", ""]])
+    bsend(row(["2729 - SOLARIS_Toit - A", "SOLARIS", "Toit", "En préparation", "Rappeler Paul", None, 400]))
+    mine = shared / "journal-Tom Rémy.csv"
+    jr = call("POST", "/journal/read", {"key": "SOLARIS / Toit"})
+    check(mine.exists() and any(r["who"] == "Tom Rémy" for r in jr["rows"]), f"journal : the next write is signed with that name, in that person's file ({[r['who'] for r in jr['rows']][:3]})")
 finally:
     proc.terminate()
     try:

@@ -27,7 +27,8 @@
    - une ligne n'est réutilisée que si elle est entièrement vide ;
    - avant la première écriture du jour, une copie du fichier est gardée dans « Sauvegardes pont » (une par jour,
      les 3 derniers jours, même si le pont est utilisé plusieurs fois le même jour) ;
-     et chaque case écrite est notée dans « Sauvegardes pont/journal-pont.csv » avec son ancienne valeur (jamais effacé).
+     et chaque case écrite est notée dans « Sauvegardes pont/journal-pont.csv » avec son ancienne valeur et qui l'a écrite
+     (jamais effacé) ; la même ligne va dans « Journal ToDo », à côté du Pipe, un fichier par personne (journal de l'équipe).
 
   Lancement : double-clic sur « Lancer-pont-excel.bat ». Au premier lancement, choisir les deux fichiers Excel
   et recopier la clé affichée dans l'app (Réglages → Pont Excel).
@@ -516,11 +517,45 @@ function Ensure-Backup($a, $state) {
 }
 $JournalPath = Join-Path $BackupDir 'journal-pont.csv'
 function Csv-Field($v) { '"' + ((Show-Value $v) -replace '"', '""' -replace "`r?`n", ' / ') + '"' }
+$JournalHeader = "Date;Fichier;Ligne;Colonne;Centrale;Ancienne valeur;Nouvelle valeur;Pourquoi;Qui`r`n"
+# v1.34 : who wrote it. The name kept in the bridge's settings (set from the app), else the Windows account.
+function Journal-Who { $n = [string](Get-Prop $Config 'name'); if (-not $n.Trim()) { $n = [string]$env:USERNAME }; if (-not $n.Trim()) { $n = 'inconnu' }; return $n.Trim() }
+# the team's journal : next to the Pipe on SharePoint, in « Journal ToDo », ONE FILE PER PERSON (never two PCs writing
+# the same file, so OneDrive never makes a conflicted copy) ; the app reads them all to show who changed what
+function Shared-JournalDir {
+  if ($Mock) { return (Join-Path (Join-Path $Here 'mock-sharepoint') 'Journal ToDo') }
+  $p = [string](Resolve-ConfigPath 'pipe'); if (-not $p) { return $null }
+  return (Join-Path (Split-Path $p -Parent) 'Journal ToDo')
+}
+function Shared-JournalPath { $d = Shared-JournalDir; if (-not $d) { return $null }; return (Join-Path $d ('journal-' + ((Journal-Who) -replace '[^\p{L}\p{N} ._-]', '_') + '.csv')) }
+function Append-Journal($path, $line) {
+  $dir = Split-Path $path -Parent
+  if (-not (Test-Path -LiteralPath $dir)) { $null = New-Item -ItemType Directory -Path $dir -Force }
+  if (-not (Test-Path -LiteralPath $path)) { [IO.File]::WriteAllText($path, $JournalHeader, (New-Object Text.UTF8Encoding $true)) }
+  [IO.File]::AppendAllText($path, $line + "`r`n", (New-Object Text.UTF8Encoding $true))
+}
+function Write-JournalLine($fileLabel, $row, $col, $key, $old, $new, $why) {
+  $line = (@((Get-Date -Format 'dd/MM/yyyy HH:mm:ss'), $fileLabel, $row, $col, $key, $old, $new, $why, (Journal-Who)) | ForEach-Object { Csv-Field $_ }) -join ';'
+  Append-Journal $JournalPath $line
+  try { $sp = Shared-JournalPath; if ($sp) { Append-Journal $sp $line } } catch { Write-ErrorLog ('Journal partagé : ' + $_.Exception.Message) }   # never blocks a write
+}
 function Write-Journal($a, $kind, $r, $c, $key, $old, $new, $why) {
-  if (-not (Test-Path $BackupDir)) { $null = New-Item -ItemType Directory -Path $BackupDir }
-  if (-not (Test-Path $JournalPath)) { [IO.File]::WriteAllText($JournalPath, "Date;Fichier;Ligne;Colonne;Centrale;Ancienne valeur;Nouvelle valeur;Pourquoi`r`n", (New-Object Text.UTF8Encoding $true)) }
-  $line = (@((Get-Date -Format 'dd/MM/yyyy HH:mm:ss'), $Kinds[$kind].label, (& $a.ExcelRow $a $r), $a.Headers[$c - 1], $key, $old, $new, $why) | ForEach-Object { Csv-Field $_ }) -join ';'
-  [IO.File]::AppendAllText($JournalPath, $line + "`r`n", (New-Object Text.UTF8Encoding $true))
+  Write-JournalLine $Kinds[$kind].label (& $a.ExcelRow $a $r) $a.Headers[$c - 1] $key $old $new $why
+}
+# the team's journal lines about one row (« Producteur / Centrale »), the most recent first
+function Journal-Read($key, $limit) {
+  $d = Shared-JournalDir; $want = Norm $key
+  if (-not $limit) { $limit = 100 }
+  if (-not $d -or -not (Test-Path -LiteralPath $d)) { return @(200, @{ ok = $true; dir = $d; rows = @() }) }
+  $rows = New-Object System.Collections.ArrayList
+  foreach ($f in @(Get-ChildItem -LiteralPath $d -Filter 'journal-*.csv' -File -ErrorAction SilentlyContinue)) {
+    foreach ($x in @(Import-Csv -LiteralPath $f.FullName -Delimiter ';' -Encoding UTF8)) {
+      if ($want -and -not (Norm $x.Centrale).StartsWith($want)) { continue }
+      $at = [datetime]::MinValue; [void][datetime]::TryParseExact([string]$x.Date, 'dd/MM/yyyy HH:mm:ss', [Globalization.CultureInfo]::InvariantCulture, [Globalization.DateTimeStyles]::None, [ref]$at)
+      [void]$rows.Add(@{ at = $at.ToString('o'); file = $x.Fichier; column = $x.Colonne; key = $x.Centrale; old = $x.'Ancienne valeur'; new = $x.'Nouvelle valeur'; why = $x.Pourquoi; who = $x.Qui })
+    }
+  }
+  return @(200, @{ ok = $true; dir = $d; rows = @($rows | Sort-Object { $_.at } -Descending | Select-Object -First ([int]$limit)) })
 }
 # errors used to live only in the console window, lost on restart ; kept here too so a problem can be diagnosed afterwards
 $ErrorLogPath = Join-Path $BackupDir 'erreurs-pont.log'
@@ -879,7 +914,8 @@ function Handle($req) {
   if ($req.path -eq '/status') {
     return @(200, @{ ok = $true; version = $Version; authorized = $authorized; mock = [bool]$Mock;
         pipe = @{ name = [IO.Path]::GetFileName([string](Resolve-ConfigPath 'pipe')); found = ($Mock -or (Test-Path ([string]$Config.pipe))) };
-        bdd = @{ name = [IO.Path]::GetFileName([string](Resolve-ConfigPath 'bdd')); found = ($Mock -or (Test-Path ([string]$Config.bdd))) } })
+        bdd = @{ name = [IO.Path]::GetFileName([string](Resolve-ConfigPath 'bdd')); found = ($Mock -or (Test-Path ([string]$Config.bdd))) };
+        who = $(if ($authorized) { Journal-Who } else { $null }) })
   }
   if (-not $authorized) { return @(401, @{ ok = $false; message = 'Clé du pont incorrecte : recopie la clé affichée dans la fenêtre du pont.' }) }
   if ($req.method -eq 'POST' -and $req.path -match '^/(pipe|bdd)/upsert$') {
@@ -934,6 +970,8 @@ function Handle($req) {
       return @(404, @{ ok = $false; message = 'Mail introuvable dans Outlook (déplacé, archivé ou supprimé ?), ou Outlook fermé.' })
     }
   }
+  if ($req.method -eq 'POST' -and $req.path -eq '/journal/read') { $d = $req.body | ConvertFrom-Json; return (Journal-Read ([string]$d.key) $d.limit) }
+  if ($req.method -eq 'POST' -and $req.path -eq '/journal/name') { $d = $req.body | ConvertFrom-Json; Set-ConfigValue 'name' (([string]$d.name).Trim() -replace '[\r\n;]', ' '); return @(200, @{ ok = $true; who = (Journal-Who) }) }
   if ($req.method -eq 'POST' -and $req.path -eq '/backup/write') { $d = $req.body | ConvertFrom-Json; return @(200, (LocalBackup-Write $d.content ([bool]$d.encrypted))) }
   if ($req.method -eq 'POST' -and $req.path -eq '/backup/list') { return @(200, @{ ok = $true; dir = (LocalBackup-Dir); files = @(LocalBackup-Files | ForEach-Object { LocalBackup-Info $_ }) }) }
   if ($req.method -eq 'POST' -and $req.path -eq '/backup/read') { $d = $req.body | ConvertFrom-Json; return (LocalBackup-Read $d.name) }
