@@ -12,7 +12,7 @@ window.TodoTeam=(function(){
   const TABLES=['opportunities','contacts','companies','meetings','team_settings'];
   let client=null, session=null, sdkPromise=null;
   const liveState={};
-  const IDLE_MS=7*864e5;   // signed out of the team after 7 days without opening the app on this device   // table -> SUBSCRIBED / CHANNEL_ERROR / TIMED_OUT / CLOSED
+  const IDLE_MS=30*864e5;   // signed out of the team after 30 days without opening the app on this device   // table -> SUBSCRIBED / CHANNEL_ERROR / TIMED_OUT / CLOSED
 
   async function loadConfig(){
     try{ const r=await window.storage.get(CONFIG_KEY); return r&&r.value?JSON.parse(r.value):null; }catch(e){ return null; }

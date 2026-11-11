@@ -42,7 +42,7 @@ window.TodoTeamUI=(function(){
     function teamAlertText(off){
       const n=teamPending(), keep=n?' '+n+' modification'+(n>1?'s':'')+' en attente, gardée'+(n>1?'s':'')+' sur cet appareil.':' Tes modifications restent sur cet appareil.';
       const idle=(()=>{ try{ return Number(localStorage.getItem('team-idle-out')||0)>Date.now()-864e5; }catch(e){ return false; } })();
-      return off ? 'Synchro équipe arrêtée : tu n\u2019es plus connecté'+(idle?' (déconnexion automatique après 7 jours sans utilisation sur cet appareil)':'')+'.'+keep
+      return off ? 'Synchro équipe arrêtée : tu n\u2019es plus connecté'+(idle?' (déconnexion automatique après 30 jours sans utilisation sur cet appareil)':'')+'.'+keep
         : 'Synchro équipe interrompue depuis '+new Date(health.since).toLocaleTimeString('fr-FR',{ hour:'2-digit', minute:'2-digit' })+' (base injoignable : en pause ou pas de réseau).'+keep+' L\u2019envoi reprendra tout seul.';
     }
     function goTeamForm(){ gsTab('lists'); setTimeout(()=>{ const t=$('team-section'); if(t) t.scrollIntoView({ behavior:'smooth', block:'start' }); const f=$(mfaPending==='none'?'team-mfa-enroll':mfaNeeded?'team-mfa-code':'team-email'); if(f) f.focus({ preventScroll:true }); }, 80); }
