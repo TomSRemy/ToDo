@@ -6216,6 +6216,22 @@
   $('errlog-copy').onclick=e=>{ let list=[]; try{ list=JSON.parse(localStorage.getItem('error-log')||'[]'); }catch(x){} copyToClipboard(list.map(r=>new Date(r.at).toISOString()+' ['+r.where+'] '+r.message+(r.stack?'\n  '+r.stack.replace(/\n/g,'\n  '):'')).join('\n')||'(vide)', e.currentTarget); };
   $('errlog-clear').onclick=()=>{ try{ localStorage.removeItem('error-log'); }catch(x){} paintErrorLog(); };
   document.querySelector('.tab[data-tab="lists"]').addEventListener('click', ()=>setTimeout(()=>{ paintErrorLog(); paintTeamErrors(); }, 0));
+  // ---------- « Nouveautés » : the list in Réglages, and a word once when something new came out since the last look ----------
+  function paintNews(){
+    const box=$('news-list'); if(!box) return; const N=window.TodoNews||[]; box.innerHTML='';
+    const seen=lsGet('news-seen')||'';
+    N.forEach(n=>{ const d=document.createElement('div'); d.className='news-row'+(n.d>seen && seen?' new':'');
+      d.innerHTML='<span class="nd"></span><div><b></b><p></p></div>';
+      d.querySelector('.nd').textContent=new Date(n.d+'T12:00:00').toLocaleDateString('fr-FR',{ day:'numeric', month:'short' });
+      d.querySelector('b').textContent=n.t; d.querySelector('p').textContent=n.x; box.appendChild(d); });
+    if(N.length) lsSet('news-seen', N[0].d);
+  }
+  document.querySelector('.tab[data-tab="lists"]').addEventListener('click', ()=>setTimeout(paintNews, 0));
+  setTimeout(()=>{ const N=window.TodoNews||[], seen=lsGet('news-seen'); if(!N.length || window.TODO_WIDGET) return;
+    if(!seen){ lsSet('news-seen', N[0].d); return; }   // a first visit : nothing to announce
+    const fresh=N.filter(n=>n.d>seen); if(!fresh.length) return;
+    notify('Nouveautés : '+fresh[0].t+(fresh.length>1?' (et '+(fresh.length-1)+' autre'+(fresh.length>2?'s':'')+')':''), { label:'Voir', fn:()=>{ gsTab('lists'); setTimeout(()=>{ const el=$('news-section'); if(el) el.scrollIntoView({ behavior:'smooth', block:'start' }); }, 80); } });
+  }, 6000);
   // a borrowed or shared computer : every key goes, the data stays (the last changes leave first, with the token)
   $('keys-wipe-btn').onclick=async ()=>{
     if(!await askConfirm('Effacer toutes les clés de cet appareil ?\n\nJeton GitHub, clé du pont Excel, clé Claude et connexion équipe. Tes données restent ici et sur GitHub ; il faudra recoller les clés pour reprendre la synchro.', 'Effacer les clés')) return;
@@ -6393,7 +6409,7 @@
   // « Réglages »: a table of contents at the top, one click to each part (UX audit TD3)
   // « Réglages » (UX audit TD3): four groups, a table of contents beside them, and each part's state on its title
   const SETTINGS_NAMES={ 'clients-section':'Clients', 'projects-section':'Projets', 'sync-section':'Synchro GitHub', 'conflicts-section':'Conflits', 'backup-section':'Sauvegarde',
-    'keys-section':'Clés', 'errlog-section':'Journal des erreurs', 'storage-section':'Stockage', 'bridge-section':'Pont Excel', 'team-section':'Synchro \u00e9quipe', 'install-section':'Installer l\u2019appli', 'ai-section':'Claude (facultatif)' };
+    'keys-section':'Clés', 'news-section':'Nouveautés', 'errlog-section':'Journal des erreurs', 'storage-section':'Stockage', 'bridge-section':'Pont Excel', 'team-section':'Synchro \u00e9quipe', 'install-section':'Installer l\u2019appli', 'ai-section':'Claude (facultatif)' };
   const settingsShown=s=>!s.classList.contains('hidden') && !s.hidden && s.style.display!=='none';
   function settingsPill(id, text, kind){ const s=$(id); if(!s) return; const h=s.querySelector('h2'); if(!h) return;
     let p=h.querySelector('.settings-pill'); if(!text){ if(p) p.remove(); return; }
@@ -7131,6 +7147,24 @@
     if(typeof v==='object') return Array.isArray(v)?v.length+' élément'+(v.length>1?'s':''):'(modifié)';
     const t=String(v); return t.length>60?t.slice(0,57)+'…':t;
   }
+  // « Revenir à cette valeur » : the old value put back (and that change itself written in the history, by the base)
+  const HIST_NO_BACK=/^(\(création\)|\(suppression définitive\)|\(restauration\))$/;
+  function histBackButton(table, id, r){
+    if(HIST_NO_BACK.test(r.field)) return null;
+    const arr=table==='opportunities'?opportunities:table==='contacts'?contacts:null; if(!arr) return null;
+    const bin=r.field==='(mise à la corbeille)';
+    const b=document.createElement('button'); b.type='button'; b.className='hist-back'; b.textContent=bin?'Restaurer':'Revenir à cette valeur';
+    b.title=bin?'Sortir la fiche de la corbeille':'Remettre la valeur d\u2019avant ce changement';
+    b.onclick=async e=>{ e.stopPropagation();
+      const o=arr.find(x=>x.id===id); if(!o){ notify('Fiche introuvable sur cet appareil.'); return; }
+      const label=bin?'Sortir cette fiche de la corbeille ?':'Remettre « '+(HIST_LABELS[r.field]||r.field)+' » à « '+histValue(r.field, r.old_value)+' » ?';
+      if(!await askConfirm(label+'\n\nLe changement sera inscrit dans l\u2019historique, à ton nom.', bin?'Restaurer':'Revenir')) return;
+      if(bin) o.deleted=false; else if(r.old_value==null) delete o[r.field]; else o[r.field]=r.old_value;
+      touchCrm(o); await saveCrm(); notify(bin?'Fiche restaurée.':'Valeur remise : '+(HIST_LABELS[r.field]||r.field)+'.');
+      if(table==='opportunities'){ renderPipeline(); if(viewingOppId===id) openOppDetail(id); } else renderContacts();
+    };
+    return b;
+  }
   function historyBlock(table, id){
     if(!(window.TodoTeam && window.TodoTeam.isSignedIn())) return null;
     const d=document.createElement('details'); d.className='hist-block';
@@ -7144,8 +7178,9 @@
         rows.forEach(r=>{ const line=document.createElement('div'); line.className='hist-row';
           const when=new Date(r.changed_at).toLocaleString('fr-FR',{ day:'numeric', month:'short', hour:'2-digit', minute:'2-digit' });
           const what=/^\(/.test(r.field)?r.field.slice(1,-1):(HIST_LABELS[r.field]||r.field)+' : '+histValue(r.field, r.old_value)+' → '+histValue(r.field, r.new_value);
-          line.innerHTML='<span class="hw"></span><span class="ht"></span><span class="hd"></span>';
+          line.innerHTML='<span class="hw"></span><span class="ht"></span><span class="hd"></span><span class="hb"></span>';
           line.querySelector('.hw').textContent=r.who; line.querySelector('.ht').textContent=what; line.querySelector('.hd').textContent=when;
+          const back=histBackButton(table, id, r); if(back) line.querySelector('.hb').appendChild(back);
           box.appendChild(line); });
       }catch(e){ box.innerHTML='<p class="hist-empty">Historique indisponible (hors ligne ?).</p>'; softFail('historique', e); }
     });
