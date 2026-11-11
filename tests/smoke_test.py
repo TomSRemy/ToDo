@@ -468,7 +468,7 @@ with sync_playwright() as p:
     check(dl.value.suggested_filename.startswith("todo-backup-") and not page.is_visible("#backup-banner"), "backup reminder: one click exports, then it goes away")
     page.evaluate("localStorage.setItem('last-export-at', String(Date.now()-35*864e5))"); page.click('[data-tab="tasks"]'); page.click('[data-tab="today"]'); page.wait_for_timeout(100)
     page.click("#backup-banner .bk-later")
-    check(not page.is_visible("#backup-banner"), "backup reminder: « Plus tard » puts it away for a week")
+    check(not page.is_visible("#backup-banner"), "backup reminder: « Plus tard » puts it away for three days")
     check(not errors, f"no page errors ({errors})")
     page.close()
 

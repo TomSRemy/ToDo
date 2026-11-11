@@ -379,6 +379,14 @@
       }
     }catch(e){ softFail('mesure de l\u2019espace', e); }
   }
+  // ask the browser to keep this site's data (never cleared to free space) : granted silently by Edge / Chrome for an
+  // installed or often used site, otherwise refused without a prompt
+  let storageKeptP=null;
+  function storageKept(){
+    if(!storageKeptP) storageKeptP=(async()=>{ try{ if(!(navigator.storage && navigator.storage.persist)) return false; return await navigator.storage.persisted() || await navigator.storage.persist(); }catch(e){ return false; } })();
+    return storageKeptP;
+  }
+  storageKept();
   async function renderStorageGauge(){
     const box=$('storage-gauge'); if(!box || !window.storage.usage) return;
     try{
@@ -393,6 +401,8 @@
       else html+='<div class="sg-mode">Stockage simple du navigateur : '+Math.round(lsRatio*100)+' % de sa limite (environ 5 Mo).</div>'+bar(lsRatio,'Limite du stockage simple');
       html+=rows.filter(r=>r[1]>0).map(([l,n])=>'<div class="sg-row"><span>'+l+'</span><b>'+fmtMo(n)+'</b></div>').join('');
       html+='<div class="muted">Réglages et autres pages de '+escapeHtml(location.host||'cette adresse')+' : '+Math.round(lsRatio*100)+' % du stockage simple (limite partagée entre ces pages).</div>';
+      const kept=await storageKept();
+      html+='<div class="sg-persist '+(kept?'ok':'warn')+'">'+(kept?'✓ Stockage protégé : le navigateur ne l\u2019efface pas pour faire de la place.':'Stockage non protégé : en cas de manque de place, le navigateur peut l\u2019effacer. La synchro GitHub ou un export régulier te protège.')+'</div>';
       box.innerHTML=html;
     }catch(e){ box.innerHTML='<span class="muted">Espace non mesurable dans ce navigateur.</span>'; }
   }
@@ -1403,8 +1413,8 @@
 
   $('inbox-refresh').onclick = fetchInbox;
 
-  // no GitHub sync and no backup file for a month: a gentle reminder at the top of Today (« Plus tard » = a week of peace)
-  const BACKUP_DAYS=30;
+  // no GitHub sync and no backup file for two weeks: a reminder at the top of the Synthèse (« Plus tard » = three days of peace)
+  const BACKUP_DAYS=14;
   function backupDueDays(){
     if(syncConfig.enabled || window.TODO_LITE || window.TODO_WIDGET) return 0;
     const get=k=>{ try{ return +localStorage.getItem(k)||0; }catch(e){ return 0; } };
@@ -1420,7 +1430,7 @@
     b.innerHTML='<span></span><button type="button" class="bk-go">Exporter maintenant</button><button type="button" class="bk-later">Plus tard</button>';
     b.firstChild.textContent=('Aucune copie de sécurité depuis '+days+' jours, et la synchro GitHub n\u2019est pas activée : un export garde tes données à l\u2019abri (fichier .json).');
     b.querySelector('.bk-go').onclick=()=>{ exportData(); renderBackupBanner(); };
-    b.querySelector('.bk-later').onclick=()=>{ lsSet('backup-snooze-until', String(Date.now()+7*864e5)); renderBackupBanner(); };
+    b.querySelector('.bk-later').onclick=()=>{ lsSet('backup-snooze-until', String(Date.now()+3*864e5)); renderBackupBanner(); };
   }
   // the market tiles : drawn by js/market.js from PowerKlock's open data (spot, Cal, TTF, EUA, Brent, GO), a click opens Marché
   function renderSynthMarket(){
