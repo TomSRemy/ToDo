@@ -10,6 +10,9 @@
 #  - SUPABASE_URL          : https://zyqvpltzitoqjvohidoy.supabase.co
 #  - SUPABASE_SERVICE_KEY  : la clé « service_role » (Supabase › Project Settings › API keys). Elle donne tous les droits
 #                            sur la base : elle reste dans ce secret, jamais ailleurs, jamais collée dans une conversation.
+#  - BACKUP_PASSPHRASE     : une longue phrase secrète qui chiffre chaque sauvegarde. Garde-la AUSSI dans ton gestionnaire
+#                            de mots de passe : GitHub ne laisse jamais relire un secret, et sans elle les sauvegardes
+#                            sont illisibles. Pour déchiffrer : supabase/dechiffrer-sauvegarde.py (dépôt de l'appli).
 name: Sauvegarde équipe
 on:
   schedule:
@@ -27,11 +30,14 @@ jobs:
         env:
           URL: ${{ secrets.SUPABASE_URL }}
           KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          PASS: ${{ secrets.BACKUP_PASSPHRASE }}
         run: |
           python3 - <<'PY'
           import json, os, datetime, urllib.request, pathlib, shutil
           url, key = os.environ.get("URL", "").rstrip("/"), os.environ.get("KEY", "")
           if not url or not key: raise SystemExit("Secrets SUPABASE_URL / SUPABASE_SERVICE_KEY manquants")
+          if len(os.environ.get("PASS", "")) < 16: raise SystemExit("Secret BACKUP_PASSPHRASE manquant ou trop court (16 caractères au moins)")
+          import subprocess
           d = pathlib.Path("sauvegardes-equipe") / datetime.date.today().isoformat(); d.mkdir(parents=True, exist_ok=True)
           for t in ["opportunities", "contacts", "companies", "meetings", "team_settings", "profiles", "change_log"]:
               rows, start = [], 0
@@ -40,7 +46,9 @@ jobs:
                   with urllib.request.urlopen(req, timeout=60) as r: part = json.loads(r.read().decode())
                   rows += part; start += 1000
                   if len(part) < 1000: break
-              (d / f"{t}.json").write_text(json.dumps(rows, ensure_ascii=False, indent=1), encoding="utf-8")
+              # chiffré (AES-256-CBC, clé dérivée de la phrase par PBKDF2, 600 000 tours) : jamais de données en clair dans le dépôt
+              subprocess.run(["openssl", "enc", "-aes-256-cbc", "-pbkdf2", "-iter", "600000", "-salt", "-pass", "env:PASS", "-out", str(d / f"{t}.json.enc")],
+                             input=json.dumps(rows, ensure_ascii=False).encode("utf-8"), check=True)
               print(t, ":", len(rows), "lignes")
           days = sorted(p for p in d.parent.iterdir() if p.is_dir())
           for old in days[:-24]: shutil.rmtree(old)   # 24 sauvegardes gardées (12 semaines), le reste dans l'historique Git
