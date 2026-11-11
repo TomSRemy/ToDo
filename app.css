@@ -2838,3 +2838,7 @@ html.widget .dup-banner{ display:none; }
 .sg-persist{ margin-top:8px; font-size:12px; } .sg-persist.ok{ color:var(--accent); } .sg-persist.warn{ color:#E5B54F; }
 #errlog-list .hist-row{ grid-template-columns:90px minmax(0,1fr) auto; }
 #errlog-list .hw{ color:#E5B54F; }
+/* keyboard : a link to skip the menu, shown only when focused */
+.skip-link{ position:fixed; left:12px; top:-60px; z-index:20000; background:var(--accent); color:#04070C; font:600 13px var(--font-ui); padding:8px 14px; border-radius:var(--radius-md); text-decoration:none; transition:top .15s var(--ease-out); }
+.skip-link:focus{ top:12px; }
+#todo-panel:focus{ outline:none; }

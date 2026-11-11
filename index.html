@@ -41,7 +41,7 @@
     </div>
 
     <div class="tabs">
-      <span class="tab active" data-tab="today" title="Synthèse : en retard, dû aujourd'hui, pipeline et marché en un coup d'œil"><svg class="tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg><span class="sidebar-label-text">Synthèse</span><span class="tab-badge" id="today-badge"></span></span>
+      <span class="tab active" aria-current="page" data-tab="today" title="Synthèse : en retard, dû aujourd'hui, pipeline et marché en un coup d'œil"><svg class="tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg><span class="sidebar-label-text">Synthèse</span><span class="tab-badge" id="today-badge"></span></span>
       <span class="tab-sec">To do</span>
       <span class="tab" data-tab="tasks" title="Tâches : toutes, à trier par client, projet ou date"><svg class="tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg><span class="sidebar-label-text">Tâches</span></span>
       <span class="tab" data-tab="inbox" title="Boîte mail : les mails marqués dans Outlook, à transformer en tâche ou en contact"><svg class="tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg><span class="sidebar-label-text">Boîte mail</span><span class="tab-badge" id="inbox-badge"></span></span>
@@ -78,7 +78,8 @@
 <div class="widget-hint" id="widget-hint" hidden>Widget Todo : clique sur la bulle en bas à droite, ou Ctrl+K.</div>
 <button type="button" class="widget-bubble" id="widget-bubble" aria-label="Ouvrir les tâches" title="Tâches (Ctrl+K) — glisser pour déplacer"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg><span class="widget-badge" id="widget-badge"></span></button>
 <button type="button" class="sync-pill sync-pill-lite" id="sync-pill-lite" data-k="off"><span class="sync-dot"></span><span class="sync-label">Synchro</span></button>
-<div id="todo-panel">
+<a class="skip-link" href="#todo-panel">Aller au contenu</a>
+<div id="todo-panel" tabindex="-1">
   <div class="widget-head" id="widget-head">
     <span class="widget-title">Tâches <span id="widget-count"></span></span>
     <button type="button" class="sync-pill sync-pill-w" id="sync-pill-w" data-k="off"><span class="sync-dot"></span><span class="sync-label">Synchro</span></button>
