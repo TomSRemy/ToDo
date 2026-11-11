@@ -27,7 +27,8 @@ window.TodoTeam = {
   init: async()=>{}, loadConfig: async()=>({ url:'x', anonKey:'y' }), saveConfig: async()=>{}, isConfigured: ()=>true, isSignedIn: ()=>true,
   currentUser: ()=>({ email:'t@x' }), signIn: async()=>{}, signOut: async()=>{},
   pullAll: async t=>JSON.parse(JSON.stringify(window.__team.server[t]||[])),
-  pushItem: async (t, it)=>{ window.__team.pushed.push([t, it.id]); return true; },
+  pushItem: async (t, it)=>{ window.__team.pushed.push([t, it.id]); (window.__team.last=window.__team.last||{})[it.id]=JSON.parse(JSON.stringify(it)); return true; },
+  getItem: async (t, id)=>{ const now=(window.__team.now||{})[id]; if(now) return JSON.parse(JSON.stringify(now)); const r=(window.__team.server[t]||[]).find(x=>x.id===id); return r ? JSON.parse(JSON.stringify(r)) : null; },
   removeItem: async (t, id)=>{ window.__team.removed.push([t, id]); return (window.__team.refuse||[]).includes(id) ? 'refused' : 'deleted'; },
   teamErrors: async ()=>[{ at:'2026-11-11T10:00:00Z', where_:'synchro', message:'Échec réseau', who:'Paul' }, { at:'2026-11-11T09:00:00Z', where_:'synchro', message:'Échec réseau', who:'Paul' }, { at:'2026-11-10T09:00:00Z', where_:'page', message:'x is undefined', who:'Toi' }],
   history: async (t, id)=>[{ field:'phone1', old_value:'0600', new_value:'0611', who:'Paul', changed_at:'2026-11-10T13:32:00Z' }, { field:'(création)', who:'Toi', changed_at:'2026-11-01T09:00:00Z' }],
@@ -66,6 +67,18 @@ with sync_playwright() as p:
     page.evaluate("window.__team.refuse=['c3']")
     page.locator(".contact-row[data-cid='c3'] .ct-share").click(); page.wait_for_timeout(800)
     check(contacts()["c3"].get("private") is False and "collègue" in page.inner_text("#app-toast"), f"a colleague's contact can't be made private : it stays shared, with a message ({contacts()['c3'].get('private')!r})")
+    # two people, two fields, one sheet : a colleague changed c3's phone on the base, I change its comment here -> both stay
+    page.evaluate("window.__team.now={ c3:{ id:'c3', firstName:'Chloé', lastName:'Test', company:'', phone1:'0699', createdAt:1, updatedAt:5000, deleted:false } }")
+    page.evaluate("(()=>{ const all=JSON.parse(window.storage.peek('todo-widget-contacts')); })()")
+    page.locator(".contact-row[data-cid='c3'] .contact-main").click(); page.wait_for_timeout(200)
+    page.evaluate("""(()=>{ const btn=[...document.querySelectorAll('.contact-detail-links button')].find(b=>/Modifier/.test(b.textContent)); if(btn) btn.click(); })()"""); page.wait_for_timeout(200)
+    if page.is_visible("#contact-form"):
+        page.fill("#ct-comment", "Vu au salon"); page.click("#contact-save-btn"); page.wait_for_timeout(800)
+        last = page.evaluate("window.__team.last && window.__team.last.c3")
+        check(bool(last) and last.get("phone1") == "0699" and last.get("comment") == "Vu au salon", f"two people, two fields : the colleague's phone and my comment both reach the base ({last!r})")
+        check(contacts()["c3"].get("phone1") == "0699", "… and the colleague's phone shows up here too")
+    else:
+        check(False, "the contact form opened to edit c3")
     page.select_option("#contacts-type-filter", "__private"); page.wait_for_timeout(300)
     names = page.locator("#contacts-list .contact-row").all_inner_texts()
     check(len(names) == 1 and "Bob" in names[0], f"the « Privés » filter lists only the private ones ({names})")

@@ -29,17 +29,48 @@ window.TodoTeamUI=(function(){
       }
       catch(e){ console.error('[teamSyncPush] retrait contact privé', id, e); }
     }
+    // ---- field by field : two colleagues changing different fields of the same sheet both keep their change ----
+    // teamSnap holds, per row, the last version seen on the base (the « base » of a three-way merge) : what I changed
+    // since is mine and goes on top of the base's current version, everything else comes from the base.
+    const META=new Set(['updatedAt','createdAt']), same=(a,b)=>JSON.stringify(a)===JSON.stringify(b);
+    // a form saves every field, empty ones included : an empty field where there was nothing is not a change
+    const blank=v=>v==null || v==='' || (Array.isArray(v) && !v.length), sameVal=(a,b)=>(blank(a) && blank(b)) || same(a,b);
+    function merge3(base, local, server){
+      if(!base) return (local.updatedAt||0)>(server.updatedAt||0) ? Object.assign({}, server, local) : Object.assign({}, local, server);
+      const out=Object.assign({}, server);
+      new Set([...Object.keys(base), ...Object.keys(local)]).forEach(k=>{ if(META.has(k) || sameVal(local[k], base[k])) return; if(local[k]===undefined) delete out[k]; else out[k]=local[k]; });
+      out.updatedAt=Math.max(local.updatedAt||0, server.updatedAt||0);
+      return out;
+    }
+    // the same object kept (an open sheet holds it), its content replaced
+    function assignInPlace(o, m){ Object.keys(o).forEach(k=>{ if(!(k in m)) delete o[k]; }); Object.assign(o, m); }
+    const snapOf=(table, id)=>{ const j=teamSnap[table].get(id); return j ? JSON.parse(j) : null; };
     async function teamSyncPush(){
       if(!(window.TodoTeam && window.TodoTeam.isSignedIn())) return;
-      const seen=await teamSeenLoad();
+      const seen=await teamSeenLoad(); let merged=false;
       for(const table of TEAM_TABLES){
         for(const item of teamArrFor(table)){
           if(teamPrivate(table, item)){ await teamDropPrivate(item.id, seen); continue; }
-          const j=JSON.stringify(item); if(teamSnap[table].get(item.id)===j) continue;
-          try{ await window.TodoTeam.pushItem(table, item); teamSnap[table].set(item.id, j); if(table==='contacts' && !seen.has(item.id)){ seen.add(item.id); teamSeenSave(); } }
-          catch(e){ console.error('[teamSyncPush]', table, item.id, e); }
+          if(teamSnap[table].get(item.id)===JSON.stringify(item)) continue;
+          try{
+            const base=snapOf(table, item.id), server=base ? await window.TodoTeam.getItem(table, item.id) : null;
+            const out=server ? merge3(base, item, server) : item;
+            if(server && !same(out, item)){ assignInPlace(item, out); merged=true; }   // a colleague's change came in with mine
+            await window.TodoTeam.pushItem(table, item); teamSnap[table].set(item.id, JSON.stringify(item));
+            if(table==='contacts' && !seen.has(item.id)){ seen.add(item.id); teamSeenSave(); }
+          }catch(e){ console.error('[teamSyncPush]', table, item.id, e); }
         }
       }
+      if(merged){ saveCrmLocalOnly(); teamRefresh(); }
+    }
+    // a row from the base : taken as is when nothing changed here since the last one seen, merged field by field otherwise
+    function teamTakeRow(table, cur, r){
+      const j=teamSnap[table].get(r.id), localEdits=cur && j && JSON.stringify(cur)!==j;
+      teamSnap[table].set(r.id, JSON.stringify(r));
+      if(!cur) return r;
+      if(localEdits){ assignInPlace(cur, merge3(JSON.parse(j), cur, r)); return cur; }   // mine not sent yet : kept, sent by the next push
+      if(j || (r.updatedAt||0)>=(cur.updatedAt||0)) assignInPlace(cur, r);
+      return cur;
     }
     // recharge tout depuis Supabase au démarrage/connexion : fusionne par id, la version la plus récente gagne
     async function teamSyncPull(){
@@ -50,7 +81,7 @@ window.TodoTeamUI=(function(){
         if(!rows) continue;
         const arr=teamArrFor(table), by=new Map(arr.map(x=>[x.id,x]));
         rows.forEach(r=>{ const cur=by.get(r.id); if(teamPrivate(table, cur)) return;   // mine and private : the push below takes it out of the team base
-          teamSnap[table].set(r.id, JSON.stringify(r)); if(!cur || (r.updatedAt||0)>=(cur.updatedAt||0)) by.set(r.id, r); });
+          by.set(r.id, teamTakeRow(table, cur, r)); });
         if(table==='contacts'){   // seen in the team base before, gone now, not mine-private : a colleague made it private
           const seen=await teamSeenLoad(), onServer=new Set(rows.map(r=>r.id));
           [...by.keys()].forEach(id=>{ if(seen.has(id) && !onServer.has(id) && !teamPrivate(table, by.get(id))) by.delete(id); });
@@ -73,9 +104,8 @@ window.TodoTeamUI=(function(){
           const arr=teamArrFor(table), i=arr.findIndex(x=>x.id===item.id);
           if(i>=0 && teamPrivate(table, arr[i])) return;   // my private copy stays as it is
           if(kind==='DELETE'){ teamSnap[table].delete(item.id); if(i>=0) arr.splice(i,1); if(teamSeen) teamSeen.delete(item.id); saveCrmLocalOnly(); teamRefresh(); return; }
-          teamSnap[table].set(item.id, JSON.stringify(item));
           if(table==='contacts' && teamSeen && !teamSeen.has(item.id)){ teamSeen.add(item.id); teamSeenSave(); }
-          if(i>=0) arr[i]=item; else arr.push(item);
+          const got=teamTakeRow(table, i>=0 ? arr[i] : null, item); if(i<0) arr.push(got);
           saveCrmLocalOnly(); teamRefresh();
         });
       });

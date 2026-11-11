@@ -97,6 +97,14 @@ window.TodoTeam=(function(){
     return data.map(rowToItem);
   }
 
+  // one row as the base has it right now (null : not there)
+  async function getItem(table, id){
+    if(!client) return null;
+    const { data, error }=await client.from(table).select('*').eq('id', id).maybeSingle();
+    if(error) throw error;
+    return data ? rowToItem(data) : null;
+  }
+
   async function pushItem(table, item){
     if(!client) return false;
     const { error }=await client.from(table).upsert(itemToRow(table, item));
@@ -184,5 +192,5 @@ window.TodoTeam=(function(){
     return report;
   }
 
-  return { TABLES, init, loadConfig, saveConfig, isConfigured, isSignedIn, currentUser, signIn, signOut, pullAll, pushItem, removeItem, history, reportError, teamErrors, subscribe, liveState:()=>Object.assign({}, liveState), cleanConfig, migrateFromLocal };
+  return { TABLES, init, loadConfig, saveConfig, isConfigured, isSignedIn, currentUser, signIn, signOut, pullAll, getItem, pushItem, removeItem, history, reportError, teamErrors, subscribe, liveState:()=>Object.assign({}, liveState), cleanConfig, migrateFromLocal };
 })();
