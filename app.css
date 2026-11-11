@@ -2836,3 +2836,5 @@ html.widget .dup-banner{ display:none; }
 .hist-row .ht{ color:var(--tx1); overflow-wrap:anywhere; } .hist-row .hd{ color:var(--tx3); font:11px var(--font-mono); white-space:nowrap; }
 .hist-empty{ margin:4px 0; font-size:12px; color:var(--tx3); }
 .sg-persist{ margin-top:8px; font-size:12px; } .sg-persist.ok{ color:var(--accent); } .sg-persist.warn{ color:#E5B54F; }
+#errlog-list .hist-row{ grid-template-columns:90px minmax(0,1fr) auto; }
+#errlog-list .hw{ color:#E5B54F; }

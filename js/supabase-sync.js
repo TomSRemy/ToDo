@@ -128,6 +128,13 @@ window.TodoTeam=(function(){
     return (data||[]).map(x=>Object.assign({}, x, { who:x.changed_by===me?'Toi':(names[x.changed_by]||'Un collègue') }));
   }
 
+  // an error met on a colleague's device, sent to the team base (client_errors) so that it can be seen and fixed
+  async function reportError(row){
+    if(!client || !session) return false;
+    const { error }=await client.from('client_errors').insert({ where_:row.where, message:row.message, stack:row.stack, app_version:row.version, user_agent:navigator.userAgent.slice(0,200) });
+    return !error;
+  }
+
   // un canal temps réel par table ; onChange(item, 'INSERT'|'UPDATE'|'DELETE') pour fusionner dans
   // les tableaux en mémoire et redessiner, sans attendre un rechargement
   function subscribe(table, onChange){
@@ -167,5 +174,5 @@ window.TodoTeam=(function(){
     return report;
   }
 
-  return { TABLES, init, loadConfig, saveConfig, isConfigured, isSignedIn, currentUser, signIn, signOut, pullAll, pushItem, removeItem, history, subscribe, liveState:()=>Object.assign({}, liveState), cleanConfig, migrateFromLocal };
+  return { TABLES, init, loadConfig, saveConfig, isConfigured, isSignedIn, currentUser, signIn, signOut, pullAll, pushItem, removeItem, history, reportError, subscribe, liveState:()=>Object.assign({}, liveState), cleanConfig, migrateFromLocal };
 })();

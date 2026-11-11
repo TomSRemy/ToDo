@@ -260,7 +260,38 @@
 
   function touch(t){ t.updatedAt=Date.now(); }
   // An error the app can live with still leaves a trace (audit C6): always in the console; said to the person when tell is given.
-  function softFail(where, e, tell){ try{ console.error('['+where+']', e); }catch(e2){} if(tell){ try{ setSyncStatus(tell); }catch(e3){} } }
+  function softFail(where, e, tell){ try{ console.error('['+where+']', e); }catch(e2){} logError(where, e); if(tell){ try{ setSyncStatus(tell); }catch(e3){} } }
+  // ---------- error log : the last 50 kept on this device (Réglages › Journal des erreurs), and sent to the team base
+  // when signed in, so that a problem on a colleague's computer doesn't go unnoticed. Never the data itself : the place,
+  // the message and the first lines of the stack.
+  const ERR_KEY='error-log', ERR_MAX=50; let errSent=0; const errSeen={};
+  function errRow(where, e){
+    const message=String(e && (e.message||e.reason&&e.reason.message) || e || '').slice(0,300); if(!message) return null;
+    const stack=String(e && e.stack || '').split('\n').slice(0,6).join('\n').slice(0,800);
+    return { at:Date.now(), where:String(where||'').slice(0,80), message, stack, version:(document.querySelector('meta[name=app-version]')||{}).content||'' };
+  }
+  const teamOn=()=>!!(window.TodoTeam && window.TodoTeam.isSignedIn && window.TodoTeam.isSignedIn());
+  function logError(where, e){
+    try{
+      const row=errRow(where, e); if(!row) return;
+      let list=[]; try{ list=JSON.parse(localStorage.getItem(ERR_KEY)||'[]'); }catch(e2){}
+      list.unshift(row); localStorage.setItem(ERR_KEY, JSON.stringify(list.slice(0, ERR_MAX)));
+      const k=row.where+'|'+row.message;   // the same error sent once per 10 minutes, at most 20 per session
+      if(teamOn() && errSent<20 && !(errSeen[k]>Date.now()-6e5)){ errSeen[k]=Date.now(); errSent++; window.TodoTeam.reportError(row).catch(()=>{}); }
+      if($('errlog-section') && !$('tab-lists').classList.contains('hidden')) paintErrorLog();
+    }catch(e3){}
+  }
+  window.addEventListener('error', ev=>logError('page', ev.error || ev.message));
+  window.addEventListener('unhandledrejection', ev=>logError('promesse', ev.reason));
+  function paintErrorLog(){
+    const box=$('errlog-list'); if(!box) return;
+    let list=[]; try{ list=JSON.parse(localStorage.getItem(ERR_KEY)||'[]'); }catch(e){}
+    box.innerHTML=list.length?'':'<p class="hist-empty">Aucune erreur enregistrée sur cet appareil.</p>';
+    list.slice(0,20).forEach(r=>{ const d=document.createElement('div'); d.className='hist-row';
+      d.innerHTML='<span class="hw"></span><span class="ht"></span><span class="hd"></span>';
+      d.querySelector('.hw').textContent=r.where; d.querySelector('.ht').textContent=r.message; d.querySelector('.hd').textContent=new Date(r.at).toLocaleString('fr-FR',{ day:'numeric', month:'short', hour:'2-digit', minute:'2-digit' });
+      box.appendChild(d); });
+  }
 
   async function loadSyncConfig(){
     try{ const r=await window.storage.get(SYNC_CONFIG_KEY,false); syncConfig=r&&r.value?JSON.parse(r.value):{owner:'',repo:'',token:'',enabled:false}; }
@@ -6263,6 +6294,9 @@
     syncConfig.token=''; syncConfig.enabled=false; await saveSyncConfig(); $('sync-token').value='';
     setSyncStatus('Jeton retiré de cet appareil.'); paintSyncPill();
   };
+  $('errlog-copy').onclick=e=>{ let list=[]; try{ list=JSON.parse(localStorage.getItem('error-log')||'[]'); }catch(x){} copyToClipboard(list.map(r=>new Date(r.at).toISOString()+' ['+r.where+'] '+r.message+(r.stack?'\n  '+r.stack.replace(/\n/g,'\n  '):'')).join('\n')||'(vide)', e.currentTarget); };
+  $('errlog-clear').onclick=()=>{ try{ localStorage.removeItem('error-log'); }catch(x){} paintErrorLog(); };
+  document.querySelector('.tab[data-tab="lists"]').addEventListener('click', ()=>setTimeout(paintErrorLog, 0));
   // a borrowed or shared computer : every key goes, the data stays (the last changes leave first, with the token)
   $('keys-wipe-btn').onclick=async ()=>{
     if(!await askConfirm('Effacer toutes les clés de cet appareil ?\n\nJeton GitHub, clé du pont Excel, clé Claude et connexion équipe. Tes données restent ici et sur GitHub ; il faudra recoller les clés pour reprendre la synchro.', 'Effacer les clés')) return;
@@ -6440,7 +6474,7 @@
   // « Réglages »: a table of contents at the top, one click to each part (UX audit TD3)
   // « Réglages » (UX audit TD3): four groups, a table of contents beside them, and each part's state on its title
   const SETTINGS_NAMES={ 'clients-section':'Clients', 'projects-section':'Projets', 'sync-section':'Synchro GitHub', 'conflicts-section':'Conflits', 'backup-section':'Sauvegarde',
-    'keys-section':'Clés', 'storage-section':'Stockage', 'bridge-section':'Pont Excel', 'team-section':'Synchro \u00e9quipe', 'install-section':'Installer l\u2019appli', 'ai-section':'Claude (facultatif)' };
+    'keys-section':'Clés', 'errlog-section':'Journal des erreurs', 'storage-section':'Stockage', 'bridge-section':'Pont Excel', 'team-section':'Synchro \u00e9quipe', 'install-section':'Installer l\u2019appli', 'ai-section':'Claude (facultatif)' };
   const settingsShown=s=>!s.classList.contains('hidden') && !s.hidden && s.style.display!=='none';
   function settingsPill(id, text, kind){ const s=$(id); if(!s) return; const h=s.querySelector('h2'); if(!h) return;
     let p=h.querySelector('.settings-pill'); if(!text){ if(p) p.remove(); return; }

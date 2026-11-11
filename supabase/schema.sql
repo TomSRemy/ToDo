@@ -226,3 +226,17 @@ end $$;
 alter function public.set_audit_fields() set search_path = public;
 alter function public.set_audit_fields_settings() set search_path = public;
 revoke execute on function public.handle_new_user() from public, anon, authenticated;
+
+-- 2026-11-11 · Journal des erreurs de l'appli (envoyé par chaque appareil connecté à l'équipe, sans les données)
+create table if not exists public.client_errors (
+  id bigint generated always as identity primary key,
+  at timestamptz not null default now(),
+  user_id uuid default auth.uid() references public.profiles(id) on delete set null,
+  where_ text, message text, stack text, app_version text, user_agent text
+);
+alter table public.client_errors enable row level security;
+drop policy if exists client_errors_insert on public.client_errors;
+create policy client_errors_insert on public.client_errors for insert to authenticated with check (user_id = auth.uid());
+drop policy if exists client_errors_read on public.client_errors;
+create policy client_errors_read on public.client_errors for select to authenticated using (true);
+create index if not exists client_errors_at_idx on public.client_errors (at desc);
