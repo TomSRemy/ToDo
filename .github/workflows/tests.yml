@@ -7,16 +7,16 @@ on:
 jobs:
   smoke:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
       - run: pip install playwright==1.63.0 openpyxl==3.1.5
-      # the Ubuntu mirrors are sometimes unreachable from the runners : two tries, then the browser alone (the system
+      # the Ubuntu mirrors are sometimes unreachable from the runners : 3 minutes at most, then the browser alone (the system
       # libraries are already on the image ; what failed to download were fonts the headless tests don't need)
-      - run: python -m playwright install --with-deps chromium || (sleep 30 && python -m playwright install --with-deps chromium) || python -m playwright install chromium
+      - run: timeout 180 python -m playwright install --with-deps chromium || python -m playwright install chromium
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
