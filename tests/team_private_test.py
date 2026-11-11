@@ -29,6 +29,7 @@ window.TodoTeam = {
   pullAll: async t=>JSON.parse(JSON.stringify(window.__team.server[t]||[])),
   pushItem: async (t, it)=>{ window.__team.pushed.push([t, it.id]); return true; },
   removeItem: async (t, id)=>{ window.__team.removed.push([t, id]); return (window.__team.refuse||[]).includes(id) ? 'refused' : 'deleted'; },
+  teamErrors: async ()=>[{ at:'2026-11-11T10:00:00Z', where_:'synchro', message:'Échec réseau', who:'Paul' }, { at:'2026-11-11T09:00:00Z', where_:'synchro', message:'Échec réseau', who:'Paul' }, { at:'2026-11-10T09:00:00Z', where_:'page', message:'x is undefined', who:'Toi' }],
   history: async (t, id)=>[{ field:'phone1', old_value:'0600', new_value:'0611', who:'Paul', changed_at:'2026-11-10T13:32:00Z' }, { field:'(création)', who:'Toi', changed_at:'2026-11-01T09:00:00Z' }],
     subscribe: (t, fn)=>{ (window.__subs=window.__subs||{})[t]=fn; return ()=>{}; }, migrateFromLocal: async()=>({})
 };
@@ -39,7 +40,7 @@ with sync_playwright() as p:
     b = p.chromium.launch(); page = b.new_page(viewport={"width": 1300, "height": 850}, bypass_csp=True); errors = []
     page.on("pageerror", lambda e: errors.append(str(e)))
     page.route("**/fonts.g*/**", lambda r: r.abort()); page.route("**/cdn.jsdelivr.net/**", lambda r: r.abort())
-    page.add_init_script("try{ if(!sessionStorage.getItem('s')){ localStorage.setItem('todo_todo-widget-contacts', %s); localStorage.setItem('todo_team-seen-contacts', %s); sessionStorage.setItem('s','1'); } }catch(e){}"
+    page.add_init_script("try{ if(!sessionStorage.getItem('s')){ localStorage.setItem('todo_todo-widget-contacts', %s); localStorage.setItem('todo_team-seen-contacts', %s); localStorage.setItem('team-errors-asked', String(Date.now())); sessionStorage.setItem('s','1'); } }catch(e){}"
                          % (json.dumps(json.dumps(local + [ct("c4", "Damien")])), json.dumps(json.dumps(["c2", "c3", "c4"]))))
     page.add_init_script(STUB)
     page.goto(URL); page.wait_for_timeout(1500)
@@ -79,6 +80,9 @@ with sync_playwright() as p:
     hist = page.inner_text(".hist-block")
     check("Paul" in hist and "Téléphone : 0600 → 0611" in hist and "création" in hist, f"a shared contact's card shows who changed what ({hist!r})")
     page.click('[data-tab="lists"]'); page.wait_for_timeout(400)
+    page.wait_for_selector("#errlog-team-list .hist-row", timeout=5000)
+    te = page.inner_text("#errlog-team-list")
+    check("2 × [synchro] Échec réseau" in te and "Paul" in te and "x is undefined" in te, f"Réglages lists the team's errors, the same one grouped ({te!r})")
     check("1 contact privé" in page.inner_text("#team-share-summary"), f"Réglages says what is shared and what stays mine ({page.inner_text('#team-share-summary')!r})")
     check(not errors, f"no page errors ({errors})")
     b.close()

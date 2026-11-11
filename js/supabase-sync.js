@@ -135,6 +135,16 @@ window.TodoTeam=(function(){
     return !error;
   }
 
+  // the errors met by the whole team (client_errors), the most recent first, with who met them
+  async function teamErrors(sinceMs, limit){
+    if(!client || !session) return null;
+    const { data, error }=await client.from('client_errors').select('at, where_, message, user_id, app_version').gte('at', new Date(sinceMs).toISOString()).order('at', { ascending:false }).limit(limit||50);
+    if(error) throw error;
+    if(!names){ const r=await client.from('profiles').select('id, display_name'); names={}; (r.data||[]).forEach(p=>{ names[p.id]=p.display_name||''; }); }
+    const me=session.user && session.user.id;
+    return (data||[]).map(x=>Object.assign({}, x, { who:x.user_id===me?'Toi':(names[x.user_id]||'Un collègue') }));
+  }
+
   // un canal temps réel par table ; onChange(item, 'INSERT'|'UPDATE'|'DELETE') pour fusionner dans
   // les tableaux en mémoire et redessiner, sans attendre un rechargement
   function subscribe(table, onChange){
@@ -174,5 +184,5 @@ window.TodoTeam=(function(){
     return report;
   }
 
-  return { TABLES, init, loadConfig, saveConfig, isConfigured, isSignedIn, currentUser, signIn, signOut, pullAll, pushItem, removeItem, history, reportError, subscribe, liveState:()=>Object.assign({}, liveState), cleanConfig, migrateFromLocal };
+  return { TABLES, init, loadConfig, saveConfig, isConfigured, isSignedIn, currentUser, signIn, signOut, pullAll, pushItem, removeItem, history, reportError, teamErrors, subscribe, liveState:()=>Object.assign({}, liveState), cleanConfig, migrateFromLocal };
 })();

@@ -166,7 +166,7 @@
     if(seeded){ saveTasks(); saveClients(); saveProjects(); }
     if(crmSeeded){ saveCrm(); }
     await loadSyncConfig();
-    if(window.TodoTeam) window.TodoTeam.init().then(async()=>{ await renderTeamStatus(); if(window.TodoTeam.isSignedIn()){ await teamSyncPull(); teamSyncSubscribe(); } }).catch(()=>{});   // bêta : inactif si pas configuré
+    if(window.TodoTeam) window.TodoTeam.init().then(async()=>{ await renderTeamStatus(); if(window.TodoTeam.isSignedIn()){ await teamSyncPull(); teamSyncSubscribe(); setTimeout(teamErrorsNotice, 4000); } }).catch(()=>{});   // bêta : inactif si pas configuré
     consolidateNotes(); rollDailyNote(); prefsInit();
     loadParc(); ensureRenewalTasks();
     if(migrateCompanyStars() | migrateContactCivility()) saveCrm();
@@ -291,6 +291,33 @@
       .observe(document.body, { subtree:true, childList:true, attributes:true, attributeFilter:['class','hidden'] }); }
   window.addEventListener('error', ev=>logError('page', ev.error || ev.message));
   window.addEventListener('unhandledrejection', ev=>logError('promesse', ev.reason));
+  // the team's errors (signed in) : the last 7 days in Réglages, and once a day a word when new ones came in
+  const ERR_SEEN_KEY='team-errors-seen';
+  async function paintTeamErrors(){
+    const wrap=$('errlog-team'), box=$('errlog-team-list'); if(!wrap || !teamOn()) { if(wrap) wrap.hidden=true; return; }
+    wrap.hidden=false; box.innerHTML='<p class="hist-empty">Chargement…</p>';
+    try{
+      const rows=await window.TodoTeam.teamErrors(Date.now()-7*864e5, 50)||[];
+      lsSet(ERR_SEEN_KEY, String(Date.now()));
+      if(!rows.length){ box.innerHTML='<p class="hist-empty">Aucune erreur chez l\u2019équipe cette semaine.</p>'; return; }
+      // the same error grouped : how many times, by whom, the last time
+      const by=new Map(); rows.forEach(r=>{ const k=r.where_+'|'+r.message; const g=by.get(k)||{ r, n:0, who:new Set() }; g.n++; g.who.add(r.who); by.set(k, g); });
+      box.innerHTML='';
+      [...by.values()].forEach(g=>{ const d=document.createElement('div'); d.className='hist-row';
+        d.innerHTML='<span class="hw"></span><span class="ht"></span><span class="hd"></span>';
+        d.querySelector('.hw').textContent=[...g.who].join(', '); d.querySelector('.ht').textContent=(g.n>1?g.n+' × ':'')+'['+g.r.where_+'] '+g.r.message;
+        d.querySelector('.hd').textContent=new Date(g.r.at).toLocaleString('fr-FR',{ day:'numeric', month:'short', hour:'2-digit', minute:'2-digit' });
+        box.appendChild(d); });
+    }catch(e){ box.innerHTML='<p class="hist-empty">Erreurs de l\u2019équipe indisponibles (hors ligne ?).</p>'; }
+  }
+  async function teamErrorsNotice(){
+    if(!teamOn()) return;
+    const seen=Number(lsGet(ERR_SEEN_KEY)||0), asked=Number(lsGet('team-errors-asked')||0);
+    if(Date.now()-asked<864e5) return; lsSet('team-errors-asked', String(Date.now()));   // once a day at most
+    try{ const rows=await window.TodoTeam.teamErrors(Math.max(seen, Date.now()-7*864e5), 50)||[]; const others=rows.filter(r=>r.who!=='Toi');
+      if(others.length) notify(others.length+' erreur'+(others.length>1?'s':'')+' chez l\u2019équipe depuis ta dernière visite', { label:'Voir', fn:()=>{ gsTab('lists'); setTimeout(()=>{ const el=$('errlog-section'); if(el) el.scrollIntoView({ behavior:'smooth', block:'start' }); }, 80); } });
+    }catch(e){}
+  }
   function paintErrorLog(){
     const box=$('errlog-list'); if(!box) return;
     let list=[]; try{ list=JSON.parse(localStorage.getItem(ERR_KEY)||'[]'); }catch(e){}
@@ -6248,7 +6275,7 @@
   };
   $('errlog-copy').onclick=e=>{ let list=[]; try{ list=JSON.parse(localStorage.getItem('error-log')||'[]'); }catch(x){} copyToClipboard(list.map(r=>new Date(r.at).toISOString()+' ['+r.where+'] '+r.message+(r.stack?'\n  '+r.stack.replace(/\n/g,'\n  '):'')).join('\n')||'(vide)', e.currentTarget); };
   $('errlog-clear').onclick=()=>{ try{ localStorage.removeItem('error-log'); }catch(x){} paintErrorLog(); };
-  document.querySelector('.tab[data-tab="lists"]').addEventListener('click', ()=>setTimeout(paintErrorLog, 0));
+  document.querySelector('.tab[data-tab="lists"]').addEventListener('click', ()=>setTimeout(()=>{ paintErrorLog(); paintTeamErrors(); }, 0));
   // a borrowed or shared computer : every key goes, the data stays (the last changes leave first, with the token)
   $('keys-wipe-btn').onclick=async ()=>{
     if(!await askConfirm('Effacer toutes les clés de cet appareil ?\n\nJeton GitHub, clé du pont Excel, clé Claude et connexion équipe. Tes données restent ici et sur GitHub ; il faudra recoller les clés pour reprendre la synchro.', 'Effacer les clés')) return;
