@@ -11,6 +11,7 @@ window.TodoTeam=(function(){
   const CONFIG_KEY='team-config';   // { url, anonKey } — jamais commité, saisi dans Réglages, gardé par window.storage
   const TABLES=['opportunities','contacts','companies','meetings','team_settings'];
   let client=null, session=null, sdkPromise=null;
+  const liveState={};   // table -> SUBSCRIBED / CHANNEL_ERROR / TIMED_OUT / CLOSED
 
   async function loadConfig(){
     try{ const r=await window.storage.get(CONFIG_KEY); return r&&r.value?JSON.parse(r.value):null; }catch(e){ return null; }
@@ -33,16 +34,27 @@ window.TodoTeam=(function(){
   // à appeler une fois au démarrage (sans effet si pas configuré) ; renvoie le client, ou null
   async function init(){
     if(client) return client;
-    const cfg=await loadConfig();
-    if(!cfg || !cfg.url || !cfg.anonKey) return null;
+    const cfg=cleanConfig(await loadConfig());
+    if(!cfg) return null;
     await loadSdk();
     client=window.supabase.createClient(cfg.url, cfg.anonKey, { auth:{ persistSession:true, autoRefreshToken:true } });
     const { data }=await client.auth.getSession();
     session=data && data.session;
-    client.auth.onAuthStateChange((_evt, s)=>{ session=s; });
+    if(session) client.realtime.setAuth(session.access_token);
+    // the live channels read with the signed-in person's rights (the tables are closed to anonymous readers) :
+    // they get the token at sign-in and at each refresh, not only the anonymous key
+    client.auth.onAuthStateChange((_evt, s)=>{ session=s; if(s) client.realtime.setAuth(s.access_token); });
     return client;
   }
 
+  // a header only takes plain ASCII : a character pasted by mistake (typographic quote, invisible space) or a password
+  // a browser filled in by itself (Edge did, in the key field) made « String contains non ISO-8859-1 code point »
+  const clean=v=>String(v||'').replace(/[^\x21-\x7E]/g,'');
+  function cleanConfig(cfg){
+    if(!cfg) return null;
+    const url=clean(cfg.url).replace(/\/+$/,''), anonKey=clean(cfg.anonKey);
+    return /^https:\/\/[a-z0-9-]+\.supabase\.co$/i.test(url) && /^[\w-]+\.[\w-]+\.[\w-]+$/.test(anonKey) ? { url, anonKey } : null;
+  }
   function isConfigured(){ return !!client; }
   function isSignedIn(){ return !!session; }
   function currentUser(){ return session && session.user; }
@@ -109,12 +121,21 @@ window.TodoTeam=(function(){
   // les tableaux en mémoire et redessiner, sans attendre un rechargement
   function subscribe(table, onChange){
     if(!client) return ()=>{};
-    const ch=client.channel('team-'+table)
-      .on('postgres_changes', { event:'*', schema:'public', table }, payload=>{
-        const row=payload.new || payload.old; if(!row) return;
-        onChange(rowToItem(row), payload.eventType);
-      }).subscribe((status, err)=>{ console.log('[team realtime]', table, status, err||''); });   // SUBSCRIBED/CHANNEL_ERROR/TIMED_OUT/CLOSED : visible dans la console, à suivre tant que le temps réel n'est pas confirmé fiable
-    return ()=>client.removeChannel(ch);
+    let ch=null, stopped=false, wait=2000;
+    const open=()=>{
+      ch=client.channel('team-'+table)
+        .on('postgres_changes', { event:'*', schema:'public', table }, payload=>{
+          const row=payload.new || payload.old; if(!row) return;
+          onChange(rowToItem(row), payload.eventType);
+        }).subscribe((status, err)=>{
+          liveState[table]=status; console.log('[team realtime]', table, status, err||'');
+          if(status==='SUBSCRIBED') wait=2000;
+          // a dropped channel comes back by itself (2 s, then up to 1 min between tries)
+          if((status==='CHANNEL_ERROR' || status==='TIMED_OUT') && !stopped){ const c=ch; setTimeout(()=>{ if(stopped) return; client.removeChannel(c); open(); }, wait); wait=Math.min(wait*2, 60000); }
+        });
+    };
+    open();
+    return ()=>{ stopped=true; if(ch) client.removeChannel(ch); };
   }
 
   // migration one-shot : reprend ce que l'appli a localement (window.storage) et le pousse en
@@ -135,5 +156,5 @@ window.TodoTeam=(function(){
     return report;
   }
 
-  return { TABLES, init, loadConfig, saveConfig, isConfigured, isSignedIn, currentUser, signIn, signOut, pullAll, pushItem, removeItem, subscribe, migrateFromLocal };
+  return { TABLES, init, loadConfig, saveConfig, isConfigured, isSignedIn, currentUser, signIn, signOut, pullAll, pushItem, removeItem, subscribe, liveState:()=>Object.assign({}, liveState), cleanConfig, migrateFromLocal };
 })();

@@ -6949,6 +6949,7 @@
 
   // ---------- Synchro équipe (Supabase, bêta) : voir js/supabase-sync.js. Inactif sans config, aucun effet sur l'appli en service. ----------
   const TEAM_TABLES=['opportunities','contacts','companies','meetings'];
+  let teamPulledAt=0;   // the last full read of the team's data
   let teamSnap={ opportunities:new Map(), contacts:new Map(), companies:new Map(), meetings:new Map() }, teamSubscribed=false;
   const teamArrFor=table=>({ opportunities, contacts, companies, meetings }[table]);
   function teamRefresh(){ render(); renderArchive(); renderLists(); renderToday(); renderContacts(); renderPipeline(); }
@@ -6985,6 +6986,7 @@
   // recharge tout depuis Supabase au démarrage/connexion : fusionne par id, la version la plus récente gagne
   async function teamSyncPull(){
     if(!(window.TodoTeam && window.TodoTeam.isSignedIn())) return;
+    teamPulledAt=Date.now();
     for(const table of TEAM_TABLES){
       let rows; try{ rows=await window.TodoTeam.pullAll(table); }catch(e){ console.error('[teamSyncPull]', table, e); continue; }
       if(!rows) continue;
@@ -7001,6 +7003,9 @@
     await saveCrmLocalOnly();
     teamRefresh();
   }
+  // back on the tab (or the window) after a while : the team's data read again, whatever the live channel did meanwhile
+  const teamPullIfStale=()=>{ if(document.visibilityState!=='visible' || !(window.TodoTeam && window.TodoTeam.isSignedIn())) return; if(Date.now()-teamPulledAt<30000) return; teamPulledAt=Date.now(); teamSyncPull().catch(e=>softFail('synchro équipe', e)); };
+  document.addEventListener('visibilitychange', teamPullIfStale); window.addEventListener('focus', teamPullIfStale);
   // un collègue modifie quelque chose : reçu en direct, fusionné dans les tableaux en mémoire
   function teamSyncSubscribe(){
     if(teamSubscribed || !(window.TodoTeam && window.TodoTeam.isSignedIn())) return;
@@ -7033,7 +7038,8 @@
     cfgEl.className='bridge-status'+(cfg&&cfg.url?' on':'');
     if(window.TodoTeam.isSignedIn()){
       const u=window.TodoTeam.currentUser();
-      authEl.textContent='Connecté comme '+(u&&u.email||'?');
+      const live=Object.values(window.TodoTeam.liveState ? window.TodoTeam.liveState() : {});
+      authEl.textContent='Connecté comme '+(u&&u.email||'?')+(live.length?' · direct : '+(live.every(x=>x==='SUBSCRIBED')?'actif':'en reconnexion (les données se rechargent aussi à chaque retour sur l\u2019onglet)'):'');
       authEl.className='bridge-status on';
     } else {
       authEl.textContent=window.TodoTeam.isConfigured()?'Non connecté.':'Configure d’abord la connexion ci-dessus.';
@@ -7048,8 +7054,9 @@
       if(!url || !key){ $('team-config-status').textContent='URL et clé requises.'; return; }
       // un header HTTP n'accepte que de l'ISO-8859-1 : un caractère collé par erreur (guillemet
       // typographique, espace invisible…) donne sinon une erreur fetch cryptique bien plus tard
-      if(!/^[\x00-\xFF]*$/.test(url) || !/^[\x00-\xFF]*$/.test(key)){ $('team-config-status').textContent='URL ou clé : caractère invalide (recopie depuis le bloc de code, sans rien autour).'; return; }
-      await window.TodoTeam.saveConfig({ url, anonKey:key });
+      const cfg=window.TodoTeam.cleanConfig({ url, anonKey:key });
+      if(!cfg){ $('team-config-status').textContent='URL ou clé non reconnue : l\u2019URL ressemble à https://xxxx.supabase.co, la clé à trois blocs séparés par des points. Recopie-les sans rien autour.'; return; }
+      await window.TodoTeam.saveConfig(cfg);
       $('team-config-status').textContent='Enregistré, rechargement…';
       location.reload();   // le client Supabase se construit une fois, au chargement : on recharge pour qu'il reprenne la config
     };

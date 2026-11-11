@@ -722,7 +722,7 @@
       <p class="list-hint">Le pipeline, les contacts, les sociétés et les rendez-vous partagés avec l'équipe en temps réel, au lieu de rester chacun sur sa propre copie. <b>En bêta</b> : demande à ton administrateur (Tom) l'URL + la clé ci-dessous à coller une fois, puis ton compte (email + mot de passe) — c'est lui qui le crée, pas besoin de t'inscrire toi-même.</p>
       <div style="display:flex; flex-direction:column; gap:8px;">
         <input type="text" id="team-url" placeholder="URL donnée par l'administrateur" autocomplete="off">
-        <input type="password" id="team-key" placeholder="Clé donnée par l'administrateur" autocomplete="off">
+        <input type="text" id="team-key" placeholder="Clé donnée par l'administrateur" autocomplete="off" spellcheck="false" data-lpignore="true">
         <div class="set-actions"><button class="data-btn" id="team-save-btn">Enregistrer la configuration</button></div>
         <span id="team-config-status" class="bridge-status"></span>
       </div>
