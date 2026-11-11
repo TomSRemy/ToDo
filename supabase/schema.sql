@@ -240,3 +240,25 @@ create policy client_errors_insert on public.client_errors for insert to authent
 drop policy if exists client_errors_read on public.client_errors;
 create policy client_errors_read on public.client_errors for select to authenticated using (true);
 create index if not exists client_errors_at_idx on public.client_errors (at desc);
+
+-- 2026-11-11 · Recommandations de performance de Supabase (appliquées via le SQL Editor) : l'utilisateur connecté
+-- calculé une fois par requête dans les règles, et un index sur chaque colonne « qui »
+do $$
+declare t text;
+begin
+  foreach t in array array['opportunities','contacts','companies','meetings'] loop
+    execute format('drop policy if exists %I_delete_own on public.%I;', t, t);
+    execute format('create policy %I_delete_own on public.%I for delete to authenticated using (created_by = (select auth.uid()));', t, t);
+    execute format('create index if not exists %I_created_by_idx on public.%I (created_by);', t, t);
+    execute format('create index if not exists %I_updated_by_idx on public.%I (updated_by);', t, t);
+  end loop;
+end $$;
+drop policy if exists profiles_write_own on public.profiles;
+create policy profiles_write_own on public.profiles for insert to authenticated with check (id = (select auth.uid()));
+drop policy if exists profiles_update_own on public.profiles;
+create policy profiles_update_own on public.profiles for update to authenticated using (id = (select auth.uid()));
+drop policy if exists client_errors_insert on public.client_errors;
+create policy client_errors_insert on public.client_errors for insert to authenticated with check (user_id = (select auth.uid()));
+create index if not exists change_log_changed_by_idx on public.change_log (changed_by);
+create index if not exists client_errors_user_id_idx on public.client_errors (user_id);
+create index if not exists team_settings_updated_by_idx on public.team_settings (updated_by);
