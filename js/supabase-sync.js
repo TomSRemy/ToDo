@@ -93,11 +93,16 @@ window.TodoTeam=(function(){
   }
 
   // vraie suppression (pas `deleted:true`) : un contact rendu privé ne doit plus rester dans la base d'équipe
+  // with the team rules, only the author of a row can delete it for good : a refused delete raises no error, it just
+  // deletes nothing. Returns 'deleted', 'gone' (already not there) or 'refused' (someone else's row).
   async function removeItem(table, id){
-    if(!client) return false;
-    const { error }=await client.from(table).delete().eq('id', id);
+    if(!client) return 'gone';
+    const { data, error }=await client.from(table).delete().eq('id', id).select('id');
     if(error) throw error;
-    return true;
+    if(data && data.length) return 'deleted';
+    const { data:still, error:e2 }=await client.from(table).select('id').eq('id', id);
+    if(e2) throw e2;
+    return still && still.length ? 'refused' : 'gone';
   }
 
   // un canal temps réel par table ; onChange(item, 'INSERT'|'UPDATE'|'DELETE') pour fusionner dans

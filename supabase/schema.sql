@@ -154,3 +154,75 @@ create policy change_log_insert on public.change_log for insert to authenticated
 
 -- temps réel : les collègues voient les changements des autres sans recharger
 alter publication supabase_realtime add table public.opportunities, public.contacts, public.companies, public.meetings, public.team_settings, public.change_log;
+
+-- ============================================================================================================
+-- 2026-11-11 · Droits d'équipe et historique (appliqué sur todo-beta via le SQL Editor)
+-- Tout le monde lit, crée et modifie le partagé ; seule l'autrice ou l'auteur d'une ligne peut la supprimer
+-- pour de bon (les autres la mettent à la corbeille : deleted = true, que n'importe qui peut annuler).
+-- L'historique (change_log) est écrit par la base elle-même, champ par champ, jamais par l'appli ; il ne peut
+-- être ni modifié ni effacé depuis l'appli. Un contact retiré de l'équipe (rendu privé) part avec son historique.
+-- ============================================================================================================
+do $$
+declare t text;
+begin
+  foreach t in array array['opportunities','contacts','companies','meetings'] loop
+    execute format('drop policy if exists %I_team_rw on public.%I;', t, t);
+    execute format('drop policy if exists %I_read on public.%I;', t, t);
+    execute format('drop policy if exists %I_insert on public.%I;', t, t);
+    execute format('drop policy if exists %I_update on public.%I;', t, t);
+    execute format('drop policy if exists %I_delete_own on public.%I;', t, t);
+    execute format('create policy %I_read on public.%I for select to authenticated using (true);', t, t);
+    execute format('create policy %I_insert on public.%I for insert to authenticated with check (true);', t, t);
+    execute format('create policy %I_update on public.%I for update to authenticated using (true) with check (true);', t, t);
+    execute format('create policy %I_delete_own on public.%I for delete to authenticated using (created_by = auth.uid());', t, t);
+  end loop;
+end $$;
+
+drop policy if exists change_log_insert on public.change_log;
+create index if not exists change_log_at_idx on public.change_log (changed_at desc);
+
+create or replace function public.log_change()
+returns trigger language plpgsql security definer set search_path = public as $$
+declare k text; o jsonb; n jsonb;
+begin
+  if tg_op = 'INSERT' then
+    insert into change_log(entity_type, entity_id, field, old_value, new_value, changed_by)
+      values (tg_table_name, new.id, '(création)', null, null, auth.uid());
+    return new;
+  elsif tg_op = 'DELETE' then
+    if tg_table_name = 'contacts' then
+      delete from change_log where entity_type = 'contacts' and entity_id = old.id;
+    end if;
+    insert into change_log(entity_type, entity_id, field, old_value, new_value, changed_by)
+      values (tg_table_name, old.id, '(suppression définitive)', null, null, auth.uid());
+    return old;
+  end if;
+  if new.deleted is distinct from old.deleted then
+    insert into change_log(entity_type, entity_id, field, old_value, new_value, changed_by)
+      values (tg_table_name, new.id, case when new.deleted then '(mise à la corbeille)' else '(restauration)' end, to_jsonb(old.deleted), to_jsonb(new.deleted), auth.uid());
+  end if;
+  for k in select distinct key from (select jsonb_object_keys(coalesce(old.data,'{}'::jsonb)) as key union select jsonb_object_keys(coalesce(new.data,'{}'::jsonb))) s loop
+    o := old.data -> k; n := new.data -> k;
+    if o is distinct from n then
+      insert into change_log(entity_type, entity_id, field, old_value, new_value, changed_by)
+        values (tg_table_name, new.id, k, o, n, auth.uid());
+    end if;
+  end loop;
+  return new;
+end $$;
+
+revoke all on function public.log_change() from public, anon, authenticated;
+
+do $$
+declare t text;
+begin
+  foreach t in array array['opportunities','contacts','companies','meetings'] loop
+    execute format('drop trigger if exists %I_log on public.%I;', t, t);
+    execute format('create trigger %I_log after insert or update or delete on public.%I for each row execute function public.log_change();', t, t);
+  end loop;
+end $$;
+
+-- Avertissements du contrôle de sécurité Supabase (à appliquer via le SQL Editor)
+alter function public.set_audit_fields() set search_path = public;
+alter function public.set_audit_fields_settings() set search_path = public;
+revoke execute on function public.handle_new_user() from public, anon, authenticated;

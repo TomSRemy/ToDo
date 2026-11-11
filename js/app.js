@@ -6960,7 +6960,14 @@
   function teamSeenSave(){ try{ window.storage.set('team-seen-contacts', JSON.stringify([...teamSeen])); }catch(e){ softFail('team-seen', e); } }
   async function teamDropPrivate(id, seen){
     if(!teamSnap.contacts.has(id) && !seen.has(id)) return;   // never sent : nothing to take back
-    try{ await window.TodoTeam.removeItem('contacts', id); teamSnap.contacts.delete(id); seen.delete(id); teamSeenSave(); }
+    try{
+      const r=await window.TodoTeam.removeItem('contacts', id);
+      if(r==='refused'){   // a colleague's contact : it stays shared, the lock is taken back
+        const c=contacts.find(x=>x.id===id); if(c){ c.private=false; touchCrm(c); saveCrmLocalOnly(); renderContacts(); paintTeamShare(); }
+        notify('Ce contact a été ajouté par un collègue : seul lui peut le retirer de l\u2019équipe. Il reste partagé.'); return;
+      }
+      teamSnap.contacts.delete(id); seen.delete(id); teamSeenSave();
+    }
     catch(e){ console.error('[teamSyncPush] retrait contact privé', id, e); }
   }
   async function teamSyncPush(){

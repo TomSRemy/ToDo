@@ -28,7 +28,7 @@ window.TodoTeam = {
   currentUser: ()=>({ email:'t@x' }), signIn: async()=>{}, signOut: async()=>{},
   pullAll: async t=>JSON.parse(JSON.stringify(window.__team.server[t]||[])),
   pushItem: async (t, it)=>{ window.__team.pushed.push([t, it.id]); return true; },
-  removeItem: async (t, id)=>{ window.__team.removed.push([t, id]); return true; },
+  removeItem: async (t, id)=>{ window.__team.removed.push([t, id]); return (window.__team.refuse||[]).includes(id) ? 'refused' : 'deleted'; },
   subscribe: (t, fn)=>{ (window.__subs=window.__subs||{})[t]=fn; return ()=>{}; }, migrateFromLocal: async()=>({})
 };
 Object.defineProperty(window, 'TodoTeam', { value: window.TodoTeam, writable: false });
@@ -60,6 +60,10 @@ with sync_playwright() as p:
     t = page.evaluate("window.__team")
     check(["contacts", "c1"] in t["removed"], "made private once shared: it is taken out of the team base")
     page.locator(".contact-row[data-cid='c1'] .ct-share").click(); page.wait_for_timeout(800)
+    # a colleague's contact (the base refuses the delete) : the lock is taken back, it stays shared, and the user is told
+    page.evaluate("window.__team.refuse=['c3']")
+    page.locator(".contact-row[data-cid='c3'] .ct-share").click(); page.wait_for_timeout(800)
+    check(contacts()["c3"].get("private") is False and "collègue" in page.inner_text("#app-toast"), f"a colleague's contact can't be made private : it stays shared, with a message ({contacts()['c3'].get('private')!r})")
     page.select_option("#contacts-type-filter", "__private"); page.wait_for_timeout(300)
     names = page.locator("#contacts-list .contact-row").all_inner_texts()
     check(len(names) == 1 and "Bob" in names[0], f"the « Privés » filter lists only the private ones ({names})")
