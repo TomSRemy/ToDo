@@ -6263,6 +6263,17 @@
     syncConfig.token=''; syncConfig.enabled=false; await saveSyncConfig(); $('sync-token').value='';
     setSyncStatus('Jeton retiré de cet appareil.'); paintSyncPill();
   };
+  // a borrowed or shared computer : every key goes, the data stays (the last changes leave first, with the token)
+  $('keys-wipe-btn').onclick=async ()=>{
+    if(!await askConfirm('Effacer toutes les clés de cet appareil ?\n\nJeton GitHub, clé du pont Excel, clé Claude et connexion équipe. Tes données restent ici et sur GitHub ; il faudra recoller les clés pour reprendre la synchro.', 'Effacer les clés')) return;
+    const st=$('keys-wipe-status'); st.textContent='Envoi des derniers changements…';
+    try{ flushPostit(); await Promise.all(Object.values(SYNC_FILES).map(f=>f.flush()).filter(Boolean)); }catch(e){ softFail('envoi avant effacement', e); }
+    syncConfig.token=''; syncConfig.enabled=false; await saveSyncConfig(); $('sync-token').value='';
+    bridgeCfg.token=''; saveBridgeCfg(); if($('bridge-token')) $('bridge-token').value='';
+    try{ localStorage.removeItem('ai-key'); }catch(e){} if($('ai-key-input')) $('ai-key-input').value='';
+    try{ if(window.TodoTeam && window.TodoTeam.isSignedIn()) await window.TodoTeam.signOut(); }catch(e){ softFail('déconnexion équipe', e); }
+    st.textContent='Clés effacées. Les données sont toujours là.'; paintSyncPill(); renderBridgeStatus(); renderTeamStatus(); paintSettingsState();
+  };
   $('sync-token-exp').addEventListener('change', ()=>{ syncConfig.tokenExpires=$('sync-token-exp').value||''; saveSyncConfig(); paintSyncPill(); });
   $('sync-now-btn').onclick=()=>{ if(!syncConfig.enabled){ setSyncStatus('Active la synchro d\u2019abord.'); return; } setSyncStatus('Synchronisation…'); syncPushNow(); syncPushCrmNow(); syncPushNotesNow(); };
   $('contact-add-btn').onclick=()=>openContactForm(null);
@@ -6429,7 +6440,7 @@
   // « Réglages »: a table of contents at the top, one click to each part (UX audit TD3)
   // « Réglages » (UX audit TD3): four groups, a table of contents beside them, and each part's state on its title
   const SETTINGS_NAMES={ 'clients-section':'Clients', 'projects-section':'Projets', 'sync-section':'Synchro GitHub', 'conflicts-section':'Conflits', 'backup-section':'Sauvegarde',
-    'storage-section':'Stockage', 'bridge-section':'Pont Excel', 'team-section':'Synchro \u00e9quipe', 'install-section':'Installer l\u2019appli', 'ai-section':'Claude (facultatif)' };
+    'keys-section':'Clés', 'storage-section':'Stockage', 'bridge-section':'Pont Excel', 'team-section':'Synchro \u00e9quipe', 'install-section':'Installer l\u2019appli', 'ai-section':'Claude (facultatif)' };
   const settingsShown=s=>!s.classList.contains('hidden') && !s.hidden && s.style.display!=='none';
   function settingsPill(id, text, kind){ const s=$(id); if(!s) return; const h=s.querySelector('h2'); if(!h) return;
     let p=h.querySelector('.settings-pill'); if(!text){ if(p) p.remove(); return; }

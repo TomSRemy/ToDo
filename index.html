@@ -771,6 +771,11 @@
       </div>
       <input type="file" id="import-file" accept="application/json" style="display:none;">
     </div>
+    <div class="list-manager" id="keys-section">
+      <h2>Clés sur cet appareil</h2>
+      <p class="list-hint">Les clés (jeton GitHub, clé du pont Excel, clé Claude, connexion équipe) restent dans ce navigateur. Sur un ordinateur prêté ou partagé, efface-les avant de partir : tes données restent ici et sur GitHub, seules les clés partent. Conseil : un jeton GitHub limité à ton seul dépôt de données, avec une date d’expiration.</p>
+      <div class="set-actions"><button class="data-btn" id="keys-wipe-btn" type="button">Effacer toutes les clés de cet appareil</button><span id="keys-wipe-status" class="bridge-status"></span></div>
+    </div>
     <div class="list-manager" id="storage-section">
       <h2>Stockage sur cet appareil</h2>
       <p class="list-hint">Tes données sont enregistrées dans ce navigateur (et sur GitHub si la synchro est active). Si l'espace venait à manquer, un bandeau rouge te prévient aussitôt.</p>
