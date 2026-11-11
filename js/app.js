@@ -1471,65 +1471,9 @@
     b.querySelector('.bk-go').onclick=()=>{ exportData(); renderBackupBanner(); };
     b.querySelector('.bk-later').onclick=()=>{ lsSet('backup-snooze-until', String(Date.now()+3*864e5)); renderBackupBanner(); };
   }
-  // the market tiles : drawn by js/market.js from PowerKlock's open data (spot, Cal, TTF, EUA, Brent, GO), a click opens Marché
-  function renderSynthMarket(){
-    const root=$('synth-market'); if(!root) return;   // on the phone too : the tiles wrap two by two
-    if(!root.dataset.built || Date.now()-(+root.dataset.built)>30*60000){ root.dataset.built=String(Date.now()); window.TodoMarket.renderTiles(root); }
-  }
-  // the Synthèse : on the left the pipeline (who has the offers) and the urgent tasks, on the right the map ;
-  // the left column stops where the map ends (the tasks that don't fit : « + N autres »)
-  function renderSynthPanels(){
-    const root=$('synth-panels'); if(!root || ON_PHONE) return;
-    root.innerHTML='';
-    const grid=document.createElement('div'); grid.className='synth-grid';
-    const left=document.createElement('div'); left.className='synth-left';
-    const inner=document.createElement('div'); inner.className='synth-left-in'; left.appendChild(inner);
-    const pipe=window.TodoOffers.offersSummary(()=>gsTab('pipeline')); pipe.querySelector('.of-sum-go').textContent='Pipeline'; inner.appendChild(pipe);
-    if(parcData===null) loadParc();
-    if(parcData){ const c=window.TodoParc.parcChart(parcData.items.filter(p=>p.statut==='Gagné')); c.classList.add('synth-parc'); c.querySelector('.parc-h').title='Ouvrir le Portefeuille'; c.querySelector('.parc-h').onclick=()=>gsTab('parc'); inner.appendChild(c); }
-    inner.appendChild(synthTasksCard());
-    grid.appendChild(left);
-    const right=document.createElement('div'); right.className='synth-right';
-    const m=parcMap(); m.classList.add('synth-map'); right.appendChild(m);
-    grid.appendChild(right);
-    root.appendChild(grid);
-    requestAnimationFrame(synthFitTasks);
-  }
-  function synthTasksCard(){
-    const open=activeTasks(), od=sortedTasks(open.filter(t=>dueStatus(t.due)==='overdue'));
-    const now=new Date(); now.setHours(0,0,0,0);
-    const td=sortedTasks(open.filter(t=>t.due && new Date(t.due+'T00:00:00').getTime()===now.getTime()));
-    const c=document.createElement('section'); c.className='pd-card st-card';
-    c.innerHTML='<h4 class="st-h"><button type="button" class="of-sum-go st-go"></button><button type="button" class="st-week">Ma semaine →</button></h4><div class="st-rows"></div>';
-    c.querySelector('.st-go').textContent='Tâches urgentes'+(od.length+td.length?' · '+(od.length+td.length):'');
-    c.querySelector('.st-go').onclick=()=>gsTab('tasks');
-    c.querySelector('.st-week').onclick=()=>openWeek('this');
-    const rows=c.querySelector('.st-rows');
-    if(!od.length && !td.length){
-      const nx=sortedTasks(open.filter(t=>t.due && dueStatus(t.due)!=='overdue')).sort((a,b)=>a.due.localeCompare(b.due))[0];
-      const p=document.createElement('p'); p.className='of-sum-empty'; p.textContent='Rien en retard ni dû aujourd\u2019hui.'+(nx?' Prochaine : '+plainLinks(nx.title)+', '+new Date(nx.due+'T00:00:00').toLocaleDateString('fr-FR',{ weekday:'long', day:'numeric', month:'long' })+'.':'');
-      rows.appendChild(p); return c;
-    }
-    od.concat(td).forEach(t=>{
-      const late=dueStatus(t.due)==='overdue', days=Math.round((now-new Date(t.due+'T00:00:00'))/864e5);
-      const r=document.createElement('button'); r.type='button'; r.className='st-row';
-      r.innerHTML='<span class="tag"></span><span class="t"></span><span class="c"></span>';
-      const tg=r.querySelector('.tag'); tg.textContent=late?'\u2212'+days+' j':'auj.'; tg.classList.add(late?'r':'a');
-      r.querySelector('.t').textContent=plainLinks(t.title); r.querySelector('.c').textContent=t.client||'';
-      r.onclick=()=>{ gsTab('tasks'); setTimeout(()=>openEdit(t.id), 30); };
-      rows.appendChild(r); });
-    return c;
-  }
-  // as many task lines as the map's height allows, the rest behind « + N autres »
-  function synthFitTasks(){
-    const left=document.querySelector('#synth-panels .synth-left'), rows=left && left.querySelector('.st-rows'); if(!rows) return;
-    const all=[...rows.querySelectorAll('.st-row')]; rows.querySelectorAll('.of-sum-more').forEach(x=>x.remove()); all.forEach(x=>{ x.hidden=false; });
-    if(getComputedStyle(left.querySelector('.synth-left-in')).position!=='absolute' || !all.length) return;   // one column (narrow window) : everything shown
-    const limit=left.getBoundingClientRect().bottom-30;
-    let hidden=0; all.forEach(x=>{ if(x.getBoundingClientRect().bottom>limit){ x.hidden=true; hidden++; } });
-    if(hidden){ const m=document.createElement('button'); m.type='button'; m.className='of-sum-more'; m.textContent='+ '+hidden+' autre'+(hidden>1?'s':'')+' dans Tâches'; m.onclick=()=>gsTab('tasks'); rows.appendChild(m); }
-  }
-  window.addEventListener('resize', ()=>{ if(!$('tab-today').classList.contains('hidden')) synthFitTasks(); });
+  // ---------- the Synthèse's panels : js/synth.js ----------
+  function renderSynthMarket(){ if(window.TodoSynth.renderSynthMarket) window.TodoSynth.renderSynthMarket(); }
+  function renderSynthPanels(){ if(window.TodoSynth.renderSynthPanels) window.TodoSynth.renderSynthPanels(); }
   function synthSignedThisYear(year){
     if(parcData===null) loadParc();
     return (parcData?parcData.items:[]).filter(p=>p.statut==='Gagné' && (p.vols[year]||0)>0).reduce((s,p)=>s+(p.kwc||0),0);
@@ -6946,6 +6890,7 @@
   const MAP_TECHS=[ ['PV','Solaire PV','#E3B448'], ['Eolien','Éolien','#8EC5E8'], ['Hydro','Hydro','#6E9CF0'], ['Biogaz','Biogaz','#9CC37A'], ['Autre','Autre','#8B95A5'] ];
   const MAP_PHASES=[ ['qualif','Qualification','#7DA2CF'], ['attente_prix','Attente de prix','#F2A541'], ['offre','Offre','#E5B54F'], ['contrat','Contrat','#B49CFF'], ['onboarding','Onboarding','#5EEAD4'], ['actif','En service','#14D3A9'] ];
   window.TodoParc.init({ $, renderSynthPanels, MAP_PHASES, MAP_TECHS, PARC_CADRES, PARC_COLORS, allCompanyNames, askConfirm, celebrate, closeRenewalTask, coDupKey, copyToClipboard, createTask, ensureCompany, escapeHtml, fmtKwc, inProcess, isExited, loadParc, loadScript, loseOpps, lsSet, newOppId, openCompanySheet, openOppDetail, oppName, oppPhase, parcBars, parcNorm, parcTable, parcYearsShown, pqFold, pqIsoToFr, pqNum, prefsToNote, relanceOnMove, render, renderPipeline, saveCrm, saveTasks, stageLabel, toISO, touchCrm, get gsTab(){ return gsTab; }, get mapInPipe(){ return mapInPipe; }, set mapInPipe(v){ mapInPipe=v; }, get opportunities(){ return opportunities; }, set opportunities(v){ opportunities=v; }, get parcData(){ return parcData; }, set parcData(v){ parcData=v; }, get parcKpi(){ return parcKpi; }, set parcKpi(v){ parcKpi=v; }, get parcKpiLabel(){ return parcKpiLabel; }, set parcKpiLabel(v){ parcKpiLabel=v; }, get parcKpiSet(){ return parcKpiSet; }, set parcKpiSet(v){ parcKpiSet=v; }, get parcMapAll(){ return parcMapAll; }, set parcMapAll(v){ parcMapAll=v; }, get parcMapLayer(){ return parcMapLayer; }, set parcMapLayer(v){ parcMapLayer=v; }, get parcMapSel(){ return parcMapSel; }, set parcMapSel(v){ parcMapSel=v; }, get parcMapView(){ return parcMapView; }, set parcMapView(v){ parcMapView=v; }, get parcSyncNote(){ return parcSyncNote; }, set parcSyncNote(v){ parcSyncNote=v; }, get parcYear(){ return parcYear; }, set parcYear(v){ parcYear=v; }, get sameCo(){ return sameCo; }, get syncConfig(){ return syncConfig; }, set syncConfig(v){ syncConfig=v; }, get tasks(){ return tasks; }, set tasks(v){ tasks=v; } });   // Portefeuille : renouvellements, tableau et carte — js/parc.js
+  window.TodoSynth.init({ $, ON_PHONE, gsTab:(...a)=>gsTab(...a), loadParc, parcMap, activeTasks, sortedTasks, dueStatus, plainLinks, openEdit, openWeek, get parcData(){ return parcData; } });
   // ---------- Excel source of the Portefeuille: link to open it, automatic refresh through the local Excel bridge ----------
   // A web page cannot read a file on SharePoint by itself (sign-in + the browser blocks it); the bridge reads the
   // synced copy on the computer instead. The link is kept to open the file in one click.
