@@ -3,6 +3,16 @@ Option Explicit
 
 ' ==== A remplir avant usage ====
 
+' Ou partent les mails marques :
+'  "dossier" (par defaut) : un fichier par mail dans INBOX_FOLDER, lu par le pont Excel.
+'                           Pas de jeton, rien sur Internet.
+'  "github"               : l'ancien chemin (depot GitHub prive + jeton ci-dessous).
+Public Const INBOX_MODE As String = "dossier"
+' Vide = OneDrive\ToDo\boite-mail (le dossier que le pont lit par defaut).
+Public Const INBOX_FOLDER As String = ""
+
+' ---- Seulement si INBOX_MODE = "github" ----
+
 ' Ton depot GitHub PRIVE des donnees (celui de la synchro de l'appli),
 ' pas le depot public de l'appli.
 Public Const GITHUB_OWNER As String = "TON_COMPTE_GITHUB"

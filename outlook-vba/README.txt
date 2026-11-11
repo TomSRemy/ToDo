@@ -12,11 +12,15 @@ Ce que fait la macro, une fois installée dans Outlook (classique) :
   « Contacts » de l'appli : l'appli lit la signature et propose le
   contact, tu valides avec « Importer ».
 
-Les propositions passent par ton dépôt GitHub PRIVÉ des données
-(data/tasks-inbox.json et data/contacts-inbox.json), le même que la
-synchro de l'appli. Le mail lui-même reste dans Outlook.
+Depuis le 12/11/2026, les propositions vont dans un DOSSIER de ton PC,
+par défaut OneDrive\ToDo\boite-mail (un petit fichier par mail), que
+le pont Excel (v1.34 ou plus) lit pour l'appli. Plus de jeton GitHub
+dans la macro, rien ne part sur Internet. Une proposition prise
+(importée ou ignorée) passe dans le sous-dossier « traites » (30 jours).
 
-Ces fichiers restent sur ton PC : on ne met JAMAIS le jeton GitHub
+En secours, l'ancien chemin reste possible : INBOX_MODE = "github" dans
+modConfig (dépôt GitHub PRIVÉ des données, data/tasks-inbox.json et
+data/contacts-inbox.json, avec un jeton). On ne met JAMAIS ce jeton
 dans ce dépôt public.
 
 --------------------------------------------------------------------
@@ -28,16 +32,16 @@ dans ce dépôt public.
    confidentialité > Paramètres > Paramètres des macros > « Notifications
    pour toutes les macros ». Si c'est grisé, l'informatique l'a bloqué.
 
-3. Importer les six modules (Fichier > Importer un fichier, un par un) :
+3. Importer les sept modules (Fichier > Importer un fichier, un par un) :
      modConfig.bas, modBase64.bas, modJson.bas, modGitHub.bas,
-     modFlagHandler.bas, modContactCapture.bas
+     modFlagHandler.bas, modContactCapture.bas, modLocalInbox.bas
 
 4. Ouvrir modConfig et remplir :
-     GITHUB_OWNER, GITHUB_REPO  : ton dépôt privé des données
-     GITHUB_TOKEN               : un jeton « fine-grained » limité à CE
-                                  dépôt, droit « Contents : Read and write »
+     INBOX_MODE                 : "dossier" (par défaut) ; "github" = l'ancien chemin
+     INBOX_FOLDER               : vide = OneDrive\ToDo\boite-mail (le dossier du pont)
      ATTACHMENT_FOLDER          : un dossier dans ton OneDrive
      OWN_DOMAIN                 : le domaine de ton adresse pro
+   Seulement en mode "github" : GITHUB_OWNER, GITHUB_REPO, GITHUB_TOKEN.
 
 5. Construire la fenêtre : suivre frmTaskCapture_instructions.txt.
 
@@ -53,9 +57,29 @@ dans ce dépôt public.
  Si ça ne marche pas
 --------------------------------------------------------------------
 - Pas de fenêtre : refaire l'étape 7, ou les macros sont bloquées.
-- « Envoi vers GitHub impossible » : vérifier le jeton, le nom du dépôt
-  et que data/tasks-inbox.json existe (contenu : [] ).
+- « Écriture dans … impossible » : le dossier n'existe pas ou OneDrive
+  n'est pas lancé ; régler INBOX_FOLDER dans modConfig.
+- La tâche n'arrive pas dans l'appli : le pont Excel doit tourner
+  (v1.34 ou plus) ; un fichier task-….json doit être dans le dossier.
+- Mode "github" : « Envoi vers GitHub impossible » = vérifier le jeton,
+  le nom du dépôt et que data/tasks-inbox.json existe (contenu : [] ).
 - Pièces jointes non enregistrées : vérifier ATTACHMENT_FOLDER.
+
+Mise à jour du 12/11/2026 (sans GitHub) : sur une macro déjà installée
+--------------------------------------------------------------------
+1. Alt+F11, Fichier > Importer un fichier : modLocalInbox.bas.
+2. Dans modConfig, ajouter en haut les deux lignes INBOX_MODE et
+   INBOX_FOLDER (copiées depuis modConfig.bas de ce dossier).
+3. Dans modFlagHandler, remplacer la ligne
+     ok = modGitHub.PushTaskToGitHub(itemJson)
+   par
+     ok = modLocalInbox.SendInboxItem(itemJson, "task")
+4. Dans modContactCapture, remplacer
+     If modGitHub.PushItemToGitHubFile(itemJson, CONTACT_INBOX_PATH, "New contact from Outlook") Then
+   par
+     If modLocalInbox.SendInboxItem(itemJson, "contact") Then
+5. Débogage > Compiler, puis enregistrer. Essai sur un mail sans importance.
+Si quelque chose cloche : INBOX_MODE = "github" remet l'ancien chemin.
 
 Copie de secours (24/10/2026)
 --------------------------------------------------------------------

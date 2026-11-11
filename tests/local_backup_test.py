@@ -11,6 +11,9 @@ def check(c, m):
 URL = (pathlib.Path(__file__).resolve().parent.parent / "index.html").as_uri()
 files = {}   # name -> content, what the stubbed bridge holds
 who, asked = ["tom.remy"], []
+moved = []
+inbox = [{"id": "inbox_1", "title": "Relancer Hélio sur le KYC", "sender": "Marc Hélio", "urgency": "haute", "_file": "task-20261112-083000-000001.json"},
+         {"id": "ct_1", "firstName": "Marc", "lastName": "Hélio", "email": "marc@helio.fr", "company": "Hélio", "_file": "contact-20261112-083100-000002.json"}]
 def task(i, title): return {"id": i, "title": title, "status": "a_faire", "urgency": "normale", "createdAt": 1, "updatedAt": 1, "deleted": False, "archived": False}
 
 def bridge(route):
@@ -23,6 +26,8 @@ def bridge(route):
         asked.append(body["key"])
         out = {"ok": True, "rows": [{"at": "2026-11-10T14:32:00", "file": "Pipe agrégation", "column": "Statut", "key": "SOLARIS / Toit", "old": "Pricing", "new": "Offre remise", "why": "case mise à jour", "who": "Paul"}]}
     elif path == "/journal/name": who[0] = body["name"]; out = {"ok": True, "who": who[0]}
+    elif path == "/inbox/list": out = {"ok": True, "tasks": [x for x in inbox if x["_file"].startswith("task-")], "contacts": [x for x in inbox if x["_file"].startswith("contact-")]}
+    elif path == "/inbox/done": moved.extend(body["files"]); inbox[:] = [x for x in inbox if x["_file"] not in body["files"]]; out = {"ok": True, "moved": len(body["files"])}
     elif path == "/backup/write":
         import datetime
         name = "todo-" + datetime.date.today().isoformat() + (".json.enc" if body["encrypted"] else ".json")
@@ -78,6 +83,16 @@ with sync_playwright() as p:
     check(pg.input_value("#bridge-who") == "tom.remy", "Réglages › Pont Excel shows the name signed in the journal")
     pg.fill("#bridge-who", "Tom Rémy"); pg.click("#bridge-who-save"); pg.wait_for_timeout(400)
     check(who[0] == "Tom Rémy", f"… and changes it ({who[0]!r})")
+    # the Outlook macro's folder, read by the bridge : the flagged mail is in Boîte mail, imported, its file taken away
+    pg.evaluate("document.querySelectorAll('.modal-overlay').forEach(x=>x.classList.add('hidden'))")
+    pg.click('[data-tab="inbox"]'); pg.wait_for_timeout(800)
+    box = pg.inner_text("#inbox-list")
+    check("Relancer Hélio sur le KYC" in box, f"a mail flagged in Outlook (folder read by the bridge) shows in Boîte mail ({box[:80]!r})")
+    pg.click("#inbox-list .inbox-import-btn"); pg.wait_for_timeout(600)
+    titles = [t["title"] for t in json.loads(pg.evaluate("window.storage.peek('todo-widget-tasks')")) if not t.get("deleted")]
+    check("Relancer Hélio sur le KYC" in titles and "task-20261112-083000-000001.json" in moved, f"imported as a task, its file moved out of the folder ({moved})")
+    pg.click('[data-tab="contacts"]'); pg.wait_for_timeout(800)
+    check(pg.is_visible("#contact-inbox-section") and "Marc" in pg.inner_text("#contact-inbox-list"), "a « CRM Contact » mail from the folder is offered in Contacts")
     check(not err, f"no page errors ({err})")
     b.close()
 print(f"\n{len(failures)} failure(s)"); sys.exit(1 if failures else 0)

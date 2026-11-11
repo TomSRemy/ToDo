@@ -315,6 +315,20 @@ try:
     check(cdump()[0][5] == "0622", "contacts : « Garder la mienne » replaces it")
     rd = call("GET", "/contacts/read")
     check(rd["sheets"]["Contacts"][0][:2] == ["Prénom", "Nom"] and len(rd["sheets"]["Contacts"]) == 3, "contacts/read : the header and the rows")
+    # v1.34 : the Outlook macro's folder — one file per mail, written by the macro (UTF-8 with a BOM, as ADODB.Stream does)
+    inbox_dir = work / "mock-onedrive" / "ToDo" / "boite-mail"
+    inbox_dir.mkdir(parents=True, exist_ok=True)
+    (inbox_dir / "task-20261112-083000-000001.json").write_text('{"id":"inbox_1","title":"Relancer Hélio","urgency":"haute"}', encoding="utf-8-sig")
+    (inbox_dir / "contact-20261112-083100-000002.json").write_text('{"id":"ct_1","firstName":"Marc","lastName":"Hélio"}', encoding="utf-8-sig")
+    (inbox_dir / "task-20261112-083200-000003.json.tmp").write_text('{"id":"half', encoding="utf-8")
+    (inbox_dir / "autre.json").write_text('{"id":"x"}', encoding="utf-8")
+    il = call("POST", "/inbox/list", {})
+    check([t["title"] for t in il["tasks"]] == ["Relancer Hélio"] and [c["firstName"] for c in il["contacts"]] == ["Marc"] and il["tasks"][0]["_file"] == "task-20261112-083000-000001.json",
+          f"inbox/list : the macro's files, tasks and contacts apart, never a file being written nor another one ({il})")
+    dn = call("POST", "/inbox/done", {"files": ["task-20261112-083000-000001.json", "../pont-excel.ps1"]})
+    check(dn["moved"] == 1 and (inbox_dir / "traites" / "task-20261112-083000-000001.json").exists() and (work / "pont-excel.ps1").exists(),
+          f"inbox/done : a taken file moves to « traites », a name that isn't the macro's is ignored ({dn})")
+    check(len(call("POST", "/inbox/list", {})["tasks"]) == 0, "inbox/list : a taken mail is no longer offered")
 finally:
     proc.terminate()
     try:

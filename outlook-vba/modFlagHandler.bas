@@ -103,14 +103,14 @@ Public Sub ProcessFlaggedMail(ByVal mail As Outlook.MailItem)
         "}"
 
     Dim ok As Boolean
-    ok = modGitHub.PushTaskToGitHub(itemJson)
+    ok = modLocalInbox.SendInboxItem(itemJson, "task")
 
     If ok Then
         mail.Categories = AddCategory(mail.Categories, PROCESSED_CATEGORY)
         mail.Save
         MsgBox "Tache envoyee a l'appli : " & taskTitle, vbInformation
     Else
-        MsgBox "Envoi vers GitHub impossible. Verifie la connexion et le jeton dans modConfig.", vbExclamation
+        MsgBox "Envoi vers l'appli impossible (voir le message precedent). Reglages dans modConfig : INBOX_MODE, INBOX_FOLDER.", vbExclamation
     End If
 
     Exit Sub

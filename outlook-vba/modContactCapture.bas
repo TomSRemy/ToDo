@@ -48,11 +48,11 @@ Public Sub ProcessContactCapture(ByVal mail As Outlook.MailItem)
         """receivedAt"":""" & modJson.JsonEscape(Format(mail.ReceivedTime, "yyyy-mm-dd hh:nn")) & """" & _
         "}"
 
-    If modGitHub.PushItemToGitHubFile(itemJson, CONTACT_INBOX_PATH, "New contact from Outlook") Then
+    If modLocalInbox.SendInboxItem(itemJson, "contact") Then
         mail.Categories = modFlagHandler.AddCategory(mail.Categories, CONTACT_PROCESSED_CATEGORY)
         mail.Save
     Else
-        MsgBox "Envoi du contact vers GitHub impossible. Verifie la connexion et le jeton dans modConfig.", vbExclamation
+        MsgBox "Envoi du contact vers l'appli impossible. Reglages dans modConfig : INBOX_MODE, INBOX_FOLDER.", vbExclamation
     End If
     Exit Sub
 

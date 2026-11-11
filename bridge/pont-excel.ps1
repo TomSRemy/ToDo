@@ -865,6 +865,36 @@ function LocalBackup-Read($name) {
   if (-not (Test-Path -LiteralPath $path)) { return @(404, @{ ok = $false; message = 'Sauvegarde introuvable.' }) }
   return @(200, @{ ok = $true; name = $name; content = [IO.File]::ReadAllText($path, [Text.Encoding]::UTF8) })
 }
+# v1.34 : the Outlook macro's inbox, without GitHub : one file per flagged mail (task-….json) or per « CRM Contact » mail
+# (contact-….json) in a folder of this PC (by default OneDrive\ToDo\boite-mail) ; taken ones go to « traites » (30 days)
+$InboxName = '^(task|contact)-[A-Za-z0-9_-]+\.json$'
+function Inbox-Dir {
+  $d = [string](Get-Prop $Config 'inboxDir'); if (-not $d) { $d = Join-Path (Split-Path (Default-LocalBackupDir) -Parent) 'boite-mail' }
+  if (-not (Test-Path -LiteralPath $d)) { $null = New-Item -ItemType Directory -Path $d -Force }
+  return $d
+}
+function Inbox-List {
+  $d = Inbox-Dir; $tasks = New-Object System.Collections.ArrayList; $contacts = New-Object System.Collections.ArrayList
+  foreach ($f in @(Get-ChildItem -LiteralPath $d -File -ErrorAction SilentlyContinue | Where-Object { $_.Name -match $InboxName } | Sort-Object Name)) {
+    $o = $null
+    try { $o = Get-Content -LiteralPath $f.FullName -Raw -Encoding UTF8 | ConvertFrom-Json } catch { Write-ErrorLog ('Boîte mail : fichier illisible ' + $f.Name + ' : ' + $_.Exception.Message); continue }
+    if ($null -eq $o) { continue }
+    $o | Add-Member -NotePropertyName '_file' -NotePropertyValue $f.Name -Force
+    if ($f.Name -like 'task-*') { [void]$tasks.Add($o) } else { [void]$contacts.Add($o) }
+  }
+  return @(200, @{ ok = $true; dir = $d; tasks = @($tasks); contacts = @($contacts) })
+}
+function Inbox-Done($files) {
+  $d = Inbox-Dir; $done = Join-Path $d 'traites'; $n = 0
+  if (-not (Test-Path -LiteralPath $done)) { $null = New-Item -ItemType Directory -Path $done -Force }
+  foreach ($x in @($files)) {
+    $name = [string]$x; if ($name -notmatch $InboxName) { continue }
+    $p = Join-Path $d $name
+    if (Test-Path -LiteralPath $p) { Move-Item -LiteralPath $p -Destination (Join-Path $done $name) -Force; $n++ }
+  }
+  Get-ChildItem -LiteralPath $done -File -ErrorAction SilentlyContinue | Where-Object { $_.LastWriteTime -lt (Get-Date).AddDays(-30) } | Remove-Item -Force -ErrorAction SilentlyContinue
+  return @(200, @{ ok = $true; moved = $n })
+}
 # the team's contacts file, chosen from the app (a path pasted there) : an Excel file that exists, nothing else
 function Set-ContactsFile($path) {
   $path = ([string]$path).Trim().Trim('"')
@@ -987,6 +1017,8 @@ function Handle($req) {
       return @(404, @{ ok = $false; message = 'Mail introuvable dans Outlook (déplacé, archivé ou supprimé ?), ou Outlook fermé.' })
     }
   }
+  if ($req.method -eq 'POST' -and $req.path -eq '/inbox/list') { return (Inbox-List) }
+  if ($req.method -eq 'POST' -and $req.path -eq '/inbox/done') { $d = $req.body | ConvertFrom-Json; return (Inbox-Done $d.files) }
   if ($req.method -eq 'POST' -and $req.path -eq '/contacts/file') { $d = $req.body | ConvertFrom-Json; return (Set-ContactsFile $d.path) }
   if ($req.method -eq 'POST' -and $req.path -eq '/journal/read') { $d = $req.body | ConvertFrom-Json; return (Journal-Read ([string]$d.key) $d.limit) }
   if ($req.method -eq 'POST' -and $req.path -eq '/journal/name') { $d = $req.body | ConvertFrom-Json; Set-ConfigValue 'name' (([string]$d.name).Trim() -replace '[\r\n;]', ' '); return @(200, @{ ok = $true; who = (Journal-Who) }) }

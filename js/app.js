@@ -1318,17 +1318,19 @@
   async function saveSeenIds(){ try{ await window.storage.set('inbox-seen-ids', JSON.stringify([...inboxSeenIds]), false); }catch(e){} }
   async function saveContactSeenIds(){ try{ await window.storage.set('contact-inbox-seen-ids', JSON.stringify([...contactInboxSeenIds]), false); }catch(e){} }
 
+  // the macro's queue : the folder read by the bridge (default) and, when the GitHub sync is on, the older GitHub file
   async function fetchInbox(){
-    if(!syncConfig.enabled){ inboxItems = []; renderInbox(); return; }
-    try{
-      const url='https://api.github.com/repos/'+syncConfig.owner+'/'+syncConfig.repo+'/contents/'+INBOX_FILE_PATH;
-      const res = await ghFetch(url, { headers:{ 'Accept':'application/vnd.github+json' } });
-      if(!res.ok) throw new Error('no inbox file');
-      const data = await res.json();
-      inboxItems = JSON.parse(b64DecodeUtf8(data.content));
-    }catch(e){
-      inboxItems = [];
+    let gh=[];
+    if(syncConfig.enabled){
+      try{
+        const url='https://api.github.com/repos/'+syncConfig.owner+'/'+syncConfig.repo+'/contents/'+INBOX_FILE_PATH;
+        const res = await ghFetch(url, { headers:{ 'Accept':'application/vnd.github+json' } });
+        if(!res.ok) throw new Error('no inbox file');
+        const data = await res.json();
+        gh = JSON.parse(b64DecodeUtf8(data.content));
+      }catch(e){ gh = []; }
     }
+    inboxItems = gh.concat(await window.TodoLocalInbox.list('task'));
     renderInbox();
   }
 
@@ -1394,7 +1396,7 @@
       await new Promise(r=>setTimeout(r, 800*(attempt+1)));
     }
   }
-  const removeFromInboxOnGitHub=itemId=>removeFromGhList(INBOX_FILE_PATH, itemId, 'Remove imported inbox item');
+  const removeFromInboxOnGitHub=itemId=>{ const it=inboxItems.find(x=>x.id===itemId); if(it && it._file){ window.TodoLocalInbox.done(it); return; } removeFromGhList(INBOX_FILE_PATH, itemId, 'Remove imported inbox item'); };
 
 
   function importInboxItem(it){
@@ -2230,14 +2232,17 @@
 
   let contactInboxItems=[];
   async function fetchContactInbox(){
-    if(!syncConfig.enabled){ contactInboxItems=[]; renderContactInbox(); return; }
-    try{
-      const url='https://api.github.com/repos/'+syncConfig.owner+'/'+syncConfig.repo+'/contents/'+CONTACT_INBOX_FILE_PATH;
-      const res=await ghFetch(url, { headers:{ 'Accept':'application/vnd.github+json' } });
-      if(!res.ok) throw new Error('no contact inbox file');
-      const data=await res.json();
-      contactInboxItems=JSON.parse(b64DecodeUtf8(data.content)).map(enrichInboxContact);
-    }catch(e){ contactInboxItems=[]; }
+    let gh=[];
+    if(syncConfig.enabled){
+      try{
+        const url='https://api.github.com/repos/'+syncConfig.owner+'/'+syncConfig.repo+'/contents/'+CONTACT_INBOX_FILE_PATH;
+        const res=await ghFetch(url, { headers:{ 'Accept':'application/vnd.github+json' } });
+        if(!res.ok) throw new Error('no contact inbox file');
+        const data=await res.json();
+        gh=JSON.parse(b64DecodeUtf8(data.content));
+      }catch(e){ gh=[]; }
+    }
+    contactInboxItems=gh.concat(await window.TodoLocalInbox.list('contact')).map(enrichInboxContact);
     renderContactInbox();
   }
   // the Outlook macro may send the mail's signature (or, for a forwarded introduction, the whole forwarded mail):
@@ -2252,7 +2257,7 @@
   }
   function pendingContactInboxItems(){ return contactInboxItems.filter(it=>!contactInboxSeenIds.has(it.id)); }
 
-  const removeFromContactInboxOnGitHub=itemId=>removeFromGhList(CONTACT_INBOX_FILE_PATH, itemId, 'Remove imported contact');
+  const removeFromContactInboxOnGitHub=itemId=>{ const it=contactInboxItems.find(x=>x.id===itemId); if(it && it._file){ window.TodoLocalInbox.done(it); return; } removeFromGhList(CONTACT_INBOX_FILE_PATH, itemId, 'Remove imported contact'); };
 
 
   function renderContactInbox(){
@@ -5641,9 +5646,10 @@
   }
   // one wording for « the bridge isn't there », in Réglages and in Synchro Excel alike
   const BRIDGE_DOWN='Pont Excel injoignable : lance « Lancer-pont-excel.bat » sur ton ordinateur et laisse sa fenêtre ouverte, puis « Réessayer ».';
+  let bridgeFirstSeen=false;   // the first answer of a v1.34 bridge : the day's backup, the macro's folder read
   async function bridgeCheck(){
     try{ const s=await bridgeCall('GET','/status',null,2500); bridgeState={ ok:true, authorized:!!s.authorized, checkedAt:Date.now(), info:s };
-      if(s.authorized && window.TodoExcelSync.verAtLeast(s, '1.34')) window.TodoLocalBackup.auto(); }
+      if(s.authorized && window.TodoExcelSync.verAtLeast(s, '1.34') && !bridgeFirstSeen){ bridgeFirstSeen=true; window.TodoLocalBackup.auto(); fetchInbox(); fetchContactInbox(); } }
     catch(e){ bridgeState={ ok:false, authorized:false, checkedAt:Date.now(), info:null, error:e.message }; }
     renderBridgeStatus(); window.TodoJournal.paintName(); window.TodoTeamExcel.paint();
     if($('rs-pipe-file-name')) renderExcelLinks();
@@ -5666,6 +5672,7 @@
   // openExcelSync is proxied in reverse at the top of this file
   window.TodoExcelSync.init({ $, ON_PHONE, PQ_FIELDS, bddCells, bridgeCall, bridgeCheck, bridgeConfigured, cellToText, closeOppDetail, codeAffaire, copyToClipboard, gsTab:(...a)=>gsTab(...a), importParcFromBridge, isExited, openOppDetail, oppActionBtn, oppName, pipeCells, pqFold, pqPad, relanceOnMove, renderPipeline, saveCrm, setOppStage, softFail, stageIndex, stageLabel, suiviState, touchCrm, get bridgeState(){ return bridgeState; }, set bridgeState(v){ bridgeState=v; }, get opportunities(){ return opportunities; }, set opportunities(v){ opportunities=v; } });   // Envoi vers les Excel partagés et Excel ⇄ appli — js/excel-sync.js
   window.TodoJournal.init({ $, bridgeCall, bridgeConfigured, bridgeInfo:()=>bridgeState.ok && bridgeState.authorized ? bridgeState.info : null, notify });
+  window.TodoLocalInbox.init({ bridgeCall, bridgeInfo:()=>bridgeState.ok && bridgeState.authorized ? bridgeState.info : null });
   window.TodoTeamExcel.init({ $, bridgeCall, bridgeCheck, bridgeInfo:()=>bridgeState.ok && bridgeState.authorized ? bridgeState.info : null, notify, askChoice, renderContacts,
     saveCrm:async ()=>{ await saveCrmLocalOnly(); scheduleCrmSyncPush(); }, uid:()=>'ct_'+Date.now()+'_'+Math.random().toString(36).slice(2,7), get contacts(){ return contacts; } });
   window.TodoLocalBackup.init({ $, bridgeCall, bridgeConfigured, backupPayload:()=>backupPayload(), importJson, notify, askChoice });
