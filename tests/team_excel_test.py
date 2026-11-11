@@ -50,6 +50,7 @@ def bridge(route):
 
 def ct(i, first, last, **kw): return {"id": i, "firstName": first, "lastName": last, "company": kw.pop("company", ""), "createdAt": 1, "updatedAt": 1, "deleted": False, **kw}
 local = [ct("c1", "Paul", "Durand", company="Ventus", phone1="0611"), ct("c2", "Secret", "Privé", private=True), ct("c3", "Claire", "Martin", company="Solaris", role="Directrice")]
+local += [ct("m%d" % i, "Prénom%d" % i, "Nom%d" % i) for i in range(10)]   # more than 10 never sent : the first send is asked
 
 with sync_playwright() as p:
     b = p.chromium.launch(); pg = b.new_page(viewport={"width": 1300, "height": 850}, bypass_csp=True); err = []
@@ -63,7 +64,10 @@ with sync_playwright() as p:
     contacts = lambda: {c["id"]: c for c in json.loads(pg.evaluate("window.storage.peek('todo-widget-contacts')")) if not c.get("deleted")}
     pg.click('[data-tab="lists"]'); pg.wait_for_timeout(500)
     check(pg.is_checked("input[name='team-mode'][value='excel']") and not pg.is_visible("#team-section"), "the team mode is « Excel » by default, the Supabase settings hidden")
-    pg.click("#xc-sync-btn"); pg.wait_for_timeout(1500)
+    pg.click("#xc-sync-btn"); pg.wait_for_timeout(1000)
+    ask = pg.inner_text("#choice-overlay") if pg.is_visible("#choice-overlay") else ""
+    check("11 contacts partagés" in ask and "cadenas" in ask and len(sheet) == 2, f"the first send of many contacts is asked first, nothing written before ({ask!r})")
+    pg.click("#choice-btns button:has-text('Envoyer les 11')"); pg.wait_for_timeout(1500)
     rows = {(r[0], r[1]): r for r in sheet[1:]}
     check(("Paul", "Durand") in rows and rows[("Paul", "Durand")][5] == "0611" and rows[("Paul", "Durand")][8] == "c1" and rows[("Paul", "Durand")][10] == "Tom",
           f"a shared contact of mine goes to the file, with its ID, signed ({rows.get(('Paul', 'Durand'))})")

@@ -58,8 +58,21 @@ window.TodoTeamExcel=(function(){
       return { added, changed };
     }
     // what changed here since the file was last agreed : sent, with what was agreed (the bridge keeps a colleague's cell)
-    async function push(parsed, who, clashes){
-      const width=parsed.head.length, todo=contacts().filter(c=>shared(c) && (!c.xlc || COLS.some(([hd, f])=>f && f!=='id' && !same(c[f], c.xlc[hd])) || !c.xlc.ID));
+    // the first time, many contacts never sent : asked once (time to lock the private ones first) ; never sent unasked
+    async function firstOk(fresh, manual){
+      if(fresh.length<=10) return true;
+      try{ if(localStorage.getItem('xc-first-ok')) return true; }catch(e){ return false; }
+      if(!manual) return false;
+      const v=await askChoice('Premier envoi des contacts', fresh.length+' contacts partagés vont être écrits dans le fichier de l\u2019équipe. Ceux au cadenas restent chez toi : vérifie-les d\u2019abord dans Contacts (filtre « Privés »).', [{ label:'Envoyer les '+fresh.length, value:'y' }]);
+      if(v!=='y') return false;
+      try{ localStorage.setItem('xc-first-ok', '1'); }catch(e){ /* asked again next time */ }
+      return true;
+    }
+    async function push(parsed, who, clashes, manual){
+      const width=parsed.head.length;
+      let todo=contacts().filter(c=>shared(c) && (!c.xlc || COLS.some(([hd, f])=>f && f!=='id' && !same(c[f], c.xlc[hd])) || !c.xlc.ID));
+      const fresh=todo.filter(c=>!c.xlc);
+      if(!await firstOk(fresh, manual)) todo=todo.filter(c=>c.xlc);
       let sent=0;
       for(let i=0; i<todo.length; i+=BATCH){
         const part=todo.slice(i, i+BATCH), rows=part.map(c=>{ const prev=c.xlc ? valuesFor(Object.fromEntries(COLS.filter(x=>x[1]).map(([hd, f])=>[f, c.xlc[hd]])), parsed.at, width, null) : [];
@@ -88,7 +101,7 @@ window.TodoTeamExcel=(function(){
       if(busy || !ready()) return null; busy=true; lastRun=Date.now();
       try{
         const parsed=parse(((await bridgeCall('GET', '/contacts/read', null, 120000)).sheets||{}).Contacts);
-        const clashes=[], got=pull(parsed, clashes), sent=await push(parsed, bridgeInfo().who, clashes);
+        const clashes=[], got=pull(parsed, clashes), sent=await push(parsed, bridgeInfo().who, clashes, manual);
         for(const k of clashes) await ask(k, parsed);
         await saveCrm(); renderContacts();
         lastReport=parsed.rows.length+' ligne'+(parsed.rows.length>1?'s':'')+' dans l’Excel · '+got.added+' arrivée(s), '+got.changed+' mise(s) à jour ici, '+sent+' envoyée(s)';
