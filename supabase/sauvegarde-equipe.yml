@@ -1,0 +1,54 @@
+# Sauvegarde de la base équipe (Supabase) — à copier dans TON DÉPÔT DE DONNÉES PRIVÉ, sous .github/workflows/
+# (jamais dans le dépôt public de l'appli : la sauvegarde contient les contacts et le pipeline de l'équipe).
+#
+# Deux fois par semaine (lundi et jeudi, 6 h UTC), et à la demande (onglet Actions › Sauvegarde équipe › Run workflow) :
+#  1. lit les tables de la base équipe et les enregistre en JSON dans sauvegardes-equipe/AAAA-MM-JJ/ ;
+#  2. garde les 12 dernières semaines (l'historique Git garde le reste) ;
+#  3. au passage, l'activité empêche Supabase de mettre en pause le projet gratuit (pause après 7 jours sans activité).
+#
+# Deux secrets à créer dans ce dépôt privé (Settings › Secrets and variables › Actions › New repository secret) :
+#  - SUPABASE_URL          : https://zyqvpltzitoqjvohidoy.supabase.co
+#  - SUPABASE_SERVICE_KEY  : la clé « service_role » (Supabase › Project Settings › API keys). Elle donne tous les droits
+#                            sur la base : elle reste dans ce secret, jamais ailleurs, jamais collée dans une conversation.
+name: Sauvegarde équipe
+on:
+  schedule:
+    - cron: '17 6 * * 1,4'
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  sauvegarde:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Lire la base équipe
+        env:
+          URL: ${{ secrets.SUPABASE_URL }}
+          KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        run: |
+          python3 - <<'PY'
+          import json, os, datetime, urllib.request, pathlib, shutil
+          url, key = os.environ.get("URL", "").rstrip("/"), os.environ.get("KEY", "")
+          if not url or not key: raise SystemExit("Secrets SUPABASE_URL / SUPABASE_SERVICE_KEY manquants")
+          d = pathlib.Path("sauvegardes-equipe") / datetime.date.today().isoformat(); d.mkdir(parents=True, exist_ok=True)
+          for t in ["opportunities", "contacts", "companies", "meetings", "team_settings", "profiles", "change_log"]:
+              rows, start = [], 0
+              while True:   # par paquets de 1000 (la limite de la base par requête)
+                  req = urllib.request.Request(f"{url}/rest/v1/{t}?select=*&order=" + ("key" if t == "team_settings" else "id"), headers={"apikey": key, "Authorization": "Bearer " + key, "Range": f"{start}-{start+999}"})
+                  with urllib.request.urlopen(req, timeout=60) as r: part = json.loads(r.read().decode())
+                  rows += part; start += 1000
+                  if len(part) < 1000: break
+              (d / f"{t}.json").write_text(json.dumps(rows, ensure_ascii=False, indent=1), encoding="utf-8")
+              print(t, ":", len(rows), "lignes")
+          days = sorted(p for p in d.parent.iterdir() if p.is_dir())
+          for old in days[:-24]: shutil.rmtree(old)   # 24 sauvegardes gardées (12 semaines), le reste dans l'historique Git
+          PY
+      - name: Enregistrer
+        run: |
+          git config user.name "sauvegarde-equipe"
+          git config user.email "actions@users.noreply.github.com"
+          git add sauvegardes-equipe
+          git diff --cached --quiet || git commit -m "Sauvegarde équipe $(date -u +%F)"
+          git push
