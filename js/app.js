@@ -5642,7 +5642,8 @@
   // one wording for « the bridge isn't there », in Réglages and in Synchro Excel alike
   const BRIDGE_DOWN='Pont Excel injoignable : lance « Lancer-pont-excel.bat » sur ton ordinateur et laisse sa fenêtre ouverte, puis « Réessayer ».';
   async function bridgeCheck(){
-    try{ const s=await bridgeCall('GET','/status',null,2500); bridgeState={ ok:true, authorized:!!s.authorized, checkedAt:Date.now(), info:s }; }
+    try{ const s=await bridgeCall('GET','/status',null,2500); bridgeState={ ok:true, authorized:!!s.authorized, checkedAt:Date.now(), info:s };
+      if(s.authorized && window.TodoExcelSync.verAtLeast(s, '1.34')) window.TodoLocalBackup.auto(); }
     catch(e){ bridgeState={ ok:false, authorized:false, checkedAt:Date.now(), info:null, error:e.message }; }
     renderBridgeStatus();
     if($('rs-pipe-file-name')) renderExcelLinks();
@@ -5664,6 +5665,8 @@
   // gsTab : not yet defined at this point in the file (const, no hoisting) — deferred to call time, same way
   // openExcelSync is proxied in reverse at the top of this file
   window.TodoExcelSync.init({ $, ON_PHONE, PQ_FIELDS, bddCells, bridgeCall, bridgeCheck, bridgeConfigured, cellToText, closeOppDetail, codeAffaire, copyToClipboard, gsTab:(...a)=>gsTab(...a), importParcFromBridge, isExited, openOppDetail, oppActionBtn, oppName, pipeCells, pqFold, pqPad, relanceOnMove, renderPipeline, saveCrm, setOppStage, softFail, stageIndex, stageLabel, suiviState, touchCrm, get bridgeState(){ return bridgeState; }, set bridgeState(v){ bridgeState=v; }, get opportunities(){ return opportunities; }, set opportunities(v){ opportunities=v; } });   // Envoi vers les Excel partagés et Excel ⇄ appli — js/excel-sync.js
+  window.TodoLocalBackup.init({ $, bridgeCall, bridgeConfigured, backupPayload:()=>backupPayload(), importJson, notify, askChoice });
+  if(bridgeConfigured()) setTimeout(()=>bridgeCheck(), 2500);   // the bridge looked for once at start : the day's local backup leaves then
   function renderLists(){
     renderStorageGauge();
     renderExcelLinks();
@@ -6081,9 +6084,9 @@
     return null;
   }
 
+  const backupPayload=()=>({ version:2, exportedAt:new Date().toISOString(), tasks, clients:clientsList, projects:projectsList, notes, crm:{ companies, contacts, meetings, opportunities, companyTypes:companyTypesList } });
   function exportData(){
-    const payload={ version:2, exportedAt:new Date().toISOString(), tasks, clients:clientsList, projects:projectsList, notes, crm:{ companies, contacts, meetings, opportunities, companyTypes:companyTypesList } };
-    const blob=new Blob([JSON.stringify(payload,null,2)],{type:'application/json'});
+    const blob=new Blob([JSON.stringify(backupPayload(),null,2)],{type:'application/json'});
     const url=URL.createObjectURL(blob);
     const a=document.createElement('a'); a.href=url; a.download='todo-backup-'+toISO(new Date())+'.json'; a.click();
     lsSet('last-export-at', String(Date.now()));
@@ -6091,9 +6094,12 @@
   }
   function importData(file){
     const reader=new FileReader();
-    reader.onload=async e=>{
+    reader.onload=e=>{ let data; try{ data=JSON.parse(e.target.result); }catch(err){ tell('Fichier invalide.'); return; } importJson(data); };
+    reader.readAsText(file);
+  }
+  // a whole backup (an export, or a local backup already shown to the user : noAsk) put in place of the current data
+  async function importJson(data, noAsk){
       try{
-        const data=JSON.parse(e.target.result);
         const raw=(!data || !Array.isArray(data.tasks))?restoreKindOf(data):null;
         if(raw){   // a file taken from the data repo: shown and restored like a version
           const plan=restorePlan(raw, data);
@@ -6101,7 +6107,7 @@
           applyRestore(raw, plan, false); return; }
         if(!data||!Array.isArray(data.tasks)) throw new Error('format');
         const extra=[data.crm?'les contacts/CRM':null, Array.isArray(data.notes)?'le calepin':null].filter(Boolean);
-        if(!await askConfirm('Remplacer les '+tasks.length+' tâche(s) actuelles par les '+data.tasks.length+' du fichier'+(extra.length?(' (ainsi que '+extra.join(' et ')+')'):'')+' ?', 'Remplacer')) return;
+        if(!noAsk && !await askConfirm('Remplacer les '+tasks.length+' tâche(s) actuelles par les '+data.tasks.length+' du fichier'+(extra.length?(' (ainsi que '+extra.join(' et ')+')'):'')+' ?', 'Remplacer')) return;
         tasks=recs(data.tasks); clientsList=data.clients||[]; projectsList=data.projects||[];
         tasks.forEach(t=>{ if(t.subtasks===undefined)t.subtasks=[]; if(t.recur===undefined)t.recur=null; if(t.archived===undefined)t.archived=false; });
         saveTasks(); saveClients(); saveProjects(); render(); renderArchive(); renderLists();
@@ -6113,8 +6119,6 @@
           saveCrm(); if(typeof renderContacts==='function') renderContacts(); if(typeof renderPipeline==='function') renderPipeline();
         }
       }catch(err){ tell('Fichier invalide.'); }
-    };
-    reader.readAsText(file);
   }
 
   const tabContacts=$('tab-contacts'), tabPipeline=$('tab-pipeline'), tabParc=$('tab-parc'), tabExcel=$('tab-excel');
@@ -6460,7 +6464,7 @@
   $('dup-banner-later').onclick=()=>{ const t=new Date(); t.setDate(t.getDate()+1); t.setHours(6,0,0,0); lsSet('dup-banner-later', String(t.getTime())); paintDupBanner(); };
   // « Réglages »: a table of contents at the top, one click to each part (UX audit TD3)
   // « Réglages » (UX audit TD3): four groups, a table of contents beside them, and each part's state on its title
-  const SETTINGS_NAMES={ 'clients-section':'Clients', 'projects-section':'Projets', 'sync-section':'Synchro GitHub', 'conflicts-section':'Conflits', 'backup-section':'Sauvegarde',
+  const SETTINGS_NAMES={ 'clients-section':'Clients', 'projects-section':'Projets', 'sync-section':'Synchro GitHub', 'conflicts-section':'Conflits', 'backup-section':'Sauvegarde', 'localbackup-section':'Sauvegarde locale',
     'keys-section':'Clés', 'news-section':'Nouveautés', 'errlog-section':'Journal des erreurs', 'storage-section':'Stockage', 'bridge-section':'Pont Excel', 'team-section':'Synchro \u00e9quipe', 'install-section':'Installer l\u2019appli', 'ai-section':'Claude (facultatif)' };
   const settingsShown=s=>!s.classList.contains('hidden') && !s.hidden && s.style.display!=='none';
   function settingsPill(id, text, kind){ const s=$(id); if(!s) return; const h=s.querySelector('h2'); if(!h) return;

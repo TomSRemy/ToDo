@@ -793,6 +793,12 @@
       </div>
       <input type="file" id="import-file" accept="application/json" style="display:none;">
     </div>
+    <div class="list-manager" id="localbackup-section">
+      <h2>Sauvegarde locale</h2>
+      <p class="list-hint">Chaque jour, le pont Excel écrit une copie complète (tâches, note, contacts, pipeline) dans un dossier de ce PC, par défaut OneDrive\ToDo\sauvegardes ; les 30 dernières sont gardées. Chiffrée avec ta phrase secrète quand la synchro GitHub est chiffrée.</p>
+      <div class="set-actions"><button class="data-btn set-primary" id="lb-save-btn" type="button">Sauvegarder maintenant</button><button class="data-btn" id="lb-restore-btn" type="button">Restaurer…</button><button class="data-btn" id="lb-dir-btn" type="button">Changer de dossier…</button></div>
+      <p id="lb-status" class="bridge-status"></p>
+    </div>
     <div class="list-manager" id="keys-section">
       <h2>Clés sur cet appareil</h2>
       <p class="list-hint">Les clés (jeton GitHub, clé du pont Excel, clé Claude, connexion équipe) restent dans ce navigateur. Sur un ordinateur prêté ou partagé, efface-les avant de partir : tes données restent ici et sur GitHub, seules les clés partent. Conseil : un jeton GitHub limité à ton seul dépôt de données, avec une date d’expiration.</p>
@@ -906,6 +912,7 @@
 <script src="js/excel-sync.js"></script>
 <script src="js/parc.js"></script>
 <script src="js/sync-crypto.js"></script>
+<script src="js/local-backup.js"></script>
 <script src="js/news.js"></script>
 <script src="js/health.js"></script>
 <script src="js/team-ui.js"></script>

@@ -36,7 +36,7 @@
 param([int]$Port = 8765, [switch]$Reconfigurer, [switch]$Mock)
 
 $ErrorActionPreference = 'Stop'
-$Version = '1.33'
+$Version = '1.34'
 $Here = Split-Path -Parent $MyInvocation.MyCommand.Path
 $LibDir = Join-Path $Here 'lib'
 # the settings (the two files, the key) live in the Windows profile, not next to the script: a new download, in any folder,
@@ -780,6 +780,57 @@ function Read-Sheets($kind) {
   return @{ sheets = $out; allNames = $allNames }
 }
 
+# ---------------- v1.34 : the app's own local backup (tasks, note, contacts, pipeline) ----------------
+# The app sends its whole backup (already encrypted by the app when the GitHub sync is encrypted) ; the bridge only
+# writes it in a folder of this PC (by default OneDrive\ToDo\sauvegardes), one file per day, the last 30 kept.
+$LocalBackupKeep = 30
+$LocalBackupName = '^todo-\d{4}-\d{2}-\d{2}\.json(\.enc)?$'
+function Set-ConfigValue($name, $value) {
+  if ($Config.PSObject.Properties[$name]) { $Config.$name = $value } else { $Config | Add-Member -NotePropertyName $name -NotePropertyValue $value }
+  try { ($Config | ConvertTo-Json) | Set-Content -Path $ConfigPath -Encoding UTF8 } catch { }
+}
+function Default-LocalBackupDir {
+  $root = if ($Mock) { Join-Path $Here 'mock-onedrive' } elseif ($env:OneDriveCommercial) { $env:OneDriveCommercial } elseif ($env:OneDrive) { $env:OneDrive } else { [Environment]::GetFolderPath('MyDocuments') }
+  return (Join-Path (Join-Path $root 'ToDo') 'sauvegardes')
+}
+function LocalBackup-Dir {
+  $d = [string](Get-Prop $Config 'backupDir'); if (-not $d) { $d = Default-LocalBackupDir }
+  if (-not (Test-Path -LiteralPath $d)) { $null = New-Item -ItemType Directory -Path $d -Force }
+  return $d
+}
+function LocalBackup-Files {
+  $d = LocalBackup-Dir
+  return @(Get-ChildItem -LiteralPath $d -File -ErrorAction SilentlyContinue | Where-Object { $_.Name -match $LocalBackupName } | Sort-Object Name -Descending)
+}
+function LocalBackup-Info($f) { return @{ name = $f.Name; size = $f.Length; at = $f.LastWriteTime.ToString('o') } }
+function LocalBackup-Write($content, $encrypted) {
+  if (-not $content) { throw 'Sauvegarde vide : rien n''est écrit.' }
+  $d = LocalBackup-Dir
+  $name = 'todo-' + (Get-Date -Format 'yyyy-MM-dd') + $(if ($encrypted) { '.json.enc' } else { '.json' })
+  $path = Join-Path $d $name; $tmp = $path + '.tmp'
+  [IO.File]::WriteAllText($tmp, [string]$content, (New-Object Text.UTF8Encoding $false))   # written aside, then put in place : never half a file
+  Move-Item -LiteralPath $tmp -Destination $path -Force
+  # the same day in the other form (encrypted / not) : only one file a day
+  $other = Join-Path $d ('todo-' + (Get-Date -Format 'yyyy-MM-dd') + $(if ($encrypted) { '.json' } else { '.json.enc' }))
+  if (Test-Path -LiteralPath $other) { Remove-Item -LiteralPath $other -Force -ErrorAction SilentlyContinue }
+  LocalBackup-Files | Select-Object -Skip $LocalBackupKeep | ForEach-Object { Remove-Item -LiteralPath $_.FullName -Force -ErrorAction SilentlyContinue }
+  return @{ ok = $true; dir = $d; file = (LocalBackup-Info (Get-Item -LiteralPath $path)) }
+}
+function LocalBackup-Read($name) {
+  if ([string]$name -notmatch $LocalBackupName) { return @(400, @{ ok = $false; message = 'Nom de sauvegarde invalide.' }) }
+  $path = Join-Path (LocalBackup-Dir) $name
+  if (-not (Test-Path -LiteralPath $path)) { return @(404, @{ ok = $false; message = 'Sauvegarde introuvable.' }) }
+  return @(200, @{ ok = $true; name = $name; content = [IO.File]::ReadAllText($path, [Text.Encoding]::UTF8) })
+}
+function LocalBackup-SetDir($dir) {
+  $dir = ([string]$dir).Trim().Trim('"')
+  if (-not $dir) { Set-ConfigValue 'backupDir' ''; return @(200, @{ ok = $true; dir = (LocalBackup-Dir) }) }   # empty : back to the default folder
+  if (-not [IO.Path]::IsPathRooted($dir) -or $dir -match '[<>|?*]') { return @(400, @{ ok = $false; message = 'Chemin de dossier invalide : colle un chemin complet, par exemple C:\Users\toi\OneDrive\ToDo\sauvegardes.' }) }
+  try { if (-not (Test-Path -LiteralPath $dir)) { $null = New-Item -ItemType Directory -Path $dir -Force } } catch { return @(400, @{ ok = $false; message = 'Dossier impossible à créer : ' + $_.Exception.Message }) }
+  Set-ConfigValue 'backupDir' $dir
+  return @(200, @{ ok = $true; dir = $dir })
+}
+
 # ---------------- Minimal HTTP server on 127.0.0.1 (no admin rights needed) ----------------
 function Send-Response($stream, $status, $obj, $origin) {
   $json = if ($null -ne $obj) { ConvertTo-Json -InputObject $obj -Depth 8 -Compress } else { '' }
@@ -808,7 +859,7 @@ function Read-Request($stream) {
   $parts = $lines[0] -split ' '
   $headers = @{}; foreach ($l in ($lines | Select-Object -Skip 1)) { $j = $l.IndexOf(':'); if ($j -gt 0) { $headers[$l.Substring(0, $j).Trim().ToLowerInvariant()] = $l.Substring($j + 1).Trim() } }
   $len = 0; if ($headers['content-length']) { $len = [int]$headers['content-length'] }
-  if ($len -gt 5MB) { return $null }
+  if ($len -gt 30MB) { return $null }
   $bodyStart = $headerEnd + 4
   $bodyMs = New-Object IO.MemoryStream
   if ($all.Length -gt $bodyStart) { $bodyMs.Write($all, $bodyStart, $all.Length - $bodyStart) }
@@ -883,6 +934,10 @@ function Handle($req) {
       return @(404, @{ ok = $false; message = 'Mail introuvable dans Outlook (déplacé, archivé ou supprimé ?), ou Outlook fermé.' })
     }
   }
+  if ($req.method -eq 'POST' -and $req.path -eq '/backup/write') { $d = $req.body | ConvertFrom-Json; return @(200, (LocalBackup-Write $d.content ([bool]$d.encrypted))) }
+  if ($req.method -eq 'POST' -and $req.path -eq '/backup/list') { return @(200, @{ ok = $true; dir = (LocalBackup-Dir); files = @(LocalBackup-Files | ForEach-Object { LocalBackup-Info $_ }) }) }
+  if ($req.method -eq 'POST' -and $req.path -eq '/backup/read') { $d = $req.body | ConvertFrom-Json; return (LocalBackup-Read $d.name) }
+  if ($req.method -eq 'POST' -and $req.path -eq '/backup/dir') { $d = $req.body | ConvertFrom-Json; return (LocalBackup-SetDir $d.dir) }
   if ($req.method -eq 'GET' -and $req.path -match '^/(pipe|bdd)/read$') {
     $r = Read-Sheets $Matches[1]
     return @(200, @{ ok = $true; sheets = $r.sheets; allNames = $r.allNames })

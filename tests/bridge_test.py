@@ -250,6 +250,36 @@ try:
     except urllib.error.HTTPError as e:
         bad = e.code
     check(bad == 400, f"mail/open : anything but a hexadecimal ID is refused ({bad})")
+    # v1.34 : the app's local backup — one file a day in a folder of the PC, read back, the folder can be changed
+    w = call("POST", "/backup/write", {"content": '{"enc":"todo-aesgcm-1","iv":"x","ct":"y"}', "encrypted": True})
+    today = datetime.date.today().isoformat()
+    check(w.get("ok") and w["file"]["name"] == f"todo-{today}.json.enc" and pathlib.Path(w["dir"], w["file"]["name"]).exists(), f"backup/write : today's file written in the backup folder ({w})")
+    w2 = call("POST", "/backup/write", {"content": '{"enc":"todo-aesgcm-1","iv":"x","ct":"z"}', "encrypted": True})
+    lst = call("POST", "/backup/list")
+    check(len(lst["files"]) == 1 and lst["files"][0]["name"] == f"todo-{today}.json.enc", f"backup/list : one file a day, the second backup of the day replaces the first ({lst['files']})")
+    rd = call("POST", "/backup/read", {"name": f"todo-{today}.json.enc"})
+    check(rd.get("content") == '{"enc":"todo-aesgcm-1","iv":"x","ct":"z"}', "backup/read : the content comes back as written")
+    old_dir = pathlib.Path(lst["dir"])
+    for i in range(35):
+        (old_dir / f"todo-2025-01-{i % 28 + 1:02d}.json").write_text("{}", encoding="utf-8") if i < 28 else (old_dir / f"todo-2025-02-{i - 27:02d}.json").write_text("{}", encoding="utf-8")
+    call("POST", "/backup/write", {"content": "{}", "encrypted": False})
+    lst = call("POST", "/backup/list")
+    check(len(lst["files"]) == 30 and lst["files"][0]["name"] == f"todo-{today}.json", f"backup : the 30 most recent kept, today's unencrypted replaces today's encrypted ({len(lst['files'])}, {lst['files'][0]['name']})")
+    for bad_name in ["../pont-excel-config.json", "todo-2026-01-01.json/../x", "autre.json"]:
+        try:
+            call("POST", "/backup/read", {"name": bad_name}); code = None
+        except urllib.error.HTTPError as e:
+            code = e.code
+        check(code == 400, f"backup/read : a name that isn't a backup's is refused ({bad_name!r} -> {code})")
+    new_dir = work / "autre-dossier" / "sauvegardes"
+    d = call("POST", "/backup/dir", {"dir": str(new_dir)})
+    call("POST", "/backup/write", {"content": "{}", "encrypted": False})
+    check(d.get("ok") and (new_dir / f"todo-{today}.json").exists(), "backup/dir : another folder chosen, the next backup goes there")
+    try:
+        call("POST", "/backup/dir", {"dir": "relatif/dossier"}); code = None
+    except urllib.error.HTTPError as e:
+        code = e.code
+    check(code == 400, f"backup/dir : a relative path is refused ({code})")
 finally:
     proc.terminate()
     try:
