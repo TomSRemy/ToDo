@@ -1,6 +1,8 @@
 // Todo — « Nouveautés » : what changed in the tool, in plain words, newest first (Réglages › Nouveautés, and a word
 // once when something new came out). Written by hand at each change worth knowing ; the technical history is on GitHub.
 window.TodoNews=[
+  { d:'2026-11-11', t:'Synchro GitHub chiffrée', x:'Réglages › Synchro GitHub › « Chiffrer la synchro » : ton dépôt ne contient plus que des données chiffrées, illisibles même si ton jeton fuit. Une phrase secrète pour l\u2019usage courant, et un kit de secours (code à garder hors de l\u2019ordinateur) si tu l\u2019oublies. Sur un autre appareil : « Déverrouiller ».' },
+  { d:'2026-11-11', t:'Sauvegardes de l\u2019équipe chiffrées', x:'Les sauvegardes automatiques de la base équipe sont chiffrées avec une phrase secrète ; un script de secours les déchiffre.' },
   { d:'2026-11-11', t:'Double authentification pour l\u2019équipe', x:'En plus du mot de passe, un code à 6 chiffres d\u2019une appli d\u2019authentification (Microsoft ou Google Authenticator, ou ton gestionnaire de mots de passe). À activer une fois dans Réglages › Équipe ; ajoute un appareil de secours. Téléphone perdu : l\u2019administrateur réinitialise.' },
   { d:'2026-11-11', t:'Déconnexion automatique', x:'Sans utilisation de l\u2019appli pendant 7 jours sur un appareil, la connexion à l\u2019équipe se ferme d\u2019elle-même.' },
   { d:'2026-11-11', t:'Alerte quand la synchro équipe s\u2019arrête', x:'Un bandeau en bas de l\u2019écran prévient si tu n\u2019es plus connecté ou si la base est injoignable (en pause, pas de réseau), avec le nombre de modifications en attente. Elles restent sur l\u2019appareil et partent toutes seules au retour ; « Réessayer » relance tout de suite.' },

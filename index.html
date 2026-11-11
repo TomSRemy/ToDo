@@ -764,6 +764,13 @@
         <button class="data-btn set-link" id="sync-forget-btn" title="Retire le jeton GitHub de cet appareil (après un changement d'adresse, ou sur un appareil prêté). Les données restent ici et sur GitHub.">Oublier le jeton sur cet appareil</button>
         </div>
         <span id="sync-status" style="font-size:11px; color:var(--tx3); font-family:var(--font-mono);"></span>
+        <div class="sync-crypt" id="sync-crypt" hidden>
+          <p class="list-hint" id="sync-crypt-text"></p>
+          <div class="set-actions"><button class="data-btn" id="sync-crypt-btn" type="button">Chiffrer la synchro</button><button class="data-btn set-primary" id="sync-crypt-unlock" type="button" hidden>Déverrouiller</button><button class="data-btn set-link" id="sync-crypt-change" type="button" hidden>Changer la phrase secrète</button></div>
+          <div class="set-actions" id="sync-crypt-form" hidden><input type="password" id="sync-crypt-pass" autocomplete="new-password"><input type="password" id="sync-crypt-pass2" placeholder="La même, une deuxième fois" autocomplete="new-password"><button class="data-btn set-primary" id="sync-crypt-go" type="button">Chiffrer</button></div>
+          <div class="sync-crypt-kit" id="sync-crypt-kit" hidden><p>Ton code de secours (il ouvre aussi tes données si tu oublies la phrase) :</p><code id="sync-crypt-code"></code><div class="set-actions"><button class="data-btn set-primary" id="sync-crypt-dl" type="button">Télécharger le kit de secours</button></div></div>
+          <span id="sync-crypt-status" class="bridge-status"></span>
+        </div>
       </div>
     </div>
     <div class="list-manager hidden" id="conflicts-section">
@@ -892,6 +899,7 @@
 <script src="js/call.js"></script>
 <script src="js/excel-sync.js"></script>
 <script src="js/parc.js"></script>
+<script src="js/sync-crypto.js"></script>
 <script src="js/news.js"></script>
 <script src="js/health.js"></script>
 <script src="js/team-ui.js"></script>

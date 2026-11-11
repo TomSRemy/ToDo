@@ -2864,3 +2864,10 @@ html.widget .dup-banner{ display:none; }
 .team-mfa-qr img{ background:#fff; padding:8px; border-radius:var(--radius-md); }
 .team-mfa-qr code{ font:500 12px var(--font-mono); color:var(--tx2); word-break:break-all; max-width:320px; }
 #team-mfa-code{ width:150px; letter-spacing:.2em; font:600 15px var(--font-mono); }
+/* the GitHub sync encrypted */
+.sync-crypt{ margin-top:12px; padding:12px; border:1px solid var(--bd); border-radius:var(--radius-lg); background:var(--panel-2); display:flex; flex-direction:column; gap:8px; }
+.sync-crypt[hidden], .sync-crypt [hidden]{ display:none !important; }
+.sync-crypt input[type=password]{ flex:1; min-width:180px; }
+.sync-crypt-kit{ border:1px dashed var(--accent); border-radius:var(--radius-md); padding:10px; }
+.sync-crypt-kit p{ margin:0 0 6px; font-size:12.5px; color:var(--tx2); }
+.sync-crypt-kit code{ display:block; font:600 15px var(--font-mono); color:var(--accent); letter-spacing:.06em; margin-bottom:8px; user-select:all; }

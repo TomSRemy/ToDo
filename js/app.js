@@ -91,6 +91,7 @@
   const COMPANY_TYPES_KEY='todo-widget-company-types';
   const SYNC_CONFIG_KEY='sync-config';
   const SYNC_TASKS_PATH='data/tasks.json';
+  let syncLocked=false, cryptMode='';   // the GitHub sync encrypted and not unlocked on this device yet (js/sync-crypto.js)
   const SYNC_CRM_PATH='data/crm.json';
   const NOTES_KEY='todo-widget-notes', SYNC_NOTES_PATH='data/notes.json';
   let notes=[], notesBaseSnapshot=null;
@@ -302,7 +303,9 @@
       if(!raw.ok) return { ok:false, status:raw.status };
       text=await raw.text();
     }
-    return { ok:true, status:200, sha:data.sha, json:JSON.parse(text) };
+    let json=JSON.parse(text);
+    try{ json=await window.TodoCrypt.open(json); }catch(e){ if(e.locked){ syncLocked=true; setSyncStatus(e.message); paintSyncCrypt(); } throw e; }
+    return { ok:true, status:200, sha:data.sha, json };
   }
   function setSyncStatus(msg){ const el=$('sync-status'); if(el) el.textContent=msg; }
 
@@ -520,7 +523,7 @@
         if(got.ok){ sha=got.sha; mergeIn(got.json); await d.saveLocal(); d.render(); }
         await saveConflicts(); updateConflictBadge();
         const sent=JSON.stringify(d.read());   // the reference copy becomes what is sent (audit A9)
-        const body={ message:d.message, content:b64EncodeUtf8(sent), branch:'main' };
+        const body={ message:d.message, content:b64EncodeUtf8(await window.TodoCrypt.seal(sent)), branch:'main' };
         if(sha) body.sha=sha;
         const putRes=await ghFetch(syncApiUrl(d.path), { method:'PUT', headers:{ 'Content-Type':'application/json' }, body:JSON.stringify(body) });
         syncNote(putRes);
@@ -642,7 +645,7 @@
         const g=await ghGetJson(SYNC_PARC_PATH);
         if(g.ok && g.json){ if((g.json.importedAt||0)>=(parcData.importedAt||0) || parcHash(g.json)===parcHash(parcData)) return; sha=g.sha; }
       }
-      const body={ message:'Sync Portefeuille', content:b64EncodeUtf8(JSON.stringify(parcData)), branch:'main' };
+      const body={ message:'Sync Portefeuille', content:b64EncodeUtf8(await window.TodoCrypt.seal(JSON.stringify(parcData))), branch:'main' };
       if(sha) body.sha=sha;
       const res=await ghFetch(syncApiUrl(SYNC_PARC_PATH), { method:'PUT', headers:{ 'Accept':'application/vnd.github+json', 'Content-Type':'application/json' }, body:JSON.stringify(body) });
       syncNote(res);
@@ -6058,7 +6061,7 @@
       planBox.innerHTML='<p class="muted">Comparaison…</p>';
       try{
         const r=await ghFetch(repoUrl+'/contents/'+RESTORE_SETS[key].path()+'?ref='+sha, { headers:Object.assign({}, auth, { 'Accept':'application/vnd.github.raw+json' }), cache:'no-store' });
-        if(!r.ok) throw new Error(r.status); const version=JSON.parse(await r.text()), plan=restorePlan(key, version);
+        if(!r.ok) throw new Error(r.status); const version=await window.TodoCrypt.open(JSON.parse(await r.text())), plan=restorePlan(key, version);
         const names=l=>l.slice(0,6).map(([t,x])=>escapeHtml(restoreName(t,x))).join(', ')+(l.length>6?' et '+(l.length-6)+' autres':'');
         planBox.innerHTML='<div class="rs-k">Revenir au '+escapeHtml(when)+'</div><ul class="rs-sum">'
           +'<li><b>'+plan.back.length+'</b> élément'+(plan.back.length>1?'s':'')+' qui revien'+(plan.back.length>1?'nent':'t')+(plan.back.length?' : '+names(plan.back):'')+'</li>'
@@ -6232,6 +6235,55 @@
     const fresh=N.filter(n=>n.d>seen); if(!fresh.length) return;
     notify('Nouveautés : '+fresh[0].t+(fresh.length>1?' (et '+(fresh.length-1)+' autre'+(fresh.length>2?'s':'')+')':''), { label:'Voir', fn:()=>{ gsTab('lists'); setTimeout(()=>{ const el=$('news-section'); if(el) el.scrollIntoView({ behavior:'smooth', block:'start' }); }, 80); } });
   }, 6000);
+  // ---------- the GitHub sync encrypted (js/sync-crypto.js) : turn it on, unlock another device, change the passphrase ----------
+  const KEYRING_PATH='data/keyring.json';
+  async function putKeyring(keyring){
+    let sha; const g=await ghGetJson(KEYRING_PATH).catch(()=>({})); if(g && g.ok) sha=g.sha;
+    const body={ message:'Sync keyring', content:b64EncodeUtf8(JSON.stringify(keyring)), branch:'main' }; if(sha) body.sha=sha;
+    const r=await ghFetch(syncApiUrl(KEYRING_PATH), { method:'PUT', headers:{ 'Content-Type':'application/json' }, body:JSON.stringify(body) });
+    if(!r.ok) throw new Error('Écriture de la clé sur GitHub impossible ('+r.status+')');
+  }
+  function paintSyncCrypt(){
+    const box=$('sync-crypt'); if(!box) return;
+    const on=window.TodoCrypt.isOn(), conf=!!(syncConfig.enabled || syncConfig.token);
+    box.hidden=!conf; if(!conf) return;
+    $('sync-crypt-text').textContent=syncLocked ? 'Synchro chiffrée : déverrouille cet appareil avec ta phrase secrète, ou avec le code de ton kit de secours. En attendant, rien n’est lu ni écrit sur GitHub.'
+      : on ? 'Chiffrement actif : ton dépôt GitHub ne contient que des données chiffrées. Garde ta phrase secrète et ton kit de secours hors de cet ordinateur.'
+      : 'Chiffrement inactif : tes données sont en clair dans ton dépôt privé. Une fuite de ton jeton GitHub les exposerait.';
+    $('sync-crypt-btn').hidden=on || syncLocked; $('sync-crypt-change').hidden=!on; $('sync-crypt-unlock').hidden=!syncLocked;
+    if(syncLocked && cryptMode!=='unlock') openCryptForm('unlock');
+  }
+  function openCryptForm(mode){
+    cryptMode=mode; $('sync-crypt-form').hidden=false; $('sync-crypt-pass2').hidden=mode==='unlock';
+    $('sync-crypt-pass').placeholder=mode==='unlock'?'Phrase secrète ou code de secours':'Nouvelle phrase secrète (12 caractères au moins)';
+    $('sync-crypt-go').textContent={ setup:'Chiffrer', unlock:'Déverrouiller', change:'Changer' }[mode]; $('sync-crypt-pass').focus();
+  }
+  function showKit(code){
+    $('sync-crypt-kit').hidden=false; $('sync-crypt-code').textContent=code;
+    $('sync-crypt-dl').onclick=()=>{ const txt='Kit de secours · ToDo Agrégation · '+new Date().toLocaleDateString('fr-FR')+'\n\nCode de secours : '+code+'\n\nIl ouvre ta synchro GitHub chiffrée si tu oublies ta phrase secrète :\nRéglages › Synchro GitHub › Déverrouiller, puis saisir ce code.\nGarde ce fichier hors de l’ordinateur (gestionnaire de mots de passe, clé USB, papier). Sans la phrase NI ce code, les données chiffrées sur GitHub sont illisibles.\n';
+      const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([txt], { type:'text/plain' })); a.download='kit-de-secours-todo.txt'; document.body.appendChild(a); a.click(); a.remove(); };
+  }
+  async function cryptGo(){
+    const p=$('sync-crypt-pass').value, p2=$('sync-crypt-pass2').value, st=$('sync-crypt-status');
+    try{
+      if(cryptMode==='unlock'){
+        st.textContent='Déverrouillage…'; const g=await ghGetJson(KEYRING_PATH); if(!g.ok) throw new Error('Clé introuvable sur GitHub.');
+        await window.TodoCrypt.unlock(g.json, p); syncLocked=false; st.textContent='Déverrouillé.'; syncEverythingNow();
+      } else {
+        if(p.length<12) throw new Error('12 caractères au moins.'); if(p!==p2) throw new Error('Les deux saisies diffèrent.');
+        st.textContent=cryptMode==='setup'?'Chiffrement…':'Changement…';
+        if(cryptMode==='setup'){ const g=await ghGetJson(KEYRING_PATH).catch(()=>({})); if(g && g.ok){ syncLocked=true; throw new Error('La synchro est déjà chiffrée depuis un autre appareil : déverrouille avec ta phrase secrète.'); } }
+        const r=cryptMode==='setup' ? await window.TodoCrypt.setup(p) : await window.TodoCrypt.rewrap((await ghGetJson(KEYRING_PATH)).json, p);
+        await putKeyring(r.keyring); showKit(r.code);
+        if(cryptMode==='setup'){ syncPushNow(); syncPushCrmNow(); syncPushNotesNow(); syncPushParc(); }   // everything rewritten, sealed
+        st.textContent=cryptMode==='setup'?'Chiffré. Télécharge ton kit de secours avant de quitter cet écran.':'Phrase secrète changée. Ton ancien code de secours ne marche plus : télécharge le nouveau kit.';
+      }
+      $('sync-crypt-pass').value=''; $('sync-crypt-pass2').value=''; $('sync-crypt-form').hidden=true; cryptMode=''; paintSyncCrypt();
+    }catch(e){ st.textContent=e.message||String(e); paintSyncCrypt(); }
+  }
+  $('sync-crypt-btn').onclick=()=>openCryptForm('setup'); $('sync-crypt-change').onclick=()=>openCryptForm('change'); $('sync-crypt-unlock').onclick=()=>openCryptForm('unlock');
+  $('sync-crypt-go').onclick=cryptGo; $('sync-crypt-pass').addEventListener('keydown', e=>{ if(e.key==='Enter' && $('sync-crypt-pass2').hidden) cryptGo(); });
+  document.querySelector('.tab[data-tab="lists"]').addEventListener('click', ()=>setTimeout(paintSyncCrypt, 0));
   // a borrowed or shared computer : every key goes, the data stays (the last changes leave first, with the token)
   $('keys-wipe-btn').onclick=async ()=>{
     if(!await askConfirm('Effacer toutes les clés de cet appareil ?\n\nJeton GitHub, clé du pont Excel, clé Claude et connexion équipe. Tes données restent ici et sur GitHub ; il faudra recoller les clés pour reprendre la synchro.', 'Effacer les clés')) return;
@@ -6239,7 +6291,7 @@
     try{ flushPostit(); await Promise.all(Object.values(SYNC_FILES).map(f=>f.flush()).filter(Boolean)); }catch(e){ softFail('envoi avant effacement', e); }
     syncConfig.token=''; syncConfig.enabled=false; await saveSyncConfig(); $('sync-token').value='';
     bridgeCfg.token=''; saveBridgeCfg(); if($('bridge-token')) $('bridge-token').value='';
-    try{ localStorage.removeItem('ai-key'); }catch(e){} if($('ai-key-input')) $('ai-key-input').value='';
+    try{ localStorage.removeItem('ai-key'); }catch(e){} if($('ai-key-input')) $('ai-key-input').value=''; window.TodoCrypt.forget();
     try{ if(window.TodoTeam && window.TodoTeam.isSignedIn()) await window.TodoTeam.signOut(); }catch(e){ softFail('déconnexion équipe', e); }
     st.textContent='Clés effacées. Les données sont toujours là.'; paintSyncPill(); renderBridgeStatus(); renderTeamStatus(); paintSettingsState();
   };
