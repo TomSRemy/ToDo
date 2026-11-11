@@ -3,7 +3,7 @@
 window.TodoTeamUI=(function(){
   const api={};
   api.init=function(app){
-    const { $, notify, softFail, askConfirm, render, renderArchive, renderLists, renderToday, renderContacts, renderPipeline, saveCrmLocalOnly, touchCrm, activeContacts, paintSettingsButtons }=app;
+    const { $, notify, softFail, askConfirm, render, renderArchive, renderLists, renderToday, renderContacts, renderPipeline, saveCrmLocalOnly, touchCrm, activeContacts, paintSettingsButtons }=app, gsTab=(...a)=>app.gsTab(...a);
     const contactsArr=()=>app.contacts;
     // ---------- Synchro équipe (Supabase, bêta) : voir js/supabase-sync.js. Inactif sans config, aucun effet sur l'appli en service. ----------
     const TEAM_TABLES=['opportunities','contacts','companies','meetings'];
@@ -27,8 +27,35 @@ window.TodoTeamUI=(function(){
         }
         teamSnap.contacts.delete(id); seen.delete(id); teamSeenSave();
       }
-      catch(e){ console.error('[teamSyncPush] retrait contact privé', id, e); }
+      catch(e){ console.error('[teamSyncPush] retrait contact privé', id, e); return 'failed'; }
     }
+    // ---- the team sync's health : a banner on every page when it stops (signed out, base unreachable or paused, sends
+    // failing), with what is waiting on this device ; the sends start again by themselves when it comes back ----
+    const health={ down:false, since:0, closed:false }; let retryTimer=null;
+    function teamPending(){ let n=0; TEAM_TABLES.forEach(t=>teamArrFor(t).forEach(o=>{ if(!teamPrivate(t, o) && teamSnap[t].size && teamSnap[t].get(o.id)!==JSON.stringify(o)) n++; })); return n; }
+    function setTeamDown(down){
+      if(down && !health.down){ health.down=true; health.since=Date.now(); health.closed=false; if(!retryTimer) retryTimer=setInterval(teamRetry, 60000); }
+      if(!down && health.down){ health.down=false; health.since=0; clearInterval(retryTimer); retryTimer=null; }
+      paintTeamAlert();
+    }
+    async function teamRetry(){ try{ await teamSyncPull(); if(!health.down) await teamSyncPush(); }catch(e){ setTeamDown(true); } }
+    function teamAlertText(off){
+      const n=teamPending(), keep=n?' '+n+' modification'+(n>1?'s':'')+' en attente, gardée'+(n>1?'s':'')+' sur cet appareil.':' Tes modifications restent sur cet appareil.';
+      return off ? 'Synchro équipe arrêtée : tu n\u2019es plus connecté.'+keep
+        : 'Synchro équipe interrompue depuis '+new Date(health.since).toLocaleTimeString('fr-FR',{ hour:'2-digit', minute:'2-digit' })+' (base injoignable : en pause ou pas de réseau).'+keep+' L\u2019envoi reprendra tout seul.';
+    }
+    function paintTeamAlert(){
+      const el=$('team-alert'); if(!el || !window.TodoTeam) return;
+      const T=window.TodoTeam, conf=T.isConfigured && T.isConfigured(), inn=T.isSignedIn && T.isSignedIn();
+      const off=conf && !inn, show=!health.closed && (off || (inn && health.down));
+      el.hidden=!show; if(!show) return;
+      el.querySelector('span').textContent=teamAlertText(off);
+      const go=el.querySelector('.ta-go'); go.textContent=off?'Se connecter':'Réessayer';
+      go.onclick=off ? ()=>{ gsTab('lists'); setTimeout(()=>{ const t=$('team-section'); if(t) t.scrollIntoView({ behavior:'smooth', block:'start' }); const f=$('team-email'); if(f) f.focus({ preventScroll:true }); }, 80); }
+        : ()=>{ go.textContent='…'; teamRetry(); };
+      el.querySelector('.ta-x').onclick=()=>{ health.closed=true; el.hidden=true; };
+    }
+    window.addEventListener('online', ()=>{ if(health.down) teamRetry(); });
     // ---- field by field : two colleagues changing different fields of the same sheet both keep their change ----
     // teamSnap holds, per row, the last version seen on the base (the « base » of a three-way merge) : what I changed
     // since is mine and goes on top of the base's current version, everything else comes from the base.
@@ -45,22 +72,28 @@ window.TodoTeamUI=(function(){
     // the same object kept (an open sheet holds it), its content replaced
     function assignInPlace(o, m){ Object.keys(o).forEach(k=>{ if(!(k in m)) delete o[k]; }); Object.assign(o, m); }
     const snapOf=(table, id)=>{ const j=teamSnap[table].get(id); return j ? JSON.parse(j) : null; };
+    // one changed row : merged onto the base's current version (field by field), then sent ; 'sent' / 'merged' / 'failed'
+    async function teamPushOne(table, item, seen){
+      try{
+        const base=snapOf(table, item.id), server=base ? await window.TodoTeam.getItem(table, item.id) : null;
+        const out=server ? merge3(base, item, server) : item, merged=!!server && !same(out, item);
+        if(merged) assignInPlace(item, out);   // a colleague's change came in with mine
+        await window.TodoTeam.pushItem(table, item); teamSnap[table].set(item.id, JSON.stringify(item));
+        if(table==='contacts' && !seen.has(item.id)){ seen.add(item.id); teamSeenSave(); }
+        return merged ? 'merged' : 'sent';
+      }catch(e){ console.error('[teamSyncPush]', table, item.id, e); return 'failed'; }
+    }
     async function teamSyncPush(){
       if(!(window.TodoTeam && window.TodoTeam.isSignedIn())) return;
-      const seen=await teamSeenLoad(); let merged=false;
+      const seen=await teamSeenLoad(); let merged=false, failed=false;
       for(const table of TEAM_TABLES){
         for(const item of teamArrFor(table)){
-          if(teamPrivate(table, item)){ await teamDropPrivate(item.id, seen); continue; }
+          if(teamPrivate(table, item)){ if(await teamDropPrivate(item.id, seen)==='failed') failed=true; continue; }
           if(teamSnap[table].get(item.id)===JSON.stringify(item)) continue;
-          try{
-            const base=snapOf(table, item.id), server=base ? await window.TodoTeam.getItem(table, item.id) : null;
-            const out=server ? merge3(base, item, server) : item;
-            if(server && !same(out, item)){ assignInPlace(item, out); merged=true; }   // a colleague's change came in with mine
-            await window.TodoTeam.pushItem(table, item); teamSnap[table].set(item.id, JSON.stringify(item));
-            if(table==='contacts' && !seen.has(item.id)){ seen.add(item.id); teamSeenSave(); }
-          }catch(e){ console.error('[teamSyncPush]', table, item.id, e); }
+          const r=await teamPushOne(table, item, seen); if(r==='merged') merged=true; else if(r==='failed') failed=true;
         }
       }
+      setTeamDown(failed);
       if(merged){ saveCrmLocalOnly(); teamRefresh(); }
     }
     // a row from the base : taken as is when nothing changed here since the last one seen, merged field by field otherwise
@@ -75,9 +108,9 @@ window.TodoTeamUI=(function(){
     // recharge tout depuis Supabase au démarrage/connexion : fusionne par id, la version la plus récente gagne
     async function teamSyncPull(){
       if(!(window.TodoTeam && window.TodoTeam.isSignedIn())) return;
-      teamPulledAt=Date.now();
+      teamPulledAt=Date.now(); let pullFailed=false; const wasDown=health.down;
       for(const table of TEAM_TABLES){
-        let rows; try{ rows=await window.TodoTeam.pullAll(table); }catch(e){ console.error('[teamSyncPull]', table, e); continue; }
+        let rows; try{ rows=await window.TodoTeam.pullAll(table); }catch(e){ console.error('[teamSyncPull]', table, e); pullFailed=true; continue; }
         if(!rows) continue;
         const arr=teamArrFor(table), by=new Map(arr.map(x=>[x.id,x]));
         rows.forEach(r=>{ const cur=by.get(r.id); if(teamPrivate(table, cur)) return;   // mine and private : the push below takes it out of the team base
@@ -89,6 +122,8 @@ window.TodoTeamUI=(function(){
         }
         arr.length=0; arr.push(...by.values());
       }
+      setTeamDown(pullFailed);
+      if(wasDown && !pullFailed) teamSyncPush();   // back : what waited here leaves now
       await saveCrmLocalOnly();
       teamRefresh();
     }
@@ -118,7 +153,7 @@ window.TodoTeamUI=(function(){
         +' Un contact est partagé par défaut ; le cadenas dans Contacts le garde pour toi.';
     }
     async function renderTeamStatus(){
-      paintTeamShare();
+      paintTeamShare(); paintTeamAlert();
       const cfgEl=$('team-config-status'), authEl=$('team-auth-status');
       if(!cfgEl || !authEl || !window.TodoTeam) return;
       const cfg=await window.TodoTeam.loadConfig();
@@ -171,7 +206,7 @@ window.TodoTeamUI=(function(){
       };
       renderTeamStatus();
     }
-    Object.assign(api, { teamSyncPush, teamSyncPull, teamSyncSubscribe, renderTeamStatus, paintTeamShare });
+    Object.assign(api, { teamSyncPush, teamSyncPull, teamSyncSubscribe, renderTeamStatus, paintTeamShare, paintTeamAlert });
   };
   return api;
 })();

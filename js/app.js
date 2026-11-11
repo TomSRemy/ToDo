@@ -6956,7 +6956,7 @@
   function teamSyncSubscribe(...a){ return window.TodoTeamUI.teamSyncSubscribe ? window.TodoTeamUI.teamSyncSubscribe(...a) : undefined; }
   function renderTeamStatus(...a){ return window.TodoTeamUI.renderTeamStatus ? window.TodoTeamUI.renderTeamStatus(...a) : Promise.resolve(); }
   function paintTeamShare(...a){ return window.TodoTeamUI.paintTeamShare ? window.TodoTeamUI.paintTeamShare(...a) : undefined; }
-  window.TodoTeamUI.init({ $, notify, softFail, askConfirm, render, renderArchive, renderLists, renderToday, renderContacts, renderPipeline, saveCrmLocalOnly, touchCrm, activeContacts, paintSettingsButtons,
+  window.TodoTeamUI.init({ $, gsTab:(...a)=>gsTab(...a), notify, softFail, askConfirm, render, renderArchive, renderLists, renderToday, renderContacts, renderPipeline, saveCrmLocalOnly, touchCrm, activeContacts, paintSettingsButtons,
     get opportunities(){ return opportunities; }, get contacts(){ return contacts; }, get companies(){ return companies; }, get meetings(){ return meetings; } });
 
   $('bridge-token').value=bridgeCfg.token||'';

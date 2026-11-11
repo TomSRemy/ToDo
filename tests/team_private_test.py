@@ -24,12 +24,12 @@ server = {"contacts": [ct("c2", "Bob-serveur", upd=9000), ct("c3", "Chloé")]}
 STUB = """
 window.__team = { pushed: [], removed: [], server: %s };
 window.TodoTeam = {
-  init: async()=>{}, loadConfig: async()=>({ url:'x', anonKey:'y' }), saveConfig: async()=>{}, isConfigured: ()=>true, isSignedIn: ()=>true,
+  init: async()=>{}, loadConfig: async()=>({ url:'x', anonKey:'y' }), saveConfig: async()=>{}, isConfigured: ()=>true, isSignedIn: ()=>!window.__team.out,
   currentUser: ()=>({ email:'t@x' }), signIn: async()=>{}, signOut: async()=>{},
-  pullAll: async t=>JSON.parse(JSON.stringify(window.__team.server[t]||[])),
-  pushItem: async (t, it)=>{ window.__team.pushed.push([t, it.id]); (window.__team.last=window.__team.last||{})[it.id]=JSON.parse(JSON.stringify(it)); return true; },
-  getItem: async (t, id)=>{ const now=(window.__team.now||{})[id]; if(now) return JSON.parse(JSON.stringify(now)); const r=(window.__team.server[t]||[]).find(x=>x.id===id); return r ? JSON.parse(JSON.stringify(r)) : null; },
-  removeItem: async (t, id)=>{ window.__team.removed.push([t, id]); return (window.__team.refuse||[]).includes(id) ? 'refused' : 'deleted'; },
+  pullAll: async t=>{ if(window.__team.down) throw new TypeError('Failed to fetch'); return JSON.parse(JSON.stringify(window.__team.server[t]||[])); },
+  pushItem: async (t, it)=>{ if(window.__team.down) throw new TypeError('Failed to fetch'); window.__team.pushed.push([t, it.id]); (window.__team.last=window.__team.last||{})[it.id]=JSON.parse(JSON.stringify(it)); const L=(window.__team.server[t]=window.__team.server[t]||[]), i=L.findIndex(x=>x.id===it.id); if(i>=0) L[i]=JSON.parse(JSON.stringify(it)); else L.push(JSON.parse(JSON.stringify(it))); return true; },
+  getItem: async (t, id)=>{ if(window.__team.down) throw new TypeError('Failed to fetch'); const now=(window.__team.now||{})[id]; if(now) return JSON.parse(JSON.stringify(now)); const r=(window.__team.server[t]||[]).find(x=>x.id===id); return r ? JSON.parse(JSON.stringify(r)) : null; },
+  removeItem: async (t, id)=>{ if(window.__team.down) throw new TypeError('Failed to fetch'); window.__team.removed.push([t, id]); return (window.__team.refuse||[]).includes(id) ? 'refused' : 'deleted'; },
   teamErrors: async ()=>[{ at:'2026-11-11T10:00:00Z', where_:'synchro', message:'Échec réseau', who:'Paul' }, { at:'2026-11-11T09:00:00Z', where_:'synchro', message:'Échec réseau', who:'Paul' }, { at:'2026-11-10T09:00:00Z', where_:'page', message:'x is undefined', who:'Toi' }],
   history: async (t, id)=>[{ field:'phone1', old_value:'0600', new_value:'0611', who:'Paul', changed_at:'2026-11-10T13:32:00Z' }, { field:'(création)', who:'Toi', changed_at:'2026-11-01T09:00:00Z' }],
     subscribe: (t, fn)=>{ (window.__subs=window.__subs||{})[t]=fn; return ()=>{}; }, migrateFromLocal: async()=>({})
@@ -79,6 +79,17 @@ with sync_playwright() as p:
         check(contacts()["c3"].get("phone1") == "0699", "… and the colleague's phone shows up here too")
     else:
         check(False, "the contact form opened to edit c3")
+    # the base goes down (paused, no network) : a banner says so, what waits stays here, « Réessayer » sends it once it is back
+    page.evaluate("window.__team.down=true; window.__team.pushed=[]")
+    page.evaluate("""(()=>{ const btn=[...document.querySelectorAll('.contact-detail-links button')].find(b=>/Modifier/.test(b.textContent)); if(btn) btn.click(); })()"""); page.wait_for_timeout(200)
+    page.fill("#ct-comment", "Rappeler lundi"); page.click("#contact-save-btn"); page.wait_for_timeout(800)
+    banner = page.inner_text("#team-alert") if page.is_visible("#team-alert") else ""
+    check("interrompue" in banner and "1 modification en attente" in banner, f"the base unreachable : a banner says the team sync stopped and what waits here ({banner!r})")
+    page.evaluate("window.__team.down=false"); page.click("#team-alert .ta-go"); page.wait_for_timeout(1000)
+    check(not page.is_visible("#team-alert") and ["contacts", "c3"] in page.evaluate("window.__team.pushed"), "back : « Réessayer » sends what waited and the banner goes")
+    page.evaluate("window.__team.out=true"); page.evaluate("window.TodoTeamUI.paintTeamAlert()")
+    check("plus connecté" in page.inner_text("#team-alert") and "Se connecter" in page.inner_text("#team-alert .ta-go"), "signed out : the banner says so and offers to sign in")
+    page.evaluate("window.__team.out=false"); page.evaluate("window.TodoTeamUI.paintTeamAlert()")
     page.select_option("#contacts-type-filter", "__private"); page.wait_for_timeout(300)
     names = page.locator("#contacts-list .contact-row").all_inner_texts()
     check(len(names) == 1 and "Bob" in names[0], f"the « Privés » filter lists only the private ones ({names})")

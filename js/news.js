@@ -1,6 +1,7 @@
 // Todo — « Nouveautés » : what changed in the tool, in plain words, newest first (Réglages › Nouveautés, and a word
 // once when something new came out). Written by hand at each change worth knowing ; the technical history is on GitHub.
 window.TodoNews=[
+  { d:'2026-11-11', t:'Alerte quand la synchro équipe s\u2019arrête', x:'Un bandeau en bas de l\u2019écran prévient si tu n\u2019es plus connecté ou si la base est injoignable (en pause, pas de réseau), avec le nombre de modifications en attente. Elles restent sur l\u2019appareil et partent toutes seules au retour ; « Réessayer » relance tout de suite.' },
   { d:'2026-11-11', t:'Modifications simultanées fusionnées', x:'Si deux personnes modifient la même fiche en même temps, chacune garde son changement : seuls les champs que tu as modifiés remplacent ceux de la base. Si vous changez le même champ, la dernière modification enregistrée l\u2019emporte (elle reste visible dans l\u2019historique).' },
   { d:'2026-11-11', t:'Historique des fiches : « Revenir à cette valeur »', x:'Dans l’historique d’une affaire ou d’un contact, chaque changement peut être annulé ; une fiche mise à la corbeille peut être restaurée. Le retour en arrière est lui-même inscrit, à ton nom.' },
   { d:'2026-11-11', t:'Erreurs de l’équipe', x:'Réglages › Journal des erreurs montre aussi les erreurs rencontrées par les collègues ces 7 derniers jours ; un message prévient, une fois par jour, s’il y en a de nouvelles.' },

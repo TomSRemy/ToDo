@@ -2854,3 +2854,6 @@ html.widget .dup-banner{ display:none; }
 .news-row .nd{ font:500 11px var(--font-mono); color:var(--tx3); padding-top:2px; }
 .news-row b{ font-size:13px; color:var(--tx1); } .news-row p{ margin:2px 0 0; font-size:12.5px; color:var(--tx2); line-height:1.5; }
 .news-row.new b::after{ content:'nouveau'; margin-left:8px; font:600 10px var(--font-mono); color:var(--accent); border:1px solid var(--accent); border-radius:var(--radius); padding:0 5px; vertical-align:1px; }
+/* the team sync stopped : at the bottom of every page (the top belongs to the storage alert) */
+.storage-alert.team-alert{ top:auto; bottom:calc(env(safe-area-inset-bottom, 0px) + 16px); }
+.storage-alert.team-alert .ta-x{ border:none; padding:4px 6px; }
