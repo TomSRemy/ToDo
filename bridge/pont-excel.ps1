@@ -30,6 +30,10 @@
      et chaque case écrite est notée dans « Sauvegardes pont/journal-pont.csv » avec son ancienne valeur et qui l'a écrite
      (jamais effacé) ; la même ligne va dans « Journal ToDo », à côté du Pipe, un fichier par personne (journal de l'équipe).
 
+  v1.34 : les contacts de l'équipe (fichier « Contacts équipe », onglet « Contacts », un tableau ; une ligne est retrouvée par
+  Prénom + Nom ; mêmes règles d'écriture), la sauvegarde locale de l'appli (OneDrive\ToDo\sauvegardes) et le journal de
+  l'équipe (« Journal ToDo » à côté du Pipe, un fichier par personne).
+
   Lancement : double-clic sur « Lancer-pont-excel.bat ». Au premier lancement, choisir les deux fichiers Excel
   et recopier la clé affichée dans l'app (Réglages → Pont Excel).
   Options : -Reconfigurer (choisir à nouveau les fichiers), -Port 8765, -Mock (test sans Excel).
@@ -56,7 +60,10 @@ if ($Mock) { $AllowedOrigins += 'null' }   # pages opened from a file, for tests
 $Kinds = @{
   pipe = @{ label = 'Pipe agrégation'; header = 'Nom Producteur'; keys = @('Nom Producteur', 'Nom Centrale'); sheet = 'Pipe agrégation' }
   bdd  = @{ label = 'BDD Agrégation'; header = 'Nom_prod'; keys = @('Nom_prod', 'Nom_Installation_prod'); sheet = 'BDD Agrégation' }
+  # v1.34 : the team's shared contacts, a table in the sheet « Contacts » ; a row is found by first name + last name
+  contacts = @{ label = 'Contacts équipe'; header = 'Nom'; keys = @('Prénom', 'Nom'); sheet = 'Contacts' }
 }
+$ContactHeaders = @('Prénom', 'Nom', 'Société', 'Fonction', 'Email', 'Téléphone', 'Téléphone 2', 'Commentaire', 'ID', 'Modifié le', 'Modifié par')
 # EPPlus : lit/écrit un .xlsx sans ouvrir Excel, utilisé quand personne n'a le fichier ouvert (sinon, COM, plus bas).
 # Téléchargé une fois (paquet NuGet, EPPlus 4.5.3.3 — la dernière version LGPL, un seul fichier .dll, aucune
 # dépendance, cible .NET Framework nativement) et gardé dans lib/ à côté du script ; plus besoin ensuite.
@@ -146,7 +153,7 @@ function Resolve-ConfigPath($kind) {
   if ($Mock -or (-not $path) -or (Test-Path -LiteralPath $path)) { return $path }
   $folder = Split-Path $path -Parent
   if (-not $folder -or -not (Test-Path -LiteralPath $folder)) { return $path }
-  $kw = if ($kind -eq 'pipe') { 'pipe' } else { 'suivi' }
+  $kw = if ($kind -eq 'pipe') { 'pipe' } elseif ($kind -eq 'contacts') { 'contact' } else { 'suivi' }
   $cands = @(Get-ChildItem -LiteralPath $folder -Filter '*.xlsx' -File -ErrorAction SilentlyContinue |
     Where-Object { $_.Name -notlike '~$*' -and (Norm $_.BaseName) -match $kw } | Sort-Object LastWriteTime -Descending)
   if ($cands.Count -eq 1) {
@@ -409,9 +416,10 @@ function New-DirectAdapter($kind) {
 $script:mockTables = @{}
 function New-MockAdapter($kind) {
   if (-not $script:mockTables.ContainsKey($kind)) {
-    $n = if ($kind -eq 'pipe') { 37 } else { 91 }
+    $n = if ($kind -eq 'pipe') { 37 } elseif ($kind -eq 'contacts') { $ContactHeaders.Count } else { 91 }
     $h = @(); for ($i = 1; $i -le $n; $i++) { $h += "Col$i" }
-    if ($kind -eq 'pipe') { $h[6] = 'Nom Producteur'; $h[19] = 'Nom Centrale' } else { $h[31] = 'Nom_prod'; $h[33] = 'Nom_Installation_prod'; $h[29] = 'Renouvellement'; $h[7] = 'Ref_Watt.ee' }
+    if ($kind -eq 'contacts') { $h = @($ContactHeaders) }
+    elseif ($kind -eq 'pipe') { $h[6] = 'Nom Producteur'; $h[19] = 'Nom Centrale' } else { $h[31] = 'Nom_prod'; $h[33] = 'Nom_Installation_prod'; $h[29] = 'Renouvellement'; $h[7] = 'Ref_Watt.ee' }
     $script:mockTables[$kind] = @{ headers = $h; rows = New-Object System.Collections.ArrayList; formulas = @{} }
     if ($kind -eq 'bdd') { $script:mockTables[$kind].formulas[30] = $true }   # column AD holds a formula
   }
@@ -627,7 +635,7 @@ function Upsert-Rows($kind, $rows) {
       $prevCode = if ($codeCol -and ($codeCol + $off - 1) -lt $prev.Count) { Norm $prev[$codeCol + $off - 1] } else { '' }
       # a row's code is « ours » when empty, the code sent now, or the code the app wrote there last time
       $codeOk = { param($r) if (-not $codeCol) { return $true }; $rc = Norm (& $a.Get $a $r $codeCol); return ($rc -eq '' -or $rc -eq $newCode -or ($prevCode -ne '' -and $rc -eq $prevCode)) }
-      if (($keyVals | Where-Object { $_ -eq '' }).Count -gt 0) { [void]$results.Add(@{ ok = $false; key = $keyText; message = 'Clé incomplète (producteur ou centrale vide) : ligne ignorée.' }); continue }
+      if (($keyVals | Where-Object { $_ -eq '' }).Count -gt 0) { [void]$results.Add(@{ ok = $false; key = $keyText; message = $(if ($kind -eq 'contacts') { 'Clé incomplète (prénom ou nom vide) : ligne ignorée.' } else { 'Clé incomplète (producteur ou centrale vide) : ligne ignorée.' }) }); continue }
       $n = & $a.RowCount $a
       if ($n -ne $keyColCacheN) { $keyColCache = @(); foreach ($kc in $keyCols) { $keyColCache += ,(& $a.Column $a $kc) }; $keyColCacheN = $n }
       $cols = $keyColCache
@@ -857,6 +865,14 @@ function LocalBackup-Read($name) {
   if (-not (Test-Path -LiteralPath $path)) { return @(404, @{ ok = $false; message = 'Sauvegarde introuvable.' }) }
   return @(200, @{ ok = $true; name = $name; content = [IO.File]::ReadAllText($path, [Text.Encoding]::UTF8) })
 }
+# the team's contacts file, chosen from the app (a path pasted there) : an Excel file that exists, nothing else
+function Set-ContactsFile($path) {
+  $path = ([string]$path).Trim().Trim('"')
+  if (-not [IO.Path]::IsPathRooted($path) -or $path -notmatch '\.xls[xm]$') { return @(400, @{ ok = $false; message = 'Colle le chemin complet du fichier Excel des contacts (…\Contacts équipe.xlsx).' }) }
+  if (-not $Mock -and -not (Test-Path -LiteralPath $path)) { return @(404, @{ ok = $false; message = 'Fichier introuvable : ' + $path }) }
+  Set-ConfigValue 'contacts' $path
+  return @(200, @{ ok = $true; name = [IO.Path]::GetFileName($path) })
+}
 function LocalBackup-SetDir($dir) {
   $dir = ([string]$dir).Trim().Trim('"')
   if (-not $dir) { Set-ConfigValue 'backupDir' ''; return @(200, @{ ok = $true; dir = (LocalBackup-Dir) }) }   # empty : back to the default folder
@@ -915,15 +931,16 @@ function Handle($req) {
     return @(200, @{ ok = $true; version = $Version; authorized = $authorized; mock = [bool]$Mock;
         pipe = @{ name = [IO.Path]::GetFileName([string](Resolve-ConfigPath 'pipe')); found = ($Mock -or (Test-Path ([string]$Config.pipe))) };
         bdd = @{ name = [IO.Path]::GetFileName([string](Resolve-ConfigPath 'bdd')); found = ($Mock -or (Test-Path ([string]$Config.bdd))) };
+        contacts = @{ name = [IO.Path]::GetFileName([string](Get-Prop $Config 'contacts')); found = [bool]((Get-Prop $Config 'contacts') -and ($Mock -or (Test-Path ([string]$Config.contacts)))) };
         who = $(if ($authorized) { Journal-Who } else { $null }) })
   }
   if (-not $authorized) { return @(401, @{ ok = $false; message = 'Clé du pont incorrecte : recopie la clé affichée dans la fenêtre du pont.' }) }
-  if ($req.method -eq 'POST' -and $req.path -match '^/(pipe|bdd)/upsert$') {
+  if ($req.method -eq 'POST' -and $req.path -match '^/(pipe|bdd|contacts)/upsert$') {
     $kind = $Matches[1]
     $data = $req.body | ConvertFrom-Json
     return @(200, (Upsert-Rows $kind @($data.rows)))
   }
-  if ($Mock -and $req.method -eq 'POST' -and $req.path -match '^/mock/seed/(pipe|bdd)$') {
+  if ($Mock -and $req.method -eq 'POST' -and $req.path -match '^/mock/seed/(pipe|bdd|contacts)$') {
     $kind = $Matches[1]; $data = $req.body | ConvertFrom-Json
     $null = New-MockAdapter $kind
     $t = $script:mockTables[$kind]
@@ -936,7 +953,7 @@ function Handle($req) {
     $t.checkboxes = @($data.checkboxes | ForEach-Object { [int]$_ })
     return @(200, @{ ok = $true })
   }
-  if ($Mock -and $req.method -eq 'POST' -and $req.path -match '^/mock/edit/(pipe|bdd)$') {
+  if ($Mock -and $req.method -eq 'POST' -and $req.path -match '^/mock/edit/(pipe|bdd|contacts)$') {
     $t = $script:mockTables[$Matches[1]]; $d = $req.body | ConvertFrom-Json
     switch ([string]$d.op) {
       'set' { $t.rows[[int]$d.row - 1][[int]$d.col - 1] = $d.value }
@@ -948,7 +965,7 @@ function Handle($req) {
     }
     return @(200, @{ ok = $true; count = $t.rows.Count; shiftArmed = [bool]$t.shiftOnWrite })
   }
-  if ($Mock -and $req.method -eq 'GET' -and $req.path -match '^/mock/dump/(pipe|bdd)$') {
+  if ($Mock -and $req.method -eq 'GET' -and $req.path -match '^/mock/dump/(pipe|bdd|contacts)$') {
     $t = $script:mockTables[$Matches[1]]
     return @(200, @{ ok = $true; headers = $t.headers; rows = @($t.rows | ForEach-Object { ,@($_ | ForEach-Object { Show-Value $_ }) }) })
   }
@@ -970,13 +987,14 @@ function Handle($req) {
       return @(404, @{ ok = $false; message = 'Mail introuvable dans Outlook (déplacé, archivé ou supprimé ?), ou Outlook fermé.' })
     }
   }
+  if ($req.method -eq 'POST' -and $req.path -eq '/contacts/file') { $d = $req.body | ConvertFrom-Json; return (Set-ContactsFile $d.path) }
   if ($req.method -eq 'POST' -and $req.path -eq '/journal/read') { $d = $req.body | ConvertFrom-Json; return (Journal-Read ([string]$d.key) $d.limit) }
   if ($req.method -eq 'POST' -and $req.path -eq '/journal/name') { $d = $req.body | ConvertFrom-Json; Set-ConfigValue 'name' (([string]$d.name).Trim() -replace '[\r\n;]', ' '); return @(200, @{ ok = $true; who = (Journal-Who) }) }
   if ($req.method -eq 'POST' -and $req.path -eq '/backup/write') { $d = $req.body | ConvertFrom-Json; return @(200, (LocalBackup-Write $d.content ([bool]$d.encrypted))) }
   if ($req.method -eq 'POST' -and $req.path -eq '/backup/list') { return @(200, @{ ok = $true; dir = (LocalBackup-Dir); files = @(LocalBackup-Files | ForEach-Object { LocalBackup-Info $_ }) }) }
   if ($req.method -eq 'POST' -and $req.path -eq '/backup/read') { $d = $req.body | ConvertFrom-Json; return (LocalBackup-Read $d.name) }
   if ($req.method -eq 'POST' -and $req.path -eq '/backup/dir') { $d = $req.body | ConvertFrom-Json; return (LocalBackup-SetDir $d.dir) }
-  if ($req.method -eq 'GET' -and $req.path -match '^/(pipe|bdd)/read$') {
+  if ($req.method -eq 'GET' -and $req.path -match '^/(pipe|bdd|contacts)/read$') {
     $r = Read-Sheets $Matches[1]
     return @(200, @{ ok = $true; sheets = $r.sheets; allNames = $r.allNames })
   }

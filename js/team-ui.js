@@ -7,6 +7,8 @@ window.TodoTeamUI=(function(){
     const contactsArr=()=>app.contacts;
     // ---------- Synchro équipe (Supabase, bêta) : voir js/supabase-sync.js. Inactif sans config, aucun effet sur l'appli en service. ----------
     const TEAM_TABLES=['opportunities','contacts','companies','meetings'];
+    // the team mode : the Supabase base works only when chosen (Réglages › Données d'équipe) ; asleep otherwise (Excel mode)
+    const awake=()=>{ try{ return localStorage.getItem('team-mode')==='supabase'; }catch(e){ return false; } };
     let teamPulledAt=0;   // the last full read of the team's data
     let teamSnap={ opportunities:new Map(), contacts:new Map(), companies:new Map(), meetings:new Map() }, teamSubscribed=false;
     const teamArrFor=table=>({ opportunities:app.opportunities, contacts:app.contacts, companies:app.companies, meetings:app.meetings }[table]);
@@ -48,6 +50,7 @@ window.TodoTeamUI=(function(){
     function goTeamForm(){ gsTab('lists'); setTimeout(()=>{ const t=$('team-section'); if(t) t.scrollIntoView({ behavior:'smooth', block:'start' }); const f=$(mfaPending==='none'?'team-mfa-enroll':mfaNeeded?'team-mfa-code':'team-email'); if(f) f.focus({ preventScroll:true }); }, 80); }
     // what the banner says : 'off' (signed out), 'mfa' (code awaited), 'down' (base unreachable), or nothing
     function teamAlertKind(){
+      if(!awake()) return '';
       const T=window.TodoTeam, conf=T.isConfigured && T.isConfigured(), inn=T.isSignedIn && T.isSignedIn();
       if(conf && !inn) return 'off';
       if(!inn) return '';
@@ -66,7 +69,7 @@ window.TodoTeamUI=(function(){
     // teamSnap holds, per row, the last version seen on the base (the « base » of a three-way merge) : what I changed
     // since is mine and goes on top of the base's current version, everything else comes from the base.
     const META=new Set(['updatedAt','createdAt','_by']), same=(a,b)=>JSON.stringify(a)===JSON.stringify(b);
-    const QUIET=/^(stageLog|xs|xsSeen|xsKeep)/;   // bookkeeping fields : no question asked, mine goes on top as before
+    const QUIET=/^(stageLog|xs|xsSeen|xsKeep|xlc)/;   // bookkeeping fields : no question asked, mine goes on top as before
     // a form saves every field, empty ones included : an empty field where there was nothing is not a change
     const blank=v=>v==null || v==='' || (Array.isArray(v) && !v.length), sameVal=(a,b)=>(blank(a) && blank(b)) || same(a,b);
     // the same field changed here AND by a colleague, to different values : the colleague's value stays for now and the
@@ -122,7 +125,7 @@ window.TodoTeamUI=(function(){
       }catch(e){ console.error('[teamSyncPush]', table, item.id, e); return 'failed'; }
     }
     async function teamSyncPush(){
-      if(!(window.TodoTeam && window.TodoTeam.isSignedIn()) || mfaNeeded) return;
+      if(!awake() || !(window.TodoTeam && window.TodoTeam.isSignedIn()) || mfaNeeded) return;
       const seen=await teamSeenLoad(); let merged=false, failed=false;
       for(const table of TEAM_TABLES){
         for(const item of teamArrFor(table)){
@@ -145,7 +148,7 @@ window.TodoTeamUI=(function(){
     }
     // recharge tout depuis Supabase au démarrage/connexion : fusionne par id, la version la plus récente gagne
     async function teamSyncPull(){
-      if(!(window.TodoTeam && window.TodoTeam.isSignedIn())) return;
+      if(!awake() || !(window.TodoTeam && window.TodoTeam.isSignedIn())) return;
       if(mfaNeeded){ paintTeamAlert(); return; }   // the base answers only with the second factor : asked in Réglages
       teamPulledAt=Date.now(); let pullFailed=false; const wasDown=health.down;
       for(const table of TEAM_TABLES){
@@ -171,7 +174,7 @@ window.TodoTeamUI=(function(){
     document.addEventListener('visibilitychange', teamPullIfStale); window.addEventListener('focus', teamPullIfStale);
     // un collègue modifie quelque chose : reçu en direct, fusionné dans les tableaux en mémoire
     function teamSyncSubscribe(){
-      if(teamSubscribed || !(window.TodoTeam && window.TodoTeam.isSignedIn())) return;
+      if(!awake() || teamSubscribed || !(window.TodoTeam && window.TodoTeam.isSignedIn())) return;
       teamSubscribed=true;
       TEAM_TABLES.forEach(table=>{
         window.TodoTeam.subscribe(table, (item, kind)=>{

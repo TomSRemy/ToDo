@@ -718,6 +718,19 @@
       <div class="add-item-row"><input type="text" id="new-project-input" placeholder="Nouveau projet"><button id="add-project-btn">Ajouter</button></div>
     </div>
     <h3 class="settings-group" id="grp-team">Équipe : partagé</h3>
+    <div class="list-manager" id="teammode-section">
+      <h2>Données d’équipe</h2>
+      <p class="list-hint">Où vivent les contacts partagés et le pipeline de l’équipe. Toute l’équipe doit faire le même choix.</p>
+      <div class="team-mode" role="radiogroup" aria-label="Données d’équipe">
+        <label class="tm-opt"><input type="radio" name="team-mode" value="excel"> <span><b>Excel SharePoint, via le pont</b><small>Pipe, Suivi et Contacts équipe. Reste dans le cadre de l’entreprise. PC uniquement.</small></span></label>
+        <label class="tm-opt"><input type="radio" name="team-mode" value="supabase"> <span><b>Base Supabase (secours)</b><small>Téléphone et direct, hors du cadre de l’entreprise. Rien n’y est envoyé tant que ce choix n’est pas pris.</small></span></label>
+      </div>
+      <div id="xc-box">
+        <p class="list-hint" style="margin-top:10px">Fichier des contacts équipe : un tableau Excel (Ctrl+T) dans l’onglet « Contacts », colonnes Prénom, Nom, Société, Fonction, Email, Téléphone, Téléphone 2, Commentaire, ID, Modifié le, Modifié par. Colle son chemin complet (clic droit sur le fichier › Copier en tant que chemin d’accès).</p>
+        <div class="set-actions"><input type="text" id="xc-file" placeholder="C:\Users\…\Contacts équipe.xlsx" autocomplete="off" spellcheck="false" style="flex:1;min-width:220px"><button class="data-btn" id="xc-file-save" type="button">Enregistrer</button><button class="data-btn set-primary" id="xc-sync-btn" type="button">Synchroniser les contacts</button></div>
+        <p id="xc-status" class="bridge-status"></p>
+      </div>
+    </div>
     <div class="list-manager" id="team-section">
       <h2>Synchro équipe (bêta)</h2>
       <p class="list-hint team-share" id="team-share-summary"></p>
@@ -915,6 +928,7 @@
 <script src="js/sync-crypto.js"></script>
 <script src="js/local-backup.js"></script>
 <script src="js/excel-journal.js"></script>
+<script src="js/team-excel.js"></script>
 <script src="js/news.js"></script>
 <script src="js/health.js"></script>
 <script src="js/team-ui.js"></script>

@@ -52,7 +52,7 @@ with sync_playwright() as p:
     b = p.chromium.launch(); page = b.new_page(viewport={"width": 1300, "height": 850}, bypass_csp=True); errors = []
     page.on("pageerror", lambda e: errors.append(str(e)))
     page.route("**/fonts.g*/**", lambda r: r.abort()); page.route("**/cdn.jsdelivr.net/**", lambda r: r.abort())
-    page.add_init_script("try{ if(!sessionStorage.getItem('s')){ localStorage.setItem('todo_todo-widget-contacts', %s); localStorage.setItem('todo_team-seen-contacts', %s); localStorage.setItem('team-errors-asked', String(Date.now())); sessionStorage.setItem('s','1'); } }catch(e){}"
+    page.add_init_script("try{ if(!sessionStorage.getItem('s')){ localStorage.setItem('todo_todo-widget-contacts', %s); localStorage.setItem('todo_team-seen-contacts', %s); localStorage.setItem('team-errors-asked', String(Date.now())); localStorage.setItem('team-mode', 'supabase'); sessionStorage.setItem('s','1'); } }catch(e){}"
                          % (json.dumps(json.dumps(local + [ct("c4", "Damien")])), json.dumps(json.dumps(["c2", "c3", "c4"]))))
     page.add_init_script(STUB)
     page.goto(URL); page.wait_for_timeout(1500)

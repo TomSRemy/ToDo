@@ -250,7 +250,7 @@
         .map(([k,v])=>window.storage.set(k,JSON.stringify(v),false)));
     }catch(e){ console.error(e); }
   }
-  async function saveCrm(){ undoSchedule(); await saveCrmLocalOnly(); scheduleCrmSyncPush(); teamSyncPush(); }
+  async function saveCrm(){ undoSchedule(); await saveCrmLocalOnly(); scheduleCrmSyncPush(); teamSyncPush(); if(window.TodoTeamExcel.later) window.TodoTeamExcel.later(); }
   function touchCrm(o){
     o.updatedAt=Date.now();
     if(o && o.stage && (o.kind==='installation'||o.kind==='prequal'||o.kind==='request')){
@@ -5645,7 +5645,7 @@
     try{ const s=await bridgeCall('GET','/status',null,2500); bridgeState={ ok:true, authorized:!!s.authorized, checkedAt:Date.now(), info:s };
       if(s.authorized && window.TodoExcelSync.verAtLeast(s, '1.34')) window.TodoLocalBackup.auto(); }
     catch(e){ bridgeState={ ok:false, authorized:false, checkedAt:Date.now(), info:null, error:e.message }; }
-    renderBridgeStatus(); window.TodoJournal.paintName();
+    renderBridgeStatus(); window.TodoJournal.paintName(); window.TodoTeamExcel.paint();
     if($('rs-pipe-file-name')) renderExcelLinks();
     return bridgeState;
   }
@@ -5666,6 +5666,8 @@
   // openExcelSync is proxied in reverse at the top of this file
   window.TodoExcelSync.init({ $, ON_PHONE, PQ_FIELDS, bddCells, bridgeCall, bridgeCheck, bridgeConfigured, cellToText, closeOppDetail, codeAffaire, copyToClipboard, gsTab:(...a)=>gsTab(...a), importParcFromBridge, isExited, openOppDetail, oppActionBtn, oppName, pipeCells, pqFold, pqPad, relanceOnMove, renderPipeline, saveCrm, setOppStage, softFail, stageIndex, stageLabel, suiviState, touchCrm, get bridgeState(){ return bridgeState; }, set bridgeState(v){ bridgeState=v; }, get opportunities(){ return opportunities; }, set opportunities(v){ opportunities=v; } });   // Envoi vers les Excel partagés et Excel ⇄ appli — js/excel-sync.js
   window.TodoJournal.init({ $, bridgeCall, bridgeConfigured, bridgeInfo:()=>bridgeState.ok && bridgeState.authorized ? bridgeState.info : null, notify });
+  window.TodoTeamExcel.init({ $, bridgeCall, bridgeCheck, bridgeInfo:()=>bridgeState.ok && bridgeState.authorized ? bridgeState.info : null, notify, askChoice, renderContacts,
+    saveCrm:async ()=>{ await saveCrmLocalOnly(); scheduleCrmSyncPush(); }, uid:()=>'ct_'+Date.now()+'_'+Math.random().toString(36).slice(2,7), get contacts(){ return contacts; } });
   window.TodoLocalBackup.init({ $, bridgeCall, bridgeConfigured, backupPayload:()=>backupPayload(), importJson, notify, askChoice });
   if(bridgeConfigured()) setTimeout(()=>bridgeCheck(), 2500);   // the bridge looked for once at start : the day's local backup leaves then
   function renderLists(){
@@ -6124,7 +6126,7 @@
 
   const tabContacts=$('tab-contacts'), tabPipeline=$('tab-pipeline'), tabParc=$('tab-parc'), tabExcel=$('tab-excel');
   tabs.forEach(el=>{ el.onclick=()=>{
-    tabs.forEach(t=>{ t.classList.remove('active'); t.removeAttribute('aria-current'); }); el.classList.add('active'); el.setAttribute('aria-current','page'); const tgt=el.dataset.tab; tabToday.classList.toggle('hidden',tgt!=='today'); tabTasks.classList.toggle('hidden',tgt!=='tasks'); tabInbox.classList.toggle('hidden',tgt!=='inbox'); tabArchive.classList.toggle('hidden',tgt!=='archive'); tabLists.classList.toggle('hidden',tgt!=='lists'); tabContacts.classList.toggle('hidden',tgt!=='contacts'); tabPipeline.classList.toggle('hidden',tgt!=='pipeline'); tabParc.classList.toggle('hidden',tgt!=='parc'); tabExcel.classList.toggle('hidden',tgt!=='excel'); if(tgt==='excel') openExcelSync(); $('tab-network').classList.toggle('hidden',tgt!=='network'); if(tgt==='network') showNetwork(); $('tab-market').classList.toggle('hidden',tgt!=='market'); if(tgt==='market') renderMarket(); if(tgt==='parc'){ renderParc(); $('parc-bridge-btn').classList.toggle('hidden', !bridgeConfigured()); paintParcLoad(); renderParcSource(); if(bridgeConfigured() && parcSource().auto && (!parcData || Date.now()-(parcData.importedAt||0)>600000)) importParcFromBridge(true); } if(tgt==='today')renderToday(); if(tgt==='archive')renderArchive(); if(tgt==='contacts'){ refreshContactsTypeFilter(); renderContacts(); fetchContactInbox(); } if(tgt==='pipeline')renderPipeline(); if(tgt==='lists'){ if(bridgeConfigured()) bridgeCheck(); else renderBridgeStatus(); renderLists(); renderConflicts(); $('sync-owner').value=syncConfig.owner||''; $('sync-repo').value=syncConfig.repo||''; if(syncConfig.enabled) setSyncStatus('Synchro active'); } if(tgt==='inbox')fetchInbox(); }; });
+    tabs.forEach(t=>{ t.classList.remove('active'); t.removeAttribute('aria-current'); }); el.classList.add('active'); el.setAttribute('aria-current','page'); const tgt=el.dataset.tab; tabToday.classList.toggle('hidden',tgt!=='today'); tabTasks.classList.toggle('hidden',tgt!=='tasks'); tabInbox.classList.toggle('hidden',tgt!=='inbox'); tabArchive.classList.toggle('hidden',tgt!=='archive'); tabLists.classList.toggle('hidden',tgt!=='lists'); tabContacts.classList.toggle('hidden',tgt!=='contacts'); tabPipeline.classList.toggle('hidden',tgt!=='pipeline'); tabParc.classList.toggle('hidden',tgt!=='parc'); tabExcel.classList.toggle('hidden',tgt!=='excel'); if(tgt==='excel') openExcelSync(); $('tab-network').classList.toggle('hidden',tgt!=='network'); if(tgt==='network') showNetwork(); $('tab-market').classList.toggle('hidden',tgt!=='market'); if(tgt==='market') renderMarket(); if(tgt==='parc'){ renderParc(); $('parc-bridge-btn').classList.toggle('hidden', !bridgeConfigured()); paintParcLoad(); renderParcSource(); if(bridgeConfigured() && parcSource().auto && (!parcData || Date.now()-(parcData.importedAt||0)>600000)) importParcFromBridge(true); } if(tgt==='today')renderToday(); if(tgt==='archive')renderArchive(); if(tgt==='contacts'){ refreshContactsTypeFilter(); renderContacts(); fetchContactInbox(); if(window.TodoTeamExcel.ready && window.TodoTeamExcel.ready()) window.TodoTeamExcel.sync(false); } if(tgt==='pipeline')renderPipeline(); if(tgt==='lists'){ if(bridgeConfigured()) bridgeCheck(); else renderBridgeStatus(); renderLists(); renderConflicts(); $('sync-owner').value=syncConfig.owner||''; $('sync-repo').value=syncConfig.repo||''; if(syncConfig.enabled) setSyncStatus('Synchro active'); } if(tgt==='inbox')fetchInbox(); }; });
 
   $('submit-task').onclick=addTask;
   addSection.addEventListener('keydown', e=>{ if(e.key==='Enter' && e.target.tagName!=='TEXTAREA'){ e.preventDefault(); addTask(); } });
@@ -6466,7 +6468,7 @@
   // « Réglages »: a table of contents at the top, one click to each part (UX audit TD3)
   // « Réglages » (UX audit TD3): four groups, a table of contents beside them, and each part's state on its title
   const SETTINGS_NAMES={ 'clients-section':'Clients', 'projects-section':'Projets', 'sync-section':'Synchro GitHub', 'conflicts-section':'Conflits', 'backup-section':'Sauvegarde', 'localbackup-section':'Sauvegarde locale',
-    'keys-section':'Clés', 'news-section':'Nouveautés', 'errlog-section':'Journal des erreurs', 'storage-section':'Stockage', 'bridge-section':'Pont Excel', 'team-section':'Synchro \u00e9quipe', 'install-section':'Installer l\u2019appli', 'ai-section':'Claude (facultatif)' };
+    'keys-section':'Clés', 'news-section':'Nouveautés', 'errlog-section':'Journal des erreurs', 'storage-section':'Stockage', 'bridge-section':'Pont Excel', 'teammode-section':'Données d\u2019équipe', 'team-section':'Base Supabase (secours)', 'install-section':'Installer l\u2019appli', 'ai-section':'Claude (facultatif)' };
   const settingsShown=s=>!s.classList.contains('hidden') && !s.hidden && s.style.display!=='none';
   function settingsPill(id, text, kind){ const s=$(id); if(!s) return; const h=s.querySelector('h2'); if(!h) return;
     let p=h.querySelector('.settings-pill'); if(!text){ if(p) p.remove(); return; }
@@ -7223,7 +7225,7 @@
     return b;
   }
   function historyBlock(table, id){
-    if(!(window.TodoTeam && window.TodoTeam.isSignedIn())) return null;
+    if(window.TodoTeamExcel.mode()!=='supabase' || !(window.TodoTeam && window.TodoTeam.isSignedIn())) return null;
     const d=document.createElement('details'); d.className='hist-block';
     d.innerHTML='<summary>Historique (équipe)</summary><div class="hist-rows"><p class="hist-empty">Chargement…</p></div>';
     let done=false;

@@ -294,6 +294,27 @@ try:
     mine = shared / "journal-Tom Rémy.csv"
     jr = call("POST", "/journal/read", {"key": "SOLARIS / Toit"})
     check(mine.exists() and any(r["who"] == "Tom Rémy" for r in jr["rows"]), f"journal : the next write is signed with that name, in that person's file ({[r['who'] for r in jr['rows']][:3]})")
+    # v1.34 : the team's contacts — a table « Contacts », a row found by first name + last name
+    HC = ["Prénom", "Nom", "Société", "Fonction", "Email", "Téléphone", "Téléphone 2", "Commentaire", "ID", "Modifié le", "Modifié par"]
+    cf = call("POST", "/contacts/file", {"path": str(work / "Contacts équipe.xlsx")})
+    check(cf.get("ok") and call("GET", "/status")["contacts"]["name"] == "Contacts équipe.xlsx", f"contacts/file : the contacts file is chosen from the app ({cf})")
+    call("POST", "/mock/seed/contacts", {"headers": HC, "rows": [["Claire", "Martin", "Solaris", "", "c.martin@solaris.fr", "", "", "", "", "", ""]], "formulas": []})
+    cdump = lambda: call("GET", "/mock/dump/contacts")["rows"]
+    csend = lambda *rows: call("POST", "/contacts/upsert", {"rows": list(rows)})
+    r = csend(row(["Claire", "Martin", "Solaris", "Directrice", "c.martin@solaris.fr", "0611", "", "Vue au salon", "ct-1", "12/11/2026", "Tom"]))["results"][0]
+    d = cdump()
+    check(r["ok"] and r["action"] == "mise à jour" and d[0][:9] == ["Claire", "Martin", "Solaris", "Directrice", "c.martin@solaris.fr", "0611", "", "Vue au salon", "ct-1"],
+          f"contacts : a row typed by hand in Excel is found by its name, its empty cells filled ({d[0]})")
+    r = csend(row(["Paul", "Durand", "Ventus", "", "", "", "", "", "ct-2", "12/11/2026", "Tom"]))["results"][0]
+    check(r["action"] == "ajoutée" and len(cdump()) == 2, "contacts : a new contact is a new row")
+    call("POST", "/mock/edit/contacts", {"op": "set", "row": 1, "col": 6, "value": "0699"})   # a colleague changes the phone in Excel
+    r = csend(row(["Claire", "Martin", "Solaris", "Directrice", "c.martin@solaris.fr", "0622", "", "Vue au salon", "ct-1", "12/11/2026", "Tom"],
+                  prev=["Claire", "Martin", "Solaris", "Directrice", "c.martin@solaris.fr", "0611", "", "Vue au salon", "ct-1", "12/11/2026", "Tom"]))["results"][0]
+    check(cdump()[0][5] == "0699" and any(c["header"] == "Téléphone" and c["excel"] == "0699" for c in r["conflicts"]), f"contacts : a cell changed by a colleague is kept and reported ({r['conflicts']})")
+    r = csend(row(["Claire", "Martin", "Solaris", "Directrice", "c.martin@solaris.fr", "0622", "", "Vue au salon", "ct-1", "12/11/2026", "Tom"], force={"5": "replace"}, seen={"5": "0699"}))["results"][0]
+    check(cdump()[0][5] == "0622", "contacts : « Garder la mienne » replaces it")
+    rd = call("GET", "/contacts/read")
+    check(rd["sheets"]["Contacts"][0][:2] == ["Prénom", "Nom"] and len(rd["sheets"]["Contacts"]) == 3, "contacts/read : the header and the rows")
 finally:
     proc.terminate()
     try:
