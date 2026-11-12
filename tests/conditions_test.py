@@ -29,6 +29,7 @@ with sync_playwright() as p:
     table = pg.text_content("#opp-detail-body .req-table")
     check(all(x in table for x in ["Demande de pricing · contrat", "Arrêt Prix Négatifs (PN)", "Durée période d'essai (Mois)", "Inscription_Registre GO", "Demande de pricing · exploitation", "Type_relève", "Retour pricing", "FG_Fixe_P1 € / MWh", "Pu€/MWh (PPA)", "Pu/Go"]),
           "the sheet's table shows the Suivi's own lines, with their exact names, in three parts")
+    check("M0 − FG" in table and "GAPD" in table, "under the lines, the Suivi's own words above its headers (Période tarifaire, M0 − FG, GAPD…)")
     opts = pg.eval_on_selector("select[data-c='c_pnArret']", "s=>[...s.options].map(o=>o.textContent)")
     check(opts == ["", "NON", "Enchères", "Prix Fixe"], f"a line with a list in the Suivi offers the Cst values ({opts})")
     miss = pg.inner_text("#opp-detail-body .req-compare-h")

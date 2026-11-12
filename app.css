@@ -2899,3 +2899,4 @@ html.widget .dup-banner{ display:none; }
 .fill-table .fo{ color:var(--tx3); }
 .fill-table tr.conf .fn{ color:var(--amber, #E5B54F); }
 .fill-go{ background:var(--accent); border-color:var(--accent); color:#04211B; }
+.req-hint{ display:block; font-weight:400; font-size:11px; color:var(--tx3); }

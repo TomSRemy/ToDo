@@ -4698,7 +4698,7 @@
   // one line of the Suivi's own (js/conditions.js) across the plants : a list where the Suivi has one
   function condRow(f, list, currentId, cell){
     const C=window.TodoConditions, need=list.some(x=>C.needed(f, x));
-    return '<tr'+(need?'':' class="opt"')+'><th scope="row" class="req-lab">'+escapeHtml(f.label)+'</th>'+list.map(x=>{
+    return '<tr'+(need?'':' class="opt"')+'><th scope="row" class="req-lab">'+escapeHtml(f.label)+(f.hint?'<small class="req-hint">'+escapeHtml(f.hint)+'</small>':'')+'</th>'+list.map(x=>{
       const v=x[f.k]==null?'':String(x[f.k]), nd=C.needed(f, x), id='data-id="'+escapeHtml(x.id)+'" data-c="'+f.k+'"';
       if(!f.opts) return cell(x, v, id, nd);
       return '<td class="'+(x.id===currentId?'cur ':'')+(v?'':(nd?'empty':'none'))+'"><select class="req-in" '+id+'><option value=""></option>'+f.opts.concat(v && !f.opts.includes(v)?[v]:[]).map(op=>'<option'+(op===v?' selected':'')+'>'+escapeHtml(op)+'</option>').join('')+'</select></td>';
