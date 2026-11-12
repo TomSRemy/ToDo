@@ -1029,8 +1029,10 @@ with sync_playwright() as p:
           f"request: both installations shown as tabs in the sheet ({tabs})")
     table = page.inner_text("#opp-detail-body .req-compare")
     cellv = lambda oid, label: page.input_value(f"#opp-detail-body .req-in[data-id='{oid}'][data-l=\"{label}\"]")
-    check(cellv("t1", "P50 annuel (indicatif) (MWh/an)") == "358" and "3 cases à compléter" in table
-          and page.locator("#opp-detail-body .req-table td.empty").count() == 3, "request: side-by-side check, empty cells to complete flagged")
+    # 3 lines of the producer's file, plus the Suivi's lines the pricing request needs (js/conditions.js), for both plants
+    cond = page.evaluate("JSON.parse(window.storage.peek('todo-widget-opportunities')).filter(o=>o.kind==='installation').reduce((s,o)=>s+window.TodoConditions.missing(o),0)")
+    check(cellv("t1", "P50 annuel (indicatif) (MWh/an)") == "358" and f"{3 + cond} cases à compléter" in table
+          and page.locator("#opp-detail-body .req-table td.empty").count() == 3 + cond, f"request: side-by-side check, empty cells to complete flagged (3 + {cond})")
     labels = page.eval_on_selector_all("#opp-detail-body .req-table tbody th.req-lab", "els=>els.map(e=>e.textContent)")
     check(labels[:4] == ["Nom Installation", "Nom SPV", "SIRET SPV", "Adresse Installation"], f"request: lines in the order of the characteristics file ({labels[:4]})")
     # a cell edited in the table goes to the installation (an app field, or the line of the producer's file)
