@@ -52,6 +52,28 @@ with sync_playwright() as p:
     check(o.get("mwh") == "1280", "the unticked one stays as it was")
     cells = pg.evaluate("window.TodoConditions.bddCells({ c_pnArret:'Enchères', c_peDuree:'6', c_fgP1:'3,5', c_finP1:'31/12/2028' }, { numCell:v=>Number(String(v).replace(',', '.')), looseDateCell:v=>({ d:v }) })")
     check(cells.get("69") == "Enchères" and cells.get("64") == 6 and cells.get("77") == 3.5 and cells.get("78") == {"d": "31/12/2028"}, f"sent to the Suivi in its own columns (BR, BM, BZ, CA) ({cells})")
+    # the pricing's answer by mail : a table « Nom du marché » (the business code) + columns in €/MWh, one cell per line
+    pg.evaluate("""(()=>{ const all=JSON.parse(window.storage.peek('todo-widget-opportunities'));
+      all.push({ id:'o2', kind:'installation', company:'SOLEO', producteur:'SOLEO', centrale:'TOIT A', kwc:'250', debut:'01/07/2027', fin:'31/12/2029', stage:'pricing_indicatif', createdAt:1, updatedAt:1, deleted:false });
+      all.push({ id:'o3', kind:'installation', company:'SOLEO', producteur:'SOLEO', centrale:'HANGAR B', kwc:'180', debut:'01/07/2027', fin:'31/12/2029', stage:'pricing_indicatif', createdAt:1, updatedAt:1, deleted:false });
+      window.storage.set('todo-widget-opportunities', JSON.stringify(all)); })()""")
+    pg.reload(); pg.wait_for_timeout(1200)
+    body = "\n".join(["Bonjour Tom,", "", "Voici les frais d'agrégation pour les centrales de SOLEO.", "", "Nom du marché", "", "Frais de gestion (€/MWh)", "", "Frais fixe (€/MWh)", "", "Marge (€/MWh)", "",
+                      "Frais d'agrégation (€/MWh)", "", "27(07)29 – SOLEO_TOIT A – A", "", "2.10", "", "1.70", "", "0.5", "", "4.30", "", "27(07)29 – SOLEO_HANGAR B – A", "", "2.20", "", "1.90", "", "0.5", "", "4.60", "", "Bon dépôt,"])
+    eml = pathlib.Path(tempfile.mkdtemp()) / "RE Pricing Agrégation.eml"
+    eml.write_text("From: pricing@exemple.fr\r\nSubject: Pricing Agregation\r\nContent-Type: text/plain; charset=utf-8\r\n\r\n" + body.replace("\n", "\r\n"), encoding="utf-8")
+    pg.evaluate("location.hash='fiche/o2'"); pg.wait_for_timeout(800)
+    pg.set_input_files("#opp-detail-body .fill-drop input[type=file]", str(eml)); pg.wait_for_selector("#fill-overlay", timeout=10000)
+    look = pg.inner_text("#fill-overlay")
+    check("FG_Fixe_P1 € / MWh" in look and "4,30" in look and "Frais de gestion (€/MWh)" in look and "2,10" in look and "4,60" not in look, f"the pricing's mail : this plant's line (found by its business code) read into the Retour pricing lines ({look[:260]!r})")
+    pg.click("#fill-overlay .fill-go"); pg.wait_for_timeout(800)
+    o2 = next(x for x in json.loads(pg.evaluate("window.storage.peek('todo-widget-opportunities')")) if x["id"] == "o2")
+    check(o2.get("c_fgP1") == "4,30" and o2.get("c_fgGestion") == "2,10" and o2.get("c_fgFixe") == "1,70" and o2.get("c_fgMarge") == "0,5", f"filled : the total in FG_Fixe_P1, the detail beside ({ {k: o2.get(k) for k in ['c_fgP1', 'c_fgGestion', 'c_fgFixe', 'c_fgMarge']} })")
+    # the same mail's text pasted, on the other plant
+    pg.evaluate("location.hash='fiche/o3'"); pg.wait_for_timeout(800)
+    pg.click("#opp-detail-body .fill-paste"); pg.fill("#paste-overlay textarea", body.replace("\n\n", "\n")); pg.click("#paste-overlay .paste-go"); pg.wait_for_selector("#fill-overlay", timeout=5000)
+    check("4,60" in pg.inner_text("#fill-overlay") and "4,30" not in pg.inner_text("#fill-overlay"), "the mail's text pasted : the other plant's line only")
+    pg.click("#fill-overlay .fill-go"); pg.wait_for_timeout(600)
     check(not err, f"no page errors ({err})")
     b.close()
 print(f"\n{len(failures)} failure(s)"); sys.exit(1 if failures else 0)

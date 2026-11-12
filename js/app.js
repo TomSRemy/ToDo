@@ -5091,7 +5091,7 @@
     qualif_en_cours:[{ id:'rdv2', label:'RDV 2', date:'rdv2' },{ id:'decision', label:'Décision Go / No Go prise' }],
     pricing_indicatif:[{ id:'mail', label:'Mail de demande envoyé', auto:l=>l.every(o=>o.mailSentAt), act:{ label:'Copier le mail', show:l=>!l.every(o=>o.mailSentAt), fn:(l,btn)=>{ const ml=pricingMail(reqOfList(l), l); copyToClipboard(ml.subject+'\n\n'+ml.body, btn); markMailSent(l); } } },
       { id:'caract', label:'Fichier Caractéristiques joint', auto:l=>l.every(o=>o.caractSentAt), act:{ label:'Créer le fichier', show:l=>!l.every(o=>o.caractSentAt), fn:(l,btn)=>downloadCaract(l, btn) } },
-      { id:'ops', label:'Retour d’Ops reçu' },{ id:'prix', label:'Prix noté dans la fiche', auto:l=>l.every(o=>o.prixValeur || o.c_pu) }],
+      { id:'ops', label:'Retour d’Ops reçu' },{ id:'prix', label:'Prix noté dans la fiche', auto:l=>l.every(o=>o.prixValeur || o.c_pu || o.c_fgP1) }],
     offre_remise:[{ id:'prete', label:'Offre préparée' },{ id:'envoyee', label:'Offre remise au producteur', date:'dateOffre' }],
     offre_attente:[{ id:'relance', label:'Relance faite', note:l=>{ const t=pqDateOf(l[0].dateOffre); if(!t) return ''; const n=Math.floor((Date.now()-t)/864e5); return n>0?'offre remise il y a '+n+' jour'+(n>1?'s':''):''; } },{ id:'reponse', label:'Réponse du producteur reçue' }],
     kyc:[{ id:'docs', label:'Documents KYC reçus' },{ id:'solva', label:'Solvabilité validée (Juridique)' }],
@@ -5701,7 +5701,7 @@
   // openExcelSync is proxied in reverse at the top of this file
   window.TodoExcelSync.init({ $, ON_PHONE, PQ_FIELDS, bddCells, bridgeCall, bridgeCheck, bridgeConfigured, cellToText, closeOppDetail, codeAffaire, copyToClipboard, gsTab:(...a)=>gsTab(...a), importParcFromBridge, isExited, openOppDetail, oppActionBtn, oppName, pipeCells, pqFold, pqPad, relanceOnMove, renderPipeline, saveCrm, setOppStage, softFail, stageIndex, stageLabel, suiviState, touchCrm, get bridgeState(){ return bridgeState; }, set bridgeState(v){ bridgeState=v; }, get opportunities(){ return opportunities; }, set opportunities(v){ opportunities=v; } });   // Envoi vers les Excel partagés et Excel ⇄ appli — js/excel-sync.js
   window.TodoJournal.init({ $, bridgeCall, bridgeConfigured, bridgeInfo:()=>bridgeState.ok && bridgeState.authorized ? bridgeState.info : null, notify });
-  window.TodoConditions.init({ readPipeFiles, caractValue, caractSet, caractKey, PQ_FIELDS, pqFold, touchCrm, saveCrm, notify, escapeHtml, reopen:()=>{ if(viewingOppId) openOppDetail(viewingOppId); } });
+  window.TodoConditions.init({ readPipeFiles, caractValue, caractSet, caractKey, codeAffaire, PQ_FIELDS, pqFold, touchCrm, saveCrm, notify, escapeHtml, reopen:()=>{ if(viewingOppId) openOppDetail(viewingOppId); } });
   window.TodoPipeImport.init({ PQ_FIELDS, pipeCells, bddCells, cellToText, codeAffaire, stageIndex, notify, askChoice, renderPipeline, saveCrm, newId:()=>newOppId('opp'),
     mode:()=>window.TodoTeamExcel.mode(), bridgeReady:()=>bridgeConfigured() && bridgeState.ok && bridgeState.authorized && window.TodoExcelSync.verAtLeast(bridgeState.info, '1.34'), get opportunities(){ return opportunities; } });
   window.TodoLocalInbox.init({ bridgeCall, bridgeInfo:()=>bridgeState.ok && bridgeState.authorized ? bridgeState.info : null });
