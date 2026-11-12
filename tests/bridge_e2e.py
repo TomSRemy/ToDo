@@ -19,7 +19,7 @@ def relire(page):
     """« ↻ Relire » : the colleague's line (AUTRE PROD) is offered for import into the app (js/pipe-import.js) — not this test's subject : « Plus tard »"""
     page.click("#tab-excel .xs-read")
     try:
-        page.wait_for_selector("#choice-overlay:not(.hidden) >> text=Lignes du Pipe à importer", timeout=4000)
+        page.wait_for_selector("#choice-overlay:not(.hidden) >> text=Lignes de l’Excel à importer", timeout=4000)
         page.click("#choice-btns button:has-text('Plus tard')")
     except Exception:
         pass

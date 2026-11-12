@@ -4558,7 +4558,7 @@
     const box=$('opp-detail-body'); box.innerHTML='';
     $('opp-detail-title').textContent=o.kind==='prequal'?o.company+' — pré-qualif':o.company+' — '+oppName(o);
     $('opp-detail-sum').textContent=o.kind==='prequal'?'':oppSummary(o.requestId?requestInstalls(o.requestId).filter(x=>!isExited(x)):[o]);
-    if(o.fromExcel){ const fx=document.createElement('div'); fx.className='from-excel'; fx.textContent='Arrivée du Pipe Excel le '+new Date(o.fromExcel.at).toLocaleDateString('fr-FR')+(o.fromExcel.line?' (ligne '+o.fromExcel.line+')':'')+(o.charge?' \u00b7 chargé d\u2019affaires : '+o.charge:''); box.appendChild(fx); }
+    if(o.fromExcel){ const fx=document.createElement('div'); fx.className='from-excel'; fx.textContent='Arrivée '+(o.fromExcel.file==='Suivi'?'du Suivi':'du Pipe')+' Excel le '+new Date(o.fromExcel.at).toLocaleDateString('fr-FR')+(o.fromExcel.line?' (ligne '+o.fromExcel.line+')':'')+(o.charge?' \u00b7 chargé d\u2019affaires : '+o.charge:''); box.appendChild(fx); }
     { const sb=suiviBadge(o, true); if(sb){ const line=document.createElement('div'); line.className='suivi-line'; line.appendChild(sb); const t=document.createElement('span'); t.textContent=sb.title; line.appendChild(t); box.appendChild(line); } }
     if(o.company || o.requestId){
       const nav=document.createElement('div'); nav.className='opp-nav';
@@ -5673,7 +5673,7 @@
   // openExcelSync is proxied in reverse at the top of this file
   window.TodoExcelSync.init({ $, ON_PHONE, PQ_FIELDS, bddCells, bridgeCall, bridgeCheck, bridgeConfigured, cellToText, closeOppDetail, codeAffaire, copyToClipboard, gsTab:(...a)=>gsTab(...a), importParcFromBridge, isExited, openOppDetail, oppActionBtn, oppName, pipeCells, pqFold, pqPad, relanceOnMove, renderPipeline, saveCrm, setOppStage, softFail, stageIndex, stageLabel, suiviState, touchCrm, get bridgeState(){ return bridgeState; }, set bridgeState(v){ bridgeState=v; }, get opportunities(){ return opportunities; }, set opportunities(v){ opportunities=v; } });   // Envoi vers les Excel partagés et Excel ⇄ appli — js/excel-sync.js
   window.TodoJournal.init({ $, bridgeCall, bridgeConfigured, bridgeInfo:()=>bridgeState.ok && bridgeState.authorized ? bridgeState.info : null, notify });
-  window.TodoPipeImport.init({ PQ_FIELDS, pipeCells, cellToText, codeAffaire, stageIndex, notify, askChoice, renderPipeline, saveCrm, newId:()=>newOppId('opp'),
+  window.TodoPipeImport.init({ PQ_FIELDS, pipeCells, bddCells, cellToText, codeAffaire, stageIndex, notify, askChoice, renderPipeline, saveCrm, newId:()=>newOppId('opp'),
     mode:()=>window.TodoTeamExcel.mode(), bridgeReady:()=>bridgeConfigured() && bridgeState.ok && bridgeState.authorized && window.TodoExcelSync.verAtLeast(bridgeState.info, '1.34'), get opportunities(){ return opportunities; } });
   window.TodoLocalInbox.init({ bridgeCall, bridgeInfo:()=>bridgeState.ok && bridgeState.authorized ? bridgeState.info : null });
   window.TodoTeamExcel.init({ $, bridgeCall, bridgeCheck, openSettings:()=>{ gsTab('lists'); setTimeout(()=>{ const t=$('teammode-section'); if(t) t.scrollIntoView({ behavior:'smooth', block:'start' }); const f=$('xc-file'); if(f) f.focus({ preventScroll:true }); }, 80); }, bridgeInfo:()=>bridgeState.ok && bridgeState.authorized ? bridgeState.info : null, notify, askChoice, renderContacts,

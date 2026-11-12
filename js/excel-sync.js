@@ -109,6 +109,7 @@ window.TodoExcelSync=(function(){
   }
   // where an installation stands for one file
   function xsState(kind, o){
+    if(kind==='pipe' && o.bddOnly) return { app:'ok', sentAt:null, excel:'present', diffs:[], statut:null };   // a Suivi line with no Pipe line (js/pipe-import.js) : nothing to send to the Pipe
     const vals=xsAppValues(kind, o), h=xsHash(kind==='pipe'?pipeCells(o):vals), sent=o.excelSent&&o.excelSent[kind], legacy=!sent && o.excelPrev && o.excelPrev[kind];
     const sentAt=sent?sent.at:(kind==='pipe'?o.pipeSentAt:o.bddSentAt);
     const app=sent?(sent.h===h?'ok':'modif'):legacy||sentAt?'envoye':'jamais';

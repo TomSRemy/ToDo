@@ -6,7 +6,10 @@
 window.TodoPipeImport=(function(){
   const api={};
   const STADE={ aqualifier:'a_qualifier', priseencontact:'prise_contact', collectedinformations:'collecte', qualificationencours:'qualif_en_cours', nogo:'no_go' };
-  const STATUT={ enpreparation:'pricing_indicatif', enattente:'offre_attente', gagne:'onboarding', perdu:'perdu', abandonne:'abandonne' };
+  const STATUT={ enpreparation:'pricing_indicatif', enattente:'offre_attente', gagne:'onboarding', perdu:'perdu', abandonne:'abandonne', resilie:'perdu' };
+  // the Suivi's columns (0 = A) the app has a field for : a Suivi line with no Pipe line becomes a sheet from these
+  const BDD_COLS=[['annee', 1], ['charge', 2], ['goDate', 3, 'date'], ['origine', 4], ['ca', 5], ['producteur', 6], ['region', 18], ['dept', 19], ['dateOffre', 22, 'date'], ['nature', 23],
+    ['signDate', 25, 'date'], ['debut', 26, 'text'], ['mesPrev', 27, 'text'], ['fin', 28, 'text'], ['particularites', 30], ['spv', 31], ['siret', 32], ['centrale', 33], ['cp', 35], ['install', 36], ['kwc', 38], ['mwh', 40], ['p90', 41]];
   const FIRST='pipe-import-ok', EVERY=5*60000, ASK_MAX=12, MAYBE_MAX=8;
   // « Solaris SAS » and « SOLARIS » are the same producer : legal forms and punctuation left out
   const CO_FORMS=new Set(['sas','sasu','sa','sarl','eurl','sci','snc','scop','sem','spl','sca','selarl','ste','societe','groupe','group','ltd','gmbh','inc','llc','gaec','earl','scea']);
@@ -19,9 +22,9 @@ window.TodoPipeImport=(function(){
   // two plant names : 1 = the same words, 0 = nothing in common
   function plantSim(a, b){ const A=words(a), B=words(b); if(!A.size || !B.size) return 0; let n=0; A.forEach(w=>{ if(B.has(w)) n++; }); return n/Math.min(A.size, B.size); }
   api.init=function(app){
-    const { PQ_FIELDS, pipeCells, cellToText, stageIndex, notify, askChoice, renderPipeline, saveCrm, newId, mode, bridgeReady }=app;
+    const { PQ_FIELDS, pipeCells, bddCells, cellToText, stageIndex, notify, askChoice, renderPipeline, saveCrm, newId, mode, bridgeReady }=app;
     const X=()=>window.TodoExcelSync;
-    let busy=false, lastRun=0;
+    let busy=false, lastRun=0, lastWon=0;
     const opps=()=>app.opportunities;
     const col=k=>X().xsColIdx((PQ_FIELDS.find(f=>f.k===k)||{}).col);
     const cell=(vals, f)=>X().xsCellText(vals[X().xsColIdx(f.col)], f.type==='date'||['mesPrev','mesEff','debut','fin'].includes(f.k));
@@ -94,6 +97,30 @@ window.TodoPipeImport=(function(){
       const vals=pipeCells(o); o.excelPrev={ pipe:X().xsAppValues('pipe', o) }; o.excelSent={ pipe:{ at:Date.now(), h:X().xsHash(vals) } };
       return o;
     }
+    // a Suivi line (a deal past the Go) that has no line in the Pipe : a sheet at its Statut's step
+    const statutOf=vals=>X().xsNorm(X().xsCellText(vals[24]));
+    function sheetFromBdd(hit){
+      const o={ id:newId(), kind:'installation', taskId:null, createdAt:Date.now(), updatedAt:Date.now(), deleted:false, lostAt:null, bddOnly:true };
+      BDD_COLS.forEach(([f, i, t])=>{ const v=X().xsCellText(hit.vals[i], !!t); if(v!=='') o[f]=t==='date' ? asField({ type:'date' }, v) : v; });
+      if(!o.producteur) o.producteur=o.spv||''; if(o.spv===o.producteur) delete o.spv;
+      o.company=o.producteur; o.title=o.centrale||'';
+      o.stage=STATUT[statutOf(hit.vals)]||'pricing_indicatif'; if(o.stage==='perdu'||o.stage==='abandonne'){ o.stageBeforeExit='pricing_indicatif'; o.lostAt=Date.now(); }
+      o.fromExcel={ at:Date.now(), line:hit.line, file:'Suivi' };
+      o.excelPrev={ bdd:X().xsAppValues('bdd', o) }; o.excelSent={ bdd:{ at:Date.now(), h:X().xsHash(bddCells(o)) } };
+      return o;
+    }
+    // the Suivi's lines no sheet and no Pipe line stand for (names, or the business code) ; signed ones stay in Portefeuille
+    function scanBdd(pipe, bdd, skip, fresh){
+      const codes=new Set(), names=new Set(); let won=0;
+      opps().forEach(o=>{ if(o.kind!=='installation') return; const c=fold(app.codeAffaire(o)).replace(/\s/g,''); if(c && !/\[/.test(c)) codes.add(c);
+        names.add(X().xsKey('bdd', X().xsAppValues('bdd', o))); names.add(X().xsNorm(o.producteur||o.company)+'|'+X().xsNorm(o.centrale||o.title)); });
+      fresh.forEach(x=>names.add(X().xsNorm(x.o.producteur)+'|'+X().xsNorm(x.o.centrale)));
+      bdd.rows.forEach((hit, k)=>{ const v=hit.vals, pk=X().xsNorm(v[6]||v[31])+'|'+X().xsNorm(v[33]), code=fold(X().xsCellText(v[7])).replace(/\s/g,'');
+        if(pipe.rows.has(pk) || names.has(k) || names.has(pk) || (code && codes.has(code)) || skip.has('bdd:'+k)) return;
+        if(/gagne/.test(statutOf(v))){ won++; return; }
+        fresh.push({ k:'bdd:'+k, o:sheetFromBdd(hit), stade:'Suivi : '+(X().xsCellText(v[24])||'sans statut') }); });
+      return won;
+    }
     // the cells a colleague changed while the sheet kept what it last sent : taken ; the Stade moves the step
     function takeChanges(o, hit, bdd){
       const prev=(o.excelPrev && o.excelPrev.pipe)||[]; let n=0;
@@ -122,7 +149,7 @@ window.TodoPipeImport=(function(){
     async function confirmFirst(fresh){
       const open=fresh.filter(x=>!isClosed(x)), closed=fresh.length-open.length;
       const list=open.concat(fresh.filter(isClosed)).slice(0, ASK_MAX).map(x=>'• '+(x.o.producteur||'?')+' · '+(x.o.centrale||'?')+' — '+x.stade+(x.o.charge?' ('+x.o.charge+')':'')).join('\n');
-      const v=await askChoice('Lignes du Pipe à importer', fresh.length+' ligne'+(fresh.length>1?'s':'')+' du Pipe n’'+(fresh.length>1?'ont':'a')+' pas de fiche dans l’appli'+(closed?' ('+open.length+' ouverte'+(open.length>1?'s':'')+', '+closed+' fermée'+(closed>1?'s':'')+' : No Go, Perdu, Abandonné)':'')+' :\n\n'+list+(fresh.length>ASK_MAX?'\n… et '+(fresh.length-ASK_MAX)+' autres':'')+'\n\nElles deviennent des fiches du pipeline, marquées « arrivée du Pipe ». Ensuite, les nouvelles lignes arriveront toutes seules.',
+      const v=await askChoice('Lignes de l’Excel à importer', fresh.length+' ligne'+(fresh.length>1?'s':'')+' du Pipe et du Suivi n’'+(fresh.length>1?'ont':'a')+' pas de fiche dans l’appli'+(closed?' ('+open.length+' ouverte'+(open.length>1?'s':'')+', '+closed+' fermée'+(closed>1?'s':'')+' : No Go, Perdu, Abandonné)':'')+' :\n\n'+list+(fresh.length>ASK_MAX?'\n… et '+(fresh.length-ASK_MAX)+' autres':'')+'\n\nElles deviennent des fiches du pipeline, marquées « arrivée de l’Excel ». Ensuite, les nouvelles lignes arriveront toutes seules.'+(lastWon>1?' Les '+lastWon+' contrats signés (Gagné) du Suivi restent dans le Portefeuille.':lastWon?' Le contrat signé (Gagné) du Suivi reste dans le Portefeuille.':''),
         [{ label:closed ? 'Tout importer ('+fresh.length+')' : 'Importer les '+fresh.length, value:'all' }].concat(closed && open.length ? [{ label:'Seulement les ouvertes ('+open.length+')', value:'open', ghost:true }] : [], [{ label:'Plus tard', value:'', ghost:true }]), { cancel:false });
       return v||'';
     }
@@ -138,7 +165,8 @@ window.TodoPipeImport=(function(){
         else if(!skip.has(k)) fresh.push({ k, o:sheetFrom(k, hit, bdd), stade:X().xsCellText(hit.vals[col('stade')])||'A qualifier' }); });
       opps().forEach(o=>{ if(o.deleted || o.kind!=='installation' || !(o.excelPrev && o.excelPrev.pipe)) return;
         const hit=pipe.rows.get(X().xsKey('pipe', X().xsAppValues('pipe', o))); if(hit) changed+=takeChanges(o, hit, bdd); });
-      return { fresh, changed, links, maybes };
+      const won=bdd ? scanBdd(pipe, bdd, skip, fresh) : 0;
+      return { fresh, changed, links, maybes, won };
     }
     // likely the same : asked, by « ↻ Relire » only (never unasked) ; « Non » makes it a new sheet, « Plus tard » waits
     async function settleMaybes(maybes, manual, fresh, bdd){
@@ -159,7 +187,7 @@ window.TodoPipeImport=(function(){
     async function run(manual){
       if(busy || mode()!=='excel' || !bridgeReady()) return null; busy=true; lastRun=Date.now();
       try{
-        const rd=await readBoth(), { fresh, changed, links, maybes }=scan(rd.pipe, rd.bdd);
+        const rd=await readBoth(), { fresh, changed, links, maybes, won }=scan(rd.pipe, rd.bdd); lastWon=won;
         links.forEach(x=>link(x.m.o, x.hit));
         const linked=links.length+await settleMaybes(maybes, manual, fresh, rd.bdd), adds=await pickAdds(fresh, manual), added=adds.length;
         adds.forEach(x=>opps().push(x.o));

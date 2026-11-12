@@ -54,6 +54,13 @@ with sync_playwright() as p:
                     line(charge="Marie", prod="AGRI SOL", plant="Grange", stade="No Go"),
                     line(charge="Paul", prod="ANCIEN", plant="Toit vieux", stade="A qualifier")]
     hel = [None] * 91; hel[31] = "HÉLIO"; hel[33] = "Hangar"; hel[24] = "En attente"; bdd_rows.append(hel)
+    def bline(prod, plant, statut, **kw):
+        r = [None] * 91; r[6] = prod; r[31] = prod; r[33] = plant; r[24] = statut
+        for i, v in kw.items(): r[int(i[1:])] = v
+        bdd_rows.append(r)
+    bline("BIOGAZ NORD", "Méthaniseur", "En attente", c2="Marie", c38=500)   # a deal past the Go with no Pipe line
+    bline("VIEUX PARC", "Toit A", "Gagné")                                     # signed : stays in Portefeuille
+    bline("OLD", "Hangar B", "Perdu")                                          # closed
     pg.reload(); pg.wait_for_timeout(4000)
     opps = lambda: [o for o in json.loads(pg.evaluate("window.storage.peek('todo-widget-opportunities')")) if not o.get("deleted")]
     check(len(opps()) == 3, f"the very first import is never done unasked ({len(opps())})")
@@ -65,16 +72,21 @@ with sync_playwright() as p:
           f"likely the same (same producer, close plant name, same power) : asked ({same!r})")
     pg.click("#choice-btns button:has-text('Oui, les relier')"); pg.wait_for_timeout(600)
     ask = pg.inner_text("#choice-overlay") if pg.is_visible("#choice-overlay") else ""
-    check("3 lignes du Pipe" in ask and "2 ouvertes, 1 fermée" in ask and "VENTUS · Parc des Crêtes — Qualification en cours (Paul)" in ask and "SOLARIS" not in ask and "Toit vieux" not in ask,
+    check("5 lignes du Pipe et du Suivi" in ask and "3 ouvertes, 2 fermées" in ask and "BIOGAZ NORD · Méthaniseur — Suivi : En attente (Marie)" in ask and "Le contrat signé (Gagné) du Suivi reste dans le Portefeuille" in ask and "VENTUS · Parc des Crêtes — Qualification en cours (Paul)" in ask and "SOLARIS" not in ask and "Toit vieux" not in ask,
           f"« Relire » : the Pipe's unknown lines are listed first, open and closed counted, a sheet in the bin not offered ({ask!r})")
-    pg.click("#choice-btns button:has-text('Seulement les ouvertes (2)')"); pg.wait_for_timeout(1200)
+    pg.click("#choice-btns button:has-text('Seulement les ouvertes (3)')"); pg.wait_for_timeout(1200)
     allc = lambda: [o.get("centrale") for o in json.loads(pg.evaluate("window.storage.peek('todo-widget-opportunities')"))]
-    check("Grange" not in allc() and allc().count("Toit vieux") == 1, "« Seulement les ouvertes » : the closed line stays out ; the binned sheet doesn't come back")
+    check("Grange" not in allc() and "Hangar B" not in allc() and "Toit A" not in allc() and allc().count("Toit vieux") == 1, "« Seulement les ouvertes » : closed lines (Pipe and Suivi) stay out, signed ones too ; the binned sheet doesn't come back")
     by = {o["centrale"]: o for o in opps()}
-    check(set(by) == {"Toit", "Parc des Crêtes", "Hangar", "Hangar Nord - extension", "Atelier toiture"} and len(opps()) == 5, f"two sheets created, the known and the linked ones not doubled ({sorted(by)})")
+    check(set(by) == {"Toit", "Parc des Crêtes", "Hangar", "Hangar Nord - extension", "Atelier toiture", "Méthaniseur"} and len(opps()) == 6, f"two sheets created, the known and the linked ones not doubled ({sorted(by)})")
     check(by["Hangar Nord - extension"]["id"] == "o2", "« Oui, les relier » : the sheet takes the Pipe's names")
     check(by["Parc des Crêtes"]["stage"] == "qualif_en_cours" and by["Parc des Crêtes"].get("charge") == "Paul" and by["Parc des Crêtes"].get("kwc") == "1200", f"its step from the Stade, its cells from the line ({by['Parc des Crêtes']})")
     check(by["Hangar"]["stage"] == "offre_attente", f"transferred to the Suivi : the step from its Statut ({by['Hangar']['stage']})")
+    m = by["Méthaniseur"]
+    check(m["stage"] == "offre_attente" and m.get("charge") == "Marie" and m.get("kwc") == "500" and m.get("bddOnly"), f"a Suivi line with no Pipe line : a sheet at its Statut's step, its cells from the Suivi ({m})")
+    pg.click('[data-tab="excel"]'); pg.wait_for_timeout(600)
+    todo = pg.inner_text("#tab-excel .xs-body")
+    check("Méthaniseur" not in todo, f"a sheet from the Suivi alone is never offered for sending to the Pipe ({todo[:120]!r})")
     # a colleague changes o1's comment in the Pipe (the sheet unchanged since) ; then both change the power
     pipe["rows"][0] = list(pipe["rows"][0]); pipe["rows"][0][35] = "Rappeler en janvier (Marie)"
     pg.evaluate("location.hash='excel'"); pg.click("#tab-excel .xs-read"); pg.wait_for_timeout(1500)
