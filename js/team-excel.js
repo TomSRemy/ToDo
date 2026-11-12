@@ -144,10 +144,11 @@ window.TodoTeamExcel=(function(){
     // the Synchro Excel page's card : what waits, what was done last ; the button syncs
     function card(el){
       if(!el) return;
-      const on=mode()==='excel'; el.hidden=!on; if(!on) return;
-      const n=contacts().filter(needsSend).length, ok=ready(), i=bridgeInfo();
+      const i=bridgeInfo(), on=mode()==='excel' && !!i && !!i.who;   // shown with a bridge that knows the contacts file (v1.34+)
+      el.hidden=!on; if(!on) return;
+      const n=contacts().filter(needsSend).length, ok=ready();
       el.classList.toggle('done', ok && !n);
-      el.querySelector('.xs-card-n').textContent=!i ? 'Pont Excel non connecté' : !(i.contacts && i.contacts.found) ? 'Fichier pas encore choisi (Réglages › Données d\u2019équipe)'
+      el.querySelector('.xs-card-n').textContent=!(i.contacts && i.contacts.found) ? 'Fichier pas encore choisi (Réglages › Données d\u2019équipe)'
         : (n ? n+' contact'+(n>1?'s':'')+' à envoyer' : 'rien à envoyer')+(lastRun ? ' · synchro à '+new Date(lastRun).toLocaleTimeString('fr-FR', { hour:'2-digit', minute:'2-digit' }) : '');
       const b=el.querySelector('.xs-ct-send'); b.disabled=busy || !ok; b.textContent=busy ? 'Synchro…' : 'Synchroniser les contacts';
       b.onclick=async ()=>{ b.disabled=true; b.textContent='Synchro…'; await sync(true); card(el); };
