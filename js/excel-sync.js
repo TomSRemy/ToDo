@@ -200,7 +200,7 @@ window.TodoExcelSync=(function(){
         sb.onclick=e=>{ e.stopPropagation(); menu.hidden=!menu.hidden; sb.setAttribute('aria-expanded', String(!menu.hidden)); };
         document.addEventListener('click', e=>{ if(!menu.hidden && !menu.contains(e.target)){ menu.hidden=true; sb.setAttribute('aria-expanded','false'); } }); }
       ov.querySelector('.xs-read').onclick=async e=>{ const b=e.currentTarget, t=b.textContent; b.disabled=true; b.textContent='Lecture…';
-        try{ await xsReadFile('pipe'); await xsReadFile('bdd'); importParcFromBridge(true); }catch(err){ showBridgeMsg(err.message, false); } b.disabled=false; b.textContent=t; paintExcelSync(); };
+        try{ await xsReadFile('pipe'); await xsReadFile('bdd'); importParcFromBridge(true); if(window.TodoPipeImport.run) await window.TodoPipeImport.run(true); }catch(err){ showBridgeMsg(err.message, false); } b.disabled=false; b.textContent=t; paintExcelSync(); };
       ov.querySelectorAll('.xs-send').forEach(b=>b.onclick=async()=>{ const kind=b.dataset.k, list=xsPendingList(kind); if(!list.length) return;
         await sendToExcel(kind, list, b); if(bridgeConfigured()){ try{ await xsReadFile(kind); }catch(e){ softFail('relecture de l\u2019Excel', e); } } paintExcelSync(); });
       // same rows as \u00ab Envoyer \u00bb, but nothing sent through the bridge : one line per installation, ready to paste into Excel
@@ -539,7 +539,8 @@ window.TodoExcelSync=(function(){
     if(!ON_PHONE) actions.appendChild(oppActionBtn(list.length>1?'Envoyer au Pipe Excel ('+list.length+')':'Envoyer au Pipe Excel', e=>sendToExcel('pipe', list, e.target)));
     if(!ON_PHONE && list.some(o=>o.goDate || stageIndex(o.stage)>=stageIndex('pricing_indicatif'))) actions.appendChild(oppActionBtn(list.length>1?'Envoyer à la BDD Excel ('+list.length+')':'Envoyer à la BDD Excel', e=>sendToExcel('bdd', list.filter(o=>o.goDate || stageIndex(o.stage)>=stageIndex('pricing_indicatif')), e.target)));
   }
-    Object.assign(api, { bridgeUpToDate, bridgeLatest, verAtLeast, xsTodo, xsBddApplies, BRIDGE_LATEST });
+    Object.assign(api, { bridgeUpToDate, bridgeLatest, verAtLeast, xsTodo, xsBddApplies, BRIDGE_LATEST,
+      xsReadFile, xsReadNow:()=>xsRead, xsKey, xsNorm, xsCellText, xsColIdx, xsHash, xsAppValues });   // read by js/pipe-import.js
   };
   return api;
 })();

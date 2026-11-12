@@ -2882,3 +2882,6 @@ html.widget .dup-banner{ display:none; }
 .tm-opt input{ margin-top:3px; accent-color:var(--accent); }
 .tm-opt b{ display:block; font-size:13.5px; }
 .tm-opt small{ display:block; color:var(--tx3); font-size:12px; }
+
+/* a sheet that came from a line typed in the Pipe Excel by a colleague */
+.from-excel{ margin:0 0 10px; padding:6px 10px; border-left:3px solid #5BA8F5; background:var(--panel-2); border-radius:6px; font-size:12.5px; color:var(--tx2); }
