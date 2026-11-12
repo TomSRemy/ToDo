@@ -1978,7 +1978,10 @@ html.no-bridge #pipe-xs-btn{ display:none; }
 /* one card per file : its name, how many lines are waiting, ONE green button */
 .xs-cards{ display:grid; grid-template-columns:repeat(auto-fit, minmax(300px, 1fr)); gap:10px; margin-bottom:10px; }
 .xs-card{ display:flex; align-items:center; gap:10px; padding:10px 14px; background:var(--panel); border:1px solid var(--bd); border-left:3px solid var(--fk); border-radius:var(--radius-lg); }
-.xs-card[data-k="pipe"]{ --fk:#5BA8F5; } .xs-card[data-k="bdd"]{ --fk:#E88FD0; }
+.xs-card[data-k="pipe"]{ --fk:#5BA8F5; } .xs-card[data-k="bdd"]{ --fk:#E88FD0; } .xs-card[data-k="contacts"]{ --fk:#E5B54F; }
+.xs-card .xs-ct-send{ background:var(--accent); border-color:var(--accent); color:#04070C; }
+.xs-card .xs-ct-send:disabled{ opacity:.45; cursor:default; }
+.xs-card .xs-ct-set[hidden]{ display:none; }
 .xs-card[hidden]{ display:none; }
 .xs-card-t{ display:flex; flex-direction:column; gap:2px; margin-right:auto; min-width:0; }
 .xs-card-t b{ font-size:13.5px; color:var(--tx1); }

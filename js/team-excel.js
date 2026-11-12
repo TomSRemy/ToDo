@@ -18,6 +18,8 @@ window.TodoTeamExcel=(function(){
     const ready=()=>{ const i=bridgeInfo(); return mode()==='excel' && !!i && !!i.who && !!(i.contacts && i.contacts.found); };
     const shared=c=>c && !c.deleted && !c.private && txt(c.firstName) && txt(c.lastName);
     const nameKey=(f, l)=>fold(f)+'|'+fold(l);
+    // shared, and changed here since the file was last agreed (or never sent)
+    const needsSend=c=>shared(c) && (!c.xlc || !c.xlc.ID || COLS.some(([hd, f])=>f && f!=='id' && !same(c[f], c.xlc[hd])));
     // the file's rows as { values by header, row } ; the header row is the first one with « Prénom » and « Nom »
     function parse(sheet){
       const rows=sheet||[]; let h=-1;
@@ -70,7 +72,7 @@ window.TodoTeamExcel=(function(){
     }
     async function push(parsed, who, clashes, manual){
       const width=parsed.head.length;
-      let todo=contacts().filter(c=>shared(c) && (!c.xlc || COLS.some(([hd, f])=>f && f!=='id' && !same(c[f], c.xlc[hd])) || !c.xlc.ID));
+      let todo=contacts().filter(needsSend);
       const fresh=todo.filter(c=>!c.xlc);
       if(!await firstOk(fresh, manual)) todo=todo.filter(c=>c.xlc);
       let sent=0;
@@ -106,7 +108,7 @@ window.TodoTeamExcel=(function(){
         await saveCrm(); renderContacts();
         lastReport=parsed.rows.length+' ligne'+(parsed.rows.length>1?'s':'')+' dans l’Excel · '+got.added+' arrivée(s), '+got.changed+' mise(s) à jour ici, '+sent+' envoyée(s)';
         if(manual) notify('Contacts équipe : '+lastReport+'.');
-        paint(); return got;
+        paint(); card(document.querySelector('.xs-card[data-k="contacts"]')); return got;
       }catch(e){ lastReport='Échec : '+(e&&e.message||e); paint(); if(manual) notify('Contacts équipe : '+lastReport); return null; }
       finally{ busy=false; }
     }
@@ -139,7 +141,19 @@ window.TodoTeamExcel=(function(){
     let soon=null;
     const later=()=>{ if(mode()!=='excel') return; clearTimeout(soon); soon=setTimeout(()=>sync(false), 8000); };
     setInterval(()=>{ if(document.visibilityState==='visible' && Date.now()-lastRun>EVERY) sync(false); }, 60000);
-    Object.assign(api, { sync, paint, later, parse, ready });
+    // the Synchro Excel page's card : what waits, what was done last ; the button syncs
+    function card(el){
+      if(!el) return;
+      const on=mode()==='excel'; el.hidden=!on; if(!on) return;
+      const n=contacts().filter(needsSend).length, ok=ready(), i=bridgeInfo();
+      el.classList.toggle('done', ok && !n);
+      el.querySelector('.xs-card-n').textContent=!i ? 'Pont Excel non connecté' : !(i.contacts && i.contacts.found) ? 'Fichier pas encore choisi (Réglages › Données d\u2019équipe)'
+        : (n ? n+' contact'+(n>1?'s':'')+' à envoyer' : 'rien à envoyer')+(lastRun ? ' · synchro à '+new Date(lastRun).toLocaleTimeString('fr-FR', { hour:'2-digit', minute:'2-digit' }) : '');
+      const b=el.querySelector('.xs-ct-send'); b.disabled=busy || !ok; b.textContent=busy ? 'Synchro…' : 'Synchroniser les contacts';
+      b.onclick=async ()=>{ b.disabled=true; b.textContent='Synchro…'; await sync(true); card(el); };
+      const g=el.querySelector('.xs-ct-set'); g.hidden=ok; g.onclick=()=>app.openSettings && app.openSettings();
+    }
+    Object.assign(api, { sync, paint, later, parse, ready, card });
   };
   return api;
 })();
