@@ -38,10 +38,11 @@ window.TodoPipeImport=(function(){
       if(/transfere/.test(st)){ const s=bddHit ? X().xsNorm(X().xsCellText(bddHit.vals[24])) : ''; return STATUT[s] || 'pricing_indicatif'; }
       return 'a_qualifier';
     }
-    // the app's installations, by Producteur (or company) + Centrale ; a centrale name met only once also counts
+    // the app's installations, by Producteur (or company) + Centrale ; a centrale name met only once also counts.
+    // A sheet put in the bin counts too : its line never comes back on its own
     function known(){
       const keys=new Set(), plants=new Map();
-      opps().forEach(o=>{ if(o.deleted || o.kind!=='installation') return;
+      opps().forEach(o=>{ if(o.kind!=='installation') return;
         keys.add(X().xsKey('pipe', X().xsAppValues('pipe', o)));
         keys.add(X().xsNorm(o.producteur||o.company)+'|'+X().xsNorm(o.centrale||o.title));
         const c=X().xsNorm(o.centrale||o.title); plants.set(c, (plants.get(c)||0)+1); });
@@ -104,26 +105,37 @@ window.TodoPipeImport=(function(){
       if(n) o.updatedAt=Date.now();
       return n;
     }
-    async function confirmFirst(fresh, manual){
-      try{ if(localStorage.getItem(FIRST)) return true; }catch(e){ return false; }
-      if(!manual) return false;   // the very first import is never done unasked
-      const list=fresh.slice(0, ASK_MAX).map(x=>'• '+(x.o.producteur||'?')+' · '+(x.o.centrale||'?')+' — '+x.stade+(x.o.charge?' ('+x.o.charge+')':'')).join('\n');
-      const v=await askChoice('Lignes du Pipe à importer', fresh.length+' ligne'+(fresh.length>1?'s':'')+' du Pipe n’'+(fresh.length>1?'ont':'a')+' pas de fiche dans l’appli :\n\n'+list+(fresh.length>ASK_MAX?'\n… et '+(fresh.length-ASK_MAX)+' autres':'')+'\n\nElles deviennent des fiches du pipeline, marquées « arrivée du Pipe ». Ensuite, les nouvelles lignes arriveront toutes seules.',
-        [{ label:'Importer les '+fresh.length, value:'y' }, { label:'Plus tard', value:'n', ghost:true }], { cancel:false });
-      if(v!=='y') return false;
-      try{ localStorage.setItem(FIRST, '1'); }catch(e){ /* asked again next time */ }
-      return true;
+    // the closed lines left out on purpose at the first import (« Seulement les ouvertes ») : never offered again
+    const SKIP='pipe-import-skip';
+    const skipped=()=>{ try{ return new Set(JSON.parse(localStorage.getItem(SKIP)||'[]')); }catch(e){ return new Set(); } };
+    const isClosed=x=>['no_go', 'perdu', 'abandonne'].includes(x.o.stage);
+    // the lines to add : all of them once the first import was agreed ; the first time, asked (all, open ones only, later)
+    async function pickAdds(fresh, manual){
+      if(!fresh.length) return [];
+      try{ if(localStorage.getItem(FIRST)) return fresh; }catch(e){ return []; }
+      if(!manual) return [];   // the very first import is never done unasked
+      const v=await confirmFirst(fresh);
+      if(!v) return [];
+      try{ localStorage.setItem(FIRST, '1'); if(v==='open') localStorage.setItem(SKIP, JSON.stringify([...skipped(), ...fresh.filter(isClosed).map(x=>x.k)])); }catch(e){ /* asked again next time */ }
+      return v==='open' ? fresh.filter(x=>!isClosed(x)) : fresh;
+    }
+    async function confirmFirst(fresh){
+      const open=fresh.filter(x=>!isClosed(x)), closed=fresh.length-open.length;
+      const list=open.concat(fresh.filter(isClosed)).slice(0, ASK_MAX).map(x=>'• '+(x.o.producteur||'?')+' · '+(x.o.centrale||'?')+' — '+x.stade+(x.o.charge?' ('+x.o.charge+')':'')).join('\n');
+      const v=await askChoice('Lignes du Pipe à importer', fresh.length+' ligne'+(fresh.length>1?'s':'')+' du Pipe n’'+(fresh.length>1?'ont':'a')+' pas de fiche dans l’appli'+(closed?' ('+open.length+' ouverte'+(open.length>1?'s':'')+', '+closed+' fermée'+(closed>1?'s':'')+' : No Go, Perdu, Abandonné)':'')+' :\n\n'+list+(fresh.length>ASK_MAX?'\n… et '+(fresh.length-ASK_MAX)+' autres':'')+'\n\nElles deviennent des fiches du pipeline, marquées « arrivée du Pipe ». Ensuite, les nouvelles lignes arriveront toutes seules.',
+        [{ label:closed ? 'Tout importer ('+fresh.length+')' : 'Importer les '+fresh.length, value:'all' }].concat(closed && open.length ? [{ label:'Seulement les ouvertes ('+open.length+')', value:'open', ghost:true }] : [], [{ label:'Plus tard', value:'', ghost:true }]), { cancel:false });
+      return v||'';
     }
     // the Pipe (and the Suivi, for the step after the Go) read through the bridge, then compared with the app
     async function readBoth(){ await X().xsReadFile('pipe'); try{ await X().xsReadFile('bdd'); }catch(e){ /* the Suivi only gives the step after the Go */ } return X().xsReadNow(); }
     function scan(pipe, bdd){
-      const isKnown=known(), fresh=[], links=[], maybes=[]; let changed=0;
+      const isKnown=known(), skip=skipped(), fresh=[], links=[], maybes=[]; let changed=0;
       // the sheets no Pipe line finds by their names : the only ones a renamed line can be
       const free=opps().filter(o=>!o.deleted && o.kind==='installation' && !pipe.rows.has(X().xsKey('pipe', X().xsAppValues('pipe', o))));
       pipe.rows.forEach((hit, k)=>{ if(isKnown(k, hit.vals)) return;
         const m=bestMatch(hit, bdd && bdd.rows.get(k), free.filter(o=>!links.some(l=>l.m.o===o) && !maybes.some(l=>l.m.o===o)));
         if(m && m.sure) links.push({ m, hit }); else if(m) maybes.push({ m, hit, k });
-        else fresh.push({ o:sheetFrom(k, hit, bdd), stade:X().xsCellText(hit.vals[col('stade')])||'A qualifier' }); });
+        else if(!skip.has(k)) fresh.push({ k, o:sheetFrom(k, hit, bdd), stade:X().xsCellText(hit.vals[col('stade')])||'A qualifier' }); });
       opps().forEach(o=>{ if(o.deleted || o.kind!=='installation' || !(o.excelPrev && o.excelPrev.pipe)) return;
         const hit=pipe.rows.get(X().xsKey('pipe', X().xsAppValues('pipe', o))); if(hit) changed+=takeChanges(o, hit, bdd); });
       return { fresh, changed, links, maybes };
@@ -134,7 +146,7 @@ window.TodoPipeImport=(function(){
       for(const x of maybes.slice(0, MAYBE_MAX)){
         const r=await askSame(x.m, x.hit);
         if(r==='same'){ link(x.m.o, x.hit); linked++; }
-        else if(r==='new') fresh.push({ o:sheetFrom(x.k, x.hit, bdd), stade:X().xsCellText(x.hit.vals[col('stade')])||'A qualifier' });
+        else if(r==='new') fresh.push({ k:x.k, o:sheetFrom(x.k, x.hit, bdd), stade:X().xsCellText(x.hit.vals[col('stade')])||'A qualifier' });
       }
       return linked;
     }
@@ -144,14 +156,13 @@ window.TodoPipeImport=(function(){
       const c=changed ? plural(changed, 'case')+' reprise'+(changed>1?'s':'')+' des collègues' : 'rien d\u2019autre';
       notify('Pipe Excel : '+a+l+c+'.');
     }
-    const howMany=async (fresh, manual)=>(fresh.length && await confirmFirst(fresh, manual)) ? fresh.length : 0;
     async function run(manual){
       if(busy || mode()!=='excel' || !bridgeReady()) return null; busy=true; lastRun=Date.now();
       try{
         const rd=await readBoth(), { fresh, changed, links, maybes }=scan(rd.pipe, rd.bdd);
         links.forEach(x=>link(x.m.o, x.hit));
-        const linked=links.length+await settleMaybes(maybes, manual, fresh, rd.bdd), added=await howMany(fresh, manual);
-        fresh.slice(0, added).forEach(x=>opps().push(x.o));
+        const linked=links.length+await settleMaybes(maybes, manual, fresh, rd.bdd), adds=await pickAdds(fresh, manual), added=adds.length;
+        adds.forEach(x=>opps().push(x.o));
         if(added || changed || linked){ await saveCrm(); renderPipeline(); }
         if(added || changed || linked || manual) report(added, changed, linked);
         return { added, changed, linked, waiting:fresh.length-added };

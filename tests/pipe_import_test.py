@@ -35,6 +35,7 @@ def bridge(route):
 
 o2 = {"id": "o2", "kind": "installation", "company": "SCEA Les Prés", "producteur": "SCEA Les Prés", "centrale": "Hangar Nord", "kwc": "300", "dept": "51 - Marne", "stage": "collecte", "createdAt": 1, "updatedAt": 1, "deleted": False}
 o3 = {"id": "o3", "kind": "installation", "company": "Solaire Durand SARL", "producteur": "Solaire Durand SARL", "centrale": "Toit atelier", "kwc": "99", "dept": "35 - Ille-et-Vilaine", "stage": "prise_contact", "createdAt": 1, "updatedAt": 1, "deleted": False}
+o4 = {"id": "o4", "kind": "installation", "company": "ANCIEN", "producteur": "ANCIEN", "centrale": "Toit vieux", "stage": "a_qualifier", "createdAt": 1, "updatedAt": 1, "deleted": True}
 o1 = {"id": "o1", "kind": "installation", "company": "SOLARIS", "producteur": "SOLARIS", "centrale": "Toit", "kwc": "250", "commentaires": "Vu au salon", "stage": "a_qualifier", "createdAt": 1, "updatedAt": 1, "deleted": False}
 with sync_playwright() as p:
     b = p.chromium.launch(); pg = b.new_page(viewport={"width": 1300, "height": 850}, bypass_csp=True); err = []
@@ -42,14 +43,16 @@ with sync_playwright() as p:
     pg.route("**/fonts.g*/**", lambda r: r.abort()); pg.route("https://tomsremy.github.io/PowerKlock/**", lambda r: r.abort())
     pg.route("http://127.0.0.1:8765/**", bridge)
     pg.add_init_script("try{ if(!sessionStorage.getItem('s')){ localStorage.setItem('todo_todo-widget-opportunities', %s); localStorage.setItem('todo_bridge-config', JSON.stringify({ port:8765, token:'k' })); localStorage.setItem('local-backup-at', String(Date.now())); sessionStorage.setItem('s','1'); } }catch(e){}"
-                       % json.dumps(json.dumps([o1, o2, o3])))
+                       % json.dumps(json.dumps([o1, o2, o3, o4])))
     pg.goto(URL); pg.wait_for_timeout(1500)
     # o1 was sent to the Pipe before : what the app wrote is what the Pipe holds
     sent = pg.evaluate("(()=>{ const all=JSON.parse(window.storage.peek('todo-widget-opportunities')); const o=all.find(x=>x.id==='o1'); const v=window.TodoExcelSync.xsAppValues('pipe', o); o.excelPrev={ pipe:v }; window.storage.set('todo-widget-opportunities', JSON.stringify(all)); return v; })()")
     pipe["rows"] = [sent, line(charge="Paul", prod="VENTUS", plant="Parc des Crêtes", kwc=1200, stade="Qualification en cours"),
                     line(charge="Marie", prod="HÉLIO", plant="Hangar", stade="Transféré BDD"),
                     line(charge="Paul", prod="LES PRES", plant="Hangar Nord - extension", kwc=300, stade="Collecte d'informations"),
-                    line(charge="Paul", prod="SOLAIRE DURAND", plant="Atelier toiture", kwc=99, dept="35 - Ille-et-Vilaine", stade="Prise en contact")]
+                    line(charge="Paul", prod="SOLAIRE DURAND", plant="Atelier toiture", kwc=99, dept="35 - Ille-et-Vilaine", stade="Prise en contact"),
+                    line(charge="Marie", prod="AGRI SOL", plant="Grange", stade="No Go"),
+                    line(charge="Paul", prod="ANCIEN", plant="Toit vieux", stade="A qualifier")]
     hel = [None] * 91; hel[31] = "HÉLIO"; hel[33] = "Hangar"; hel[24] = "En attente"; bdd_rows.append(hel)
     pg.reload(); pg.wait_for_timeout(4000)
     opps = lambda: [o for o in json.loads(pg.evaluate("window.storage.peek('todo-widget-opportunities')")) if not o.get("deleted")]
@@ -62,8 +65,11 @@ with sync_playwright() as p:
           f"likely the same (same producer, close plant name, same power) : asked ({same!r})")
     pg.click("#choice-btns button:has-text('Oui, les relier')"); pg.wait_for_timeout(600)
     ask = pg.inner_text("#choice-overlay") if pg.is_visible("#choice-overlay") else ""
-    check("2 lignes du Pipe" in ask and "VENTUS · Parc des Crêtes — Qualification en cours (Paul)" in ask and "SOLARIS" not in ask, f"« Relire » : the Pipe's unknown lines are listed first ({ask!r})")
-    pg.click("#choice-btns button:has-text('Importer les 2')"); pg.wait_for_timeout(1200)
+    check("3 lignes du Pipe" in ask and "2 ouvertes, 1 fermée" in ask and "VENTUS · Parc des Crêtes — Qualification en cours (Paul)" in ask and "SOLARIS" not in ask and "Toit vieux" not in ask,
+          f"« Relire » : the Pipe's unknown lines are listed first, open and closed counted, a sheet in the bin not offered ({ask!r})")
+    pg.click("#choice-btns button:has-text('Seulement les ouvertes (2)')"); pg.wait_for_timeout(1200)
+    allc = lambda: [o.get("centrale") for o in json.loads(pg.evaluate("window.storage.peek('todo-widget-opportunities')"))]
+    check("Grange" not in allc() and allc().count("Toit vieux") == 1, "« Seulement les ouvertes » : the closed line stays out ; the binned sheet doesn't come back")
     by = {o["centrale"]: o for o in opps()}
     check(set(by) == {"Toit", "Parc des Crêtes", "Hangar", "Hangar Nord - extension", "Atelier toiture"} and len(opps()) == 5, f"two sheets created, the known and the linked ones not doubled ({sorted(by)})")
     check(by["Hangar Nord - extension"]["id"] == "o2", "« Oui, les relier » : the sheet takes the Pipe's names")
@@ -80,7 +86,9 @@ with sync_playwright() as p:
     # a new line later : arrives by itself
     pipe["rows"].append(line(charge="Paul", prod="SCEA ESSAI", plant="Toit 2", stade="A qualifier"))
     pg.click('[data-tab="pipeline"]'); pg.wait_for_timeout(1500)
-    check(any(o["centrale"] == "Toit 2" for o in opps()), "after the first time, a new Pipe line arrives by itself")
+    check(any(o["centrale"] == "Toit 2" for o in opps()) and "Grange" not in allc(), "after the first time, a new Pipe line arrives by itself ; the closed one left out stays out")
+    board = pg.inner_text("#tab-pipeline")
+    check(all(n in board for n in ["Parc des Crêtes", "Hangar", "Toit 2"]), "the imported sheets show on the Pipeline board")
     new = next(o for o in opps() if o["centrale"] == "Toit 2")
     pg.evaluate(f"location.hash='fiche/{new['id']}'"); pg.wait_for_timeout(800)
     check("Arrivée du Pipe Excel" in pg.inner_text("#opp-detail-body") and "Paul" in pg.inner_text("#opp-detail-body"), "the sheet says it came from the Pipe, and whose it is")
