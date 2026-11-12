@@ -15,6 +15,16 @@ PWSH = os.environ.get("PWSH") or shutil.which("pwsh")
 if not PWSH:
     print("PowerShell absent: skipped"); sys.exit(0)
 failures = []
+def relire(page):
+    """« ↻ Relire » : the colleague's line (AUTRE PROD) is offered for import into the app (js/pipe-import.js) — not this test's subject : « Plus tard »"""
+    page.click("#tab-excel .xs-read")
+    try:
+        page.wait_for_selector("#choice-overlay:not(.hidden) >> text=Lignes du Pipe à importer", timeout=4000)
+        page.click("#choice-btns button:has-text('Plus tard')")
+    except Exception:
+        pass
+
+
 def check(cond, msg):
     print(("ok   " if cond else "FAIL ") + msg)
     if not cond: failures.append(msg)
@@ -63,7 +73,7 @@ try:
         r0 = next(r for r in mine if r[19] == "Toit 0")
         check(r0[22] == "100" and r0[1] == "True" and r0[36] == "True", f"each value in its column (kWc in W, New in B, Qualification in AK): {r0[22]!r} {r0[1]!r} {r0[36]!r}")
         snap = dump("pipe")
-        page.click("#tab-excel .xs-read"); page.wait_for_timeout(1500)
+        relire(page); page.wait_for_timeout(1500)
         check(page.locator("#tab-excel .xl-tag.todo").count() == 0, "after the send and a new reading: no cell left to decide")
         # a colleague writes a comment in two lines (the panel is a grid per card since nov. 2: open the card, pick
         # « Excel » (the default) or « Appli » per cell, then the card's button)
@@ -71,7 +81,7 @@ try:
         call("POST", "/mock/edit/pipe", {"op": "set", "row": idx["Toit 1"] + 1, "col": 36, "value": "Vu par Paul"})
         call("POST", "/mock/edit/pipe", {"op": "set", "row": idx["Toit 2"] + 1, "col": 36, "value": "Rappeler en mars"})
         c1, c2 = "#tab-excel .xl-lot[data-rid='solo-e1']", "#tab-excel .xl-lot[data-rid='solo-e2']"
-        page.click("#tab-excel .xs-read"); page.wait_for_selector(c1 + " .xl-tag.todo", timeout=20000)
+        relire(page); page.wait_for_selector(c1 + " .xl-tag.todo", timeout=20000)
         # Toit 1: the app had no comment, a colleague wrote one → keeping the Excel (default) brings it into the app
         page.click(c1 + " .xl-head")
         check("Vu par Paul" in page.inner_text(c1 + " .xl-grid"), "a colleague's comment shows up in its card")
@@ -96,7 +106,7 @@ try:
         page.click("#tab-excel .xs-send[data-k=bdd]"); page.wait_for_timeout(3000)
         brows = dump("bdd")
         check(len(brows) == 3 and all(r[31] == "SCEA Essai" for r in brows) and sorted(r[33] for r in brows) == ["Toit 0", "Toit 1", "Toit 2"], f"Suivi: the 3 lines at the pricing step, keys in AF / AH ({[(r[31], r[33]) for r in brows]})")
-        page.click("#tab-excel .xs-read"); page.wait_for_timeout(2000)
+        relire(page); page.wait_for_timeout(2000)
         body = page.inner_text("#tab-excel .xs-body") if page.locator("#tab-excel .xs-body table").count() else ""
         check("Absent du fichier" not in body, "Suivi read back on its key columns: no line wrongly « absent »")
         check(not errors, f"no page errors ({errors})")
