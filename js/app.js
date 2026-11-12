@@ -4594,6 +4594,7 @@
       if(!window.TODO_LITE) box.appendChild(sheetSection('Notes express', 'colle ou tape tes notes : les chiffres sont repérés, un clic pour remplir la fiche', false, buildQuickNotes(scopeList, { onFill:()=>openOppDetail(o.id), onKeep:()=>openOppDetail(o.id) })));
       const sheet=buildInstallSheet(o);
       box.appendChild(sheetSection('Détails de la centrale', [o.install, o.contrat, fmtKwc(o.kwc, o.install)].filter(Boolean).join(' · '), stageIndex(o.stage)<=stageIndex('qualif_en_cours') || isExited(o), sheet));
+      if(!window.TODO_LITE) box.appendChild(window.TodoConditions.dropZone(siblings.length>1?siblings:[o], box));   // a file dropped fills the sheet, after a look
       const cmp=buildRequestCompare(siblings.length>1?siblings:[o], o.id);   // every line of the « Caractéristiques Centrales » file, to fill in place
       if(!o.requestId){ const fr=document.createElement('div'), pm=appendPricingMail(fr, { company:o.company }, [o]);   // a plant on its own has its pricing mail too, first at the pricing steps
         if(pm.mailNow){ box.append(...fr.childNodes); box.appendChild(cmp); } else { box.appendChild(cmp); box.append(...fr.childNodes); } }
@@ -4687,6 +4688,22 @@
       document.addEventListener('pointermove', move); document.addEventListener('pointerup', up);
     });
   }
+  // a cell of the table that is not an app field : one of the Suivi's own lines (data-c), else a line of the producer's file
+  function setFromCell(o, inp, v){
+    if(!inp.dataset.c){ caractSet(o, inp.dataset.l, v); return; }
+    const f=window.TodoConditions.FIELDS.find(x=>x.k===inp.dataset.c), fd=f && f.type==='date' && v ? pqFullDate(v) : '';
+    if(fd) v=fd;
+    if(v) o[inp.dataset.c]=v; else delete o[inp.dataset.c];
+  }
+  // one line of the Suivi's own (js/conditions.js) across the plants : a list where the Suivi has one
+  function condRow(f, list, currentId, cell){
+    const C=window.TodoConditions, need=list.some(x=>C.needed(f, x));
+    return '<tr'+(need?'':' class="opt"')+'><th scope="row" class="req-lab">'+escapeHtml(f.label)+'</th>'+list.map(x=>{
+      const v=x[f.k]==null?'':String(x[f.k]), nd=C.needed(f, x), id='data-id="'+escapeHtml(x.id)+'" data-c="'+f.k+'"';
+      if(!f.opts) return cell(x, v, id, nd);
+      return '<td class="'+(x.id===currentId?'cur ':'')+(v?'':(nd?'empty':'none'))+'"><select class="req-in" '+id+'><option value=""></option>'+f.opts.concat(v && !f.opts.includes(v)?[v]:[]).map(op=>'<option'+(op===v?' selected':'')+'>'+escapeHtml(op)+'</option>').join('')+'</select></td>';
+    }).join('')+'</tr>';
+  }
   function buildRequestCompare(list, currentId){
     // folds away with a click on its title; open or closed is remembered on this device
     const wrap=document.createElement('details'); wrap.className='req-compare';
@@ -4695,7 +4712,7 @@
     let open=early; try{ const v=localStorage.getItem(key); if(v!=null) open=v!=='0'; }catch(e){}
     wrap.open=open;
     wrap.addEventListener('toggle', ()=>{ if(wrap.dataset.noRemember){ delete wrap.dataset.noRemember; return; } lsSet(key, wrap.open?'1':'0'); });
-    const missing=list.reduce((s,x)=>s+CARACT_ROWS.filter(l=>REQ_NEEDED.has(caractKey(l)) && caractValue(x,l)==='').length,0);
+    const missing=list.reduce((s,x)=>s+CARACT_ROWS.filter(l=>REQ_NEEDED.has(caractKey(l)) && caractValue(x,l)==='').length+window.TodoConditions.missing(x),0);
     wrap.innerHTML='<summary class="opp-phase-h req-compare-h">'+(list.length>1?'Les '+list.length+' installations côte à côte':'Caractéristiques centrales')+(missing?' <span class="req-miss">'+missing+' case'+(missing>1?'s':'')+' à compléter</span>':'')+'<span class="req-hint">cliquer dans une case pour la modifier · tirer le petit carré pour recopier</span></summary>';
     const sc=document.createElement('div'); sc.className='req-compare-scroll';
     const cell=(x,v,attrs,need)=>'<td class="'+(x.id===currentId?'cur ':'')+(v===''?(need?'empty':'none'):'')+'"><input class="req-in" '+attrs+' value="'+escapeHtml(String(v))+'" placeholder="'+(need?'à compléter':'—')+'" aria-label="'+escapeHtml(oppName(x))+'"></td>';
@@ -4721,7 +4738,16 @@
         if(opts) return '<td class="'+(x.id===currentId?'cur ':'')+(v?'':'none')+'"><select class="req-in" data-id="'+escapeHtml(x.id)+'" data-k="'+k+'"><option value=""></option>'+opts.concat(v && !opts.includes(v)?[v]:[]).map(o=>'<option'+(o===v?' selected':'')+'>'+escapeHtml(o)+'</option>').join('')+'</select></td>';
         return cell(x, v, 'data-id="'+escapeHtml(x.id)+'" data-k="'+k+'"', false); }).join('')+'</tr>';
     });
-    t+='</tbody></table>';
+    t+='</tbody>';
+    // the Suivi's lines for the offer : what the pricing request needs, what the pricing sends back (js/conditions.js)
+    window.TodoConditions.sections().forEach(([name, fields])=>{
+      const back=name==='Retour pricing';
+      section(name, [fields.map(f=>list.some(x=>x[f.k]))], !back);
+      if(back) t=t.replace(/<tbody class="req-sec([^"]*)" data-sec="([^"]*)">(?![\s\S]*<tbody)/, '<tbody class="req-sec$1 opt-sec" data-sec="$2">');
+      fields.forEach(f=>{ t+=condRow(f, list, currentId, cell); });
+      t+='</tbody>';
+    });
+    t+='</table>';
     sc.innerHTML=t;
     // all the lines of the file, or only the ones the pricing needs (choice remembered on this device)
     const tools=document.createElement('div'); tools.className='req-tools';
@@ -4746,7 +4772,7 @@
         if(inp.dataset.k){ if(['debut','fin'].includes(inp.dataset.k) && v){ const f=pqFullDate(v); if(f) v=f; } o[inp.dataset.k]=v;
           // start and end give the duration (the duration never moves a date)
           if(['debut','fin'].includes(inp.dataset.k)){ const d=pqDateOf(o.debut), e=pqDateOf(o.fin); if(d && e && e>d){ o.duree=String(Math.round(((e-d)/864e5+1)/365.25*2)/2).replace('.',','); const dc=sc.querySelector('.req-in[data-id="'+o.id+'"][data-k="duree"]'); if(dc) dc.value=o.duree; } } }
-        else caractSet(o, inp.dataset.l, v);
+        else setFromCell(o, inp, v);
         touchCrm(o); saveCrm(); renderPipeline();
         const td=inp.closest('td'); td.classList.remove('empty','none'); if(!v) td.classList.add(td.querySelector('[placeholder="à compléter"]')?'empty':'none');
         td.classList.add('saved'); setTimeout(()=>td.classList.remove('saved'), 900);
@@ -5065,7 +5091,7 @@
     qualif_en_cours:[{ id:'rdv2', label:'RDV 2', date:'rdv2' },{ id:'decision', label:'Décision Go / No Go prise' }],
     pricing_indicatif:[{ id:'mail', label:'Mail de demande envoyé', auto:l=>l.every(o=>o.mailSentAt), act:{ label:'Copier le mail', show:l=>!l.every(o=>o.mailSentAt), fn:(l,btn)=>{ const ml=pricingMail(reqOfList(l), l); copyToClipboard(ml.subject+'\n\n'+ml.body, btn); markMailSent(l); } } },
       { id:'caract', label:'Fichier Caractéristiques joint', auto:l=>l.every(o=>o.caractSentAt), act:{ label:'Créer le fichier', show:l=>!l.every(o=>o.caractSentAt), fn:(l,btn)=>downloadCaract(l, btn) } },
-      { id:'ops', label:'Retour d’Ops reçu' },{ id:'prix', label:'Prix noté dans la fiche', auto:l=>l.every(o=>o.prixValeur) }],
+      { id:'ops', label:'Retour d’Ops reçu' },{ id:'prix', label:'Prix noté dans la fiche', auto:l=>l.every(o=>o.prixValeur || o.c_pu) }],
     offre_remise:[{ id:'prete', label:'Offre préparée' },{ id:'envoyee', label:'Offre remise au producteur', date:'dateOffre' }],
     offre_attente:[{ id:'relance', label:'Relance faite', note:l=>{ const t=pqDateOf(l[0].dateOffre); if(!t) return ''; const n=Math.floor((Date.now()-t)/864e5); return n>0?'offre remise il y a '+n+' jour'+(n>1?'s':''):''; } },{ id:'reponse', label:'Réponse du producteur reçue' }],
     kyc:[{ id:'docs', label:'Documents KYC reçus' },{ id:'solva', label:'Solvabilité validée (Juridique)' }],
@@ -5373,6 +5399,7 @@
     const lots=[...new Set(all.map(o=>o.lot).filter(Boolean))];
     box.appendChild(sheetSection('Installations', all.length+' installation'+(all.length>1?'s':'')+(lots.length?' · '+lots.length+' lot'+(lots.length>1?'s':''):'')+' · '+all.slice(0,3).map(o=>oppName(o)+(o.kwc?' '+fmtKwc(o.kwc, o.install):'')).join(' · ')+(all.length>3?'…':''), all.length<=6, card));
     // the characteristics file and the pricing mail (open when the step needs them), the history
+    if(!window.TODO_LITE && list.length) box.appendChild(window.TodoConditions.dropZone(list, box));
     const mailFrag=document.createElement('div'), pm=appendPricingMail(mailFrag, req, list), mailNow=pm.mailNow, cmp=list.length?buildRequestCompare(list, null):null;
     if(mailNow){ box.append(...mailFrag.childNodes); if(cmp) box.appendChild(cmp); } else { if(cmp) box.appendChild(cmp); box.append(...mailFrag.childNodes); }
     { const h=buildHistory(all); if(h) box.appendChild(h); }
@@ -5609,6 +5636,7 @@
       31:or(o.spv||o.producteur||o.company), 32:or(o.siret), 33:oppName(o), 34:or(o.dept), 35:or(o.cp), 36:/PV et/.test(o.install||'')?null:or(o.install), 37:or(ty),
       38:kwc||null, 39:kwc&&mwh?Math.round(mwh*1000/kwc):null, 40:mwh||null, 41:o.p90?pqNum(o.p90):null
     });
+    Object.assign(row, window.TodoConditions.bddCells(o, { numCell, looseDateCell }));   // the offer's own lines (P, AQ–AV, BM–CM)
     // Aggregated volume per year 2026 → 2041, prorated on the contract dates when both are known
     const from=pqToDate(o.debut)||pqToDate(o.mesEff)||pqToDate(o.mesPrev), to=pqToDate(o.fin);
     if(mwh && from && to){
@@ -5673,6 +5701,7 @@
   // openExcelSync is proxied in reverse at the top of this file
   window.TodoExcelSync.init({ $, ON_PHONE, PQ_FIELDS, bddCells, bridgeCall, bridgeCheck, bridgeConfigured, cellToText, closeOppDetail, codeAffaire, copyToClipboard, gsTab:(...a)=>gsTab(...a), importParcFromBridge, isExited, openOppDetail, oppActionBtn, oppName, pipeCells, pqFold, pqPad, relanceOnMove, renderPipeline, saveCrm, setOppStage, softFail, stageIndex, stageLabel, suiviState, touchCrm, get bridgeState(){ return bridgeState; }, set bridgeState(v){ bridgeState=v; }, get opportunities(){ return opportunities; }, set opportunities(v){ opportunities=v; } });   // Envoi vers les Excel partagés et Excel ⇄ appli — js/excel-sync.js
   window.TodoJournal.init({ $, bridgeCall, bridgeConfigured, bridgeInfo:()=>bridgeState.ok && bridgeState.authorized ? bridgeState.info : null, notify });
+  window.TodoConditions.init({ readPipeFiles, caractValue, caractSet, caractKey, PQ_FIELDS, pqFold, touchCrm, saveCrm, notify, escapeHtml, reopen:()=>{ if(viewingOppId) openOppDetail(viewingOppId); } });
   window.TodoPipeImport.init({ PQ_FIELDS, pipeCells, bddCells, cellToText, codeAffaire, stageIndex, notify, askChoice, renderPipeline, saveCrm, newId:()=>newOppId('opp'),
     mode:()=>window.TodoTeamExcel.mode(), bridgeReady:()=>bridgeConfigured() && bridgeState.ok && bridgeState.authorized && window.TodoExcelSync.verAtLeast(bridgeState.info, '1.34'), get opportunities(){ return opportunities; } });
   window.TodoLocalInbox.init({ bridgeCall, bridgeInfo:()=>bridgeState.ok && bridgeState.authorized ? bridgeState.info : null });

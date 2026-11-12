@@ -102,6 +102,7 @@ window.TodoPipeImport=(function(){
     function sheetFromBdd(hit){
       const o={ id:newId(), kind:'installation', taskId:null, createdAt:Date.now(), updatedAt:Date.now(), deleted:false, lostAt:null, bddOnly:true };
       BDD_COLS.forEach(([f, i, t])=>{ const v=X().xsCellText(hit.vals[i], !!t); if(v!=='') o[f]=t==='date' ? asField({ type:'date' }, v) : v; });
+      Object.assign(o, window.TodoConditions.fromBdd(hit.vals, X().xsCellText));   // the offer's own lines (js/conditions.js)
       if(!o.producteur) o.producteur=o.spv||''; if(o.spv===o.producteur) delete o.spv;
       o.company=o.producteur; o.title=o.centrale||'';
       o.stage=STATUT[statutOf(hit.vals)]||'pricing_indicatif'; if(o.stage==='perdu'||o.stage==='abandonne'){ o.stageBeforeExit='pricing_indicatif'; o.lostAt=Date.now(); }

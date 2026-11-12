@@ -29,6 +29,7 @@ jobs:
       - run: python tests/local_backup_test.py   # the day's local backup through the bridge, and restoring one
       - run: python tests/team_excel_test.py   # the team's contacts in an Excel file through the bridge (default team mode)
       - run: python tests/pipe_import_test.py   # the Pipe Excel read back into the app : colleagues' lines become sheets
+      - run: python tests/conditions_test.py   # the Suivi's lines for an offer in a sheet, and a dropped file filling it
       - run: python tests/team_private_test.py   # a private contact never reaches the team base
       - run: python tests/csp_test.py   # the app under the security headers of _headers (Cloudflare Pages)
       - run: python tests/mail_accuracy.py --all --min 0.95

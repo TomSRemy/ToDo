@@ -2885,3 +2885,17 @@ html.widget .dup-banner{ display:none; }
 
 /* a sheet that came from a line typed in the Pipe Excel by a colleague */
 .from-excel{ margin:0 0 10px; padding:6px 10px; border-left:3px solid #5BA8F5; background:var(--panel-2); border-radius:6px; font-size:12.5px; color:var(--tx2); }
+
+/* a file dropped on a sheet fills it (js/conditions.js) */
+.fill-drop{ display:block; margin:0 0 12px; padding:10px 14px; border:1.5px dashed var(--accent); border-radius:10px; background:color-mix(in srgb, var(--accent) 6%, transparent); cursor:pointer; }
+.fill-drop b{ display:block; font-size:13px; color:var(--tx1); }
+.fill-drop span{ font-size:12px; color:var(--tx3); }
+.fill-drop.drag{ background:color-mix(in srgb, var(--accent) 16%, transparent); }
+.fill-box{ max-width:760px; }
+.fill-scroll{ max-height:52vh; overflow:auto; margin:8px 0 12px; }
+.fill-table{ width:100%; border-collapse:collapse; font-size:12.5px; }
+.fill-table th, .fill-table td{ padding:6px 8px; border-bottom:1px solid var(--bd); text-align:left; vertical-align:top; }
+.fill-table th{ color:var(--tx3); font-weight:500; font-size:11.5px; }
+.fill-table .fo{ color:var(--tx3); }
+.fill-table tr.conf .fn{ color:var(--amber, #E5B54F); }
+.fill-go{ background:var(--accent); border-color:var(--accent); color:#04211B; }
