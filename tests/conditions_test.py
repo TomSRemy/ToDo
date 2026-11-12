@@ -59,7 +59,7 @@ with sync_playwright() as p:
       all.push({ id:'o3', kind:'installation', company:'SOLEO', producteur:'SOLEO', centrale:'HANGAR B', kwc:'180', debut:'01/07/2027', fin:'31/12/2029', stage:'pricing_indicatif', createdAt:1, updatedAt:1, deleted:false });
       window.storage.set('todo-widget-opportunities', JSON.stringify(all)); })()""")
     pg.reload(); pg.wait_for_timeout(1200)
-    body = "\n".join(["Bonjour Tom,", "", "Voici les frais d'agrégation pour les centrales de SOLEO.", "", "Nom du marché", "", "Frais de gestion (€/MWh)", "", "Frais fixe (€/MWh)", "", "Marge (€/MWh)", "",
+    body = "\n".join(["Oui c'est ça !", "", "De : Tom", "On est à 0.4 €/MWh pour le pilotage c'est bien ça ?", "", "Bonjour Tom,", "", "Voici les frais d'agrégation pour les centrales de SOLEO.", "", "Nom du marché", "", "Frais de gestion (€/MWh)", "", "Frais fixe (€/MWh)", "", "Marge (€/MWh)", "",
                       "Frais d'agrégation (€/MWh)", "", "27(07)29 – SOLEO_TOIT A – A", "", "2.10", "", "1.70", "", "0.5", "", "4.30", "", "27(07)29 – SOLEO_HANGAR B – A", "", "2.20", "", "1.90", "", "0.5", "", "4.60", "", "Bon dépôt,"])
     eml = pathlib.Path(tempfile.mkdtemp()) / "RE Pricing Agrégation.eml"
     eml.write_text("From: pricing@exemple.fr\r\nSubject: Pricing Agregation\r\nContent-Type: text/plain; charset=utf-8\r\n\r\n" + body.replace("\n", "\r\n"), encoding="utf-8")
@@ -69,7 +69,8 @@ with sync_playwright() as p:
     check("FG_Fixe_P1 € / MWh" in look and "4,30" in look and "Frais de gestion (€/MWh)" in look and "2,10" in look and "4,60" not in look, f"the pricing's mail : this plant's line (found by its business code) read into the Retour pricing lines ({look[:260]!r})")
     pg.click("#fill-overlay .fill-go"); pg.wait_for_timeout(800)
     o2 = next(x for x in json.loads(pg.evaluate("window.storage.peek('todo-widget-opportunities')")) if x["id"] == "o2")
-    check(o2.get("c_fgP1") == "4,30" and o2.get("c_fgGestion") == "2,10" and o2.get("c_fgFixe") == "1,70" and o2.get("c_fgMarge") == "0,5", f"filled : the total in FG_Fixe_P1, the detail beside ({ {k: o2.get(k) for k in ['c_fgP1', 'c_fgGestion', 'c_fgFixe', 'c_fgMarge']} })")
+    check(o2.get("c_fgP1") == "4,30" and o2.get("c_fgGestion") == "2,10" and o2.get("c_fgFixe") == "1,70" and o2.get("c_fgMarge") == "0,5" and o2.get("c_pilotage") == "0,4",
+          f"filled : the total in FG_Fixe_P1, the detail beside, the steering said in the thread noted apart ({ {k: o2.get(k) for k in ['c_fgP1', 'c_fgGestion', 'c_fgFixe', 'c_fgMarge', 'c_pilotage']} })")
     # the same mail's text pasted, on the other plant
     pg.evaluate("location.hash='fiche/o3'"); pg.wait_for_timeout(800)
     pg.click("#opp-detail-body .fill-paste"); pg.fill("#paste-overlay textarea", body.replace("\n\n", "\n")); pg.click("#paste-overlay .paste-go"); pg.wait_for_selector("#fill-overlay", timeout=5000)

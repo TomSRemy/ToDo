@@ -38,13 +38,14 @@ window.TodoConditions=(function(){
     ['c_m0P1', 'FG_%M0_P1', 81, 'number'], ['c_finM0P1', 'Fin P1 %', 82, 'date'], ['c_m0P2', 'FG_%M0_P2', 83, 'number'], ['c_finM0P2', 'Fin P2 %', 84, 'date'],
     ['c_remu', 'Remu_prod', 87, 'text'], ['c_puGo', 'Pu/Go', 90, 'number'],
     // the detail of the aggregation fee as the pricing's mail gives it (no column in the Suivi : kept in the app)
-    ['c_fgGestion', 'Frais de gestion (€/MWh)', null, 'number'], ['c_fgFixe', 'Frais fixe (€/MWh)', null, 'number'], ['c_fgMarge', 'Marge (€/MWh)', null, 'number']
+    ['c_fgGestion', 'Frais de gestion (€/MWh)', null, 'number'], ['c_fgFixe', 'Frais fixe (€/MWh)', null, 'number'], ['c_fgMarge', 'Marge (€/MWh)', null, 'number'],
+    ['c_pilotage', 'Pilotage (€/MWh)', null, 'number']
   ];
   // the Suivi's own words above its headers (the lines « Période tarifaire », « M0 − FG », « CAPA », « GO »…), shown under each line
   const HINT={ c_fgAcc:'Prix forfaitaire par an pour la gestion d\u2019une ACC', c_pu:'Prix fixe', c_fgP1:'Période tarifaire 1 (P1) · M0 − FG', c_finP1:'Période tarifaire 1 (P1)',
     c_fgP2:'Période tarifaire 2 (P2) · M0 − FG', c_finP2:'Période tarifaire 2 (P2)', c_m0P1:'Période tarifaire 1 (P1) · FG% × M0', c_finM0P1:'Période tarifaire 1 (P1)',
     c_m0P2:'Période tarifaire 2 (P2) · FG% × M0', c_finM0P2:'Période tarifaire 2 (P2)', c_garanties:'GAPD', c_capa:'CAPA', c_remu:'CAPA', c_goRegistre:'GO', c_selfee:'GO', c_puGo:'GO',
-    c_fgGestion:'détail du mail du pricing', c_fgFixe:'détail du mail du pricing', c_fgMarge:'détail du mail du pricing' };
+    c_pilotage:'noté à part, dans le mail du pricing ou l\u2019échange qui suit', c_fgGestion:'détail du mail du pricing', c_fgFixe:'détail du mail du pricing', c_fgMarge:'détail du mail du pricing' };
   const def=([k, label, col, type, opts, need], part)=>({ k, label, col, type, opts:opts||null, need:!!need, part, hint:HINT[k]||'' });
   const FIELDS=ASK.map(x=>def(x, 'ask')).concat(EXPLOIT.map(x=>def(x, 'exploit')), BACK.map(x=>def(x, 'back')));
   api.FIELDS=FIELDS;
@@ -73,6 +74,7 @@ window.TodoConditions=(function(){
   // a pricing column → the sheet's field ; the total aggregation fee is the Suivi's FG_Fixe_P1
   function pricingField(h){
     const f=foldS(h);
+    if(/pilotage/.test(f)) return 'c_pilotage';
     if(/fraisdagregation|totalfrais/.test(f)) return 'c_fgP1';
     if(/fraisdegestion/.test(f)) return 'c_fgGestion';
     if(/fraisfixe/.test(f)) return 'c_fgFixe';
@@ -100,6 +102,10 @@ window.TodoConditions=(function(){
     return rows;
   }
   api.pricingTables=pricingTables;
+  // « on est à 0.4 €/MWh pour le pilotage » / « pilotage : 0,4 €/MWh » : the steering's price said in a sentence of the thread
+  api.pilotageIn=text=>{ const t=String(text||'');
+    const m=/(\d+(?:[.,]\d+)?)\s*€\s*\/\s*MWh[^\n.]{0,25}pilotage/i.exec(t) || /pilotage[^\n\d]{0,30}(\d+(?:[.,]\d+)?)\s*€\s*\/\s*MWh/i.exec(t);
+    return m ? m[1].replace('.', ',') : ''; };
 
   api.init=function(app){
     const { readPipeFiles, caractValue, caractSet, caractKey, PQ_FIELDS, pqFold, touchCrm, saveCrm, notify, reopen, escapeHtml, codeAffaire }=app;
@@ -158,9 +164,12 @@ window.TodoConditions=(function(){
         || list.find(o=>{ const c=fold(o.centrale||o.title); return c.length>3 && n.includes(c); }) || null;
     }
     function pricingChanges(text, list, from){
-      const out=[];
+      const out=[], hit=new Set(), put=(o, k, v)=>{ const f=FIELDS.find(x=>x.k===k); if(f && v!=='' && !same(o[k], v)) out.push({ o, label:f.label, now:String(o[k]==null?'':o[k]), val:v, set:x=>{ o[k]=x; }, from }); };
       pricingTables(text).forEach(r=>{ const o=sheetForLine(r, list) || (list.length===1 && pricingTables(text).length===1 ? list[0] : null); if(!o) return;
-        Object.keys(r.values).forEach(k=>{ const f=FIELDS.find(x=>x.k===k), v=r.values[k]; if(f && !same(o[k], v)) out.push({ o, label:f.label, now:String(o[k]==null?'':o[k]), val:v, set:x=>{ o[k]=x; }, from }); }); });
+        hit.add(o); Object.keys(r.values).forEach(k=>put(o, k, r.values[k])); });
+      // the steering's price, said once for the whole mail : on the plants of its table (or the only sheet)
+      const pil=api.pilotageIn(text);
+      if(pil) (hit.size ? [...hit] : list.length===1 ? list : []).forEach(o=>put(o, 'c_pilotage', pil));
       return out;
     }
     async function fill(files, list){
