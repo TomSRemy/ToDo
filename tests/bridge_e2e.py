@@ -16,7 +16,8 @@ if not PWSH:
     print("PowerShell absent: skipped"); sys.exit(0)
 failures = []
 def relire(page):
-    """« ↻ Relire » : the colleague's line (AUTRE PROD) is offered for import into the app (js/pipe-import.js) — not this test's subject : « Plus tard »"""
+    """« ↻ Relire ». This test checks the cell-by-cell grid : run with the Pipe import off (team mode « supabase » in the seed,
+    the import itself is tests/pipe_import_test.py) ; should the import's first question show anyway, « Plus tard »"""
     page.click("#tab-excel .xs-read")
     try:
         page.wait_for_selector("#choice-overlay:not(.hidden) >> text=Lignes de l’Excel à importer", timeout=4000)
@@ -58,7 +59,7 @@ try:
     with sync_playwright() as p:
         b = p.chromium.launch(); page = b.new_page(viewport={"width": 1400, "height": 900}, bypass_csp=True); errors = []; page.on("pageerror", lambda e: errors.append(str(e)))
         page.route("**/fonts.g*/**", lambda r: r.abort())
-        page.add_init_script("try{ if(!sessionStorage.getItem('s')){ localStorage.setItem('todo_todo-widget-opportunities', %s); localStorage.setItem('todo_bridge-config', %s); sessionStorage.setItem('s','1'); } }catch(e){}"
+        page.add_init_script("try{ if(!sessionStorage.getItem('s')){ localStorage.setItem('todo_todo-widget-opportunities', %s); localStorage.setItem('todo_bridge-config', %s); localStorage.setItem('team-mode', 'supabase'); sessionStorage.setItem('s','1'); } }catch(e){}"
                              % (json.dumps(json.dumps(insts)), json.dumps(json.dumps({"port": PORT, "token": "mocktoken"}))))
         page.goto(URL); page.click('[data-tab="pipeline"]'); page.click("#pipe-more-btn"); page.click("#pipe-xs-btn")
         page.wait_for_selector("#tab-excel .xs-send[data-k=pipe]:not([disabled])", timeout=20000)
