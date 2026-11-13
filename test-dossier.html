@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'">
+<title>Test du dossier d'équipe · ToDo</title>
+<style>
+:root{ --bg:#F6F8F7; --panel:#fff; --ink:#16201D; --ink2:#4B5A55; --line:#D9E1DE; --ok:#0E8F74; --ko:#B3261E; --wait:#7A8783; }
+@media (prefers-color-scheme: dark){ :root{ --bg:#0D1311; --panel:#141C19; --ink:#E5ECE9; --ink2:#AAB8B3; --line:#26322E; --ok:#2FC6A2; --ko:#F2867E; --wait:#7D8B86; color-scheme:dark; } }
+body{ margin:0; background:var(--bg); color:var(--ink); font:15px/1.55 'Segoe UI', system-ui, sans-serif; }
+main{ max-width:640px; margin:0 auto; padding:28px 16px 48px; display:flex; flex-direction:column; gap:18px; }
+h1{ font-size:22px; margin:0; } p{ margin:0; color:var(--ink2); }
+.card{ background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:16px; display:flex; flex-direction:column; gap:10px; }
+button{ font:600 14px 'Segoe UI', system-ui, sans-serif; padding:9px 16px; border-radius:8px; border:1px solid var(--ok); background:var(--ok); color:#fff; cursor:pointer; align-self:flex-start; }
+button.ghost{ background:none; color:var(--ok); }
+button:disabled{ opacity:.5; cursor:default; }
+ul{ list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:6px; }
+li{ display:grid; grid-template-columns:22px 1fr; gap:8px; }
+li .i{ font-weight:700; } li.ok .i{ color:var(--ok); } li.ko .i{ color:var(--ko); } li.wait .i{ color:var(--wait); }
+li small{ display:block; color:var(--ink2); }
+textarea{ width:100%; box-sizing:border-box; min-height:110px; font:12.5px Consolas, monospace; background:var(--bg); color:var(--ink); border:1px solid var(--line); border-radius:8px; padding:8px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Test du dossier d'équipe</h1>
+  <p>30 secondes, rien n'est installé. On vérifie qu'Edge laisse ToDo lire et écrire dans un dossier OneDrive, ce dont la version équipe a besoin. Un petit fichier de test est créé puis supprimé.</p>
+  <div class="card">
+    <b>1. Choisis un dossier OneDrive</b>
+    <p>Idéalement le dossier SharePoint de l'équipe synchronisé sur ce PC ; sinon n'importe quel dossier de ton OneDrive. Edge te demandera d'autoriser la modification : accepte, et choisis « Autoriser à chaque visite » s'il le propose.</p>
+    <button id="pick" type="button">Choisir le dossier</button>
+  </div>
+  <div class="card">
+    <b>2. Résultats</b>
+    <ul id="results"></ul>
+    <button id="again" class="ghost" type="button" hidden>Recharger et revérifier l'autorisation</button>
+  </div>
+  <div class="card">
+    <b>3. Envoie ce résumé à Tom</b>
+    <textarea id="summary" readonly></textarea>
+    <button id="copy" class="ghost" type="button">Copier le résumé</button>
+  </div>
+</main>
+<script src="js/test-dossier.js"></script>
+</body>
+</html>
