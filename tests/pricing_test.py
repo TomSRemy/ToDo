@@ -17,6 +17,8 @@ opps = [{"id": "r1", "kind": "request", "company": "IEL", "label": "IEL — dema
         inst("a", "MOUTONNERIE", kwc="9000"), inst("b", "PLOUISY", kwc="2200"),
         inst("c", "TOIT", company="VENTUS", producteur="VENTUS", requestId=None, stage="offre_remise", c_fgP1="4,80"),
         inst("d", "GRANGE", company="AGRI", producteur="AGRI", requestId=None, stage="collecte"),
+        {"id": "r9", "kind": "request", "company": "VERGERS", "label": "Lot Vergers", "stage": "collecte", "createdAt": 1, "updatedAt": 1, "deleted": False},
+        inst("y", "POMME", company="VERGERS", producteur="VERGERS", requestId="r9", stage="collecte"), inst("w", "POIRE", company="VERGERS", producteur="VERGERS", requestId="r9", stage="collecte"),
         {"id": "r2", "kind": "request", "company": "SOLEO", "label": "SOLEO — toitures", "stage": "pricing_indicatif", "createdAt": 1, "updatedAt": 1, "deleted": False},
         inst("e", "TOIT 1", company="SOLEO", producteur="SOLEO", requestId="r2", lot="Lot 1 toitures"), inst("f", "TOIT 2", company="SOLEO", producteur="SOLEO", requestId="r2", lot="Lot 1 toitures")]
 with sync_playwright() as p:
@@ -85,7 +87,7 @@ with sync_playwright() as p:
     lots = "Nom du marché\tFrais de gestion (€/MWh)\tFrais fixe (€/MWh)\tMarge (€/MWh)\tFrais d'agrégation (€/MWh)\tFrais de gestion (%m0)\tFrais fixe (%m0)\tMarge (%m0)\tFrais d'agrégation (%m0)\nLot Brownfield\t2.68\t0.09\t0.5\t3.27\t3.9\t0.15\t0.73\t4.78\nLot Brownfield - 2028\t1.78\t0.06\t0.5\t2.34\t5.31\t0.11\t0.91\t6.33\nLot Decize\t2.92\t0.06\t0.5\t3.47\t4.23\t0.09\t0.72\t5.04\nLot Greenfield\t2.7\t0.19\t0.5\t3.29\t4.14\t0.15\t0.77\t5.06"
     pg.click("#pricing-root .fill-paste"); pg.fill("#paste-overlay textarea", lots); pg.click("#paste-overlay .paste-go"); pg.wait_for_selector("#assign-overlay", timeout=5000)
     check("Lot Greenfield" in pg.inner_text("#assign-overlay") and "Lot Brownfield" not in pg.inner_text("#assign-overlay"), "a line whose lot isn't found : asked what it is (the others found by their lot's words)")
-    pg.click("#assign-overlay .as-pick-btn"); pg.click("#assign-overlay .as-lot[data-lot='Neuf']"); pg.click("#assign-overlay .as-go"); pg.wait_for_selector("#fill-overlay", timeout=5000)
+    pg.click("#assign-overlay .as-pick-btn"); pg.click("#assign-overlay .as-lot[data-key='lot:Neuf']"); pg.click("#assign-overlay .as-go"); pg.wait_for_selector("#fill-overlay", timeout=5000)
     pg.click("#fill-overlay .fill-go"); pg.wait_for_timeout(600)
     o = by()
     check(o["g"].get("c_fgP1") == "3,27" and o["h"].get("c_m0P1") == "4,78" and o["g"].get("c_fgGestionPct") == "3,9" and o["i"].get("c_fgP1") == "3,47" and o["j"].get("c_fgP1") == "3,29",
@@ -103,6 +105,11 @@ with sync_playwright() as p:
     check(pg.locator("#assign-overlay").count() == 0, "the next time, the lot is found on its own")
     pg.locator("#fill-overlay tbody input").evaluate_all("l=>l.forEach(x=>{ x.checked=true; x.dispatchEvent(new Event('change', { bubbles:true })); })")
     pg.click("#fill-overlay .fill-go"); pg.wait_for_timeout(600)
+    # a request named like a lot (« Lot Vergers », made in the pipeline) : its line found on its own, every plant of the request
+    pg.click("#pricing-root .fill-paste"); pg.fill("#paste-overlay textarea", "Nom du marché\tFrais d'agrégation (€/MWh)\nLot Vergers\t3,33"); pg.click("#paste-overlay .paste-go"); pg.wait_for_selector("#fill-overlay", timeout=5000)
+    check(pg.locator("#assign-overlay").count() == 0, "a request named « Lot … » is a lot : found without asking")
+    pg.click("#fill-overlay .fill-go"); pg.wait_for_timeout(600)
+    o = by(); check(o["y"].get("c_fgP1") == "3,33" and o["w"].get("c_fgP1") == "3,33", "every plant of the request « Lot Vergers » priced")
     # the table for the pricing, plain words and only the columns needed, filled in and pasted back : each in its line of the Suivi
     cols = pg.evaluate("window.TodoConditions.templateCols(JSON.parse(window.storage.peek('todo-widget-opportunities')).filter(o=>o.requestId==='r1'))")
     check(len(cols) == 20 and cols[0] == "Nom du marché" and cols[-1] == "Commentaire", f"the full table, plain words ({cols})")

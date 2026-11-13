@@ -165,7 +165,9 @@ window.TodoConditions=(function(){
     const m=/(\d+(?:[.,]\d+)?)\s*€\s*\/\s*MWh[^\n.]{0,25}pilotage/i.exec(t) || /pilotage[^\n\d]{0,30}(\d+(?:[.,]\d+)?)\s*€\s*\/\s*MWh/i.exec(t);
     return m ? m[1].replace('.', ',') : ''; };
 
+  let appRef={};
   api.init=function(app){
+    appRef=app;
     const { readPipeFiles, caractValue, caractSet, caractKey, PQ_FIELDS, pqFold, touchCrm, saveCrm, notify, reopen, escapeHtml, codeAffaire }=app;
     const fold=s=>pqFold(String(s==null?'':s)).replace(/[^a-z0-9]/g, '');
     const same=(a, b)=>fold(a)===fold(b);
@@ -226,13 +228,22 @@ window.TodoConditions=(function(){
     // a line priced for a whole lot (« Lot 1 — toitures », or a business code carrying the lot's name) : every plant of the lot
     // « Lot Brownfield » ↔ the app's lot « Brownfield » or « Lot 1 – Brownfield » : the same words, « lot » and numbers aside
     const lotWords=x=>new Set(pqFold(String(x||'')).split(/[^a-z0-9]+/).filter(w=>w.length>1 && w!=='lot' && !/^\d{1,2}$/.test(w)));
+    // the app's lots : the plants' « lot », and the requests named like a lot (« Lot Greenfield », a request of 33 plants) ;
+    // the other requests (« Solarhona ») only offered by hand, never matched on their own (a producer's name is no lot)
+    function lotsIn(all){
+      const out=[...new Set(all.map(o=>o.lot).filter(Boolean))].map(l=>({ key:'lot:'+l, name:l, ps:all.filter(o=>o.lot===l), isLot:true }));
+      (appRef.opportunities||[]).filter(r=>r.kind==='request' && !r.deleted).forEach(r=>{ const ps=all.filter(o=>o.requestId===r.id && !o.deleted);
+        const name=String(r.label||r.company||'Demande'); if(ps.length) out.push({ key:'req:'+r.id, name, ps, isLot:/^\s*lot\b/i.test(name) }); });
+      return out;
+    }
     function lotFor(r, list){
-      const rw=lotWords(r.name), lots=[...new Set(list.map(o=>o.lot).filter(Boolean))];
-      const lot=lots.filter(l=>{ const lw=lotWords(l); return lw.size && [...lw].every(w=>rw.has(w)); }).sort((a, b)=>lotWords(b).size-lotWords(a).size)[0];
-      if(!lot) return { plants:[], extra:'' };
-      const plants=list.filter(o=>o.lot===lot), lw=lotWords(lot), pw=lotWords(plants.map(o=>[o.producteur, o.company].join(' ')).join(' '));
+      const rw=lotWords(r.name), fit=lotsIn(list).filter(x=>x.isLot).map(x=>({ x, lw:lotWords(x.name) })).filter(({ lw })=>lw.size && [...lw].every(w=>rw.has(w)));
+      const top=Math.max(0, ...fit.map(f=>f.lw.size)), best=fit.filter(f=>f.lw.size===top);
+      const keys=new Set(best.map(f=>f.x.ps.map(o=>o.id).sort().join(',')));
+      if(!best.length || keys.size>1) return { plants:[], extra:'' };   // two lots fit as well (« Lot Brownfield - 2028 » : Brownfield ? 2028 ?) : asked
+      const { x, lw }=best[0], pw=lotWords(x.ps.map(o=>[o.producteur, o.company].join(' ')).join(' '));
       const extra=[...rw].filter(w=>!lw.has(w) && !pw.has(w) && !/^(baseload|bl)$/.test(w));   // « Lot Brownfield - 2028 » : the variant « 2028 » (never the producer's name)
-      return { plants, extra:extra.join(' ') };
+      return { plants:x.ps, extra:extra.join(' ') };
     }
     // « Plouisy + Moutonnerie - Baseload » : an offer for several plants together, kept on each of them as the group's offer
     const GRP={ c_blMW:'c_grpBlMW', c_formule:'c_grpFormule', c_exemple:'c_grpExemple', c_exempleRef:'c_exempleRef' };
@@ -280,23 +291,24 @@ window.TodoConditions=(function(){
     const prodOf=o=>String(o.producteur||o.company||'Sans producteur').trim();
     const score=(rw, text)=>{ const w=lotWords(text); return [...rw].filter(x=>w.has(x)).length; };
     const SHOW=60;
-    function assignLots(all){
-      return [...new Set(all.map(o=>o.lot).filter(Boolean))].map(l=>{ const ps=all.filter(o=>o.lot===l); return { l, ps, prod:[...new Set(ps.map(prodOf))].join(', ') }; });
-    }
-    // the results of one line's search : its lots first (the closest to the line's name on top), then the installations
+    const lotItem=x=>'<button type="button" class="as-opt as-lot" data-key="'+escapeHtml(x.key)+'"><b>'+escapeHtml(x.isLot && !/^\s*lot\b/i.test(x.name) ? 'Lot · '+x.name : x.name)+'</b><span>'
+      +escapeHtml([...new Set(x.ps.map(prodOf))].join(', '))+' · '+x.ps.length+' installation'+(x.ps.length>1?'s':'')+'</span></button>';
+    // the results of one line's search : the lots first (the closest to the line's name on top), the other requests, then the installations
     function assignResults(st, all, lots){
       const q=pqFold(st.q||''), hit=t=>!q || pqFold(t).includes(q), rw=lotWords(st.name);
-      const ls=lots.filter(x=>hit('lot '+x.l+' '+x.prod)).map(x=>({ x, s:score(rw, x.l+' '+x.prod) })).sort((a, b)=>b.s-a.s || a.x.l.localeCompare(b.x.l, 'fr'));
+      const more=n=>n>SHOW ? '<p class="as-more">… et '+(n-SHOW)+' autres : affine la recherche</p>' : '';
+      const rank=l=>l.filter(x=>hit(x.name+' '+x.ps.map(prodOf).join(' '))).map(x=>({ x, s:score(rw, x.name) })).sort((a, b)=>b.s-a.s || a.x.name.localeCompare(b.x.name, 'fr')).map(y=>y.x);
+      const ls=rank(lots.filter(x=>x.isLot)), rs=rank(lots.filter(x=>!x.isLot));
       const ps=all.filter(o=>hit([o.centrale, o.title, prodOf(o), o.lot, codeAffaire(o)].join(' '))).map(o=>({ o, s:score(rw, [o.centrale||o.title, prodOf(o), o.lot].join(' ')) }))
         .sort((a, b)=>b.s-a.s || prodOf(a.o).localeCompare(prodOf(b.o), 'fr') || String(a.o.centrale||'').localeCompare(String(b.o.centrale||''), 'fr'));
-      const more=n=>n>SHOW ? '<p class="as-more">… et '+(n-SHOW)+' autres : affine la recherche</p>' : '';
-      return '<div class="as-sec">Lots <i>'+ls.length+'</i></div>'+(ls.length ? ls.slice(0, SHOW).map(({ x })=>'<button type="button" class="as-opt as-lot" data-lot="'+escapeHtml(x.l)+'"><b>Lot · '+escapeHtml(x.l)+'</b><span>'+escapeHtml(x.prod)+' · '+x.ps.length+' installation'+(x.ps.length>1?'s':'')+'</span></button>').join('')+more(ls.length) : '<p class="as-more">Aucun lot</p>')
+      return '<div class="as-sec">Lots <i>'+ls.length+'</i></div>'+(ls.length ? ls.slice(0, SHOW).map(lotItem).join('')+more(ls.length) : '<p class="as-more">Aucun lot</p>')
+        +(rs.length ? '<div class="as-sec">Autres demandes <i>'+rs.length+'</i></div>'+rs.slice(0, SHOW).map(lotItem).join('')+more(rs.length) : '')
         +'<div class="as-sec">Installations <i>'+ps.length+'</i> <small>coche celles du lot</small></div>'
         +ps.slice(0, SHOW).map(({ o })=>'<label class="as-opt"><input type="checkbox" value="'+escapeHtml(o.id)+'"'+(st.ids.has(o.id)?' checked':'')+'><b>'+escapeHtml(o.centrale||o.title||'?')+'</b><span>'+escapeHtml(prodOf(o)+(o.lot?' · lot '+o.lot:''))+'</span></label>').join('')+more(ps.length);
     }
     function assignDialog(rows, left, list, app){
       return new Promise(res=>{
-        const all=pool(list, app), lots=assignLots(all), st=left.map(i=>({ i, name:rows[i].name, q:'', ids:new Set(), lot:null, save:true }));
+        const all=pool(list, app), lots=lotsIn(all), st=left.map(i=>({ i, name:rows[i].name, q:'', ids:new Set(), lot:null, save:true }));
         const ov=document.createElement('div'); ov.className='modal-overlay'; ov.id='assign-overlay';
         ov.innerHTML='<div class="modal-box wide fill-box" role="dialog" aria-labelledby="assign-title"><div class="opp-detail-head"><h3 id="assign-title">À quoi correspondent ces lignes ?</h3></div>'
           +'<p class="modal-hint">'+left.length+' ligne'+(left.length>1?'s':'')+' du tableau du pricing sans fiche ni lot reconnus. Pour chacune : un lot, ou coche ses installations (l’appli s’en souviendra). Sans choix, la ligne est ignorée.</p>'
@@ -315,7 +327,7 @@ window.TodoConditions=(function(){
           row.appendChild(p); const f=p.querySelector('.as-filter'); f.value=s.q; paintRes(row, s); f.focus();
           let t=null; f.oninput=()=>{ clearTimeout(t); t=setTimeout(()=>{ s.q=f.value; paintRes(row, s); }, 120); };
           f.onkeydown=e=>{ if(e.key==='Enter'){ e.preventDefault(); const first=p.querySelector('.as-lot'); if(first) first.click(); } if(e.key==='Escape'){ e.stopPropagation(); close(row); row.querySelector('.as-pick-btn').focus(); } };
-          p.onclick=e=>{ const l=e.target.closest('.as-lot'); if(!l) return; s.lot=l.dataset.lot; s.ids.clear(); paintBtn(row, s); close(row); };
+          p.onclick=e=>{ const l=e.target.closest('.as-lot'); if(!l) return; s.lot=l.dataset.key; s.ids.clear(); paintBtn(row, s); close(row); };
           p.onchange=e=>{ const x=e.target; if(x.classList.contains('as-save')){ s.save=x.checked; } else if(x.type==='checkbox'){ if(x.checked) s.ids.add(x.value); else s.ids.delete(x.value); s.lot=null; } paintBtn(row, s); };
           p.querySelector('.as-ok').onclick=()=>{ close(row); row.querySelector('.as-pick-btn').focus(); };
         }
@@ -328,7 +340,7 @@ window.TodoConditions=(function(){
         const done=v=>{ ov.remove(); res(v); };
         ov.querySelector('.as-cancel').onclick=()=>done(null);
         ov.querySelector('.as-go').onclick=()=>{ const map={}, keep=[];
-          st.forEach(s=>{ const plants=s.lot ? all.filter(o=>o.lot===s.lot) : all.filter(o=>s.ids.has(o.id)); if(!plants.length) return;
+          st.forEach(s=>{ const plants=s.lot ? lots.find(x=>x.key===s.lot).ps : all.filter(o=>s.ids.has(o.id)); if(!plants.length) return;
             map[s.i]=plants; if(!s.lot && s.save) keep.push({ plants, name:lotOf(s.name) }); });
           done({ map, lots:keep }); };
         ov.addEventListener('keydown', e=>{ if(e.key==='Escape'){ e.stopPropagation(); done(null); } });
