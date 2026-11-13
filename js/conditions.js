@@ -157,7 +157,8 @@ window.TodoConditions=(function(){
     'Frais d\u2019agrégation 1re période (€/MWh)', 'Frais d\u2019agrégation 1re période (% M0)', 'Valable jusqu\u2019au (1re période)',
     'Frais d\u2019agrégation 2e période (€/MWh)', 'Frais d\u2019agrégation 2e période (% M0)', 'Valable jusqu\u2019au (2e période)',
     'Prix période d\u2019essai (€/MWh)', 'Frais ACC (€/an)', 'Prix GO (€/MWh)', 'Pilotage (€/MWh)',
-    'Dont frais de gestion (€/MWh)', 'Dont frais fixes (€/MWh)', 'Dont marge (€/MWh)', 'Commentaire'];
+    'Dont frais de gestion (€/MWh)', 'Dont frais de gestion (% M0)', 'Dont frais fixes (€/MWh)', 'Dont frais fixes (% M0)',
+    'Dont marge (€/MWh)', 'Dont marge (% M0)', 'Commentaire'];
   api.templateCols=()=>api.TEMPLATE_COLS.slice();
   // « on est à 0.4 €/MWh pour le pilotage » / « pilotage : 0,4 €/MWh » : the steering's price said in a sentence of the thread
   api.pilotageIn=text=>{ const t=String(text||'');
@@ -246,7 +247,7 @@ window.TodoConditions=(function(){
     // a line's sheets : the sure match, else its lot (and the variant beyond the lot's name), else the plant's name alone
     function targetsFor(r, list, n){
       const o=sheetForLine(r, list) || (list.length===1 && n===1 ? list[0] : null); if(o) return { plants:[o], extra:'' };
-      const lot=lotFor(r, list); if(lot.plants.length) return lot;
+      const lot=lotFor(r, pool(list, app)); if(lot.plants.length) return lot;
       const loose=sheetByName(r, list); return { plants:loose ? [loose] : [], extra:'' };
     }
     // the lines of the table, each onto its sheets : an option or a variant (« Lot Brownfield - 2028 », Option « MES 2028 ») kept
@@ -272,21 +273,63 @@ window.TodoConditions=(function(){
       return { out, left, rows };
     }
     // the lines found for no sheet : chosen by hand (a lot, or an installation), or left aside
-    function assignDialog(rows, left, list){
+    // a line nobody was found for : an existing lot, a whole request, one installation, or several picked by hand —
+    // those then kept as a lot named after the line (« Lot Greenfield » → lot « Greenfield »), found on their own next time
+    const lotOf=name=>String(name||'').replace(/^\s*lot\s*[-–:]?\s*/i, '').trim()||String(name||'').trim();
+    // every installation of the app (a lot made in the pipeline whose plants aren't all shown here is still offered)
+    const pool=(list, app)=>{ const all=(app.opportunities||[]).filter(o=>!o.deleted && o.kind!=='request'); return [...new Set(list.concat(all))]; };
+    const prodOf=o=>String(o.producteur||o.company||'Sans producteur').trim();
+    // by producer : its lots first (with their size), then its installations
+    function byProducer(all){
+      const m=new Map(); all.forEach(o=>{ const p=prodOf(o); if(!m.has(p)) m.set(p, []); m.get(p).push(o); });
+      return [...m.entries()].sort((a, b)=>a[0].localeCompare(b[0], 'fr')).map(([p, os])=>({ p, lots:[...new Set(os.map(o=>o.lot).filter(Boolean))].sort((a, b)=>a.localeCompare(b, 'fr')),
+        plants:os.sort((a, b)=>String(a.centrale||a.title||'').localeCompare(String(b.centrale||b.title||''), 'fr')) }));
+    }
+    function assignOptions(all){
+      return '<option value="">Ignorer cette ligne</option><option value="pick">Choisir les installations du lot…</option>'
+        +byProducer(all).map(g=>'<optgroup label="'+escapeHtml(g.p)+'">'
+          +g.lots.map(l=>'<option value="lot:'+escapeHtml(l)+'">Lot · '+escapeHtml(l)+' ('+all.filter(o=>o.lot===l).length+')</option>').join('')
+          +g.plants.map(o=>'<option value="o:'+escapeHtml(o.id)+'"> '+escapeHtml(o.centrale||o.title||'?')+(o.lot?' — lot '+escapeHtml(o.lot):'')+'</option>').join('')+'</optgroup>').join('');
+    }
+    function assignRow(ov, i, name, all, opts){
+      const tr=document.createElement('tr');
+      tr.innerHTML='<td class="fl"></td><td><select data-i="'+i+'">'+opts+'</select><div class="as-pick" hidden><input type="search" class="as-filter" placeholder="Filtrer (centrale, producteur, lot)"><div class="as-list"></div>'
+        +'<label class="as-save-l"><input type="checkbox" class="as-save" checked> Retenir ces installations comme lot « <span></span> »</label></div></td>';
+      tr.querySelector('.fl').textContent=name; tr.querySelector('.as-save-l span').textContent=lotOf(name);
+      const box=tr.querySelector('.as-list');
+      byProducer(all).forEach(g=>{ const h=document.createElement('div'); h.className='as-prod'; h.textContent=g.p; box.appendChild(h);
+        g.plants.forEach(o=>{ const l=document.createElement('label'); l.className='as-item'; l.dataset.prod=g.p;
+          l.innerHTML='<input type="checkbox" value="'+escapeHtml(o.id)+'"> <span></span>'; l.querySelector('span').textContent=(o.centrale||o.title||'?')+(o.lot?' — lot '+o.lot:''); box.appendChild(l); }); });
+      const sel=tr.querySelector('select'), pick=tr.querySelector('.as-pick'), filt=tr.querySelector('.as-filter');
+      sel.onchange=()=>{ pick.hidden=sel.value!=='pick'; if(!pick.hidden) filt.focus(); };
+      filt.oninput=()=>{ const q=pqFold(filt.value), seen=new Set();
+        box.querySelectorAll('.as-item').forEach(l=>{ l.hidden=!!q && !pqFold(l.dataset.prod+' '+l.textContent).includes(q); if(!l.hidden) seen.add(l.dataset.prod); });
+        box.querySelectorAll('.as-prod').forEach(h=>{ h.hidden=!seen.has(h.textContent); }); };
+      return tr;
+    }
+    function assignRead(tr, list){
+      const v=tr.querySelector('select').value;
+      if(!v) return null;
+      if(v==='pick'){ const ids=[...tr.querySelectorAll('.as-list input:checked')].map(x=>x.value), plants=list.filter(o=>ids.includes(o.id));
+        return plants.length ? { plants, lot:tr.querySelector('.as-save').checked ? tr.querySelector('.as-save-l span').textContent : '' } : null; }
+      if(v.startsWith('lot:')) return { plants:list.filter(o=>o.lot===v.slice(4)) };
+      if(v.startsWith('req:')) return { plants:list.filter(o=>o.requestId===v.slice(4)) };
+      return { plants:list.filter(o=>o.id===v.slice(2)) };
+    }
+    function assignDialog(rows, left, list, app){
       return new Promise(res=>{
-        const lots=[...new Set(list.map(o=>o.lot).filter(Boolean))].sort();
-        const opts='<option value="">Ignorer cette ligne</option>'+lots.map(l=>'<option value="lot:'+escapeHtml(l)+'">Lot · '+escapeHtml(l)+'</option>').join('')
-          +list.map(o=>'<option value="o:'+escapeHtml(o.id)+'">'+escapeHtml((o.centrale||o.title||'?')+' \u00b7 '+(o.producteur||o.company||''))+'</option>').join('');
         const ov=document.createElement('div'); ov.className='modal-overlay'; ov.id='assign-overlay';
         ov.innerHTML='<div class="modal-box wide fill-box" role="dialog" aria-labelledby="assign-title"><div class="opp-detail-head"><h3 id="assign-title">À quoi correspondent ces lignes ?</h3></div>'
-          +'<p class="modal-hint">'+left.length+' ligne'+(left.length>1?'s':'')+' du tableau du pricing sans fiche ni lot reconnus. Choisis pour chacune, puis l\u2019aperçu habituel s\u2019ouvre.</p>'
-          +'<table class="fill-table"><tbody>'+left.map(i=>'<tr><td class="fl"></td><td><select data-i="'+i+'">'+opts+'</select></td></tr>').join('')+'</tbody></table>'
+          +'<p class="modal-hint">'+left.length+' ligne'+(left.length>1?'s':'')+' du tableau du pricing sans fiche ni lot reconnus. Choisis pour chacune ; pour un lot, « Choisir les installations du lot… » puis coche-les : l’appli s’en souviendra la prochaine fois.</p>'
+          +'<table class="fill-table"><tbody></tbody></table>'
           +'<div class="crm-form-actions"><button type="button" class="ghost-btn as-cancel">Annuler</button><button type="button" class="fill-go as-go">Continuer</button></div></div>';
-        ov.querySelectorAll('.fl').forEach((td, n)=>{ td.textContent=rows[left[n]].name; });
+        const all=pool(list, app), opts=assignOptions(all), body=ov.querySelector('tbody');
+        left.forEach(i=>body.appendChild(assignRow(ov, i, rows[i].name, all, opts)));
         const done=v=>{ ov.remove(); res(v); };
         ov.querySelector('.as-cancel').onclick=()=>done(null);
-        ov.querySelector('.as-go').onclick=()=>{ const map={}; ov.querySelectorAll('select').forEach(sel=>{ const v=sel.value; if(!v) return;
-          map[+sel.dataset.i]=v.startsWith('lot:') ? list.filter(o=>o.lot===v.slice(4)) : list.filter(o=>o.id===v.slice(2)); }); done(map); };
+        ov.querySelector('.as-go').onclick=()=>{ const map={}, lots=[];
+          body.querySelectorAll('tr').forEach(tr=>{ const got=assignRead(tr, all); if(!got) return; const i=+tr.querySelector('select').dataset.i; map[i]=got.plants; if(got.lot) lots.push({ plants:got.plants, name:got.lot }); });
+          done({ map, lots }); };
         ov.addEventListener('keydown', e=>{ if(e.key==='Escape'){ e.stopPropagation(); done(null); } });
         document.body.appendChild(ov); ov.querySelector('select').focus();
       });
@@ -295,8 +338,8 @@ window.TodoConditions=(function(){
     async function pricingChangesAsk(text, list, from){
       const first=pricingChanges(text, list, from);
       if(!first.left.length || (list.length===1 && first.out.length)) return first.out;   // on a single sheet, the other plants' lines are none of its business
-      const map=await assignDialog(first.rows, first.left, list); if(!map) return first.out;
-      return pricingChanges(text, list, from, map).out;
+      const got=await assignDialog(first.rows, first.left, list, app); if(!got) return first.out;
+      const out=pricingChanges(text, list, from, got.map).out; out.lots=got.lots; return out;
     }
     async function fill(files, list){
       let got; try{ got=await readPipeFiles(files); }catch(e){ notify('Fichier illisible : '+(e&&e.message||e)); return; }
@@ -330,12 +373,15 @@ window.TodoConditions=(function(){
       ov.querySelector('.pm-copy').onclick=()=>{ try{ navigator.clipboard.writeText(m.text); notify('Mail copié.'); }catch(e){ notify('Copie impossible.'); } };
       document.body.appendChild(ov); ov.querySelector('.pm-close').focus();
     }
+    // the lots made while assigning the lines : each installation picked gets the lot's name
+    const saveLots=lots=>(lots||[]).flatMap(l=>l.plants.filter(o=>o.lot!==l.name).map(o=>{ o.lot=l.name; return o; }));
     async function apply(rows, got, list){
       if(!rows.length){ notify(got.installs && got.installs.length ? 'Rien de nouveau dans '+got.names.join(', ')+' pour cette fiche.' : 'Rien trouvé pour cette fiche dans '+got.names.join(', ')+' : ni centrale (Excel Caractéristiques Centrales ou du producteur), ni tableau de prix du pricing (« Nom du marché » + colonnes en €/MWh, avec le code affaire de la fiche).'); return; }
       const ok=await preview(rows, 'Remplir depuis « '+got.names.join(', ')+' »'); if(!ok || !ok.length) return;
       ok.forEach(r=>r.set(r.val));
+      const lotted=saveLots(rows.lots);
       if(got.text && pricingTables(got.text).length) keepMail(new Set(ok.map(r=>r.o)), got);
-      new Set(ok.map(r=>r.o)).forEach(o=>touchCrm(o)); await saveCrm();
+      new Set(ok.map(r=>r.o).concat(lotted)).forEach(o=>touchCrm(o)); await saveCrm();
       notify(ok.length+' case'+(ok.length>1?'s':'')+' remplie'+(ok.length>1?'s':'')+'.'); reopen();
     }
     // the zone at the top of a sheet ; the whole sheet takes a drop too

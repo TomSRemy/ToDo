@@ -30,7 +30,7 @@ with sync_playwright() as p:
     page = pg.inner_text("#pricing-root")
     check("IEL — demande de pricing" in page and "MOUTONNERIE" in page and "PLOUISY" in page and "VENTUS" not in page and "GRANGE" not in page,
           "« En attente de prix » : the request's installations, grouped ; neither the priced one nor one before the pricing")
-    check(all(x in page for x in ["FG_Fixe_P1 € / MWh", "Pu€/MWh (PPA)", "Pilotage (€/MWh)"]) and "FG_%M0_P1" not in page, "« Essentiel » : the main columns, with the Suivi's names")
+    check(all(x in page for x in ["FG_Fixe_P1 € / MWh", "Pu€/MWh (PPA)", "Pilotage (€/MWh)", "FG_%M0_P1"]) and "FG_ACC / An" not in page, "« Essentiel » : the main columns (€/MWh and % M0 side by side, a mixed fee), with the Suivi's names")
     # type, Enter : saved, the cell below
     a1 = "#pricing-root .pr-in[data-id='a'][data-k='c_fgP1']"
     pg.fill(a1, "5,99"); pg.press(a1, "Enter"); pg.wait_for_timeout(300)
@@ -38,14 +38,14 @@ with sync_playwright() as p:
     by = lambda: {o["id"]: o for o in json.loads(pg.evaluate("window.storage.peek('todo-widget-opportunities')"))}
     check(by()["a"].get("c_fgP1") == "5,99" and foc == "b/c_fgP1", f"Enter saves and goes to the cell below ({foc})")
     # a range copied from Excel : two lines, two columns
-    pg.evaluate("""(()=>{ const inp=document.querySelector("#pricing-root .pr-in[data-id='a'][data-k='c_fgP1']"); const dt=new DataTransfer(); dt.setData('text/plain', '6,10\\t31/12/2029\\n5,21\\t31/12/2029\\n');
+    pg.evaluate("""(()=>{ const inp=document.querySelector("#pricing-root .pr-in[data-id='a'][data-k='c_fgP1']"); const dt=new DataTransfer(); dt.setData('text/plain', '6,10\\t4,80\\t31/12/2029\\n5,21\\t4,60\\t31/12/2029\\n');
       inp.dispatchEvent(new ClipboardEvent('paste', { clipboardData:dt, bubbles:true, cancelable:true })); })()""")
     pg.wait_for_timeout(400)
     o = by()
     check(o["a"].get("c_fgP1") == "6,10" and o["a"].get("c_finP1") == "31/12/2029" and o["b"].get("c_fgP1") == "5,21" and o["b"].get("c_finP1") == "31/12/2029",
           f"a range pasted from Excel fills the cells from there, down and right ({ {k: (o[k].get('c_fgP1'), o[k].get('c_finP1')) for k in 'ab'} })")
     # a lot priced once : its line fills every plant of the lot
-    check("Lot · Lot 1 toitures" in pg.inner_text("#pricing-root"), "a lot has its own line in its request")
+    check("Lot 1 toitures" in pg.inner_text("#pricing-root"), "a lot has its own line in its request")
     lot = "#pricing-root .pr-lot-in[data-k='c_fgP1']"
     pg.fill(lot, "4,40"); pg.press(lot, "Enter"); pg.wait_for_timeout(300)
     o = by()
@@ -91,16 +91,28 @@ with sync_playwright() as p:
     check(o["g"].get("c_fgP1") == "3,27" and o["h"].get("c_m0P1") == "4,78" and o["g"].get("c_fgGestionPct") == "3,9" and o["i"].get("c_fgP1") == "3,47" and o["j"].get("c_fgP1") == "3,29",
           f"€/MWh and %m0 apart (the %m0 total in FG_%M0_P1), every plant of each lot, the one chosen by hand too ({ {k: (o[k].get('c_fgP1'), o[k].get('c_m0P1')) for k in 'ghij'} })")
     check((o["g"].get("pricingExtra") or {}).get("2028 · FG_Fixe_P1 € / MWh") == "2,34", f"the variant « Lot Brownfield - 2028 » kept apart under its name ({o['g'].get('pricingExtra')})")
+    # a lot unknown to the app : its installations picked by hand, then kept as a lot (found on its own next time)
+    pick = "Nom du marché\tFrais d'agrégation (€/MWh)\nLot Pommiers\t4,44"
+    pg.click("#pricing-root .fill-paste"); pg.fill("#paste-overlay textarea", pick); pg.click("#paste-overlay .paste-go"); pg.wait_for_selector("#assign-overlay", timeout=5000)
+    pg.select_option("#assign-overlay select", "pick"); pg.check("#assign-overlay .as-list input[value='b']"); pg.click("#assign-overlay .as-go"); pg.wait_for_selector("#fill-overlay", timeout=5000)
+    pg.locator("#fill-overlay tbody input").evaluate_all("l=>l.forEach(x=>{ x.checked=true; x.dispatchEvent(new Event('change', { bubbles:true })); })")
+    pg.click("#fill-overlay .fill-go"); pg.wait_for_timeout(600)
+    o = by()
+    check(o["b"].get("lot") == "Pommiers" and o["b"].get("c_fgP1") == "4,44", f"lot picked by hand : filled and remembered ({o['b'].get('lot')}, {o['b'].get('c_fgP1')})")
+    pg.click("#pricing-root .fill-paste"); pg.fill("#paste-overlay textarea", pick.replace("4,44", "4,55")); pg.click("#paste-overlay .paste-go"); pg.wait_for_selector("#fill-overlay", timeout=5000)
+    check(pg.locator("#assign-overlay").count() == 0, "the next time, the lot is found on its own")
+    pg.locator("#fill-overlay tbody input").evaluate_all("l=>l.forEach(x=>{ x.checked=true; x.dispatchEvent(new Event('change', { bubbles:true })); })")
+    pg.click("#fill-overlay .fill-go"); pg.wait_for_timeout(600)
     # the table for the pricing, plain words and only the columns needed, filled in and pasted back : each in its line of the Suivi
     cols = pg.evaluate("window.TodoConditions.templateCols(JSON.parse(window.storage.peek('todo-widget-opportunities')).filter(o=>o.requestId==='r1'))")
-    check(len(cols) == 17 and cols[0] == "Nom du marché" and cols[-1] == "Commentaire", f"the full table, plain words ({cols})")
-    vals = ["27(07)29 – IEL_MOUTONNERIE – A", "", "", "6,05", "4,80", "31/12/2029", "5,10", "4,20", "31/12/2032", "", "", "0,25", "0,4", "2,93", "2,56", "0,5", "valable 1 mois"]
+    check(len(cols) == 20 and cols[0] == "Nom du marché" and cols[-1] == "Commentaire", f"the full table, plain words ({cols})")
+    vals = ["27(07)29 – IEL_MOUTONNERIE – A", "", "", "6,05", "4,80", "31/12/2029", "5,10", "4,20", "31/12/2032", "", "", "0,25", "0,4", "2,93", "1,10", "2,56", "0,95", "0,5", "0,20", "valable 1 mois"]
     back = "\t".join(cols) + "\n" + "\t".join(vals)
     pg.click("#pricing-root .fill-paste"); pg.fill("#paste-overlay textarea", back); pg.click("#paste-overlay .paste-go"); pg.wait_for_selector("#fill-overlay", timeout=5000)
     pg.locator("#fill-overlay tbody input").evaluate_all("l=>l.forEach(x=>{ x.checked=true; x.dispatchEvent(new Event('change', { bubbles:true })); })")
     pg.click("#fill-overlay .fill-go"); pg.wait_for_timeout(600)
     o = by()
-    want = {"c_fgP1": "6,05", "c_m0P1": "4,80", "c_finP1": "31/12/2029", "c_fgP2": "5,10", "c_m0P2": "4,20", "c_finP2": "31/12/2032", "c_puGo": "0,25", "c_pilotage": "0,4", "c_fgGestion": "2,93", "c_fgFixe": "2,56", "c_fgMarge": "0,5"}
+    want = {"c_fgP1": "6,05", "c_m0P1": "4,80", "c_finP1": "31/12/2029", "c_fgP2": "5,10", "c_m0P2": "4,20", "c_finP2": "31/12/2032", "c_puGo": "0,25", "c_pilotage": "0,4", "c_fgGestion": "2,93", "c_fgFixe": "2,56", "c_fgMarge": "0,5", "c_fgGestionPct": "1,10", "c_fgFixePct": "0,95", "c_fgMargePct": "0,20"}
     got = {k: o["a"].get(k) for k in want}
     check(got == want and (o["a"].get("pricingExtra") or {}).get("Commentaire") == "valable 1 mois", f"filled and pasted back : every column in its line of the Suivi, the comment kept ({got})")
     rows = pg.evaluate("window.TodoPricing.templateRows(JSON.parse(window.storage.peek('todo-widget-opportunities')).filter(o=>o.requestId==='r3'))")
