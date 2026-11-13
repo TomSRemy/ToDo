@@ -99,14 +99,18 @@ window.TodoTeamExcel=(function(){
         await bridgeCall('POST', '/contacts/upsert', { rows:[{ values, force:{ [i]:'replace' }, seen:{ [i]:k.excel } }] }, 60000); k.c.xlc[k.hd]=txt(k.mine); }
       else { if(k.excel) k.c[k.f]=k.excel; else delete k.c[k.f]; k.c.xlc[k.hd]=txt(k.excel); k.c.updatedAt=Date.now(); }
     }
+    // the file read again only when it changed (bridge 1.36) ; unchanged, the last reading is used again
     let lastRead=null;
+    async function readSheet(manual){
+      const since=lastRead && lastRead.stamp && !manual ? '?since='+encodeURIComponent(lastRead.stamp) : '';
+      const res=await bridgeCall('GET', '/contacts/read'+since, null, 120000);
+      if(!res.unchanged) lastRead={ stamp:res.stamp||'', sheet:(res.sheets||{}).Contacts };
+      return lastRead.sheet;
+    }
     async function sync(manual){
       if(busy || !ready()) return null; busy=true; lastRun=Date.now();
       try{
-        // the file read again only when it changed (bridge 1.36) ; unchanged, the last reading is used again
-        const res=await bridgeCall('GET', '/contacts/read'+(lastRead && lastRead.stamp && !manual ? '?since='+encodeURIComponent(lastRead.stamp) : ''), null, 120000);
-        if(!res.unchanged) lastRead={ stamp:res.stamp||'', sheet:(res.sheets||{}).Contacts };
-        const parsed=parse(lastRead.sheet);
+        const parsed=parse(await readSheet(manual));
         const clashes=[], got=pull(parsed, clashes), sent=await push(parsed, bridgeInfo().who, clashes, manual);
         for(const k of clashes) await ask(k, parsed);
         await saveCrm(); renderContacts();
