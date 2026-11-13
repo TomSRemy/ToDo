@@ -91,11 +91,21 @@ with sync_playwright() as p:
     check(o["g"].get("c_fgP1") == "3,27" and o["h"].get("c_m0P1") == "4,78" and o["g"].get("c_fgGestionPct") == "3,9" and o["i"].get("c_fgP1") == "3,47" and o["j"].get("c_fgP1") == "3,29",
           f"€/MWh and %m0 apart (the %m0 total in FG_%M0_P1), every plant of each lot, the one chosen by hand too ({ {k: (o[k].get('c_fgP1'), o[k].get('c_m0P1')) for k in 'ghij'} })")
     check((o["g"].get("pricingExtra") or {}).get("2028 · FG_Fixe_P1 € / MWh") == "2,34", f"the variant « Lot Brownfield - 2028 » kept apart under its name ({o['g'].get('pricingExtra')})")
+    # the table for the pricing, plain words and only the columns needed, filled in and pasted back : each in its line of the Suivi
+    cols = pg.evaluate("window.TodoConditions.templateCols(JSON.parse(window.storage.peek('todo-widget-opportunities')).filter(o=>o.requestId==='r1'))")
+    check(cols == ["Nom du marché", "Variante (si plusieurs offres)", "Frais d’agrégation (€/MWh)", "Frais d’agrégation (% M0)", "Valable jusqu’au", "Commentaire"], f"the table's columns : plain words, only what the request needs ({cols})")
+    back = "\t".join(cols) + "\n27(07)29 – IEL_MOUTONNERIE – A\t\t6,05\t4,80\t31/12/2029\tvalable 1 mois"
+    pg.click("#pricing-root .fill-paste"); pg.fill("#paste-overlay textarea", back); pg.click("#paste-overlay .paste-go"); pg.wait_for_selector("#fill-overlay", timeout=5000)
+    pg.locator("#fill-overlay tbody input").evaluate_all("l=>l.forEach(x=>{ x.checked=true; x.dispatchEvent(new Event('change', { bubbles:true })); })")
+    pg.click("#fill-overlay .fill-go"); pg.wait_for_timeout(600)
+    o = by()
+    check(o["a"].get("c_fgP1") == "6,05" and o["a"].get("c_m0P1") == "4,80" and o["a"].get("c_finP1") == "31/12/2029" and (o["a"].get("pricingExtra") or {}).get("Commentaire") == "valable 1 mois",
+          f"filled and pasted back : FG_Fixe_P1, FG_%M0_P1, Fin P1, the comment kept ({ {k: o['a'].get(k) for k in ['c_fgP1', 'c_m0P1', 'c_finP1']} })")
     rows = pg.evaluate("window.TodoPricing.templateRows(JSON.parse(window.storage.peek('todo-widget-opportunities')).filter(o=>o.requestId==='r3'))")
     check(rows == ["Lot 1 – Brownfield", "Lot Decize", "Lot Neuf"], f"the table for the pricing : a line per lot ({rows})")
     pg.click("#pricing-root .pr-seg[data-seg='view'] button[data-v='done']"); pg.wait_for_timeout(300)
     pg.click("#pricing-root .pr-mails-btn[data-id='a']"); pg.wait_for_selector("#pmail-overlay", timeout=3000)
-    check("77.5% x CAL - 1.8" in pg.inner_text("#pmail-overlay"), "the ✉ button shows the kept mail")
+    check("valable 1 mois" in pg.inner_text("#pmail-overlay"), "the ✉ button shows the last kept mail")
     pg.click("#pmail-overlay .pm-close")
     pg.click("#pricing-root .pr-seg[data-seg='view'] button[data-v='done']"); pg.wait_for_timeout(300)
     check(all(x in pg.inner_text("#pricing-root") for x in ["MOUTONNERIE", "PLOUISY", "TOIT"]), "« Prix reçus » : the priced ones, to correct")

@@ -58,7 +58,7 @@ window.TodoPricing=(function(){
     function tableHtml(list){
       const F=fields(list);
       let t='<table class="req-table pr-table"><thead><tr><th>Installation</th><th>Étape</th>'+F.map(f=>'<th>'+escapeHtml(f.label)+(f.hint?'<small>'+escapeHtml(f.hint)+'</small>':'')+'</th>').join('')+'<th></th></tr></thead>';
-      groups(list).forEach(g=>{ t+='<tbody><tr class="pr-grp"><td colspan="'+(F.length+3)+'">'+escapeHtml(g.title)+' <span>· '+g.members.length+' installation'+(g.members.length>1?'s':'')+(g.days?' · depuis '+g.days+' j à cette étape':'')+'</span></td></tr>'
+      groups(list).forEach(g=>{ t+='<tbody><tr class="pr-grp"><td colspan="'+(F.length+3)+'">'+escapeHtml(g.title)+' <span>· '+g.members.length+' installation'+(g.members.length>1?'s':'')+(g.days?' · depuis '+g.days+' j à cette étape':'')+'</span> <button type="button" class="ghost-btn pr-tpl-grp" data-ids="'+escapeHtml(g.members.map(o=>o.id).join(','))+'" title="Le tableau à faire compléter par le pricing pour cette demande, à coller dans ton mail">Copier le tableau pour le pricing</button></td></tr>'
         +lotsOf(g.members).map(([lot, ms])=>(lot ? lotRowHtml(lot, ms, F) : '')+ms.map(o=>rowHtml(o, F)).join('')).join('')+'</tbody>'; });
       return t+'</table>';
     }
@@ -108,7 +108,7 @@ window.TodoPricing=(function(){
       root.innerHTML='<div class="pr-top"><h1>Pricing</h1><span>les prix et frais rendus par le pricing, installation par installation</span></div><div class="pr-drop-slot"></div>'
         +'<div class="pr-bar">'+seg('view', [['wait', 'En attente de prix <i>'+nWait+'</i>'], ['done', 'Prix reçus <i>'+nDone+'</i>'], ['all', 'Toutes <i>'+nAll+'</i>']], view)
         +'<input type="search" class="pr-search" placeholder="Rechercher producteur, centrale, code…" value="'+escapeHtml(q)+'">'
-        +'<span class="pr-r">'+seg('cols', [['essential', 'Essentiel'], ['all', 'Toutes les colonnes']], cols)+'<button type="button" class="ghost-btn pr-tpl" title="Le tableau à faire compléter par le pricing, une ligne par installation ou lot de cette vue, à coller dans ton mail">Tableau pour le pricing</button>'+(bridgeConfigured()?'<button type="button" class="ghost-btn pr-send">Envoyer au Suivi</button>':'')+'</span></div>'
+        +'<span class="pr-r">'+seg('cols', [['essential', 'Essentiel'], ['all', 'Toutes les colonnes']], cols)+'<button type="button" class="ghost-btn pr-tpl" title="Le tableau à faire compléter par le pricing pour toutes les installations de cette vue">Tableau pour le pricing (vue)</button>'+(bridgeConfigured()?'<button type="button" class="ghost-btn pr-send">Envoyer au Suivi</button>':'')+'</span></div>'
         +(list.length ? '<div class="pr-scroll">'+tableHtml(list)+'</div>' : '<p class="xs-empty">'+(view==='wait'?'✓ Aucune installation en attente de prix.':'Rien à afficher.')+'</p>');
       // the drop zone : the pricing's mail matched across every installation of the app
       root.querySelector('.pr-drop-slot').replaceWith(C().dropZone(installs().filter(o=>!isExited(o) || priced(o)), root, 'Dépose ici le mail du pricing : chaque ligne va à son installation (code affaire)'));
@@ -116,6 +116,7 @@ window.TodoPricing=(function(){
         else { cols=b.dataset.v; try{ localStorage.setItem('pricing-cols', cols); }catch(e){ /* kept for this session */ } } render(); }; }));
       const sr=root.querySelector('.pr-search'); sr.oninput=()=>{ q=sr.value; const pos=sr.selectionStart; render(); const n=$('pricing-root').querySelector('.pr-search'); n.focus(); n.setSelectionRange(pos, pos); };
       root.querySelector('.pr-tpl').onclick=e=>copyTemplate(e.currentTarget);
+      root.querySelectorAll('.pr-tpl-grp').forEach(b=>{ b.onclick=e=>{ const ids=b.dataset.ids.split(','); copyTemplate(e.currentTarget, app.opportunities.filter(o=>ids.includes(o.id))); }; });
       const send=root.querySelector('.pr-send'); if(send) send.onclick=async()=>{ const l=shown().filter(priced); if(!l.length){ notify('Aucun prix à envoyer dans cette vue.'); return; } await window.TodoExcelSync.sendToExcel('bdd', l, send); };
       wire(root); paintCount();
     }
@@ -126,16 +127,16 @@ window.TodoPricing=(function(){
       list.forEach(o=>{ const n=o.lot ? 'Lot '+String(o.lot).replace(/^lot\s*/i, '') : app.codeAffaire(o); if(!seen.has(n)){ seen.add(n); names.push(n); } });
       return names;
     }
-    async function copyTemplate(btn){
-      const list=shown(), cols=C().TEMPLATE_COLS; if(!list.length){ notify('Aucune installation dans cette vue.'); return; }
-      const names=templateRows(list), lines=[cols].concat(names.map(n=>[n, 'Base'].concat(cols.slice(2).map(()=>''))));
+    async function copyTemplate(btn, only){
+      const list=only||shown(), cols=C().templateCols(list); if(!list.length){ notify('Aucune installation dans cette vue.'); return; }
+      const names=templateRows(list), lines=[cols].concat(names.map(n=>[n].concat(cols.slice(1).map(()=>''))));
       const tsv=lines.map(r=>r.join('\t')).join('\n');
       const cell=(v, h)=>'<'+(h?'th':'td')+' style="border:1px solid #999;padding:4px 8px;font:11pt Calibri,Arial;'+(h?'background:#1d6b4f;color:#fff;':'')+'">'+escapeHtml(v)+'</'+(h?'th':'td')+'>';
       const html='<table style="border-collapse:collapse">'+lines.map((r, i)=>'<tr>'+r.map(v=>cell(v, i===0)).join('')+'</tr>').join('')+'</table>';
       try{ await navigator.clipboard.write([new ClipboardItem({ 'text/html':new Blob([html], { type:'text/html' }), 'text/plain':new Blob([tsv], { type:'text/plain' }) })]); }
       catch(e){ try{ await navigator.clipboard.writeText(tsv); }catch(e2){ notify('Copie impossible dans ce navigateur.'); return; } }
       const t=btn.textContent; btn.textContent='Copié ✓'; setTimeout(()=>{ btn.textContent=t; }, 1500);
-      notify('Tableau copié ('+names.length+' ligne'+(names.length>1?'s':'')+') : colle-le dans ton mail au pricing. Une ligne par option (« Option ») si besoin.');
+      notify('Tableau copié ('+names.length+' ligne'+(names.length>1?'s':'')+', '+(cols.length-1)+' colonnes) : colle-le dans ton mail au pricing.');
     }
     api.templateRows=templateRows;
     function paintCount(){ const b=$('pricing-badge'); if(b){ const n=api.waitingCount(); b.textContent=n?String(n):''; } }

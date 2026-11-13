@@ -84,22 +84,17 @@ window.TodoConditions=(function(){
     if(/m0/.test(f)){ if(/fraisdagregation|total/.test(f)) return 'c_m0P1'; if(/fraisdegestion/.test(f)) return 'c_fgGestionPct'; if(/fraisfixe/.test(f)) return 'c_fgFixePct'; if(/marge/.test(f)) return 'c_fgMargePct'; }
     return pricingField(h);
   }
+  // a column's words → the field ; the first rule that matches (the order matters : « 2e période » before the plain fee)
+  const FIELD_RULES=[[/pilotage/, 'c_pilotage'], [/puissancebl|baseload/, 'c_blMW'], [/formule/, 'c_formule'], [/exemple/, 'c_exemple'], [/fraisacc/, 'c_fgAcc'],
+    [/(fraisdagregation|totalfrais).*(2e|deuxieme|p2|seconde)|(2e|deuxieme|seconde)periode/, 'c_fgP2'], [/valablejusqu|jusquau|finp1|findelapremiere|fin1re/, 'c_finP1'],
+    [/fraisdagregation|totalfrais/, 'c_fgP1'], [/fraisdegestion/, 'c_fgGestion'], [/fraisfixe/, 'c_fgFixe'], [/marge/, 'c_fgMarge'], [/periodedessai|prixpe/, 'c_pePrix'],
+    [/m0/, 'c_m0P1'], [/go(?![a-z])|prixgo|pugo/, 'c_puGo'], [/^pu|prix/, 'c_pu']];
   function pricingField(h){
-    const f=foldS(h);
-    if(/pilotage/.test(f)) return 'c_pilotage';
-    if(/puissancebl|baseload/.test(f)) return 'c_blMW';
-    if(/formule/.test(f)) return 'c_formule';
-    if(/exemple/.test(f)) return 'c_exemple';
-    if(/fraisdagregation|totalfrais/.test(f)) return 'c_fgP1';
-    if(/fraisdegestion/.test(f)) return 'c_fgGestion';
-    if(/fraisfixe/.test(f)) return 'c_fgFixe';
-    if(/marge/.test(f)) return 'c_fgMarge';
-    if(/periodedessai|prixpe/.test(f)) return 'c_pePrix';
-    if(/m0/.test(f)) return 'c_m0P1';
-    if(/go/.test(f) && /pu|prix/.test(f)) return 'c_puGo';
-    if(/^pu|prix/.test(f)) return 'c_pu';
-    return null;
+    const f=foldS(h), hit=FIELD_RULES.find(([re])=>re.test(f));
+    if(hit && hit[1]==='c_puGo' && !/pu|prix/.test(f)) return null;
+    return hit ? hit[1] : null;
   }
+
   // a table copied with its tabs (Outlook / Excel) : the header may run over several lines (a cell with a line break) ;
   // its columns are found by their words, in order, then each line « name, value, value… » is read under them
   const TAB_COLS=[[/puissance\s*bl|puissance\s*baseload/i, 'c_blMW'], [/formule/i, 'c_formule'], [/exemple/i, 'c_exemple'], [/frais\s+d.agr/i, 'c_fgP1'], [/frais\s+de\s+gestion/i, 'c_fgGestion'],
@@ -115,7 +110,7 @@ window.TodoConditions=(function(){
     return cells;
   }
   // a header cell → the sheet's field ; a column the app doesn't know is kept under its own name (« x: » + its header)
-  const colKey=h=>{ if(/^option$/i.test(h.trim())) return 'opt'; const k=fieldFor(h); if(k) return k; const hit=TAB_COLS.find(([re, x])=>x && re.test(h)); return hit ? hit[1] : 'x:'+h.replace(/\s+/g, ' ').trim(); };
+  const colKey=h=>{ if(/^(option|variante)/i.test(h.trim())) return 'opt'; const k=fieldFor(h); if(k) return k; const hit=TAB_COLS.find(([re, x])=>x && re.test(h)); return hit ? hit[1] : 'x:'+h.replace(/\s+/g, ' ').trim(); };
   function tabTables(text){
     const lines=String(text||'').replace(/ /g, ' ').split(/\r?\n/), rows=[];
     const isData=l=>{ const c=l.split('\t').map(x=>x.trim()); return c.length>1 && c[0] && !FIRST_COL.test(foldS(c[0])) && c.slice(1).some(x=>x && isValue(x)); };
@@ -155,9 +150,18 @@ window.TodoConditions=(function(){
     return rows;
   }
   api.pricingTables=pricingTables;
-  // the table to send to the pricing : the Suivi's exact names, one line per installation / lot / option, to fill in
-  api.TEMPLATE_COLS=['Nom du marché', 'Option', 'FG_Fixe_P1 € / MWh', 'Fin P1 fixe', 'FG_Fixe_P2 € / MWh', 'Fin P2 fixe', 'FG_%M0_P1', 'Fin P1 %', 'FG_%M0_P2', 'Fin P2 %',
-    'Pu€/MWh (PPA)', 'Formule', 'Prix_PE', 'Frais_gestion_PE €/MWh', 'Pu/Go', 'Remu_prod', 'Pilotage (€/MWh)', 'Frais de gestion (€/MWh)', 'Frais fixe (€/MWh)', 'Marge (€/MWh)', 'Commentaire'];
+  // the table to send to the pricing : plain words (the ones its own mails use), only the columns the request needs —
+  // each read back into the right line of the Suivi
+  api.templateCols=list=>{
+    const has=re=>list.some(o=>re.test([o.contrat, o.c_indice, o.nature].join(' ')));
+    const cols=['Nom du marché', 'Variante (si plusieurs offres)'];
+    if(has(/PPA|Prix fixe/i)) cols.push('Prix fixe (€/MWh)');
+    if(!list.length || list.some(o=>!/PPA/i.test(o.contrat||''))) cols.push('Frais d\u2019agrégation (€/MWh)', 'Frais d\u2019agrégation (% M0)', 'Valable jusqu\u2019au');
+    if(has(/ACC/i)) cols.push('Frais ACC (€/an)');
+    if(list.some(o=>Number(String(o.c_peDuree||'').replace(',', '.'))>0)) cols.push('Prix période d\u2019essai (€/MWh)');
+    if(list.some(o=>o.c_selfee==='OUI')) cols.push('Prix GO (€/MWh)');
+    return cols.concat('Commentaire');
+  };
   // « on est à 0.4 €/MWh pour le pilotage » / « pilotage : 0,4 €/MWh » : the steering's price said in a sentence of the thread
   api.pilotageIn=text=>{ const t=String(text||'');
     const m=/(\d+(?:[.,]\d+)?)\s*€\s*\/\s*MWh[^\n.]{0,25}pilotage/i.exec(t) || /pilotage[^\n\d]{0,30}(\d+(?:[.,]\d+)?)\s*€\s*\/\s*MWh/i.exec(t);
