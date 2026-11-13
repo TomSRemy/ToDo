@@ -18,16 +18,22 @@ def line(**kw):
     for k, v in kw.items(): r[{"charge": 2, "prod": 6, "dept": 8, "plant": 19, "kwc": 22, "stade": 30, "comment": 35}[k]] = v
     return r
 pipe = {"rows": []}
+reads = {"full": 0, "unchanged": 0}
 bdd_rows = [[None] * 91]
 def bridge(route):
-    req = route.request; path = req.url.split("8765", 1)[1]
+    req = route.request; path, _, qs = req.url.split("8765", 1)[1].partition("?")
+    since = qs[6:] if qs.startswith("since=") else None
     h = {"Access-Control-Allow-Origin": "*", "Content-Type": "application/json"}
     if req.method == "OPTIONS": return route.fulfill(status=204, headers={**h, "Access-Control-Allow-Headers": "Content-Type, X-Bridge-Token"})
-    if path == "/status": out = {"ok": True, "version": "1.35", "authorized": True, "who": "Tom", "pipe": {"name": "Pipe.xlsx", "found": True}, "bdd": {"name": "Suivi.xlsx", "found": True}, "contacts": {"name": "", "found": False}}
-    elif path == "/pipe/read": out = {"ok": True, "sheets": {"Pipe agrégation": [HP] + pipe["rows"]}, "allNames": ["Pipe agrégation"]}
+    if path == "/status": out = {"ok": True, "version": "1.36", "authorized": True, "who": "Tom", "pipe": {"name": "Pipe.xlsx", "found": True}, "bdd": {"name": "Suivi.xlsx", "found": True}, "contacts": {"name": "", "found": False}}
+    elif path == "/pipe/read":
+        stamp = str(abs(hash(json.dumps(pipe["rows"], default=str))))   # like the bridge 1.36 : the file's date and size
+        if since == stamp: reads["unchanged"] += 1; out = {"ok": True, "unchanged": True, "stamp": stamp}
+        else: reads["full"] += 1; out = {"ok": True, "sheets": {"Pipe agrégation": [HP] + pipe["rows"]}, "allNames": ["Pipe agrégation"], "stamp": stamp}
     elif path == "/bdd/read":
         hb = [None] * 91; hb[31] = "Nom_prod"; hb[33] = "Nom_Installation_prod"; hb[24] = "Statut"
-        out = {"ok": True, "sheets": {"BDD Agrégation": [hb] + bdd_rows}, "allNames": ["BDD Agrégation"]}
+        stamp = str(abs(hash(json.dumps(bdd_rows, default=str))))
+        out = {"ok": True, "unchanged": True, "stamp": stamp} if since == stamp else {"ok": True, "sheets": {"BDD Agrégation": [hb] + bdd_rows}, "allNames": ["BDD Agrégation"], "stamp": stamp}
     elif path == "/backup/write": out = {"ok": True, "dir": "C:\\x", "file": {"name": "t.json", "size": 1}}
     elif path == "/inbox/list": out = {"ok": True, "tasks": [], "contacts": []}
     else: out = {"ok": True}
@@ -104,6 +110,11 @@ with sync_playwright() as p:
     new = next(o for o in opps() if o["centrale"] == "Toit 2")
     pg.evaluate(f"location.hash='fiche/{new['id']}'"); pg.wait_for_timeout(800)
     check("Arrivée du Pipe Excel" in pg.inner_text("#opp-detail-body") and "Paul" in pg.inner_text("#opp-detail-body"), "the sheet says it came from the Pipe, and whose it is")
+    # bridge 1.36 : a file that didn't change is not sent again, nor compared again
+    pg.evaluate("window.TodoPipeImport.run(false)"); pg.wait_for_timeout(800); before = dict(reads)
+    r = pg.evaluate("window.TodoPipeImport.run(false)"); pg.wait_for_timeout(500)
+    check(reads["unchanged"] > before["unchanged"] and reads["full"] == before["full"] and r == {"added": 0, "changed": 0, "linked": 0, "waiting": 0},
+          f"Excel unchanged : only asked whether it changed, nothing read nor compared again ({before} → {reads}, {r})")
     check(not err, f"no page errors ({err})")
     b.close()
 print(f"\n{len(failures)} failure(s)"); sys.exit(1 if failures else 0)

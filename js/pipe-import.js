@@ -155,7 +155,8 @@ window.TodoPipeImport=(function(){
       return v||'';
     }
     // the Pipe (and the Suivi, for the step after the Go) read through the bridge, then compared with the app
-    async function readBoth(){ await X().xsReadFile('pipe'); try{ await X().xsReadFile('bdd'); }catch(e){ /* the Suivi only gives the step after the Go */ } return X().xsReadNow(); }
+    // changed : false when neither file moved since the last reading (nothing to compare again)
+    async function readBoth(){ let changed=await X().xsReadFile('pipe'); try{ changed=(await X().xsReadFile('bdd')) || changed; }catch(e){ /* the Suivi only gives the step after the Go */ } return Object.assign({ changed }, X().xsReadNow()); }
     function scan(pipe, bdd){
       const isKnown=known(), skip=skipped(), fresh=[], links=[], maybes=[]; let changed=0;
       // the sheets no Pipe line finds by their names : the only ones a renamed line can be
@@ -185,16 +186,21 @@ window.TodoPipeImport=(function(){
       const c=changed ? plural(changed, 'case')+' reprise'+(changed>1?'s':'')+' des collègues' : 'rien d\u2019autre';
       notify('Pipe Excel : '+a+l+c+'.');
     }
+    let scanned=false;   // the first reading of the session is always compared
+    async function compare(rd, manual){
+      const { fresh, changed, links, maybes, won }=scan(rd.pipe, rd.bdd); lastWon=won; scanned=true;
+      links.forEach(x=>link(x.m.o, x.hit));
+      const linked=links.length+await settleMaybes(maybes, manual, fresh, rd.bdd), adds=await pickAdds(fresh, manual), added=adds.length;
+      adds.forEach(x=>opps().push(x.o));
+      if(added || changed || linked){ await saveCrm(); renderPipeline(); }
+      if(added || changed || linked || manual) report(added, changed, linked);
+      return { added, changed, linked, waiting:fresh.length-added };
+    }
     async function run(manual){
       if(busy || mode()!=='excel' || !bridgeReady()) return null; busy=true; lastRun=Date.now();
       try{
-        const rd=await readBoth(), { fresh, changed, links, maybes, won }=scan(rd.pipe, rd.bdd); lastWon=won;
-        links.forEach(x=>link(x.m.o, x.hit));
-        const linked=links.length+await settleMaybes(maybes, manual, fresh, rd.bdd), adds=await pickAdds(fresh, manual), added=adds.length;
-        adds.forEach(x=>opps().push(x.o));
-        if(added || changed || linked){ await saveCrm(); renderPipeline(); }
-        if(added || changed || linked || manual) report(added, changed, linked);
-        return { added, changed, linked, waiting:fresh.length-added };
+        const rd=await readBoth();
+        return !manual && !rd.changed && scanned ? { added:0, changed:0, linked:0, waiting:0 } : await compare(rd, manual);
       }catch(e){ if(manual) notify('Pipe Excel illisible : '+(e&&e.message||e)); return null; }
       finally{ busy=false; }
     }

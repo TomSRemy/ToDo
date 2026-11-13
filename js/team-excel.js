@@ -99,10 +99,14 @@ window.TodoTeamExcel=(function(){
         await bridgeCall('POST', '/contacts/upsert', { rows:[{ values, force:{ [i]:'replace' }, seen:{ [i]:k.excel } }] }, 60000); k.c.xlc[k.hd]=txt(k.mine); }
       else { if(k.excel) k.c[k.f]=k.excel; else delete k.c[k.f]; k.c.xlc[k.hd]=txt(k.excel); k.c.updatedAt=Date.now(); }
     }
+    let lastRead=null;
     async function sync(manual){
       if(busy || !ready()) return null; busy=true; lastRun=Date.now();
       try{
-        const parsed=parse(((await bridgeCall('GET', '/contacts/read', null, 120000)).sheets||{}).Contacts);
+        // the file read again only when it changed (bridge 1.36) ; unchanged, the last reading is used again
+        const res=await bridgeCall('GET', '/contacts/read'+(lastRead && lastRead.stamp && !manual ? '?since='+encodeURIComponent(lastRead.stamp) : ''), null, 120000);
+        if(!res.unchanged) lastRead={ stamp:res.stamp||'', sheet:(res.sheets||{}).Contacts };
+        const parsed=parse(lastRead.sheet);
         const clashes=[], got=pull(parsed, clashes), sent=await push(parsed, bridgeInfo().who, clashes, manual);
         for(const k of clashes) await ask(k, parsed);
         await saveCrm(); renderContacts();

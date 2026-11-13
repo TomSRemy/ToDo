@@ -50,7 +50,7 @@ window.TodoExcelSync=(function(){
   // writing, and keeps a journal of every cell; an older one is refused
   // the bridge published with this app (bridge/pont-excel.ps1 $Version; tests/bridge_test.py checks they match). Writing needs it:
   // 1.4 writes only in « Pipe Agrégation » / « BDD Agrégation », 1.7 adds new lines in a table with calculated columns
-  const BRIDGE_LATEST='1.35', BRIDGE_MIN='1.11';   // writing needs BRIDGE_MIN; a newer one is only offered
+  const BRIDGE_LATEST='1.36', BRIDGE_MIN='1.11';   // writing needs BRIDGE_MIN; a newer one is only offered
   const verAtLeast=(info, want)=>{ const v=String(info&&info.version||'0').split('.').map(Number), l=want.split('.').map(Number); return v[0]>l[0] || (v[0]===l[0] && (v[1]||0)>=l[1]); };
   const bridgeUpToDate=info=>verAtLeast(info, BRIDGE_MIN), bridgeLatest=info=>verAtLeast(info, BRIDGE_LATEST);
   // sent by packets of 8 lines (Excel takes a few seconds per line): no request runs long enough to be cut, and progress shows
@@ -92,9 +92,13 @@ window.TodoExcelSync=(function(){
   const XS_KEYS={ pipe:{ header:'Nom Producteur', a:6, b:19, sheet:'pipeagregation' }, bdd:{ header:'Nom_prod', a:31, b:33, sheet:'bddagregation' } };   // that sheet only, never another « Pipe … » one
   const xsAppValues=(kind,o)=>kind==='pipe'?PQ_FIELDS.reduce((row,f,i)=>{ row[xsColIdx(f.col)]=pipeCells(o)[i]; return row; }, []):bddCells(o);
   const xsKey=(kind, vals)=>xsNorm(vals[XS_KEYS[kind].a])+'|'+xsNorm(vals[XS_KEYS[kind].b]);
+  // the file read again only when it changed (bridge 1.36 : the date and size it had last time) ; false = unchanged
+  const xsStamp={ pipe:null, bdd:null };
   async function xsReadFile(kind){
     try{
-      const res=await bridgeCall('GET','/'+kind+'/read',null,60000), sheets=res.sheets||{};
+      const since=xsRead[kind] && xsStamp[kind] ? '?since='+encodeURIComponent(xsStamp[kind]) : '';
+      const res=await bridgeCall('GET','/'+kind+'/read'+since,null,60000), sheets=res.sheets||{};
+      if(res.unchanged){ xsRead[kind].at=Date.now(); xsReadError[kind]=null; return false; }
       const name=Object.keys(sheets).find(n=>xsNorm(n)===XS_KEYS[kind].sheet);
       // the bridge only ever returned the sheet it recognized : when it doesn't match, the real names in the file
       // (allNames, the bridge's own full worksheet list) are what tells apart a renamed tab from the wrong file
@@ -103,8 +107,8 @@ window.TodoExcelSync=(function(){
       const hi=rows.findIndex((r,i)=>i<20 && (r||[]).some(c=>xsNorm(c)===xsNorm(K.header))); if(hi<0) throw new Error('En-tête « '+K.header+' » introuvable');
       const off=rows[hi].findIndex(c=>xsNorm(c)===xsNorm(K.header))-K.a, map=new Map();
       rows.slice(hi+1).forEach((r,i)=>{ if(!r) return; const vals=[]; r.forEach((c,j)=>{ vals[j-off]=c; }); const k=xsKey(kind, vals); if(k!=='|') map.set(k, { vals, line:hi+2+i }); });
-      xsRead[kind]={ at:Date.now(), rows:map, name };
-      xsReadError[kind]=null;
+      xsRead[kind]={ at:Date.now(), rows:map, name }; xsStamp[kind]=res.stamp||null;
+      xsReadError[kind]=null; return true;
     }catch(e){ xsReadError[kind]=e.message; throw e; }
   }
   // where an installation stands for one file

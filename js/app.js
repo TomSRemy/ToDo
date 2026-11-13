@@ -175,9 +175,9 @@
     render(); renderArchive(); renderLists(); renderToday(); initPostit(); updateConflictBadge(); applyColumnVisibility();
     await loadSeenIds();
     fetchInbox();
-    setInterval(fetchInbox, 5 * 60 * 1000);
+    setInterval(()=>{ if(!document.hidden) fetchInbox(); }, 5 * 60 * 1000);   // not while ToDo is in the background
     fetchContactInbox();
-    setInterval(fetchContactInbox, 5 * 60 * 1000);
+    setInterval(()=>{ if(!document.hidden) fetchContactInbox(); }, 5 * 60 * 1000);
     checkDailyDigestNotification();
     undoRebase();   // the state as loaded is the starting point of the undo history
     if(syncConfig.enabled){ syncPull(); syncPullCrm(); syncPullNotes(); syncPullParc(); setInterval(syncPull, 5 * 60 * 1000); setInterval(syncPullCrm, 5 * 60 * 1000); setInterval(syncPullNotes, 5 * 60 * 1000); setInterval(syncPullParc, 5 * 60 * 1000); }
@@ -6952,10 +6952,12 @@
     }catch(e){ console.error(e); $('parc-info').textContent='Fichier illisible : '+(e.message||e); }
   }
 
+  let parcStamp=null;   // the Suivi read again for the portfolio only when it changed (bridge 1.36)
   async function importParcFromBridge(silent){
     if(!silent) $('parc-info').textContent='Lecture de l’Excel…';
     try{
-      const res=await bridgeCall('GET','/bdd/read',null,60000);
+      const res=await bridgeCall('GET','/bdd/read'+(silent && parcStamp ? '?since='+encodeURIComponent(parcStamp) : ''),null,60000);
+      if(res.unchanged) return; parcStamp=res.stamp||null;
       const names=Object.keys(res.sheets||{});
       const next=parseParcSheets(names, n=>res.sheets[n]||[]); next.fileName='Excel (pont local)'; parcImported(next);
     }catch(e){ if(!silent) $('parc-info').textContent=e.message; }
@@ -7010,7 +7012,7 @@
       ? (s.auto?'Actualisation automatique active : le pont Excel de cet ordinateur relit le fichier synchronisé à l\u2019ouverture du portefeuille puis toutes les 15 minutes.':'Actualisation automatique désactivée : utilise « Lire depuis l\u2019Excel ».')
       : 'L\u2019actualisation automatique passe par le pont Excel de l\u2019ordinateur (Réglages → Pont Excel), qui lit la copie synchronisée du fichier. Sans lui (sur le téléphone par exemple), recharge le fichier avec « Charger le Suivi Agrégation ».';
   }
-  setInterval(()=>{ if(parcSource().auto && bridgeConfigured()) importParcFromBridge(true); }, 15*60*1000);
+  setInterval(()=>{ if(!document.hidden && parcSource().auto && bridgeConfigured()) importParcFromBridge(true); }, 15*60*1000);
 
   function parcBars(title, entries, fmt, tipFn){
     const b=document.createElement('div'); b.className='parc-block';

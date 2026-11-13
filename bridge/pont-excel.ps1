@@ -30,6 +30,9 @@
      et chaque case écrite est notée dans « Sauvegardes pont/journal-pont.csv » avec son ancienne valeur et qui l'a écrite
      (jamais effacé) ; la même ligne va dans « Journal ToDo », à côté du Pipe, un fichier par personne (journal de l'équipe).
 
+  v1.36 : les Excel ne sont relus que s'ils ont changé, et toujours depuis le fichier (Excel n'est plus sollicité pour
+  lire, même quand le fichier y est ouvert) : le PC est soulagé.
+
   v1.35 : fichier fermé, le pont ne change que les cases écrites, dans le fichier lui-même : la mise en forme, les mises
   en forme conditionnelles, les listes déroulantes et le reste du classeur restent tels quels (avant, tout le classeur
   était réenregistré et en perdait une partie). Toujours sans ouvrir Excel, donc sans bloquer le fichier.
@@ -45,7 +48,7 @@
 param([int]$Port = 8765, [switch]$Reconfigurer, [switch]$Mock, [string]$PatchTest = '')
 
 $ErrorActionPreference = 'Stop'
-$Version = '1.35'
+$Version = '1.36'
 $Here = Split-Path -Parent $MyInvocation.MyCommand.Path
 $LibDir = Join-Path $Here 'lib'
 # the settings (the two files, the key) live in the Windows profile, not next to the script: a new download, in any folder,
@@ -422,7 +425,9 @@ public static class TodoAtomicMove {
 # whole rewrite was meant to shrink (confirmed : it showed Excel's own "fichier ouvert dans une autre application").
 # A MemoryStream has no file handle on the real path at all, so nothing is held open past this one quick read.
 function Open-DirectPackage($path) {
-  $bytes = [IO.File]::ReadAllBytes($path)
+  # shared read : works while Excel (or OneDrive) has the file open
+  $fs = [IO.File]::Open($path, [IO.FileMode]::Open, [IO.FileAccess]::Read, ([IO.FileShare]::ReadWrite -bor [IO.FileShare]::Delete))
+  try { $bytes = New-Object byte[] $fs.Length; $got = 0; while ($got -lt $bytes.Length) { $n = $fs.Read($bytes, $got, $bytes.Length - $got); if ($n -le 0) { break }; $got += $n } } finally { $fs.Dispose() }
   $ms = New-Object IO.MemoryStream (,$bytes)
   @{ pkg = (New-Object OfficeOpenXml.ExcelPackage ($ms)); ms = $ms }
 }
@@ -484,6 +489,7 @@ function New-DirectAdapter($kind) {
     $tmp = Join-Path $tmpDir ([guid]::NewGuid().ToString('N') + '.xlsx')
     # v1.35 : the file as it is now on disk, only the written cells changed in it (never the workbook rewritten by EPPlus)
     try { [IO.File]::WriteAllBytes($tmp, (Write-XlsxCells ([IO.File]::ReadAllBytes($a.path)) $a.ws.Name $a.pending)) } catch { Remove-Item $tmp -ErrorAction SilentlyContinue; throw }
+    $a.pending.Clear()   # saved row by row : each save writes only what is new since the last one
     try { Invoke-AtomicReplace $tmp $a.path } catch { Remove-Item $tmp -ErrorAction SilentlyContinue; throw } }
   $a.Close = { param($a) $a.pkg.Dispose(); $a.ms.Dispose() }
   return $a
@@ -866,6 +872,7 @@ function Read-Sheets-Direct($kind) {
     return @{ sheets = $out; allNames = $allNames }
   } finally { $pkg.Dispose(); $opened.ms.Dispose() }
 }
+$script:readCache = @{}
 function Read-Sheets($kind) {
   $out = @{}
   if ($Mock) {
@@ -876,9 +883,9 @@ function Read-Sheets($kind) {
     $out[$Kinds[$kind].sheet] = $rows
     return @{ sheets = $out; allNames = @($Kinds[$kind].sheet) }
   }
-  if (-not (Is-AlreadyOpen (Resolve-ConfigPath $kind))) {
-    try { return Read-Sheets-Direct $kind } catch { Write-Info ("Lecture directe impossible (" + $_.Exception.Message + ") : on passe par Excel.") 'DarkGray' }
-  }
+  # v1.36 : read from the file on disk even when it is open in Excel (shared read) : Excel is never asked, so it never
+  # freezes while you work in it. Through Excel only if the file can't be read that way.
+  try { return Read-Sheets-Direct $kind } catch { Write-Info ("Lecture directe impossible (" + $_.Exception.Message + ") : on passe par Excel.") 'DarkGray' }
   $book = Open-Book (Resolve-ConfigPath $kind)
   try {
     # every worksheet's name, whether or not it matches : the only way the app can show what's really in the file
@@ -1021,7 +1028,8 @@ function Read-Request($stream) {
   $bodyMs = New-Object IO.MemoryStream
   if ($all.Length -gt $bodyStart) { $bodyMs.Write($all, $bodyStart, $all.Length - $bodyStart) }
   while ($bodyMs.Length -lt $len) { $n = $stream.Read($buf, 0, $buf.Length); if ($n -le 0) { break }; $bodyMs.Write($buf, 0, $n) }
-  return @{ method = $parts[0]; path = ($parts[1] -split '\?')[0]; headers = $headers; body = [Text.Encoding]::UTF8.GetString($bodyMs.ToArray()) }
+  $query = @{}; $qs = ($parts[1] -split '\?', 2); if ($qs.Count -gt 1) { foreach ($kv in ($qs[1] -split '&')) { $q = $kv -split '=', 2; if ($q[0]) { $query[$q[0]] = $(if ($q.Count -gt 1) { [Uri]::UnescapeDataString($q[1]) } else { '' }) } } }
+  return @{ method = $parts[0]; path = $qs[0]; query = $query; headers = $headers; body = [Text.Encoding]::UTF8.GetString($bodyMs.ToArray()) }
 }
 function Handle($req) {
   # defense in depth against DNS-rebinding : a page on another domain whose name briefly resolves to 127.0.0.1
@@ -1103,8 +1111,13 @@ function Handle($req) {
   if ($req.method -eq 'POST' -and $req.path -eq '/backup/read') { $d = $req.body | ConvertFrom-Json; return (LocalBackup-Read $d.name) }
   if ($req.method -eq 'POST' -and $req.path -eq '/backup/dir') { $d = $req.body | ConvertFrom-Json; return (LocalBackup-SetDir $d.dir) }
   if ($req.method -eq 'GET' -and $req.path -match '^/(pipe|bdd|contacts)/read$') {
-    $r = Read-Sheets $Matches[1]
-    return @(200, @{ ok = $true; sheets = $r.sheets; allNames = $r.allNames })
+    # v1.36 : a file read again only when it changed (its date and size) ; the app says what it already has (since)
+    $k = $Matches[1]; $stamp = $null
+    if (-not $Mock) { try { $fi = Get-Item -LiteralPath (Resolve-ConfigPath $k); $stamp = [string]$fi.LastWriteTimeUtc.Ticks + '-' + $fi.Length } catch { } }
+    if ($stamp -and $req.query -and $req.query['since'] -eq $stamp) { return @(200, @{ ok = $true; unchanged = $true; stamp = $stamp }) }
+    $c = $script:readCache[$k]
+    if ($stamp -and $c -and $c.stamp -eq $stamp) { $r = $c.r } else { $r = Read-Sheets $k; if ($stamp) { $script:readCache[$k] = @{ stamp = $stamp; r = $r } } }
+    return @(200, @{ ok = $true; sheets = $r.sheets; allNames = $r.allNames; stamp = $stamp })
   }
   return @(404, @{ ok = $false; message = 'Route inconnue.' })
 }
