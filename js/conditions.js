@@ -273,65 +273,66 @@ window.TodoConditions=(function(){
       return { out, left, rows };
     }
     // the lines found for no sheet : chosen by hand (a lot, or an installation), or left aside
-    // a line nobody was found for : an existing lot, a whole request, one installation, or several picked by hand —
-    // those then kept as a lot named after the line (« Lot Greenfield » → lot « Greenfield »), found on their own next time
+    // a line nobody was found for : a lot of the app (every one, not only those shown), or installations picked by hand —
+    // kept as a lot named after the line (« Lot Greenfield » → lot « Greenfield »), found on its own next time
     const lotOf=name=>String(name||'').replace(/^\s*lot\s*[-–:]?\s*/i, '').trim()||String(name||'').trim();
-    // every installation of the app (a lot made in the pipeline whose plants aren't all shown here is still offered)
     const pool=(list, app)=>{ const all=(app.opportunities||[]).filter(o=>!o.deleted && o.kind!=='request'); return [...new Set(list.concat(all))]; };
     const prodOf=o=>String(o.producteur||o.company||'Sans producteur').trim();
-    // by producer : its lots first (with their size), then its installations
-    function byProducer(all){
-      const m=new Map(); all.forEach(o=>{ const p=prodOf(o); if(!m.has(p)) m.set(p, []); m.get(p).push(o); });
-      return [...m.entries()].sort((a, b)=>a[0].localeCompare(b[0], 'fr')).map(([p, os])=>({ p, lots:[...new Set(os.map(o=>o.lot).filter(Boolean))].sort((a, b)=>a.localeCompare(b, 'fr')),
-        plants:os.sort((a, b)=>String(a.centrale||a.title||'').localeCompare(String(b.centrale||b.title||''), 'fr')) }));
+    const score=(rw, text)=>{ const w=lotWords(text); return [...rw].filter(x=>w.has(x)).length; };
+    const SHOW=60;
+    function assignLots(all){
+      return [...new Set(all.map(o=>o.lot).filter(Boolean))].map(l=>{ const ps=all.filter(o=>o.lot===l); return { l, ps, prod:[...new Set(ps.map(prodOf))].join(', ') }; });
     }
-    function assignOptions(all){
-      return '<option value="">Ignorer cette ligne</option><option value="pick">Choisir les installations du lot…</option>'
-        +byProducer(all).map(g=>'<optgroup label="'+escapeHtml(g.p)+'">'
-          +g.lots.map(l=>'<option value="lot:'+escapeHtml(l)+'">Lot · '+escapeHtml(l)+' ('+all.filter(o=>o.lot===l).length+')</option>').join('')
-          +g.plants.map(o=>'<option value="o:'+escapeHtml(o.id)+'"> '+escapeHtml(o.centrale||o.title||'?')+(o.lot?' — lot '+escapeHtml(o.lot):'')+'</option>').join('')+'</optgroup>').join('');
-    }
-    function assignRow(ov, i, name, all, opts){
-      const tr=document.createElement('tr');
-      tr.innerHTML='<td class="fl"></td><td><select data-i="'+i+'">'+opts+'</select><div class="as-pick" hidden><input type="search" class="as-filter" placeholder="Filtrer (centrale, producteur, lot)"><div class="as-list"></div>'
-        +'<label class="as-save-l"><input type="checkbox" class="as-save" checked> Retenir ces installations comme lot « <span></span> »</label></div></td>';
-      tr.querySelector('.fl').textContent=name; tr.querySelector('.as-save-l span').textContent=lotOf(name);
-      const box=tr.querySelector('.as-list');
-      byProducer(all).forEach(g=>{ const h=document.createElement('div'); h.className='as-prod'; h.textContent=g.p; box.appendChild(h);
-        g.plants.forEach(o=>{ const l=document.createElement('label'); l.className='as-item'; l.dataset.prod=g.p;
-          l.innerHTML='<input type="checkbox" value="'+escapeHtml(o.id)+'"> <span></span>'; l.querySelector('span').textContent=(o.centrale||o.title||'?')+(o.lot?' — lot '+o.lot:''); box.appendChild(l); }); });
-      const sel=tr.querySelector('select'), pick=tr.querySelector('.as-pick'), filt=tr.querySelector('.as-filter');
-      sel.onchange=()=>{ pick.hidden=sel.value!=='pick'; if(!pick.hidden) filt.focus(); };
-      filt.oninput=()=>{ const q=pqFold(filt.value), seen=new Set();
-        box.querySelectorAll('.as-item').forEach(l=>{ l.hidden=!!q && !pqFold(l.dataset.prod+' '+l.textContent).includes(q); if(!l.hidden) seen.add(l.dataset.prod); });
-        box.querySelectorAll('.as-prod').forEach(h=>{ h.hidden=!seen.has(h.textContent); }); };
-      return tr;
-    }
-    function assignRead(tr, list){
-      const v=tr.querySelector('select').value;
-      if(!v) return null;
-      if(v==='pick'){ const ids=[...tr.querySelectorAll('.as-list input:checked')].map(x=>x.value), plants=list.filter(o=>ids.includes(o.id));
-        return plants.length ? { plants, lot:tr.querySelector('.as-save').checked ? tr.querySelector('.as-save-l span').textContent : '' } : null; }
-      if(v.startsWith('lot:')) return { plants:list.filter(o=>o.lot===v.slice(4)) };
-      if(v.startsWith('req:')) return { plants:list.filter(o=>o.requestId===v.slice(4)) };
-      return { plants:list.filter(o=>o.id===v.slice(2)) };
+    // the results of one line's search : its lots first (the closest to the line's name on top), then the installations
+    function assignResults(st, all, lots){
+      const q=pqFold(st.q||''), hit=t=>!q || pqFold(t).includes(q), rw=lotWords(st.name);
+      const ls=lots.filter(x=>hit('lot '+x.l+' '+x.prod)).map(x=>({ x, s:score(rw, x.l+' '+x.prod) })).sort((a, b)=>b.s-a.s || a.x.l.localeCompare(b.x.l, 'fr'));
+      const ps=all.filter(o=>hit([o.centrale, o.title, prodOf(o), o.lot, codeAffaire(o)].join(' '))).map(o=>({ o, s:score(rw, [o.centrale||o.title, prodOf(o), o.lot].join(' ')) }))
+        .sort((a, b)=>b.s-a.s || prodOf(a.o).localeCompare(prodOf(b.o), 'fr') || String(a.o.centrale||'').localeCompare(String(b.o.centrale||''), 'fr'));
+      const more=n=>n>SHOW ? '<p class="as-more">… et '+(n-SHOW)+' autres : affine la recherche</p>' : '';
+      return '<div class="as-sec">Lots <i>'+ls.length+'</i></div>'+(ls.length ? ls.slice(0, SHOW).map(({ x })=>'<button type="button" class="as-opt as-lot" data-lot="'+escapeHtml(x.l)+'"><b>Lot · '+escapeHtml(x.l)+'</b><span>'+escapeHtml(x.prod)+' · '+x.ps.length+' installation'+(x.ps.length>1?'s':'')+'</span></button>').join('')+more(ls.length) : '<p class="as-more">Aucun lot</p>')
+        +'<div class="as-sec">Installations <i>'+ps.length+'</i> <small>coche celles du lot</small></div>'
+        +ps.slice(0, SHOW).map(({ o })=>'<label class="as-opt"><input type="checkbox" value="'+escapeHtml(o.id)+'"'+(st.ids.has(o.id)?' checked':'')+'><b>'+escapeHtml(o.centrale||o.title||'?')+'</b><span>'+escapeHtml(prodOf(o)+(o.lot?' · lot '+o.lot:''))+'</span></label>').join('')+more(ps.length);
     }
     function assignDialog(rows, left, list, app){
       return new Promise(res=>{
+        const all=pool(list, app), lots=assignLots(all), st=left.map(i=>({ i, name:rows[i].name, q:'', ids:new Set(), lot:null, save:true }));
         const ov=document.createElement('div'); ov.className='modal-overlay'; ov.id='assign-overlay';
         ov.innerHTML='<div class="modal-box wide fill-box" role="dialog" aria-labelledby="assign-title"><div class="opp-detail-head"><h3 id="assign-title">À quoi correspondent ces lignes ?</h3></div>'
-          +'<p class="modal-hint">'+left.length+' ligne'+(left.length>1?'s':'')+' du tableau du pricing sans fiche ni lot reconnus. Choisis pour chacune ; pour un lot, « Choisir les installations du lot… » puis coche-les : l’appli s’en souviendra la prochaine fois.</p>'
-          +'<table class="fill-table"><tbody></tbody></table>'
-          +'<div class="crm-form-actions"><button type="button" class="ghost-btn as-cancel">Annuler</button><button type="button" class="fill-go as-go">Continuer</button></div></div>';
-        const all=pool(list, app), opts=assignOptions(all), body=ov.querySelector('tbody');
-        left.forEach(i=>body.appendChild(assignRow(ov, i, rows[i].name, all, opts)));
+          +'<p class="modal-hint">'+left.length+' ligne'+(left.length>1?'s':'')+' du tableau du pricing sans fiche ni lot reconnus. Pour chacune : un lot, ou coche ses installations (l’appli s’en souviendra). Sans choix, la ligne est ignorée.</p>'
+          +'<div class="as-rows"></div><div class="crm-form-actions"><button type="button" class="ghost-btn as-cancel">Annuler</button><button type="button" class="fill-go as-go">Continuer</button></div></div>';
+        const box=ov.querySelector('.as-rows');
+        const label=s=>s.lot ? 'Lot · '+s.lot : s.ids.size ? s.ids.size+' installation'+(s.ids.size>1?'s':'')+(s.save?' → lot « '+lotOf(s.name)+' »':'') : 'Choisir…';
+        const paintBtn=(row, s)=>{ const btn=row.querySelector('.as-pick-btn'); btn.textContent=label(s); btn.classList.toggle('set', !!(s.lot||s.ids.size)); row.querySelector('.as-clear').hidden=!(s.lot||s.ids.size); };
+        const paintRes=(row, s)=>{ row.querySelector('.as-res').innerHTML=assignResults(s, all, lots); };
+        const close=row=>{ const p=row.querySelector('.as-panel'); if(p) p.remove(); };
+        function open(row, s){
+          box.querySelectorAll('.as-row').forEach(close);
+          const p=document.createElement('div'); p.className='as-panel';
+          p.innerHTML='<input type="text" class="as-filter" placeholder="Chercher un lot, une centrale, un producteur, un code affaire"><div class="as-res"></div>'
+            +'<div class="as-foot"><label class="as-save-l"><input type="checkbox" class="as-save"'+(s.save?' checked':'')+'> Retenir les installations cochées comme lot « <span></span> »</label><button type="button" class="pipe-bar-btn as-ok">OK</button></div>';
+          p.querySelector('.as-save-l span').textContent=lotOf(s.name);
+          row.appendChild(p); const f=p.querySelector('.as-filter'); f.value=s.q; paintRes(row, s); f.focus();
+          let t=null; f.oninput=()=>{ clearTimeout(t); t=setTimeout(()=>{ s.q=f.value; paintRes(row, s); }, 120); };
+          f.onkeydown=e=>{ if(e.key==='Enter'){ e.preventDefault(); const first=p.querySelector('.as-lot'); if(first) first.click(); } if(e.key==='Escape'){ e.stopPropagation(); close(row); row.querySelector('.as-pick-btn').focus(); } };
+          p.onclick=e=>{ const l=e.target.closest('.as-lot'); if(!l) return; s.lot=l.dataset.lot; s.ids.clear(); paintBtn(row, s); close(row); };
+          p.onchange=e=>{ const x=e.target; if(x.classList.contains('as-save')){ s.save=x.checked; } else if(x.type==='checkbox'){ if(x.checked) s.ids.add(x.value); else s.ids.delete(x.value); s.lot=null; } paintBtn(row, s); };
+          p.querySelector('.as-ok').onclick=()=>{ close(row); row.querySelector('.as-pick-btn').focus(); };
+        }
+        st.forEach(s=>{ const row=document.createElement('div'); row.className='as-row';
+          row.innerHTML='<div class="as-line"><span class="as-name"></span><button type="button" class="pipe-bar-btn as-pick-btn"></button><button type="button" class="as-clear" title="Ignorer cette ligne" hidden>×</button></div>';
+          row.querySelector('.as-name').textContent=s.name; paintBtn(row, s);
+          row.querySelector('.as-pick-btn').onclick=()=>{ if(row.querySelector('.as-panel')) close(row); else open(row, s); };
+          row.querySelector('.as-clear').onclick=()=>{ s.lot=null; s.ids.clear(); paintBtn(row, s); close(row); };
+          box.appendChild(row); });
         const done=v=>{ ov.remove(); res(v); };
         ov.querySelector('.as-cancel').onclick=()=>done(null);
-        ov.querySelector('.as-go').onclick=()=>{ const map={}, lots=[];
-          body.querySelectorAll('tr').forEach(tr=>{ const got=assignRead(tr, all); if(!got) return; const i=+tr.querySelector('select').dataset.i; map[i]=got.plants; if(got.lot) lots.push({ plants:got.plants, name:got.lot }); });
-          done({ map, lots }); };
+        ov.querySelector('.as-go').onclick=()=>{ const map={}, keep=[];
+          st.forEach(s=>{ const plants=s.lot ? all.filter(o=>o.lot===s.lot) : all.filter(o=>s.ids.has(o.id)); if(!plants.length) return;
+            map[s.i]=plants; if(!s.lot && s.save) keep.push({ plants, name:lotOf(s.name) }); });
+          done({ map, lots:keep }); };
         ov.addEventListener('keydown', e=>{ if(e.key==='Escape'){ e.stopPropagation(); done(null); } });
-        document.body.appendChild(ov); ov.querySelector('select').focus();
+        document.body.appendChild(ov); ov.querySelector('.as-pick-btn').focus();
       });
     }
     // the pricing's changes, with the lines nobody was found for chosen by hand first

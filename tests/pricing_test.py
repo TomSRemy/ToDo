@@ -85,7 +85,7 @@ with sync_playwright() as p:
     lots = "Nom du marché\tFrais de gestion (€/MWh)\tFrais fixe (€/MWh)\tMarge (€/MWh)\tFrais d'agrégation (€/MWh)\tFrais de gestion (%m0)\tFrais fixe (%m0)\tMarge (%m0)\tFrais d'agrégation (%m0)\nLot Brownfield\t2.68\t0.09\t0.5\t3.27\t3.9\t0.15\t0.73\t4.78\nLot Brownfield - 2028\t1.78\t0.06\t0.5\t2.34\t5.31\t0.11\t0.91\t6.33\nLot Decize\t2.92\t0.06\t0.5\t3.47\t4.23\t0.09\t0.72\t5.04\nLot Greenfield\t2.7\t0.19\t0.5\t3.29\t4.14\t0.15\t0.77\t5.06"
     pg.click("#pricing-root .fill-paste"); pg.fill("#paste-overlay textarea", lots); pg.click("#paste-overlay .paste-go"); pg.wait_for_selector("#assign-overlay", timeout=5000)
     check("Lot Greenfield" in pg.inner_text("#assign-overlay") and "Lot Brownfield" not in pg.inner_text("#assign-overlay"), "a line whose lot isn't found : asked what it is (the others found by their lot's words)")
-    pg.select_option("#assign-overlay select", "lot:Neuf"); pg.click("#assign-overlay .as-go"); pg.wait_for_selector("#fill-overlay", timeout=5000)
+    pg.click("#assign-overlay .as-pick-btn"); pg.click("#assign-overlay .as-lot[data-lot='Neuf']"); pg.click("#assign-overlay .as-go"); pg.wait_for_selector("#fill-overlay", timeout=5000)
     pg.click("#fill-overlay .fill-go"); pg.wait_for_timeout(600)
     o = by()
     check(o["g"].get("c_fgP1") == "3,27" and o["h"].get("c_m0P1") == "4,78" and o["g"].get("c_fgGestionPct") == "3,9" and o["i"].get("c_fgP1") == "3,47" and o["j"].get("c_fgP1") == "3,29",
@@ -94,7 +94,7 @@ with sync_playwright() as p:
     # a lot unknown to the app : its installations picked by hand, then kept as a lot (found on its own next time)
     pick = "Nom du marché\tFrais d'agrégation (€/MWh)\nLot Pommiers\t4,44"
     pg.click("#pricing-root .fill-paste"); pg.fill("#paste-overlay textarea", pick); pg.click("#paste-overlay .paste-go"); pg.wait_for_selector("#assign-overlay", timeout=5000)
-    pg.select_option("#assign-overlay select", "pick"); pg.check("#assign-overlay .as-list input[value='b']"); pg.click("#assign-overlay .as-go"); pg.wait_for_selector("#fill-overlay", timeout=5000)
+    pg.click("#assign-overlay .as-pick-btn"); pg.fill("#assign-overlay .as-filter", "plouisy"); pg.wait_for_timeout(300); pg.check("#assign-overlay .as-res input[value='b']"); pg.click("#assign-overlay .as-ok"); pg.click("#assign-overlay .as-go"); pg.wait_for_selector("#fill-overlay", timeout=5000)
     pg.locator("#fill-overlay tbody input").evaluate_all("l=>l.forEach(x=>{ x.checked=true; x.dispatchEvent(new Event('change', { bubbles:true })); })")
     pg.click("#fill-overlay .fill-go"); pg.wait_for_timeout(600)
     o = by()
