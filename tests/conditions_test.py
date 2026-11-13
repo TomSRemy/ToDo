@@ -37,6 +37,10 @@ with sync_playwright() as p:
     back_need = pg.locator("select[data-c='c_pnArret']").evaluate("s=>s.closest('td').className")
     fg_cls = pg.locator("input[data-c='c_fgP1']").evaluate("i=>i.closest('tr').className")
     check("empty" in back_need and "opt" in fg_cls, f"needed for the request : marked to fill ; a pricing answer (FG) is never asked ({back_need!r}, {fg_cls!r})")
+    # « Saisir les prix » on the step's checklist : the table opened on its Retour pricing lines, the first empty cell focused
+    pg.locator("#opp-detail-body button", has_text="Saisir les prix").click(); pg.wait_for_timeout(600)
+    foc = pg.evaluate("(()=>{ const a=document.activeElement; return a && a.dataset ? a.dataset.c : null; })()")
+    check(foc == "c_pePrix" and pg.is_visible("input[data-c='c_fgP1']"), f"« Saisir les prix » : straight to the Retour pricing lines ({foc})")
     pg.select_option("select[data-c='c_pnArret']", "Enchères"); pg.wait_for_timeout(400)
     opp = lambda: json.loads(pg.evaluate("window.storage.peek('todo-widget-opportunities')"))[0]
     check(opp().get("c_pnArret") == "Enchères", "a value chosen in the table is kept on the sheet")
