@@ -30,8 +30,9 @@
      et chaque case écrite est notée dans « Sauvegardes pont/journal-pont.csv » avec son ancienne valeur et qui l'a écrite
      (jamais effacé) ; la même ligne va dans « Journal ToDo », à côté du Pipe, un fichier par personne (journal de l'équipe).
 
-  v1.35 : le pont écrit toujours par Excel (le fichier ouvert, ou ouvert en arrière-plan puis refermé) : plus jamais
-  réécrit sans Excel, ce qui cassait la mise en forme (couleurs, mises en forme conditionnelles, listes déroulantes).
+  v1.35 : fichier fermé, le pont ne change que les cases écrites, dans le fichier lui-même : la mise en forme, les mises
+  en forme conditionnelles, les listes déroulantes et le reste du classeur restent tels quels (avant, tout le classeur
+  était réenregistré et en perdait une partie). Toujours sans ouvrir Excel, donc sans bloquer le fichier.
 
   v1.34 : les contacts de l'équipe (fichier « Contacts équipe », onglet « Contacts », un tableau ; une ligne est retrouvée par
   Prénom + Nom ; mêmes règles d'écriture), la sauvegarde locale de l'appli (OneDrive\ToDo\sauvegardes) et le journal de
@@ -41,7 +42,7 @@
   et recopier la clé affichée dans l'app (Réglages → Pont Excel).
   Options : -Reconfigurer (choisir à nouveau les fichiers), -Port 8765, -Mock (test sans Excel).
 #>
-param([int]$Port = 8765, [switch]$Reconfigurer, [switch]$Mock)
+param([int]$Port = 8765, [switch]$Reconfigurer, [switch]$Mock, [string]$PatchTest = '')
 
 $ErrorActionPreference = 'Stop'
 $Version = '1.35'
@@ -116,6 +117,76 @@ function Token-Matches($given, $expected) {
   if ($g.Length -ne $e.Length) { return $false }
   $diff = 0; for ($i = 0; $i -lt $g.Length; $i++) { $diff = $diff -bor ($g[$i] -bxor $e[$i]) }
   return ($diff -eq 0)
+}
+
+# ---------------- v1.35 : writing cells into the .xlsx itself ----------------
+# Only the written cells change, inside the file's own XML : every other part of the workbook (formatting, conditional
+# formats, drop-down lists, checkboxes, other sheets, the table) stays byte for byte as it was. EPPlus 4.5 rewrote the
+# whole workbook on save and lost what it doesn't know (reported for real : formatting broken) ; Excel itself
+# (COM) keeps everything but locks the file while it writes. $cells : @{ r ; c ; v } in the sheet's own rows/columns.
+function Col-Name([int]$c) { $s = ''; while ($c -gt 0) { $m = ($c - 1) % 26; $s = [string][char](65 + $m) + $s; $c = [int][math]::Floor(($c - 1) / 26) }; $s }
+function Col-Num([string]$ref) { $n = 0; foreach ($ch in ($ref -replace '[^A-Za-z]', '').ToUpper().ToCharArray()) { $n = $n * 26 + ([int]$ch - 64) }; $n }
+function Find-Child($parent, [scriptblock]$key, [int]$want) {
+  # the element whose key is $want, else the last one before it (to insert after) ; the elements are in order
+  $hit = $null; $before = $null
+  foreach ($x in $parent.ChildNodes) { if ($x.NodeType -ne [Xml.XmlNodeType]::Element) { continue }; $k = & $key $x
+    if ($k -eq $want) { $hit = $x; break }; if ($k -lt $want) { $before = $x } else { break } }
+  @{ hit = $hit; before = $before }
+}
+function Set-XmlCell($doc, $data, [string]$M, [int]$r, [int]$c, $v) {
+  $empty = ($null -eq $v) -or ($v -is [string] -and $v -eq '')
+  $f = Find-Child $data { param($x) [int]$x.GetAttribute('r') } $r; $row = $f.hit
+  if (-not $row) { if ($empty) { return }; $row = $doc.CreateElement('row', $M); $row.SetAttribute('r', [string]$r)
+    if ($f.before) { $null = $data.InsertAfter($row, $f.before) } else { $null = $data.PrependChild($row) } }
+  $g = Find-Child $row { param($x) Col-Num $x.GetAttribute('r') } $c; $cell = $g.hit
+  if (-not $cell) { if ($empty) { return }; $cell = $doc.CreateElement('c', $M); $cell.SetAttribute('r', (Col-Name $c) + $r)
+    if ($row.HasAttribute('s') -and $row.GetAttribute('customFormat') -eq '1') { $cell.SetAttribute('s', $row.GetAttribute('s')) }
+    if ($g.before) { $null = $row.InsertAfter($cell, $g.before) } else { $null = $row.PrependChild($cell) } }
+  foreach ($n in @($cell.ChildNodes)) { if ($n.LocalName -in @('f', 'v', 'is')) { $null = $cell.RemoveChild($n) } }
+  $cell.RemoveAttribute('t')   # the cell's style (s) is kept : its format, its colours stay
+  if ($empty) { return }
+  $inv = [Globalization.CultureInfo]::InvariantCulture
+  if ($v -is [bool]) { $cell.SetAttribute('t', 'b'); $x = $doc.CreateElement('v', $M); $x.InnerText = $(if ($v) { '1' } else { '0' }); $null = $cell.AppendChild($x) }
+  elseif ($v -is [datetime]) { $x = $doc.CreateElement('v', $M); $x.InnerText = $v.ToOADate().ToString($inv); $null = $cell.AppendChild($x) }
+  elseif ($v -is [double] -or $v -is [int] -or $v -is [long] -or $v -is [decimal] -or $v -is [single]) { $x = $doc.CreateElement('v', $M); $x.InnerText = ([double]$v).ToString('R', $inv); $null = $cell.AppendChild($x) }
+  else { $cell.SetAttribute('t', 'inlineStr'); $is = $doc.CreateElement('is', $M); $t = $doc.CreateElement('t', $M); $t.InnerText = [string]$v
+    $null = $t.SetAttribute('space', 'http://www.w3.org/XML/1998/namespace', 'preserve'); $null = $is.AppendChild($t); $null = $cell.AppendChild($is) }
+}
+function Read-ZipXml($zip, [string]$name) {
+  $e = $zip.GetEntry($name); if (-not $e) { return $null }
+  $sr = New-Object IO.StreamReader($e.Open()); try { $x = New-Object Xml.XmlDocument; $x.PreserveWhitespace = $true; $x.LoadXml($sr.ReadToEnd()); $x } finally { $sr.Dispose() }
+}
+function Write-ZipXml($zip, [string]$name, $x) {
+  $old = $zip.GetEntry($name); if ($old) { $old.Delete() }
+  $s = $zip.CreateEntry($name, [IO.Compression.CompressionLevel]::Optimal).Open()
+  try { $w = New-Object IO.StreamWriter($s, (New-Object Text.UTF8Encoding $false)); $x.Save($w); $w.Flush() } finally { $s.Dispose() }
+}
+function Write-XlsxCells([byte[]]$bytes, [string]$sheetName, $cells) {
+  Add-Type -AssemblyName System.IO.Compression
+  $M = 'http://schemas.openxmlformats.org/spreadsheetml/2006/main'; $R = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships'
+  $ms = New-Object IO.MemoryStream; $ms.Write($bytes, 0, $bytes.Length); $ms.Position = 0
+  $zip = New-Object IO.Compression.ZipArchive($ms, [IO.Compression.ZipArchiveMode]::Update, $true)
+  try {
+    $wb = Read-ZipXml $zip 'xl/workbook.xml'; $ns = New-Object Xml.XmlNamespaceManager($wb.NameTable); $ns.AddNamespace('m', $M)
+    $sheet = $null; foreach ($s in $wb.SelectNodes('//m:sheets/m:sheet', $ns)) { if ((Norm $s.GetAttribute('name')) -eq (Norm $sheetName)) { $sheet = $s; break } }
+    if (-not $sheet) { throw ("Onglet « " + $sheetName + " » introuvable : rien n'est écrit.") }
+    $rid = $sheet.GetAttribute('id', $R); $rels = Read-ZipXml $zip 'xl/_rels/workbook.xml.rels'; $target = $null
+    foreach ($rel in $rels.DocumentElement.ChildNodes) { if ($rel.NodeType -eq [Xml.XmlNodeType]::Element -and $rel.GetAttribute('Id') -eq $rid) { $target = $rel.GetAttribute('Target') } }
+    if (-not $target) { throw "Onglet « $sheetName » : fichier interne introuvable, rien n'est écrit." }
+    $part = if ($target.StartsWith('/')) { $target.TrimStart('/') } else { 'xl/' + $target }
+    $doc = Read-ZipXml $zip $part; $ns2 = New-Object Xml.XmlNamespaceManager($doc.NameTable); $ns2.AddNamespace('m', $M)
+    $data = $doc.SelectSingleNode('//m:sheetData', $ns2)
+    foreach ($cell in @($cells)) { Set-XmlCell $doc $data $M ([int]$cell.r) ([int]$cell.c) $cell.v }
+    Write-ZipXml $zip $part $doc
+    # the formulas reading these cells : computed again when the file is next opened
+    $calc = $wb.SelectSingleNode('//m:calcPr', $ns); if ($calc) { $calc.SetAttribute('fullCalcOnLoad', '1'); Write-ZipXml $zip 'xl/workbook.xml' $wb }
+  } finally { $zip.Dispose() }
+  ,$ms.ToArray()
+}
+if ($PatchTest) {   # tests only : { file ; sheet ; cells : [ { r ; c ; v } ] } written into « file »
+  $spec = Get-Content $PatchTest -Raw -Encoding UTF8 | ConvertFrom-Json
+  $out = Write-XlsxCells ([IO.File]::ReadAllBytes($spec.file)) $spec.sheet @($spec.cells | ForEach-Object { @{ r = $_.r; c = $_.c; v = $_.v } })
+  [IO.File]::WriteAllBytes($spec.file, $out); exit 0
 }
 
 # ---------------- Configuration ----------------
@@ -380,10 +451,10 @@ function New-DirectAdapter($kind) {
   $a.Column = { param($a, $c) $n = & $a.RowCount $a; $out = New-Object object[] ($n + 1); for ($r = 1; $r -le $n; $r++) { $out[$r] = & $a.Get $a $r $c }; ,$out }
   $a.HasFormula = { param($a, $r, $c) [bool](& $a.Cell $a $r $c).Formula }
   # EPPlus's Formula property has no leading « = » (unlike COM's) ; Quote-Formula always returns one, stripped here
-  $a.Set = { param($a, $r, $c, $v) $cell = (& $a.Cell $a $r $c)
-    if ($v -is [string] -and $v.Length -gt 0 -and '=+-@'.IndexOf($v[0]) -ge 0) { $cell.Formula = (Quote-Formula $v).Substring(1); return }
-    if ($v -is [datetime]) { $cell.Value = $v; if ($cell.Style.Numberformat.Format -notmatch '[dmy]') { $cell.Style.Numberformat.Format = 'dd/mm/yyyy' }; return }
-    $cell.Value = $v }
+  # v1.35 : the value kept in memory for reading back, and noted to be written into the file's own XML on Save
+  $a.pending = New-Object System.Collections.ArrayList
+  $a.Set = { param($a, $r, $c, $v) $cell = (& $a.Cell $a $r $c); $cell.Value = $v
+    $null = $a.pending.Add(@{ r = $a.firstRow + $r; c = $a.FirstCol + $c - 1; v = $v }) }
   $a.BeforeWrite = { param($a) }
   $a.AddRow = { param($a) throw "Nouvelle ligne : pas encore prise en charge sans Excel ouvert. Ouvre le fichier toi-même dans Excel, puis réessaie." }
   $a.ExcelRow = { param($a, $r) $a.firstRow + $r }
@@ -396,7 +467,7 @@ function New-DirectAdapter($kind) {
   # Seen for real (two reports, same line) : « La propriété Value est introuvable » — $cell came back unusable for
   # some column/row combination not yet understood (no Windows here to reproduce). Never worth losing the whole
   # request over a trailing-row trim : skip that one cell instead of throwing, the row just won't retrim this time.
-  $a.DeleteRow = { param($a, $r) for ($c = 1; $c -le $a.Headers.Count; $c++) { if (-not (& $a.HasFormula $a $r $c)) { try { $cell = & $a.Cell $a $r $c; if ($cell) { $cell.Value = $null } } catch { } } } }
+  $a.DeleteRow = { param($a, $r) for ($c = 1; $c -le $a.Headers.Count; $c++) { if (-not (& $a.HasFormula $a $r $c)) { try { & $a.Set $a $r $c $null } catch { } } } }
   $a.DeleteRows = { param($a, $first, $count) for ($i = 0; $i -lt $count; $i++) { & $a.DeleteRow $a ($first + $i) } }
   $a.WasClosed = $true
   $a.Backup = { param($a, $dir, $stamp) $n = [IO.Path]::GetFileNameWithoutExtension($a.path); $e = [IO.Path]::GetExtension($a.path); $p = Join-Path $dir ($n + "-" + $stamp + $e); Copy-Item $a.path $p; $p }
@@ -411,7 +482,8 @@ function New-DirectAdapter($kind) {
     $tmpDir = Join-Path ([IO.Path]::GetTempPath()) 'PontExcel'
     if (-not (Test-Path $tmpDir)) { $null = New-Item -ItemType Directory -Path $tmpDir }
     $tmp = Join-Path $tmpDir ([guid]::NewGuid().ToString('N') + '.xlsx')
-    try { $a.pkg.SaveAs([IO.FileInfo]$tmp) } catch { Remove-Item $tmp -ErrorAction SilentlyContinue; throw }
+    # v1.35 : the file as it is now on disk, only the written cells changed in it (never the workbook rewritten by EPPlus)
+    try { [IO.File]::WriteAllBytes($tmp, (Write-XlsxCells ([IO.File]::ReadAllBytes($a.path)) $a.ws.Name $a.pending)) } catch { Remove-Item $tmp -ErrorAction SilentlyContinue; throw }
     try { Invoke-AtomicReplace $tmp $a.path } catch { Remove-Item $tmp -ErrorAction SilentlyContinue; throw } }
   $a.Close = { param($a) $a.pkg.Dispose(); $a.ms.Dispose() }
   return $a
@@ -449,10 +521,10 @@ function New-MockAdapter($kind) {
 }
 function New-Adapter($kind) {
   if ($Mock) { return New-MockAdapter $kind }
-  # v1.35 : always written by Excel itself (open in that session, or opened hidden then closed). The file rewritten
-  # by EPPlus 4.5 (New-DirectAdapter) lost what that library doesn't know of the shared Excel files : formatting,
-  # conditional formats, drop-down lists, checkboxes… — reported for real. New-DirectAdapter is kept, never used to write.
-  return New-ComAdapter $kind
+  if (Is-AlreadyOpen (Resolve-ConfigPath $kind)) { return New-ComAdapter $kind }   # someone has it open : write into that session
+  # closed : written without Excel (no lock), only the written cells changed inside the file (v1.35, Write-XlsxCells)
+  try { return New-DirectAdapter $kind }
+  catch { Write-Info ("Écriture directe impossible (" + $_.Exception.Message + ") : on passe par Excel.") 'DarkGray'; return New-ComAdapter $kind }
 }
 
 # ---------------- Upsert ----------------
