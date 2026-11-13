@@ -48,8 +48,9 @@ with sync_playwright() as p:
           f"a range pasted from Excel fills the cells from there, down and right ({ {k: (o[k].get('c_fgP1'), o[k].get('c_finP1')) for k in 'ab'} })")
     # a lot priced once : its line fills every plant of the lot
     check("Lot 1 toitures" in pg.inner_text("#pricing-root"), "a lot has its own line in its request")
-    lot = "#pricing-root .pr-lot-in[data-k='c_fgP1']"
-    pg.fill(lot, "4,40"); pg.press(lot, "Enter"); pg.wait_for_timeout(300)
+    check(pg.locator("#pricing-root tr.pr-prod").first.inner_text().startswith("▾IEL") or "IEL" in pg.locator("#pricing-root tr.pr-prod").first.inner_text(), "level 1 : the producer")
+    lot = pg.locator("#pricing-root tr.pr-lot", has_text="Lot 1 toitures").locator(".pr-lot-in[data-k='c_fgP1']")
+    lot.fill("4,40"); lot.press("Enter"); pg.wait_for_timeout(300)
     o = by()
     check(o["e"].get("c_fgP1") == "4,40" and o["f"].get("c_fgP1") == "4,40" and pg.input_value("#pricing-root .pr-in[data-id='f'][data-k='c_fgP1']") == "4,40", "a price typed on the lot's line goes to every plant of the lot")
     # the pricing's mail dropped on the page : each line found by its business code, whatever the sheet
@@ -57,7 +58,11 @@ with sync_playwright() as p:
                         "27(07)29 – IEL_MOUTONNERIE – A", "2.93", "2.56", "0.5", "5.99", "27(07)29 – IEL_PLOUISY – A", "2.91", "1.80", "0.5", "5.21", "Lot 1 toitures – SOLEO", "2.10", "1.70", "0.5", "4.30", "", "On est à 0.4 €/MWh pour le pilotage"])
     eml = pathlib.Path(tempfile.mkdtemp()) / "Pricing.eml"
     eml.write_text("From: pricing@exemple.fr\r\nSubject: Pricing\r\nContent-Type: text/plain; charset=utf-8\r\n\r\n" + body, encoding="utf-8")
-    pg.set_input_files("#pricing-root .fill-drop input[type=file]", str(eml)); pg.wait_for_selector("#fill-overlay", timeout=8000)
+    pg.set_input_files("#pricing-root .fill-drop input[type=file]", str(eml)); pg.wait_for_selector("#assign-overlay", timeout=8000)
+    rows_txt = [pg.locator("#assign-overlay .as-row").nth(k).inner_text() for k in range(pg.locator("#assign-overlay .as-row").count())]
+    check(len(rows_txt) == 3 and "code affaire" in rows_txt[0] and "nom du lot" in rows_txt[2] and "Lot 1 toitures" in rows_txt[2],
+          f"before filling, every line of the mail with what it was matched to and how : the business code sure, the lot's name to check ({rows_txt})")
+    pg.click("#assign-overlay .as-go"); pg.wait_for_selector("#fill-overlay", timeout=5000)
     look = pg.inner_text("#fill-overlay")
     check("MOUTONNERIE" in look and "PLOUISY" in look and "5,99" in look and "0,4" in look, f"the mail : both plants found by their business code, shown before filling ({look[:200]!r})")
     check(not pg.locator("#fill-overlay .fg-c").first.is_checked(), "a price already typed and different starts unticked")
@@ -70,7 +75,9 @@ with sync_playwright() as p:
           "no more waiting : the menu's count says so, and the page shows what was just filled (« Prix reçus », rows marked)")
     # a baseload offer indexed on the CAL, pasted as copied (tabs, a header over several lines), with a line for both plants together
     bl = "Nom du marché\tPuissance BL (MW)\nsur la base du P50\tFormule\tPlancher (€/MWh)\n\tExemple \nCAL = 60 €/MWh\nMoutonnerie - Baseload\t1.25\t38.5% x CAL - 1.7\t15\t21.40\nPlouisy - Baseload\t0.32\t77.5% x CAL - 1.8\t15\t44.70\nPlouisy + Moutonnerie - Baseload\t1.60\t48.9% x CAL - 1.6\t15\t27.74"
-    pg.click("#pricing-root .fill-paste"); pg.fill("#paste-overlay textarea", bl); pg.click("#paste-overlay .paste-go"); pg.wait_for_selector("#fill-overlay", timeout=5000)
+    pg.click("#pricing-root .fill-paste"); pg.fill("#paste-overlay textarea", bl); pg.click("#paste-overlay .paste-go"); pg.wait_for_selector("#assign-overlay", timeout=5000)
+    check("offre groupée" in pg.inner_text("#assign-overlay") and "nom de centrale" in pg.inner_text("#assign-overlay"), "the plants' names and the group offer : proposed, to check")
+    pg.click("#assign-overlay .as-go"); pg.wait_for_selector("#fill-overlay", timeout=5000)
     look = pg.inner_text("#fill-overlay")
     check("38.5% x CAL - 1.7" in look and "77.5% x CAL - 1.8" in look and "Offre groupée" in look and "Plouisy + Moutonnerie" in look, f"a CAL-indexed baseload table : formulas, power, example, and the offer for both plants ({look[:220]!r})")
     pg.click("#fill-overlay .fill-go"); pg.wait_for_timeout(600)
@@ -87,8 +94,9 @@ with sync_playwright() as p:
     pg.reload(); pg.wait_for_timeout(1200); pg.click('[data-tab="pricing"]'); pg.wait_for_timeout(400)
     lots = "Nom du marché\tFrais de gestion (€/MWh)\tFrais fixe (€/MWh)\tMarge (€/MWh)\tFrais d'agrégation (€/MWh)\tFrais de gestion (%m0)\tFrais fixe (%m0)\tMarge (%m0)\tFrais d'agrégation (%m0)\nLot Brownfield\t2.68\t0.09\t0.5\t3.27\t3.9\t0.15\t0.73\t4.78\nLot Brownfield - 2028\t1.78\t0.06\t0.5\t2.34\t5.31\t0.11\t0.91\t6.33\nLot Decize\t2.92\t0.06\t0.5\t3.47\t4.23\t0.09\t0.72\t5.04\nLot Greenfield\t2.7\t0.19\t0.5\t3.29\t4.14\t0.15\t0.77\t5.06"
     pg.click("#pricing-root .fill-paste"); pg.fill("#paste-overlay textarea", lots); pg.click("#paste-overlay .paste-go"); pg.wait_for_selector("#assign-overlay", timeout=5000)
-    check("Lot Greenfield" in pg.inner_text("#assign-overlay") and "Lot Brownfield" not in pg.inner_text("#assign-overlay"), "a line whose lot isn't found : asked what it is (the others found by their lot's words)")
-    pg.click("#assign-overlay .as-pick-btn"); pg.click("#assign-overlay .as-lot[data-key='lot:Neuf']"); pg.click("#assign-overlay .as-go"); pg.wait_for_selector("#fill-overlay", timeout=5000)
+    gf = pg.locator("#assign-overlay .as-row", has_text="Lot Greenfield"); bf = pg.locator("#assign-overlay .as-row", has_text="Lot Brownfield").first
+    check("à choisir" in gf.inner_text() and "nom du lot" in bf.inner_text(), "a line whose lot isn't found : to choose ; the others proposed by their lot's words")
+    gf.locator(".as-pick-btn").click(); pg.click("#assign-overlay .as-lot[data-key='lot:Neuf']"); pg.click("#assign-overlay .as-go"); pg.wait_for_selector("#fill-overlay", timeout=5000)
     pg.click("#fill-overlay .fill-go"); pg.wait_for_timeout(600)
     o = by()
     check(o["g"].get("c_fgP1") == "3,27" and o["h"].get("c_m0P1") == "4,78" and o["g"].get("c_fgGestionPct") == "3,9" and o["i"].get("c_fgP1") == "3,47" and o["j"].get("c_fgP1") == "3,29",
@@ -102,19 +110,21 @@ with sync_playwright() as p:
     pg.click("#fill-overlay .fill-go"); pg.wait_for_timeout(600)
     o = by()
     check(o["b"].get("lot") == "Pommiers" and o["b"].get("c_fgP1") == "4,44", f"lot picked by hand : filled and remembered ({o['b'].get('lot')}, {o['b'].get('c_fgP1')})")
-    pg.click("#pricing-root .fill-paste"); pg.fill("#paste-overlay textarea", pick.replace("4,44", "4,55")); pg.click("#paste-overlay .paste-go"); pg.wait_for_selector("#fill-overlay", timeout=5000)
-    check(pg.locator("#assign-overlay").count() == 0, "the next time, the lot is found on its own")
+    pg.click("#pricing-root .fill-paste"); pg.fill("#paste-overlay textarea", pick.replace("4,44", "4,55")); pg.click("#paste-overlay .paste-go"); pg.wait_for_selector("#assign-overlay", timeout=5000)
+    check("Pommiers" in pg.inner_text("#assign-overlay .as-pick-btn") and "nom du lot" in pg.inner_text("#assign-overlay"), "the next time, the lot is proposed on its own")
+    pg.click("#assign-overlay .as-go"); pg.wait_for_selector("#fill-overlay", timeout=5000)
     pg.locator("#fill-overlay tbody input").evaluate_all("l=>l.forEach(x=>{ x.checked=true; x.dispatchEvent(new Event('change', { bubbles:true })); })")
     pg.click("#fill-overlay .fill-go"); pg.wait_for_timeout(600)
     # a request named like a lot (« Lot Vergers », made in the pipeline) : its line found on its own, every plant of the request
-    pg.click("#pricing-root .fill-paste"); pg.fill("#paste-overlay textarea", "Nom du marché\tFrais d'agrégation (€/MWh)\nLot Vergers\t3,33"); pg.click("#paste-overlay .paste-go"); pg.wait_for_selector("#fill-overlay", timeout=5000)
-    check(pg.locator("#assign-overlay").count() == 0, "a request named « Lot … » is a lot : found without asking")
+    pg.click("#pricing-root .fill-paste"); pg.fill("#paste-overlay textarea", "Nom du marché\tFrais d'agrégation (€/MWh)\nLot Vergers\t3,33"); pg.click("#paste-overlay .paste-go"); pg.wait_for_selector("#assign-overlay", timeout=5000)
+    check("Lot Vergers" in pg.inner_text("#assign-overlay .as-pick-btn"), "a request named « Lot … » is a lot : proposed")
+    pg.click("#assign-overlay .as-go"); pg.wait_for_selector("#fill-overlay", timeout=5000)
     pg.click("#fill-overlay .fill-go"); pg.wait_for_timeout(600)
     o = by(); check(o["y"].get("c_fgP1") == "3,33" and o["w"].get("c_fgP1") == "3,33", "every plant of the request « Lot Vergers » priced")
     # the table for the pricing, plain words and only the columns needed, filled in and pasted back : each in its line of the Suivi
     cols = pg.evaluate("window.TodoConditions.templateCols(JSON.parse(window.storage.peek('todo-widget-opportunities')).filter(o=>o.requestId==='r1'))")
-    check(len(cols) == 20 and cols[0] == "Nom du marché" and cols[-1] == "Commentaire", f"the full table, plain words ({cols})")
-    vals = ["27(07)29 – IEL_MOUTONNERIE – A", "", "", "6,05", "4,80", "31/12/2029", "5,10", "4,20", "31/12/2032", "", "", "0,25", "0,4", "2,93", "1,10", "2,56", "0,95", "0,5", "0,20", "valable 1 mois"]
+    check(len(cols) == 21 and cols[0] == "Nom du marché" and cols[-1] == "Commentaire", f"the full table, plain words ({cols})")
+    vals = ["Moutonnerie", "27(07)29 – IEL_MOUTONNERIE – A", "", "", "6,05", "4,80", "31/12/2029", "5,10", "4,20", "31/12/2032", "", "", "0,25", "0,4", "2,93", "1,10", "2,56", "0,95", "0,5", "0,20", "valable 1 mois"]
     back = "\t".join(cols) + "\n" + "\t".join(vals)
     pg.click("#pricing-root .fill-paste"); pg.fill("#paste-overlay textarea", back); pg.click("#paste-overlay .paste-go"); pg.wait_for_selector("#fill-overlay", timeout=5000)
     pg.locator("#fill-overlay tbody input").evaluate_all("l=>l.forEach(x=>{ x.checked=true; x.dispatchEvent(new Event('change', { bubbles:true })); })")
@@ -123,6 +133,8 @@ with sync_playwright() as p:
     want = {"c_fgP1": "6,05", "c_m0P1": "4,80", "c_finP1": "31/12/2029", "c_fgP2": "5,10", "c_m0P2": "4,20", "c_finP2": "31/12/2032", "c_puGo": "0,25", "c_pilotage": "0,4", "c_fgGestion": "2,93", "c_fgFixe": "2,56", "c_fgMarge": "0,5", "c_fgGestionPct": "1,10", "c_fgFixePct": "0,95", "c_fgMargePct": "0,20"}
     got = {k: o["a"].get(k) for k in want}
     check(got == want and (o["a"].get("pricingExtra") or {}).get("Commentaire") == "valable 1 mois", f"filled and pasted back : every column in its line of the Suivi, the comment kept ({got})")
+    t = pg.evaluate("window.TodoParse.pqHtmlToText('<p>Bonjour</p><table><tr><td><p>Nom du marché</p></td><td>Code(s) affaire</td><td></td><td>Frais</td></tr><tr><td>Lot A</td><td>X1, X2</td><td></td><td>4,1</td></tr></table>')")
+    check("Nom du marché\tCode(s) affaire\t\tFrais" in t and "Lot A\tX1, X2\t\t4,1" in t, f"a mail's table read cell by cell, empty cells kept ({t!r})")
     rows = pg.evaluate("window.TodoPricing.templateRows(JSON.parse(window.storage.peek('todo-widget-opportunities')).filter(o=>o.requestId==='r3'))")
     check(rows == ["Lot 1 – Brownfield", "Lot Decize", "Lot Neuf"], f"the table for the pricing : a line per lot ({rows})")
     pg.click("#pricing-root .pr-seg[data-seg='view'] button[data-v='done']"); pg.wait_for_timeout(300)
@@ -133,7 +145,7 @@ with sync_playwright() as p:
     check(all(x in pg.inner_text("#pricing-root") for x in ["MOUTONNERIE", "PLOUISY", "TOIT"]), "« Prix reçus » : the priced ones, to correct")
     pg.click("#pricing-root .pr-seg[data-seg='cols'] button[data-v='all']"); pg.wait_for_timeout(300)
     check("FG_%M0_P1" in pg.inner_text("#pricing-root") and "Remu_prod" in pg.inner_text("#pricing-root") and "Plancher (€/MWh)" in pg.inner_text("#pricing-root"), "« Toutes les colonnes » : every line of the Retour pricing, and the pricing's own columns")
-    pg.click("#pricing-root .pr-open[data-id='c']"); pg.wait_for_timeout(500)
+    pg.locator("#pricing-root .pr-open[data-id='c']").evaluate("e=>e.click()"); pg.wait_for_timeout(500)
     check(not pg.locator("#opp-detail-overlay").evaluate("e=>e.classList.contains('hidden')") and "TOIT" in pg.inner_text("#opp-detail-title"), "« Fiche » opens the installation's sheet")
     check(not err, f"no page errors ({err})")
     b.close()

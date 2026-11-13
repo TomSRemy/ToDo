@@ -2911,9 +2911,6 @@ html.widget .dup-banner{ display:none; }
 .pr-fold{ background:none; border:0; color:var(--tx3); cursor:pointer; font-size:11px; width:18px; padding:0; margin-right:4px; }
 .pr-fold:hover{ color:var(--tx1); } .pr-fold:focus-visible{ outline:2px solid var(--accent); outline-offset:1px; }
 .pr-table .pr-lot .pr-name b{ display:inline; }
-.pr-table .pr-lot .pr-name span{ display:block; padding-left:22px; }
-.pr-table tr[data-in]:not(.pr-lot) .pr-name{ padding-left:22px; }
-.pr-table .pr-lot ~ tr[data-in*="/"] .pr-name{ padding-left:30px; }
 .pr-r{ margin-left:auto; display:flex; gap:6px; align-items:center; }
 .pr-scroll{ overflow:auto; border:1px solid var(--bd); border-radius:10px; }
 .pr-table{ min-width:100%; }
@@ -2964,3 +2961,14 @@ html.widget .dup-banner{ display:none; }
 .fg-table .fg-sub .fg-ref{ padding-left:30px; } .fg-table .fg-ref b{ font:600 12px var(--font-mono, monospace); } .fg-table .fg-ref span{ margin-left:8px; font-size:11px; color:var(--tx3); }
 .pr-table tr[data-in]:not(.pr-lot) .pr-name b{ font:600 12px var(--font-mono, monospace); }
 .as-opt input + b{ font-family:var(--font-mono, monospace); font-size:12px; }
+.pr-table .pr-prod td{ font-size:12.5px; color:var(--tx1); }
+.pr-table .pr-prod .pr-tpl-grp{ margin-left:10px; }
+.pr-table .pr-lot .pr-name{ padding-left:22px; }
+.pr-table .pr-lot .pr-name span{ padding-left:22px; }
+.pr-table tr.pr-solo .pr-name{ padding-left:44px; }
+.pr-table tr.pr-in-lot .pr-name{ padding-left:56px; }
+.pr-table .pr-lot .pr-act .pr-tpl-grp{ padding:3px 8px; font-size:11px; }
+.as-how{ font:600 10.5px var(--font-mono, monospace); padding:2px 7px; border-radius:4px; white-space:nowrap; }
+.as-how.ok{ color:var(--accent); background:color-mix(in srgb, var(--accent) 12%, transparent); }
+.as-how.chk{ color:#E5B54F; background:#E5B54F18; }
+.as-how.none{ color:var(--tx3); background:var(--panel-3, rgba(255,255,255,.04)); }

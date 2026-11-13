@@ -847,7 +847,9 @@ window.TodoParse=(function(){
   // ----- Files: .eml / .txt / .msg (Outlook) / .xlsx; SheetJS is loaded on first use -----
 
   function pqDecodeQP(s){ return s.replace(/=\r?\n/g,'').replace(/(=[0-9A-F]{2})+/gi, m=>{ try{ return decodeURIComponent(m.replace(/=/g,'%')); }catch(e){ return m; } }); }
-  function pqHtmlToText(h){ const d=document.createElement('div'); d.innerHTML=h.replace(/<(br|\/p|\/div|\/tr|\/li)[^>]*>/gi,'\n$&'); d.querySelectorAll('style,script').forEach(n=>n.remove()); return d.textContent.replace(/\n{3,}/g,'\n\n'); }
+  function pqHtmlToText(h){ const d=document.createElement('div'); d.innerHTML=h.replace(/<(br|\/p|\/div|\/tr|\/li)[^>]*>/gi,'\n$&'); d.querySelectorAll('style,script').forEach(n=>n.remove());
+    [...d.querySelectorAll('table')].reverse().forEach(t=>{ const rows=[...t.rows].map(r=>[...r.cells].map(c=>c.textContent.replace(/\s+/g,' ').trim()).join('\t')); t.replaceWith(document.createTextNode('\n'+rows.join('\n')+'\n')); });   // a table : one line per row, its cells (empty ones too) separated by tabs
+    return d.textContent.replace(/\n{3,}/g,'\n\n'); }
   function pqDecodeMimeWords(s){ return s.replace(/=\?([^?]+)\?([bq])\?([^?]*)\?=/gi,(m,cs,enc,txt)=>{ try{ if(enc.toLowerCase()==='b') return decodeURIComponent(escape(atob(txt))); return pqDecodeQP(txt.replace(/_/g,' ')); }catch(e){ return txt; } }); }
   // .eml (saved from the new Outlook, Outlook on the web, Gmail…): text, sender, subject and the attached files
   // (Excel of the producer…), including those of a mail forwarded as an attachment.
@@ -879,7 +881,7 @@ window.TodoParse=(function(){
         else if(/content-type:\s*text\/html/i.test(ph) && !html) html=decodePart(ph,pb);
       });
     } else { const body=decodePart(head,rest); if(/content-type:\s*text\/html/i.test(head)) html=body; else text=body; }
-    let body=text||pqHtmlToText(html);
+    let body=/<table/i.test(html) ? pqHtmlToText(html) : text||pqHtmlToText(html);   // a table : read cell by cell from the HTML (the text version loses the empty cells)
     forwarded.forEach(f=>{ body+='\n\n-------- Mail joint --------\nDe : '+f.from+'\nObjet : '+f.subject+'\n\n'+f.body; });
     return { from:hdr('From'), subject:hdr('Subject'), body, attachments, forwarded };
   }
@@ -889,7 +891,8 @@ window.TodoParse=(function(){
     const get=(path)=>{ const e=XLSX.CFB.find(cfb,path); return e&&e.content?new Uint8Array(e.content):null; };
     const str=(id)=>{ const u=get('/__substg1.0_'+id+'001F'); if(u) return pqUtf16(u); const a=get('/__substg1.0_'+id+'001E'); return a?new TextDecoder('latin1').decode(a).replace(/\u0000+$/,''):''; };
     let body=str('1000');
-    if(!body){ const h=get('/__substg1.0_10130102'); if(h) body=pqHtmlToText(new TextDecoder().decode(h)); }
+    const h=get('/__substg1.0_10130102'), html=h ? new TextDecoder().decode(h) : '';
+    if(!body || /<table/i.test(html)) body=pqHtmlToText(html)||body;   // a table : read cell by cell from the HTML (the text version loses the empty cells)
     const attachments=[];
     cfb.FullPaths.forEach(p=>{
       const m=/^\/?(?:Root Entry\/)?(__attach_version1\.0_#[0-9A-F]{8})\/$/i.exec(p); if(!m) return;

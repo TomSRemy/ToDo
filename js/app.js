@@ -5094,7 +5094,7 @@
     qualif_en_cours:[{ id:'rdv2', label:'RDV 2', date:'rdv2' },{ id:'decision', label:'Décision Go / No Go prise' }],
     pricing_indicatif:[{ id:'mail', label:'Mail de demande envoyé', auto:l=>l.every(o=>o.mailSentAt), act:{ label:'Copier le mail', show:l=>!l.every(o=>o.mailSentAt), fn:(l,btn)=>{ const ml=pricingMail(reqOfList(l), l); copyToClipboard(ml.subject+'\n\n'+ml.body, btn); markMailSent(l); } } },
       { id:'caract', label:'Fichier Caractéristiques joint', auto:l=>l.every(o=>o.caractSentAt), act:{ label:'Créer le fichier', show:l=>!l.every(o=>o.caractSentAt), fn:(l,btn)=>downloadCaract(l, btn) } },
-      { id:'ops', label:'Retour d’Ops reçu' },{ id:'prix', label:'Prix noté dans la fiche', auto:l=>l.every(o=>o.prixValeur || o.c_pu || o.c_fgP1 || o.c_formule || o.c_grpFormule), act:{ label:'Saisir les prix', show:l=>!l.every(o=>o.prixValeur || o.c_pu || o.c_fgP1 || o.c_formule || o.c_grpFormule), fn:l=>goToPricingAnswer(l) } }],
+      { id:'ops', label:'Retour d’Ops reçu' },{ id:'prix', label:'Prix noté dans la fiche', auto:l=>l.every(o=>o.prixValeur || o.c_pu || o.c_fgP1 || o.c_formule || o.c_grpFormule), act:{ label:'Saisir les prix', show:()=>true, fn:l=>goToPricingAnswer(l) } }],
     offre_remise:[{ id:'prete', label:'Offre préparée' },{ id:'envoyee', label:'Offre remise au producteur', date:'dateOffre' }],
     offre_attente:[{ id:'relance', label:'Relance faite', note:l=>{ const t=pqDateOf(l[0].dateOffre); if(!t) return ''; const n=Math.floor((Date.now()-t)/864e5); return n>0?'offre remise il y a '+n+' jour'+(n>1?'s':''):''; } },{ id:'reponse', label:'Réponse du producteur reçue' }],
     kyc:[{ id:'docs', label:'Documents KYC reçus' },{ id:'solva', label:'Solvabilité validée (Juridique)' }],
