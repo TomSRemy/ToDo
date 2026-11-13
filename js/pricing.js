@@ -108,16 +108,36 @@ window.TodoPricing=(function(){
       root.innerHTML='<div class="pr-top"><h1>Pricing</h1><span>les prix et frais rendus par le pricing, installation par installation</span></div><div class="pr-drop-slot"></div>'
         +'<div class="pr-bar">'+seg('view', [['wait', 'En attente de prix <i>'+nWait+'</i>'], ['done', 'Prix reçus <i>'+nDone+'</i>'], ['all', 'Toutes <i>'+nAll+'</i>']], view)
         +'<input type="search" class="pr-search" placeholder="Rechercher producteur, centrale, code…" value="'+escapeHtml(q)+'">'
-        +'<span class="pr-r">'+seg('cols', [['essential', 'Essentiel'], ['all', 'Toutes les colonnes']], cols)+(bridgeConfigured()?'<button type="button" class="ghost-btn pr-send">Envoyer au Suivi</button>':'')+'</span></div>'
+        +'<span class="pr-r">'+seg('cols', [['essential', 'Essentiel'], ['all', 'Toutes les colonnes']], cols)+'<button type="button" class="ghost-btn pr-tpl" title="Le tableau à faire compléter par le pricing, une ligne par installation ou lot de cette vue, à coller dans ton mail">Tableau pour le pricing</button>'+(bridgeConfigured()?'<button type="button" class="ghost-btn pr-send">Envoyer au Suivi</button>':'')+'</span></div>'
         +(list.length ? '<div class="pr-scroll">'+tableHtml(list)+'</div>' : '<p class="xs-empty">'+(view==='wait'?'✓ Aucune installation en attente de prix.':'Rien à afficher.')+'</p>');
       // the drop zone : the pricing's mail matched across every installation of the app
       root.querySelector('.pr-drop-slot').replaceWith(C().dropZone(installs().filter(o=>!isExited(o) || priced(o)), root, 'Dépose ici le mail du pricing : chaque ligne va à son installation (code affaire)'));
       root.querySelectorAll('.pr-seg').forEach(s=>s.querySelectorAll('button').forEach(b=>{ b.onclick=()=>{ if(s.dataset.seg==='view'){ view=b.dataset.v; try{ localStorage.setItem('pricing-view', view); }catch(e){ /* kept for this session */ } }
         else { cols=b.dataset.v; try{ localStorage.setItem('pricing-cols', cols); }catch(e){ /* kept for this session */ } } render(); }; }));
       const sr=root.querySelector('.pr-search'); sr.oninput=()=>{ q=sr.value; const pos=sr.selectionStart; render(); const n=$('pricing-root').querySelector('.pr-search'); n.focus(); n.setSelectionRange(pos, pos); };
+      root.querySelector('.pr-tpl').onclick=e=>copyTemplate(e.currentTarget);
       const send=root.querySelector('.pr-send'); if(send) send.onclick=async()=>{ const l=shown().filter(priced); if(!l.length){ notify('Aucun prix à envoyer dans cette vue.'); return; } await window.TodoExcelSync.sendToExcel('bdd', l, send); };
       wire(root); paintCount();
     }
+    // the table the pricing fills in : the Suivi's exact names, one line per lot (« Lot … ») or per installation (its
+    // business code), copied as a table (pasted in Outlook as a table) and as tab-separated text
+    function templateRows(list){
+      const seen=new Set(), names=[];
+      list.forEach(o=>{ const n=o.lot ? 'Lot '+String(o.lot).replace(/^lot\s*/i, '') : app.codeAffaire(o); if(!seen.has(n)){ seen.add(n); names.push(n); } });
+      return names;
+    }
+    async function copyTemplate(btn){
+      const list=shown(), cols=C().TEMPLATE_COLS; if(!list.length){ notify('Aucune installation dans cette vue.'); return; }
+      const names=templateRows(list), lines=[cols].concat(names.map(n=>[n, 'Base'].concat(cols.slice(2).map(()=>''))));
+      const tsv=lines.map(r=>r.join('\t')).join('\n');
+      const cell=(v, h)=>'<'+(h?'th':'td')+' style="border:1px solid #999;padding:4px 8px;font:11pt Calibri,Arial;'+(h?'background:#1d6b4f;color:#fff;':'')+'">'+escapeHtml(v)+'</'+(h?'th':'td')+'>';
+      const html='<table style="border-collapse:collapse">'+lines.map((r, i)=>'<tr>'+r.map(v=>cell(v, i===0)).join('')+'</tr>').join('')+'</table>';
+      try{ await navigator.clipboard.write([new ClipboardItem({ 'text/html':new Blob([html], { type:'text/html' }), 'text/plain':new Blob([tsv], { type:'text/plain' }) })]); }
+      catch(e){ try{ await navigator.clipboard.writeText(tsv); }catch(e2){ notify('Copie impossible dans ce navigateur.'); return; } }
+      const t=btn.textContent; btn.textContent='Copié ✓'; setTimeout(()=>{ btn.textContent=t; }, 1500);
+      notify('Tableau copié ('+names.length+' ligne'+(names.length>1?'s':'')+') : colle-le dans ton mail au pricing. Une ligne par option (« Option ») si besoin.');
+    }
+    api.templateRows=templateRows;
     function paintCount(){ const b=$('pricing-badge'); if(b){ const n=api.waitingCount(); b.textContent=n?String(n):''; } }
     // from a sheet's « Saisir les prix » : the view that shows them, their rows marked, the first empty price focused
     function focusOn(ids){

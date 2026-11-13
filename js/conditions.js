@@ -40,6 +40,7 @@ window.TodoConditions=(function(){
     // the detail of the aggregation fee as the pricing's mail gives it (no column in the Suivi : kept in the app)
     ['c_fgGestion', 'Frais de gestion (€/MWh)', null, 'number'], ['c_fgFixe', 'Frais fixe (€/MWh)', null, 'number'], ['c_fgMarge', 'Marge (€/MWh)', null, 'number'],
     ['c_pilotage', 'Pilotage (€/MWh)', null, 'number'],
+    ['c_fgGestionPct', 'Frais de gestion (%m0)', null, 'number'], ['c_fgFixePct', 'Frais fixe (%m0)', null, 'number'], ['c_fgMargePct', 'Marge (%m0)', null, 'number'],
     // a baseload offer indexed on the CAL (« 38.5% x CAL - 1.7 »), and the same for several plants together
     ['c_blMW', 'Puissance BL (MW)', null, 'number'], ['c_formule', 'Formule', null, 'text'], ['c_exemple', 'Prix exemple (€/MWh)', null, 'number'], ['c_exempleRef', 'Base de l\u2019exemple', null, 'text'],
     ['c_grpNom', 'Offre groupée', null, 'text'], ['c_grpBlMW', 'Offre groupée · Puissance BL (MW)', null, 'number'], ['c_grpFormule', 'Offre groupée · Formule', null, 'text'], ['c_grpExemple', 'Offre groupée · Prix exemple (€/MWh)', null, 'number']
@@ -76,6 +77,13 @@ window.TodoConditions=(function(){
   const NUM=/^-?\d+(?:[.,]\d+)?\s*(?:€|%)?$/;
   const FIRST_COL=/^(nomdumarche|codeaffaire|centrale|installation|nomdelacentrale|nominstallation|marche)$/;
   // a pricing column → the sheet's field ; the total aggregation fee is the Suivi's FG_Fixe_P1
+  // a header → the sheet's field : the Suivi's exact name first, then the %m0 columns (never mixed with the €/MWh ones)
+  function fieldFor(h){
+    const f=foldS(h), exact=FIELDS.find(x=>foldS(x.label)===f);
+    if(exact) return exact.k;
+    if(/m0/.test(f)){ if(/fraisdagregation|total/.test(f)) return 'c_m0P1'; if(/fraisdegestion/.test(f)) return 'c_fgGestionPct'; if(/fraisfixe/.test(f)) return 'c_fgFixePct'; if(/marge/.test(f)) return 'c_fgMargePct'; }
+    return pricingField(h);
+  }
   function pricingField(h){
     const f=foldS(h);
     if(/pilotage/.test(f)) return 'c_pilotage';
@@ -107,7 +115,7 @@ window.TodoConditions=(function(){
     return cells;
   }
   // a header cell → the sheet's field ; a column the app doesn't know is kept under its own name (« x: » + its header)
-  const colKey=h=>{ const hit=TAB_COLS.find(([re, k])=>k && re.test(h)); return hit ? hit[1] : 'x:'+h.replace(/\s+/g, ' ').trim(); };
+  const colKey=h=>{ if(/^option$/i.test(h.trim())) return 'opt'; const k=fieldFor(h); if(k) return k; const hit=TAB_COLS.find(([re, x])=>x && re.test(h)); return hit ? hit[1] : 'x:'+h.replace(/\s+/g, ' ').trim(); };
   function tabTables(text){
     const lines=String(text||'').replace(/ /g, ' ').split(/\r?\n/), rows=[];
     const isData=l=>{ const c=l.split('\t').map(x=>x.trim()); return c.length>1 && c[0] && !FIRST_COL.test(foldS(c[0])) && c.slice(1).some(x=>x && isValue(x)); };
@@ -118,7 +126,7 @@ window.TodoConditions=(function(){
       if(!cols.length){ i=j-1; continue; }
       for(; j<lines.length && isData(lines[j]); j++){
         const c=lines[j].split('\t').map(x=>x.trim()), r={ name:c[0], values:{} };
-        cols.forEach((k, n)=>{ const v=c[n+1]; if(v && k!=='x:') r.values[k]=NUM.test(v) ? v.replace(/\s*[€%]$/, '').replace('.', ',') : v; });
+        cols.forEach((k, n)=>{ const v=c[n+1]; if(!v || k==='x:') return; if(k==='opt'){ r.option=v; return; } r.values[k]=NUM.test(v) ? v.replace(/\s*[€%]$/, '').replace('.', ',') : v; });
         if(ref && r.values.c_exemple) r.values.c_exempleRef=ref.replace(/\s+/g, ' ');
         rows.push(r);
       }
@@ -135,10 +143,10 @@ window.TodoConditions=(function(){
     for(let i=0; i<cells.length; i++){
       if(!FIRST_COL.test(foldS(cells[i]))) continue;
       const head=[]; let j=i+1;
-      while(j<cells.length && !NUM.test(cells[j]) && pricingField(cells[j])!==null){ head.push(cells[j]); j++; }
+      while(j<cells.length && !NUM.test(cells[j]) && fieldFor(cells[j])!==null){ head.push(cells[j]); j++; }
       if(!head.length) continue;
       while(j+head.length<cells.length && !NUM.test(cells[j]) && head.every((h, k)=>NUM.test(cells[j+1+k]))){
-        const r={ name:cells[j], values:{} }; head.forEach((h, k)=>{ r.values[pricingField(h)]=cells[j+1+k].replace(/\s*[€%]$/, '').replace('.', ','); });
+        const r={ name:cells[j], values:{} }; head.forEach((h, k)=>{ r.values[fieldFor(h)]=cells[j+1+k].replace(/\s*[€%]$/, '').replace('.', ','); });
         if(!rows.some(x=>foldS(x.name)===foldS(r.name))) rows.push(r);   // a quoted older reply repeating the table : the most recent kept
         j+=head.length+1;
       }
@@ -147,6 +155,9 @@ window.TodoConditions=(function(){
     return rows;
   }
   api.pricingTables=pricingTables;
+  // the table to send to the pricing : the Suivi's exact names, one line per installation / lot / option, to fill in
+  api.TEMPLATE_COLS=['Nom du marché', 'Option', 'FG_Fixe_P1 € / MWh', 'Fin P1 fixe', 'FG_Fixe_P2 € / MWh', 'Fin P2 fixe', 'FG_%M0_P1', 'Fin P1 %', 'FG_%M0_P2', 'Fin P2 %',
+    'Pu€/MWh (PPA)', 'Formule', 'Prix_PE', 'Frais_gestion_PE €/MWh', 'Pu/Go', 'Remu_prod', 'Pilotage (€/MWh)', 'Frais de gestion (€/MWh)', 'Frais fixe (€/MWh)', 'Marge (€/MWh)', 'Commentaire'];
   // « on est à 0.4 €/MWh pour le pilotage » / « pilotage : 0,4 €/MWh » : the steering's price said in a sentence of the thread
   api.pilotageIn=text=>{ const t=String(text||'');
     const m=/(\d+(?:[.,]\d+)?)\s*€\s*\/\s*MWh[^\n.]{0,25}pilotage/i.exec(t) || /pilotage[^\n\d]{0,30}(\d+(?:[.,]\d+)?)\s*€\s*\/\s*MWh/i.exec(t);
@@ -211,10 +222,15 @@ window.TodoConditions=(function(){
     // looser, after the lots : the plant's name alone in the line's name
     const sheetByName=(r, list)=>{ const n=fold(r.name); return list.find(o=>{ const c=fold(o.centrale||o.title); return c.length>3 && n.includes(c); }) || null; };
     // a line priced for a whole lot (« Lot 1 — toitures », or a business code carrying the lot's name) : every plant of the lot
+    // « Lot Brownfield » ↔ the app's lot « Brownfield » or « Lot 1 – Brownfield » : the same words, « lot » and numbers aside
+    const lotWords=x=>new Set(pqFold(String(x||'')).split(/[^a-z0-9]+/).filter(w=>w.length>1 && w!=='lot' && !/^\d{1,2}$/.test(w)));
     function lotFor(r, list){
-      const n=fold(r.name), lots=[...new Set(list.map(o=>o.lot).filter(Boolean))];
-      const lot=lots.filter(l=>fold(l).length>2 && n.includes(fold(l))).sort((a, b)=>fold(b).length-fold(a).length)[0];
-      return lot ? list.filter(o=>o.lot===lot) : [];
+      const rw=lotWords(r.name), lots=[...new Set(list.map(o=>o.lot).filter(Boolean))];
+      const lot=lots.filter(l=>{ const lw=lotWords(l); return lw.size && [...lw].every(w=>rw.has(w)); }).sort((a, b)=>lotWords(b).size-lotWords(a).size)[0];
+      if(!lot) return { plants:[], extra:'' };
+      const plants=list.filter(o=>o.lot===lot), lw=lotWords(lot), pw=lotWords(plants.map(o=>[o.producteur, o.company].join(' ')).join(' '));
+      const extra=[...rw].filter(w=>!lw.has(w) && !pw.has(w) && !/^(baseload|bl)$/.test(w));   // « Lot Brownfield - 2028 » : the variant « 2028 » (never the producer's name)
+      return { plants, extra:extra.join(' ') };
     }
     // « Plouisy + Moutonnerie - Baseload » : an offer for several plants together, kept on each of them as the group's offer
     const GRP={ c_blMW:'c_grpBlMW', c_formule:'c_grpFormule', c_exemple:'c_grpExemple', c_exempleRef:'c_exempleRef' };
@@ -226,26 +242,69 @@ window.TodoConditions=(function(){
       Object.keys(r.values).forEach(k=>{ values[GRP[k]||k]=r.values[k]; });
       return { plants, values };
     }
-    function pricingChanges(text, list, from){
-      const out=[], hit=new Set(), put=(o, k, v)=>{
+    // a line's sheets : the sure match, else its lot (and the variant beyond the lot's name), else the plant's name alone
+    function targetsFor(r, list, n){
+      const o=sheetForLine(r, list) || (list.length===1 && n===1 ? list[0] : null); if(o) return { plants:[o], extra:'' };
+      const lot=lotFor(r, list); if(lot.plants.length) return lot;
+      const loose=sheetByName(r, list); return { plants:loose ? [loose] : [], extra:'' };
+    }
+    // the lines of the table, each onto its sheets : an option or a variant (« Lot Brownfield - 2028 », Option « MES 2028 ») kept
+    // apart under its own name ; the lines nobody is found for come back in `left`, to be assigned by hand
+    function pricingChanges(text, list, from, assigned){
+      const out=[], hit=new Set(), left=[], put=(o, k, v)=>{
         if(k.startsWith('x:')){ const h=k.slice(2), now=(o.pricingExtra||{})[h]; if(v!=='' && !same(now, v)) out.push({ o, label:h, now:String(now==null?'':now), val:v, set:x=>{ o.pricingExtra=Object.assign({}, o.pricingExtra||{}, { [h]:x }); }, from }); return; }
         const f=FIELDS.find(x=>x.k===k); if(f && v!=='' && !same(o[k], v)) out.push({ o, label:f.label, now:String(o[k]==null?'':o[k]), val:v, set:x=>{ o[k]=x; }, from }); };
-      pricingTables(text).forEach(r=>{ const g=groupLine(r, list); if(g){ g.plants.forEach(x=>{ hit.add(x); Object.keys(g.values).forEach(k=>put(x, k, g.values[k])); }); return; }
-        const o=sheetForLine(r, list) || (list.length===1 && pricingTables(text).length===1 ? list[0] : null), lot=o ? [] : lotFor(r, list), loose=o || lot.length ? null : sheetByName(r, list);
-        (o ? [o] : lot.length ? lot : loose ? [loose] : []).forEach(x=>{ hit.add(x); Object.keys(r.values).forEach(k=>put(x, k, r.values[k])); }); });
+      const label=k=>{ if(k.startsWith('x:')) return k.slice(2); const f=FIELDS.find(x=>x.k===k); return f ? f.label : k; };
+      const onto=(targets, r, variant)=>targets.forEach(x=>{ hit.add(x); Object.keys(r.values).forEach(k=>put(x, variant ? 'x:'+variant+' \u00b7 '+label(k) : k, r.values[k])); });
+      const rows=pricingTables(text);
+      rows.forEach((r, i)=>{
+        const opt=r.option && !/^(base|principale?|standard|-)$/i.test(r.option) ? r.option : '';
+        if(assigned && assigned[i]){ onto(assigned[i], r, opt); return; }
+        const g=groupLine(r, list); if(g){ g.plants.forEach(x=>{ hit.add(x); Object.keys(g.values).forEach(k=>put(x, k, g.values[k])); }); return; }
+        const t=targetsFor(r, list, rows.length);
+        if(!t.plants.length){ left.push(i); return; }
+        onto(t.plants, r, opt || t.extra);
+      });
       // the steering's price, said once for the whole mail : on the plants of its table (or the only sheet)
       const pil=api.pilotageIn(text);
       if(pil) (hit.size ? [...hit] : list.length===1 ? list : []).forEach(o=>put(o, 'c_pilotage', pil));
-      return out;
+      return { out, left, rows };
+    }
+    // the lines found for no sheet : chosen by hand (a lot, or an installation), or left aside
+    function assignDialog(rows, left, list){
+      return new Promise(res=>{
+        const lots=[...new Set(list.map(o=>o.lot).filter(Boolean))].sort();
+        const opts='<option value="">Ignorer cette ligne</option>'+lots.map(l=>'<option value="lot:'+escapeHtml(l)+'">Lot · '+escapeHtml(l)+'</option>').join('')
+          +list.map(o=>'<option value="o:'+escapeHtml(o.id)+'">'+escapeHtml((o.centrale||o.title||'?')+' \u00b7 '+(o.producteur||o.company||''))+'</option>').join('');
+        const ov=document.createElement('div'); ov.className='modal-overlay'; ov.id='assign-overlay';
+        ov.innerHTML='<div class="modal-box wide fill-box" role="dialog" aria-labelledby="assign-title"><div class="opp-detail-head"><h3 id="assign-title">À quoi correspondent ces lignes ?</h3></div>'
+          +'<p class="modal-hint">'+left.length+' ligne'+(left.length>1?'s':'')+' du tableau du pricing sans fiche ni lot reconnus. Choisis pour chacune, puis l\u2019aperçu habituel s\u2019ouvre.</p>'
+          +'<table class="fill-table"><tbody>'+left.map(i=>'<tr><td class="fl"></td><td><select data-i="'+i+'">'+opts+'</select></td></tr>').join('')+'</tbody></table>'
+          +'<div class="crm-form-actions"><button type="button" class="ghost-btn as-cancel">Annuler</button><button type="button" class="fill-go as-go">Continuer</button></div></div>';
+        ov.querySelectorAll('.fl').forEach((td, n)=>{ td.textContent=rows[left[n]].name; });
+        const done=v=>{ ov.remove(); res(v); };
+        ov.querySelector('.as-cancel').onclick=()=>done(null);
+        ov.querySelector('.as-go').onclick=()=>{ const map={}; ov.querySelectorAll('select').forEach(sel=>{ const v=sel.value; if(!v) return;
+          map[+sel.dataset.i]=v.startsWith('lot:') ? list.filter(o=>o.lot===v.slice(4)) : list.filter(o=>o.id===v.slice(2)); }); done(map); };
+        ov.addEventListener('keydown', e=>{ if(e.key==='Escape'){ e.stopPropagation(); done(null); } });
+        document.body.appendChild(ov); ov.querySelector('select').focus();
+      });
+    }
+    // the pricing's changes, with the lines nobody was found for chosen by hand first
+    async function pricingChangesAsk(text, list, from){
+      const first=pricingChanges(text, list, from);
+      if(!first.left.length || (list.length===1 && first.out.length)) return first.out;   // on a single sheet, the other plants' lines are none of its business
+      const map=await assignDialog(first.rows, first.left, list); if(!map) return first.out;
+      return pricingChanges(text, list, from, map).out;
     }
     async function fill(files, list){
       let got; try{ got=await readPipeFiles(files); }catch(e){ notify('Fichier illisible : '+(e&&e.message||e)); return; }
-      const rows=pricingChanges(got.text, list, got.names.join(', '));
+      const rows=await pricingChangesAsk(got.text, list, got.names.join(', '));
       (got.installs||[]).forEach(inst=>{ const o=sheetFor(inst, list); if(o) rows.push(...changes(o, inst, got.names.join(', '))); });
       await apply(rows, got, list);
     }
     // the text of a mail pasted (the pricing's answer copied out of Outlook)
-    async function fillText(text, list){ await apply(pricingChanges(text, list, 'texte collé'), { names:['le texte collé'], installs:[], text }, list); }
+    async function fillText(text, list){ await apply(await pricingChangesAsk(text, list, 'texte collé'), { names:['le texte collé'], installs:[], text }, list); }
     // the pricing's mails kept on the sheets they filled (the text, read back later ; at most 20 000 characters, the last 10)
     const mailHash=t=>{ let h=5381; for(let i=0; i<t.length; i++) h=((h*33)^t.charCodeAt(i))>>>0; return h.toString(36); };
     function keepMail(sheets, got){

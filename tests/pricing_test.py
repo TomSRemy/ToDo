@@ -77,6 +77,22 @@ with sync_playwright() as p:
           f"each plant gets its formula, both keep the group's offer ({ {k: o['a'].get(k) for k in ['c_formule', 'c_blMW', 'c_exemple', 'c_grpNom', 'c_grpFormule']} })")
     check((o["a"].get("pricingExtra") or {}).get("Plancher (€/MWh)") == "15", f"a column the app doesn't know is kept under its own header ({o['a'].get('pricingExtra')})")
     check(len(o["a"].get("pricingMails") or []) >= 1 and "38.5% x CAL" in o["a"]["pricingMails"][-1]["text"], "the pricing's mail (here pasted) is kept on the sheets it filled")
+    # the pricing's table by lot, with €/MWh and %m0 columns and a variant line ; a lot nobody knows : chosen by hand
+    pg.evaluate("""(()=>{ const all=JSON.parse(window.storage.peek('todo-widget-opportunities')); const add=(id, plant, lot)=>all.push({ id, kind:'installation', company:'SOLVEO', producteur:'SOLVEO', centrale:plant, lot, requestId:'r3', stage:'pricing_indicatif', createdAt:1, updatedAt:1, deleted:false });
+      add('g', 'SITE A', 'Lot 1 – Brownfield'); add('h', 'SITE B', 'Lot 1 – Brownfield'); add('i', 'DECIZE TOIT', 'Decize'); add('j', 'SITE GREEN', 'Neuf');
+      window.storage.set('todo-widget-opportunities', JSON.stringify(all)); })()""")
+    pg.reload(); pg.wait_for_timeout(1200); pg.click('[data-tab="pricing"]'); pg.wait_for_timeout(400)
+    lots = "Nom du marché\tFrais de gestion (€/MWh)\tFrais fixe (€/MWh)\tMarge (€/MWh)\tFrais d'agrégation (€/MWh)\tFrais de gestion (%m0)\tFrais fixe (%m0)\tMarge (%m0)\tFrais d'agrégation (%m0)\nLot Brownfield\t2.68\t0.09\t0.5\t3.27\t3.9\t0.15\t0.73\t4.78\nLot Brownfield - 2028\t1.78\t0.06\t0.5\t2.34\t5.31\t0.11\t0.91\t6.33\nLot Decize\t2.92\t0.06\t0.5\t3.47\t4.23\t0.09\t0.72\t5.04\nLot Greenfield\t2.7\t0.19\t0.5\t3.29\t4.14\t0.15\t0.77\t5.06"
+    pg.click("#pricing-root .fill-paste"); pg.fill("#paste-overlay textarea", lots); pg.click("#paste-overlay .paste-go"); pg.wait_for_selector("#assign-overlay", timeout=5000)
+    check("Lot Greenfield" in pg.inner_text("#assign-overlay") and "Lot Brownfield" not in pg.inner_text("#assign-overlay"), "a line whose lot isn't found : asked what it is (the others found by their lot's words)")
+    pg.select_option("#assign-overlay select", "lot:Neuf"); pg.click("#assign-overlay .as-go"); pg.wait_for_selector("#fill-overlay", timeout=5000)
+    pg.click("#fill-overlay .fill-go"); pg.wait_for_timeout(600)
+    o = by()
+    check(o["g"].get("c_fgP1") == "3,27" and o["h"].get("c_m0P1") == "4,78" and o["g"].get("c_fgGestionPct") == "3,9" and o["i"].get("c_fgP1") == "3,47" and o["j"].get("c_fgP1") == "3,29",
+          f"€/MWh and %m0 apart (the %m0 total in FG_%M0_P1), every plant of each lot, the one chosen by hand too ({ {k: (o[k].get('c_fgP1'), o[k].get('c_m0P1')) for k in 'ghij'} })")
+    check((o["g"].get("pricingExtra") or {}).get("2028 · FG_Fixe_P1 € / MWh") == "2,34", f"the variant « Lot Brownfield - 2028 » kept apart under its name ({o['g'].get('pricingExtra')})")
+    rows = pg.evaluate("window.TodoPricing.templateRows(JSON.parse(window.storage.peek('todo-widget-opportunities')).filter(o=>o.requestId==='r3'))")
+    check(rows == ["Lot 1 – Brownfield", "Lot Decize", "Lot Neuf"], f"the table for the pricing : a line per lot ({rows})")
     pg.click("#pricing-root .pr-seg[data-seg='view'] button[data-v='done']"); pg.wait_for_timeout(300)
     pg.click("#pricing-root .pr-mails-btn[data-id='a']"); pg.wait_for_selector("#pmail-overlay", timeout=3000)
     check("77.5% x CAL - 1.8" in pg.inner_text("#pmail-overlay"), "the ✉ button shows the kept mail")
