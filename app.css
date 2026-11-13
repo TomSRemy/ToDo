@@ -2919,3 +2919,4 @@ html.widget .dup-banner{ display:none; }
 .pr-tag.wait{ color:#E5B54F; background:#E5B54F18; }
 .pr-table .pr-in{ min-width:78px; font-family:var(--font-mono, monospace); }
 .pr-table .pr-lot td{ background:color-mix(in srgb, var(--accent) 5%, transparent); } .pr-table .pr-lot .pr-name b{ color:var(--accent); }
+.pr-table tr.pr-focus td{ background:color-mix(in srgb, #5BA8F5 10%, transparent); }

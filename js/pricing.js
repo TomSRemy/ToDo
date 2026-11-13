@@ -114,7 +114,18 @@ window.TodoPricing=(function(){
       wire(root); paintCount();
     }
     function paintCount(){ const b=$('pricing-badge'); if(b){ const n=api.waitingCount(); b.textContent=n?String(n):''; } }
-    Object.assign(api, { render, paintCount });
+    // from a sheet's « Saisir les prix » : the view that shows them, their rows marked, the first empty price focused
+    function focusOn(ids){
+      if(!ids.length) return;
+      const list=app.opportunities.filter(o=>ids.includes(o.id));
+      q=''; view=list.every(waiting) ? 'wait' : 'all'; render();
+      const root=$('pricing-root'), rows=ids.map(id=>root.querySelector('.pr-in[data-id="'+id+'"]')).filter(Boolean).map(x=>x.closest('tr'));
+      rows.forEach(tr=>tr.classList.add('pr-focus'));
+      if(rows[0]) rows[0].scrollIntoView({ block:'center' });
+      const first=rows.map(tr=>[...tr.querySelectorAll('.pr-in')].find(i=>!i.value)).find(Boolean) || (rows[0] && rows[0].querySelector('.pr-in'));
+      if(first) setTimeout(()=>{ first.focus(); first.select(); }, 60);
+    }
+    Object.assign(api, { render, paintCount, focusOn });
   };
   return api;
 })();
