@@ -81,11 +81,12 @@ window.TodoConditions=(function(){
   function fieldFor(h){
     const f=foldS(h), exact=FIELDS.find(x=>foldS(x.label)===f);
     if(exact) return exact.k;
-    if(/m0/.test(f)){ if(/fraisdagregation|total/.test(f)) return 'c_m0P1'; if(/fraisdegestion/.test(f)) return 'c_fgGestionPct'; if(/fraisfixe/.test(f)) return 'c_fgFixePct'; if(/marge/.test(f)) return 'c_fgMargePct'; }
+    if(/m0/.test(f)){ if(/fraisdagregation|total/.test(f)) return /2e|deuxieme|seconde|p2/.test(f.replace('m0', '')) ? 'c_m0P2' : 'c_m0P1'; if(/fraisdegestion/.test(f)) return 'c_fgGestionPct'; if(/fraisfixe/.test(f)) return 'c_fgFixePct'; if(/marge/.test(f)) return 'c_fgMargePct'; }
     return pricingField(h);
   }
   // a column's words → the field ; the first rule that matches (the order matters : « 2e période » before the plain fee)
   const FIELD_RULES=[[/pilotage/, 'c_pilotage'], [/puissancebl|baseload/, 'c_blMW'], [/formule/, 'c_formule'], [/exemple/, 'c_exemple'], [/fraisacc/, 'c_fgAcc'],
+    [/(valablejusqu|jusquau|^fin).*(2e|deuxieme|seconde|p2)/, 'c_finP2'],
     [/(fraisdagregation|totalfrais).*(2e|deuxieme|p2|seconde)|(2e|deuxieme|seconde)periode/, 'c_fgP2'], [/valablejusqu|jusquau|finp1|findelapremiere|fin1re/, 'c_finP1'],
     [/fraisdagregation|totalfrais/, 'c_fgP1'], [/fraisdegestion/, 'c_fgGestion'], [/fraisfixe/, 'c_fgFixe'], [/marge/, 'c_fgMarge'], [/periodedessai|prixpe/, 'c_pePrix'],
     [/m0/, 'c_m0P1'], [/go(?![a-z])|prixgo|pugo/, 'c_puGo'], [/^pu|prix/, 'c_pu']];
@@ -152,16 +153,12 @@ window.TodoConditions=(function(){
   api.pricingTables=pricingTables;
   // the table to send to the pricing : plain words (the ones its own mails use), only the columns the request needs —
   // each read back into the right line of the Suivi
-  api.templateCols=list=>{
-    const has=re=>list.some(o=>re.test([o.contrat, o.c_indice, o.nature].join(' ')));
-    const cols=['Nom du marché', 'Variante (si plusieurs offres)'];
-    if(has(/PPA|Prix fixe/i)) cols.push('Prix fixe (€/MWh)');
-    if(!list.length || list.some(o=>!/PPA/i.test(o.contrat||''))) cols.push('Frais d\u2019agrégation (€/MWh)', 'Frais d\u2019agrégation (% M0)', 'Valable jusqu\u2019au');
-    if(has(/ACC/i)) cols.push('Frais ACC (€/an)');
-    if(list.some(o=>Number(String(o.c_peDuree||'').replace(',', '.'))>0)) cols.push('Prix période d\u2019essai (€/MWh)');
-    if(list.some(o=>o.c_selfee==='OUI')) cols.push('Prix GO (€/MWh)');
-    return cols.concat('Commentaire');
-  };
+  api.TEMPLATE_COLS=['Nom du marché', 'Variante (si plusieurs offres)', 'Prix fixe (€/MWh)',
+    'Frais d\u2019agrégation 1re période (€/MWh)', 'Frais d\u2019agrégation 1re période (% M0)', 'Valable jusqu\u2019au (1re période)',
+    'Frais d\u2019agrégation 2e période (€/MWh)', 'Frais d\u2019agrégation 2e période (% M0)', 'Valable jusqu\u2019au (2e période)',
+    'Prix période d\u2019essai (€/MWh)', 'Frais ACC (€/an)', 'Prix GO (€/MWh)', 'Pilotage (€/MWh)',
+    'Dont frais de gestion (€/MWh)', 'Dont frais fixes (€/MWh)', 'Dont marge (€/MWh)', 'Commentaire'];
+  api.templateCols=()=>api.TEMPLATE_COLS.slice();
   // « on est à 0.4 €/MWh pour le pilotage » / « pilotage : 0,4 €/MWh » : the steering's price said in a sentence of the thread
   api.pilotageIn=text=>{ const t=String(text||'');
     const m=/(\d+(?:[.,]\d+)?)\s*€\s*\/\s*MWh[^\n.]{0,25}pilotage/i.exec(t) || /pilotage[^\n\d]{0,30}(\d+(?:[.,]\d+)?)\s*€\s*\/\s*MWh/i.exec(t);

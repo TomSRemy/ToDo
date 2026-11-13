@@ -93,14 +93,16 @@ with sync_playwright() as p:
     check((o["g"].get("pricingExtra") or {}).get("2028 · FG_Fixe_P1 € / MWh") == "2,34", f"the variant « Lot Brownfield - 2028 » kept apart under its name ({o['g'].get('pricingExtra')})")
     # the table for the pricing, plain words and only the columns needed, filled in and pasted back : each in its line of the Suivi
     cols = pg.evaluate("window.TodoConditions.templateCols(JSON.parse(window.storage.peek('todo-widget-opportunities')).filter(o=>o.requestId==='r1'))")
-    check(cols == ["Nom du marché", "Variante (si plusieurs offres)", "Frais d’agrégation (€/MWh)", "Frais d’agrégation (% M0)", "Valable jusqu’au", "Commentaire"], f"the table's columns : plain words, only what the request needs ({cols})")
-    back = "\t".join(cols) + "\n27(07)29 – IEL_MOUTONNERIE – A\t\t6,05\t4,80\t31/12/2029\tvalable 1 mois"
+    check(len(cols) == 17 and cols[0] == "Nom du marché" and cols[-1] == "Commentaire", f"the full table, plain words ({cols})")
+    vals = ["27(07)29 – IEL_MOUTONNERIE – A", "", "", "6,05", "4,80", "31/12/2029", "5,10", "4,20", "31/12/2032", "", "", "0,25", "0,4", "2,93", "2,56", "0,5", "valable 1 mois"]
+    back = "\t".join(cols) + "\n" + "\t".join(vals)
     pg.click("#pricing-root .fill-paste"); pg.fill("#paste-overlay textarea", back); pg.click("#paste-overlay .paste-go"); pg.wait_for_selector("#fill-overlay", timeout=5000)
     pg.locator("#fill-overlay tbody input").evaluate_all("l=>l.forEach(x=>{ x.checked=true; x.dispatchEvent(new Event('change', { bubbles:true })); })")
     pg.click("#fill-overlay .fill-go"); pg.wait_for_timeout(600)
     o = by()
-    check(o["a"].get("c_fgP1") == "6,05" and o["a"].get("c_m0P1") == "4,80" and o["a"].get("c_finP1") == "31/12/2029" and (o["a"].get("pricingExtra") or {}).get("Commentaire") == "valable 1 mois",
-          f"filled and pasted back : FG_Fixe_P1, FG_%M0_P1, Fin P1, the comment kept ({ {k: o['a'].get(k) for k in ['c_fgP1', 'c_m0P1', 'c_finP1']} })")
+    want = {"c_fgP1": "6,05", "c_m0P1": "4,80", "c_finP1": "31/12/2029", "c_fgP2": "5,10", "c_m0P2": "4,20", "c_finP2": "31/12/2032", "c_puGo": "0,25", "c_pilotage": "0,4", "c_fgGestion": "2,93", "c_fgFixe": "2,56", "c_fgMarge": "0,5"}
+    got = {k: o["a"].get(k) for k in want}
+    check(got == want and (o["a"].get("pricingExtra") or {}).get("Commentaire") == "valable 1 mois", f"filled and pasted back : every column in its line of the Suivi, the comment kept ({got})")
     rows = pg.evaluate("window.TodoPricing.templateRows(JSON.parse(window.storage.peek('todo-widget-opportunities')).filter(o=>o.requestId==='r3'))")
     check(rows == ["Lot 1 – Brownfield", "Lot Decize", "Lot Neuf"], f"the table for the pricing : a line per lot ({rows})")
     pg.click("#pricing-root .pr-seg[data-seg='view'] button[data-v='done']"); pg.wait_for_timeout(300)
