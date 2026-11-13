@@ -541,7 +541,7 @@ window.TodoExcelSync=(function(){
     if(!ON_PHONE && list.some(o=>o.goDate || stageIndex(o.stage)>=stageIndex('pricing_indicatif'))) actions.appendChild(oppActionBtn(list.length>1?'Envoyer à la BDD Excel ('+list.length+')':'Envoyer à la BDD Excel', e=>sendToExcel('bdd', list.filter(o=>o.goDate || stageIndex(o.stage)>=stageIndex('pricing_indicatif')), e.target)));
   }
     Object.assign(api, { bridgeUpToDate, bridgeLatest, verAtLeast, xsTodo, xsBddApplies, BRIDGE_LATEST,
-      xsReadFile, xsReadNow:()=>xsRead, xsKey, xsNorm, xsCellText, xsColIdx, xsHash, xsAppValues });   // read by js/pipe-import.js
+      sendToExcel, xsReadFile, xsReadNow:()=>xsRead, xsKey, xsNorm, xsCellText, xsColIdx, xsHash, xsAppValues });   // read by js/pipe-import.js
   };
   return api;
 })();

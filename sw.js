@@ -1,4 +1,4 @@
-const CACHE = 'todo-pwa-v63';
+const CACHE = 'todo-pwa-v65';
 // Excel / Outlook reader, loaded on demand by the app: kept for offline use
 const EXCELJS_URL = 'https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js';   // the « Caractéristiques Centrales » file in its design
 const LIBS = [EXCELJS_URL];
@@ -32,6 +32,7 @@ const ASSETS = [
   './js/local-inbox.js',
   './js/pipe-import.js',
   './js/conditions.js',
+  './js/pricing.js',
   './js/health.js',
   './js/team-ui.js',
   './js/synth.js',

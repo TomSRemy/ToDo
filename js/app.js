@@ -250,7 +250,7 @@
         .map(([k,v])=>window.storage.set(k,JSON.stringify(v),false)));
     }catch(e){ console.error(e); }
   }
-  async function saveCrm(){ undoSchedule(); await saveCrmLocalOnly(); scheduleCrmSyncPush(); teamSyncPush(); if(window.TodoTeamExcel.later) window.TodoTeamExcel.later(); }
+  async function saveCrm(){ undoSchedule(); await saveCrmLocalOnly(); scheduleCrmSyncPush(); teamSyncPush(); if(window.TodoTeamExcel.later) window.TodoTeamExcel.later(); if(window.TodoPricing.paintCount) window.TodoPricing.paintCount(); }
   function touchCrm(o){
     o.updatedAt=Date.now();
     if(o && o.stage && (o.kind==='installation'||o.kind==='prequal'||o.kind==='request')){
@@ -3440,7 +3440,7 @@
   window.todoExtraCommands=(window.todoExtraCommands||[]).concat(
     PRESET_VIEWS.tasks.map(p=>({ t:'Vue tâches : '+p.name, k:'vue filtre taches', go:()=>applySavedView('tasks',{ id:p.id, name:p.name, preset:p.id }) })),
     PRESET_VIEWS.pipeline.map(p=>({ t:'Vue pipeline : '+p.name, k:'vue filtre pipeline', go:()=>applySavedView('pipeline',{ id:p.id, name:p.name, preset:p.id }) })));
-  function renderPipeline(){ renderPipelineInner(); if(typeof paintPicks==='function') paintPicks(); paintXsCount(); paintPipeSummary(); }
+  function renderPipeline(){ renderPipelineInner(); if(typeof paintPicks==='function') paintPicks(); paintXsCount(); paintPipeSummary(); if(window.TodoPricing.paintCount) window.TodoPricing.paintCount(); }
   // « À moi · En attente des autres · Bloqués » over the board, counted per block
   let pipeTallyN={ me:0, others:0, stuck:0, on:false };
   function pipeTallyReset(){ pipeTallyN={ me:0, others:0, stuck:0, on:true }; }
@@ -5712,7 +5712,10 @@
   // openExcelSync is proxied in reverse at the top of this file
   window.TodoExcelSync.init({ $, ON_PHONE, PQ_FIELDS, bddCells, bridgeCall, bridgeCheck, bridgeConfigured, cellToText, closeOppDetail, codeAffaire, copyToClipboard, gsTab:(...a)=>gsTab(...a), importParcFromBridge, isExited, openOppDetail, oppActionBtn, oppName, pipeCells, pqFold, pqPad, relanceOnMove, renderPipeline, saveCrm, setOppStage, softFail, stageIndex, stageLabel, suiviState, touchCrm, get bridgeState(){ return bridgeState; }, set bridgeState(v){ bridgeState=v; }, get opportunities(){ return opportunities; }, set opportunities(v){ opportunities=v; } });   // Envoi vers les Excel partagés et Excel ⇄ appli — js/excel-sync.js
   window.TodoJournal.init({ $, bridgeCall, bridgeConfigured, bridgeInfo:()=>bridgeState.ok && bridgeState.authorized ? bridgeState.info : null, notify });
-  window.TodoConditions.init({ readPipeFiles, caractValue, caractSet, caractKey, codeAffaire, PQ_FIELDS, pqFold, touchCrm, saveCrm, notify, escapeHtml, reopen:()=>{ if(viewingOppId) openOppDetail(viewingOppId); } });
+  window.TodoConditions.init({ readPipeFiles, caractValue, caractSet, caractKey, codeAffaire, PQ_FIELDS, pqFold, touchCrm, saveCrm, notify, escapeHtml, reopen:()=>{ if(!$('tab-pricing').classList.contains('hidden') && $('opp-detail-overlay').classList.contains('hidden')) window.TodoPricing.render(); else if(viewingOppId) openOppDetail(viewingOppId); } });
+  window.TodoPricing.init({ $, escapeHtml, isExited, stageIndex, stageLabel, daysInStage, oppName, touchCrm, saveCrm, openOppDetail, pqFullDate, notify, bridgeConfigured, codeAffaire,
+    fillHandle:el=>{ if(!el.dataset.fillHandle){ el.dataset.fillHandle='1'; reqFillHandle(el); } }, get opportunities(){ return opportunities; } });
+  window.TodoPricing.paintCount();
   window.TodoPipeImport.init({ PQ_FIELDS, pipeCells, bddCells, cellToText, codeAffaire, stageIndex, notify, askChoice, renderPipeline, saveCrm, newId:()=>newOppId('opp'),
     mode:()=>window.TodoTeamExcel.mode(), bridgeReady:()=>bridgeConfigured() && bridgeState.ok && bridgeState.authorized && window.TodoExcelSync.verAtLeast(bridgeState.info, '1.34'), get opportunities(){ return opportunities; } });
   window.TodoLocalInbox.init({ bridgeCall, bridgeInfo:()=>bridgeState.ok && bridgeState.authorized ? bridgeState.info : null });
@@ -6176,7 +6179,7 @@
 
   const tabContacts=$('tab-contacts'), tabPipeline=$('tab-pipeline'), tabParc=$('tab-parc'), tabExcel=$('tab-excel');
   tabs.forEach(el=>{ el.onclick=()=>{
-    tabs.forEach(t=>{ t.classList.remove('active'); t.removeAttribute('aria-current'); }); el.classList.add('active'); el.setAttribute('aria-current','page'); const tgt=el.dataset.tab; tabToday.classList.toggle('hidden',tgt!=='today'); tabTasks.classList.toggle('hidden',tgt!=='tasks'); tabInbox.classList.toggle('hidden',tgt!=='inbox'); tabArchive.classList.toggle('hidden',tgt!=='archive'); tabLists.classList.toggle('hidden',tgt!=='lists'); tabContacts.classList.toggle('hidden',tgt!=='contacts'); tabPipeline.classList.toggle('hidden',tgt!=='pipeline'); tabParc.classList.toggle('hidden',tgt!=='parc'); tabExcel.classList.toggle('hidden',tgt!=='excel'); if(tgt==='excel') openExcelSync(); $('tab-network').classList.toggle('hidden',tgt!=='network'); if(tgt==='network') showNetwork(); $('tab-market').classList.toggle('hidden',tgt!=='market'); if(tgt==='market') renderMarket(); if(tgt==='parc'){ renderParc(); $('parc-bridge-btn').classList.toggle('hidden', !bridgeConfigured()); paintParcLoad(); renderParcSource(); if(bridgeConfigured() && parcSource().auto && (!parcData || Date.now()-(parcData.importedAt||0)>600000)) importParcFromBridge(true); } if(tgt==='today')renderToday(); if(tgt==='archive')renderArchive(); if(tgt==='contacts'){ refreshContactsTypeFilter(); renderContacts(); fetchContactInbox(); if(window.TodoTeamExcel.ready && window.TodoTeamExcel.ready()) window.TodoTeamExcel.sync(false); } if(tgt==='pipeline'){ renderPipeline(); window.TodoPipeImport.run(false); } if(tgt==='lists'){ if(bridgeConfigured()) bridgeCheck(); else renderBridgeStatus(); renderLists(); renderConflicts(); $('sync-owner').value=syncConfig.owner||''; $('sync-repo').value=syncConfig.repo||''; if(syncConfig.enabled) setSyncStatus('Synchro active'); } if(tgt==='inbox')fetchInbox(); }; });
+    tabs.forEach(t=>{ t.classList.remove('active'); t.removeAttribute('aria-current'); }); el.classList.add('active'); el.setAttribute('aria-current','page'); const tgt=el.dataset.tab; tabToday.classList.toggle('hidden',tgt!=='today'); tabTasks.classList.toggle('hidden',tgt!=='tasks'); tabInbox.classList.toggle('hidden',tgt!=='inbox'); tabArchive.classList.toggle('hidden',tgt!=='archive'); tabLists.classList.toggle('hidden',tgt!=='lists'); tabContacts.classList.toggle('hidden',tgt!=='contacts'); tabPipeline.classList.toggle('hidden',tgt!=='pipeline'); tabParc.classList.toggle('hidden',tgt!=='parc'); tabExcel.classList.toggle('hidden',tgt!=='excel'); if(tgt==='excel') openExcelSync(); $('tab-network').classList.toggle('hidden',tgt!=='network'); if(tgt==='network') showNetwork(); $('tab-market').classList.toggle('hidden',tgt!=='market'); if(tgt==='market') renderMarket(); $('tab-pricing').classList.toggle('hidden',tgt!=='pricing'); if(tgt==='pricing') window.TodoPricing.render(); if(tgt==='parc'){ renderParc(); $('parc-bridge-btn').classList.toggle('hidden', !bridgeConfigured()); paintParcLoad(); renderParcSource(); if(bridgeConfigured() && parcSource().auto && (!parcData || Date.now()-(parcData.importedAt||0)>600000)) importParcFromBridge(true); } if(tgt==='today')renderToday(); if(tgt==='archive')renderArchive(); if(tgt==='contacts'){ refreshContactsTypeFilter(); renderContacts(); fetchContactInbox(); if(window.TodoTeamExcel.ready && window.TodoTeamExcel.ready()) window.TodoTeamExcel.sync(false); } if(tgt==='pipeline'){ renderPipeline(); window.TodoPipeImport.run(false); } if(tgt==='lists'){ if(bridgeConfigured()) bridgeCheck(); else renderBridgeStatus(); renderLists(); renderConflicts(); $('sync-owner').value=syncConfig.owner||''; $('sync-repo').value=syncConfig.repo||''; if(syncConfig.enabled) setSyncStatus('Synchro active'); } if(tgt==='inbox')fetchInbox(); }; });
 
   $('submit-task').onclick=addTask;
   addSection.addEventListener('keydown', e=>{ if(e.key==='Enter' && e.target.tagName!=='TEXTAREA'){ e.preventDefault(); addTask(); } });
@@ -7764,7 +7767,7 @@
       +(syncConfig.enabled?' Tes données sont aussi sur GitHub.':''));
   })();
   $('storage-alert-see').onclick=()=>{ $('storage-alert').hidden=true; openStorageSection(); };
-  loadAll().then(()=>{ try{ paintDupBanner(); }catch(e){ softFail('bandeau doublons', e); } try{ reportCorrupt(); }catch(e){ softFail('données illisibles', e); }
+  loadAll().then(()=>{ try{ paintDupBanner(); }catch(e){ softFail('bandeau doublons', e); } window.TodoPricing.paintCount(); try{ reportCorrupt(); }catch(e){ softFail('données illisibles', e); }
     paintSyncPill(); checkStorageFull(); setInterval(checkStorageFull, 10*60*1000);
     $('sync-token-exp').value=syncConfig.tokenExpires||'';
     if(location.hash==='#sync' && !window.TODO_LITE) openSyncSettings();

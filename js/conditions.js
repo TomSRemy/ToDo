@@ -158,15 +158,23 @@ window.TodoConditions=(function(){
       });
     }
     // a line of the pricing's table : its sheet by the business code, else by the plant's name in it
+    // sure : the business code, or the plant and its producer both in the line's name
     function sheetForLine(r, list){
       const n=fold(r.name);
-      return list.find(o=>fold(codeAffaire(o))===n) || list.find(o=>{ const c=fold(o.centrale||o.title); return c && n.includes(c) && n.includes(fold(o.producteur||o.company)); })
-        || list.find(o=>{ const c=fold(o.centrale||o.title); return c.length>3 && n.includes(c); }) || null;
+      return list.find(o=>fold(codeAffaire(o))===n) || list.find(o=>{ const c=fold(o.centrale||o.title); return c && n.includes(c) && n.includes(fold(o.producteur||o.company)); }) || null;
+    }
+    // looser, after the lots : the plant's name alone in the line's name
+    const sheetByName=(r, list)=>{ const n=fold(r.name); return list.find(o=>{ const c=fold(o.centrale||o.title); return c.length>3 && n.includes(c); }) || null; };
+    // a line priced for a whole lot (« Lot 1 — toitures », or a business code carrying the lot's name) : every plant of the lot
+    function lotFor(r, list){
+      const n=fold(r.name), lots=[...new Set(list.map(o=>o.lot).filter(Boolean))];
+      const lot=lots.filter(l=>fold(l).length>2 && n.includes(fold(l))).sort((a, b)=>fold(b).length-fold(a).length)[0];
+      return lot ? list.filter(o=>o.lot===lot) : [];
     }
     function pricingChanges(text, list, from){
       const out=[], hit=new Set(), put=(o, k, v)=>{ const f=FIELDS.find(x=>x.k===k); if(f && v!=='' && !same(o[k], v)) out.push({ o, label:f.label, now:String(o[k]==null?'':o[k]), val:v, set:x=>{ o[k]=x; }, from }); };
-      pricingTables(text).forEach(r=>{ const o=sheetForLine(r, list) || (list.length===1 && pricingTables(text).length===1 ? list[0] : null); if(!o) return;
-        hit.add(o); Object.keys(r.values).forEach(k=>put(o, k, r.values[k])); });
+      pricingTables(text).forEach(r=>{ const o=sheetForLine(r, list) || (list.length===1 && pricingTables(text).length===1 ? list[0] : null), lot=o ? [] : lotFor(r, list), loose=o || lot.length ? null : sheetByName(r, list);
+        (o ? [o] : lot.length ? lot : loose ? [loose] : []).forEach(x=>{ hit.add(x); Object.keys(r.values).forEach(k=>put(x, k, r.values[k])); }); });
       // the steering's price, said once for the whole mail : on the plants of its table (or the only sheet)
       const pil=api.pilotageIn(text);
       if(pil) (hit.size ? [...hit] : list.length===1 ? list : []).forEach(o=>put(o, 'c_pilotage', pil));
@@ -188,9 +196,9 @@ window.TodoConditions=(function(){
       notify(ok.length+' case'+(ok.length>1?'s':'')+' remplie'+(ok.length>1?'s':'')+'.'); reopen();
     }
     // the zone at the top of a sheet ; the whole sheet takes a drop too
-    function dropZone(list, host){
+    function dropZone(list, host, title){
       const z=document.createElement('label'); z.className='fill-drop';
-      z.innerHTML='<input type="file" multiple accept=".xlsx,.xlsm,.xls,.msg,.eml" hidden><b>Dépose un fichier ici pour remplir la fiche</b><span>Caractéristiques Centrales, Excel du producteur, mail du pricing (.msg, .eml) — ou clique pour le choisir. Tu valides avant que rien ne change.</span> <button type="button" class="fill-paste">ou colle le texte d\u2019un mail</button>';
+      z.innerHTML='<input type="file" multiple accept=".xlsx,.xlsm,.xls,.msg,.eml" hidden><b>'+(title||'Dépose un fichier ici pour remplir la fiche')+'</b><span>Caractéristiques Centrales, Excel du producteur, mail du pricing (.msg, .eml) — ou clique pour le choisir. Tu valides avant que rien ne change.</span> <button type="button" class="fill-paste">ou colle le texte d\u2019un mail</button>';
       const inp=z.querySelector('input'); inp.onchange=()=>{ if(inp.files.length) fill([...inp.files], list); inp.value=''; };
       z.querySelector('.fill-paste').onclick=e=>{ e.preventDefault(); e.stopPropagation(); pasteBox(list); };
       // the sheet's body stays the same element from one sheet to the next : listened to once, for the sheet now shown

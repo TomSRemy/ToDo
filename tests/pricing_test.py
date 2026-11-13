@@ -1,0 +1,76 @@
+"""« Pricing » : the installations waiting for their prices, grouped by request, edited like Excel (Enter moves down, a
+range pasted from Excel fills the cells), the pricing's mail dropped filling every installation it names by business code.
+    python tests/pricing_test.py
+"""
+import json, pathlib, sys, tempfile
+from playwright.sync_api import sync_playwright
+failures = []
+def check(c, m):
+    print(("ok   " if c else "FAIL ") + m)
+    if not c: failures.append(m)
+URL = (pathlib.Path(__file__).resolve().parent.parent / "index.html").as_uri()
+def inst(i, plant, **kw):
+    base = {"id": i, "kind": "installation", "company": "IEL", "producteur": "IEL", "centrale": plant, "debut": "01/07/2027", "fin": "31/12/2029", "stage": "pricing_indicatif",
+            "requestId": "r1", "createdAt": 1, "updatedAt": 1, "deleted": False, "stageLog": [{"stage": "pricing_indicatif", "at": 1}]}
+    base.update(kw); return base
+opps = [{"id": "r1", "kind": "request", "company": "IEL", "label": "IEL — demande de pricing", "stage": "pricing_indicatif", "createdAt": 1, "updatedAt": 1, "deleted": False},
+        inst("a", "MOUTONNERIE", kwc="9000"), inst("b", "PLOUISY", kwc="2200"),
+        inst("c", "TOIT", company="VENTUS", producteur="VENTUS", requestId=None, stage="offre_remise", c_fgP1="4,80"),
+        inst("d", "GRANGE", company="AGRI", producteur="AGRI", requestId=None, stage="collecte"),
+        {"id": "r2", "kind": "request", "company": "SOLEO", "label": "SOLEO — toitures", "stage": "pricing_indicatif", "createdAt": 1, "updatedAt": 1, "deleted": False},
+        inst("e", "TOIT 1", company="SOLEO", producteur="SOLEO", requestId="r2", lot="Lot 1 toitures"), inst("f", "TOIT 2", company="SOLEO", producteur="SOLEO", requestId="r2", lot="Lot 1 toitures")]
+with sync_playwright() as p:
+    b = p.chromium.launch(); pg = b.new_page(viewport={"width": 1400, "height": 900}, bypass_csp=True); err = []
+    pg.on("pageerror", lambda e: err.append(str(e)))
+    pg.route("**/fonts.g*/**", lambda r: r.abort()); pg.route("https://tomsremy.github.io/PowerKlock/**", lambda r: r.abort())
+    pg.add_init_script("try{ if(!sessionStorage.getItem('s')){ localStorage.setItem('todo_todo-widget-opportunities', %s); sessionStorage.setItem('s','1'); } }catch(e){}" % json.dumps(json.dumps(opps)))
+    pg.goto(URL); pg.wait_for_timeout(1200)
+    check(pg.inner_text("#pricing-badge") == "4", f"the menu says how many installations wait for their prices ({pg.inner_text('#pricing-badge')!r})")
+    pg.click('[data-tab="pricing"]'); pg.wait_for_timeout(400)
+    page = pg.inner_text("#pricing-root")
+    check("IEL — demande de pricing" in page and "MOUTONNERIE" in page and "PLOUISY" in page and "VENTUS" not in page and "GRANGE" not in page,
+          "« En attente de prix » : the request's installations, grouped ; neither the priced one nor one before the pricing")
+    check(all(x in page for x in ["FG_Fixe_P1 € / MWh", "Pu€/MWh (PPA)", "Pilotage (€/MWh)"]) and "FG_%M0_P1" not in page, "« Essentiel » : the main columns, with the Suivi's names")
+    # type, Enter : saved, the cell below
+    a1 = "#pricing-root .pr-in[data-id='a'][data-k='c_fgP1']"
+    pg.fill(a1, "5,99"); pg.press(a1, "Enter"); pg.wait_for_timeout(300)
+    foc = pg.evaluate("document.activeElement.dataset.id+'/'+document.activeElement.dataset.k")
+    by = lambda: {o["id"]: o for o in json.loads(pg.evaluate("window.storage.peek('todo-widget-opportunities')"))}
+    check(by()["a"].get("c_fgP1") == "5,99" and foc == "b/c_fgP1", f"Enter saves and goes to the cell below ({foc})")
+    # a range copied from Excel : two lines, two columns
+    pg.evaluate("""(()=>{ const inp=document.querySelector("#pricing-root .pr-in[data-id='a'][data-k='c_fgP1']"); const dt=new DataTransfer(); dt.setData('text/plain', '6,10\\t31/12/2029\\n5,21\\t31/12/2029\\n');
+      inp.dispatchEvent(new ClipboardEvent('paste', { clipboardData:dt, bubbles:true, cancelable:true })); })()""")
+    pg.wait_for_timeout(400)
+    o = by()
+    check(o["a"].get("c_fgP1") == "6,10" and o["a"].get("c_finP1") == "31/12/2029" and o["b"].get("c_fgP1") == "5,21" and o["b"].get("c_finP1") == "31/12/2029",
+          f"a range pasted from Excel fills the cells from there, down and right ({ {k: (o[k].get('c_fgP1'), o[k].get('c_finP1')) for k in 'ab'} })")
+    # a lot priced once : its line fills every plant of the lot
+    check("Lot · Lot 1 toitures" in pg.inner_text("#pricing-root"), "a lot has its own line in its request")
+    lot = "#pricing-root .pr-lot-in[data-k='c_fgP1']"
+    pg.fill(lot, "4,40"); pg.press(lot, "Enter"); pg.wait_for_timeout(300)
+    o = by()
+    check(o["e"].get("c_fgP1") == "4,40" and o["f"].get("c_fgP1") == "4,40" and pg.input_value("#pricing-root .pr-in[data-id='f'][data-k='c_fgP1']") == "4,40", "a price typed on the lot's line goes to every plant of the lot")
+    # the pricing's mail dropped on the page : each line found by its business code, whatever the sheet
+    body = "\r\n".join(["Nom du marché", "Frais de gestion (€/MWh)", "Frais fixe (€/MWh)", "Marge (€/MWh)", "Frais d'agrégation (€/MWh)",
+                        "27(07)29 – IEL_MOUTONNERIE – A", "2.93", "2.56", "0.5", "5.99", "27(07)29 – IEL_PLOUISY – A", "2.91", "1.80", "0.5", "5.21", "Lot 1 toitures – SOLEO", "2.10", "1.70", "0.5", "4.30", "", "On est à 0.4 €/MWh pour le pilotage"])
+    eml = pathlib.Path(tempfile.mkdtemp()) / "Pricing.eml"
+    eml.write_text("From: pricing@exemple.fr\r\nSubject: Pricing\r\nContent-Type: text/plain; charset=utf-8\r\n\r\n" + body, encoding="utf-8")
+    pg.set_input_files("#pricing-root .fill-drop input[type=file]", str(eml)); pg.wait_for_selector("#fill-overlay", timeout=8000)
+    look = pg.inner_text("#fill-overlay")
+    check("MOUTONNERIE" in look and "PLOUISY" in look and "5,99" in look and "0,4" in look, f"the mail : both plants found by their business code, shown before filling ({look[:200]!r})")
+    check(not pg.locator("#fill-overlay tr.conf input").first.is_checked(), "a price already typed and different starts unticked")
+    pg.locator("#fill-overlay tr.conf input").evaluate_all("l=>l.forEach(x=>{ x.checked=true; x.dispatchEvent(new Event('change', { bubbles:true })); })")
+    pg.click("#fill-overlay .fill-go"); pg.wait_for_timeout(700)
+    o = by()
+    check(o["a"].get("c_fgP1") == "5,99" and o["b"].get("c_fgP1") == "5,21" and o["a"].get("c_pilotage") == "0,4" and o["b"].get("c_fgGestion") == "2,91", "« Remplir » : every installation named in the mail gets its prices")
+    check(o["e"].get("c_fgP1") == "4,30" and o["f"].get("c_fgP1") == "4,30" and o["f"].get("c_fgGestion") == "2,10", "a line of the mail priced for a lot : every plant of the lot gets it")
+    check(pg.inner_text("#pricing-badge") == "" and "Aucune installation en attente de prix" in pg.inner_text("#pricing-root"), "no more waiting : the menu's count and the page say so")
+    pg.click("#pricing-root .pr-seg[data-seg='view'] button[data-v='done']"); pg.wait_for_timeout(300)
+    check(all(x in pg.inner_text("#pricing-root") for x in ["MOUTONNERIE", "PLOUISY", "TOIT"]), "« Prix reçus » : the priced ones, to correct")
+    pg.click("#pricing-root .pr-seg[data-seg='cols'] button[data-v='all']"); pg.wait_for_timeout(300)
+    check("FG_%M0_P1" in pg.inner_text("#pricing-root") and "Remu_prod" in pg.inner_text("#pricing-root"), "« Toutes les colonnes » : every line of the Retour pricing")
+    pg.click("#pricing-root .pr-open[data-id='c']"); pg.wait_for_timeout(500)
+    check(not pg.locator("#opp-detail-overlay").evaluate("e=>e.classList.contains('hidden')") and "TOIT" in pg.inner_text("#opp-detail-title"), "« Fiche » opens the installation's sheet")
+    check(not err, f"no page errors ({err})")
+    b.close()
+print(f"\n{len(failures)} failure(s)"); sys.exit(1 if failures else 0)

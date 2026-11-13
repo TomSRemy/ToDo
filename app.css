@@ -2900,3 +2900,22 @@ html.widget .dup-banner{ display:none; }
 .fill-table tr.conf .fn{ color:var(--amber, #E5B54F); }
 .fill-go{ background:var(--accent); border-color:var(--accent); color:#04211B; }
 .req-hint{ display:block; font-weight:400; font-size:11px; color:var(--tx3); }
+
+/* « Pricing » : the prices and fees sent back by the pricing (js/pricing.js) */
+.pr-root{ padding:4px 2px; }
+.pr-top{ display:flex; align-items:baseline; gap:12px; margin-bottom:12px; } .pr-top h1{ margin:0; font-size:19px; } .pr-top span{ color:var(--tx3); font-size:13px; }
+.pr-bar{ display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-bottom:10px; }
+.pr-seg{ display:flex; border:1px solid var(--bd); border-radius:7px; overflow:hidden; }
+.pr-seg button{ background:none; border:0; padding:5px 11px; color:var(--tx2); font:500 12.5px var(--font-ui); cursor:pointer; }
+.pr-seg button.on{ background:var(--accent-dim); color:var(--accent); } .pr-seg button i{ font-style:normal; font-size:11px; color:var(--tx3); margin-left:4px; }
+.pr-search{ flex:0 1 240px; }
+.pr-r{ margin-left:auto; display:flex; gap:6px; align-items:center; }
+.pr-scroll{ overflow:auto; border:1px solid var(--bd); border-radius:10px; }
+.pr-table{ min-width:100%; }
+.pr-table th small{ display:block; font-weight:400; font-size:10.5px; color:var(--tx3); }
+.pr-table .pr-name{ min-width:220px; } .pr-table .pr-name b{ display:block; font-size:12.5px; } .pr-table .pr-name span{ font-size:11px; color:var(--tx3); }
+.pr-table .pr-grp td{ background:var(--panel-2); color:var(--tx2); font-weight:600; font-size:12px; } .pr-table .pr-grp td span{ font-weight:400; color:var(--tx3); }
+.pr-tag{ font:600 10.5px var(--font-mono, monospace); padding:1px 6px; border-radius:4px; white-space:nowrap; color:var(--accent); background:color-mix(in srgb, var(--accent) 12%, transparent); }
+.pr-tag.wait{ color:#E5B54F; background:#E5B54F18; }
+.pr-table .pr-in{ min-width:78px; font-family:var(--font-mono, monospace); }
+.pr-table .pr-lot td{ background:color-mix(in srgb, var(--accent) 5%, transparent); } .pr-table .pr-lot .pr-name b{ color:var(--accent); }
