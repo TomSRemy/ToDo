@@ -23,7 +23,7 @@ def bridge(route):
     req = route.request; path = req.url.split("8765", 1)[1]
     h = {"Access-Control-Allow-Origin": "*", "Content-Type": "application/json"}
     if req.method == "OPTIONS": return route.fulfill(status=204, headers={**h, "Access-Control-Allow-Headers": "Content-Type, X-Bridge-Token"})
-    if path == "/status": out = {"ok": True, "version": "1.34", "authorized": True, "who": "Tom", "pipe": {"name": "Pipe.xlsx", "found": True}, "bdd": {"name": "Suivi.xlsx", "found": True}, "contacts": {"name": "", "found": False}}
+    if path == "/status": out = {"ok": True, "version": "1.35", "authorized": True, "who": "Tom", "pipe": {"name": "Pipe.xlsx", "found": True}, "bdd": {"name": "Suivi.xlsx", "found": True}, "contacts": {"name": "", "found": False}}
     elif path == "/pipe/read": out = {"ok": True, "sheets": {"Pipe agrégation": [HP] + pipe["rows"]}, "allNames": ["Pipe agrégation"]}
     elif path == "/bdd/read":
         hb = [None] * 91; hb[31] = "Nom_prod"; hb[33] = "Nom_Installation_prod"; hb[24] = "Statut"

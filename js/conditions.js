@@ -300,7 +300,8 @@ window.TodoConditions=(function(){
     const GRP={ c_blMW:'c_grpBlMW', c_formule:'c_grpFormule', c_exemple:'c_grpExemple', c_exempleRef:'c_exempleRef' };
     function groupLine(r, list){
       if(!/\+|\bet\b/i.test(r.name)) return null;
-      const n=fold(r.name), plants=list.filter(o=>{ const c=fold(o.centrale||o.title); return c.length>3 && n.includes(c); });
+      const words=t=>pqFold(String(t||'')).split(/[^a-z0-9]+/).filter(Boolean).join(' '), line=' '+words(r.name)+' ';
+      const plants=list.filter(o=>{ const w=words(o.centrale||o.title); return fold(w).length>3 && line.includes(' '+w+' '); });
       if(plants.length<2) return null;
       const values={ c_grpNom:r.name.replace(/\s*[-–]\s*(baseload|bl)\s*$/i, '').trim() };
       Object.keys(r.values).forEach(k=>{ values[GRP[k]||k]=r.values[k]; });
@@ -318,7 +319,9 @@ window.TodoConditions=(function(){
       const g=groupLine(r, list); if(g) return { plants:g.plants, extra:'', how:'group', group:g };
       if(list.length===1 && n===1) return { plants:[list[0]], extra:'', how:'sheet' };
       // a plant's whole name in the line (« GREENFIELD 3 seul ») is more precise than its lot's (« Greenfield ») : the plant
-      const named=list.map(o=>({ o, c:fold(o.centrale||o.title) })).filter(x=>x.c.length>3 && name.includes(x.c)).sort((x, y)=>y.c.length-x.c.length)[0];
+      // whole words only : « BROWNFIELD 2 » is not in « Lot Brownfield - 2028 »
+      const words=t=>pqFold(String(t||'')).split(/[^a-z0-9]+/).filter(Boolean).join(' '), line=' '+words(r.name)+' ';
+      const named=list.map(o=>({ o, w:words(o.centrale||o.title), c:fold(o.centrale||o.title) })).filter(x=>x.c.length>3 && line.includes(' '+x.w+' ')).sort((x, y)=>y.c.length-x.c.length)[0];
       const lot=lotFor(r, all), lotLen=lot.plants.length ? Math.max(...lotsIn(all).filter(x=>x.ps.length===lot.plants.length && x.ps.every(o=>lot.plants.includes(o))).map(x=>fold(lotOf(x.name)).length), 0) : 0;
       if(lot.plants.length && !(named && named.c.length>lotLen)) return Object.assign(lot, { how:'lot' });
       return named ? { plants:[named.o], extra:'', how:'name' } : { plants:[], extra:'', how:'' };

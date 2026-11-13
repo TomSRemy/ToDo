@@ -21,7 +21,7 @@ def bridge(route):
     body = json.loads(req.post_data or "null") if req.method == "POST" else None
     h = {"Access-Control-Allow-Origin": "*", "Content-Type": "application/json"}
     if req.method == "OPTIONS": return route.fulfill(status=204, headers={**h, "Access-Control-Allow-Headers": "Content-Type, X-Bridge-Token"})
-    if path == "/status": out = {"ok": True, "version": "1.34", "authorized": True, "who": who[0], "pipe": {"name": "Pipe.xlsx", "found": True}, "bdd": {"name": "Suivi.xlsx", "found": True}}
+    if path == "/status": out = {"ok": True, "version": "1.35", "authorized": True, "who": who[0], "pipe": {"name": "Pipe.xlsx", "found": True}, "bdd": {"name": "Suivi.xlsx", "found": True}}
     elif path == "/journal/read":
         asked.append(body["key"])
         out = {"ok": True, "rows": [{"at": "2026-11-10T14:32:00", "file": "Pipe agrégation", "column": "Statut", "key": "SOLARIS / Toit", "old": "Pricing", "new": "Offre remise", "why": "case mise à jour", "who": "Paul"}]}

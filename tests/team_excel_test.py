@@ -41,7 +41,7 @@ def bridge(route):
     body = json.loads(req.post_data or "null") if req.method == "POST" else None
     h = {"Access-Control-Allow-Origin": "*", "Content-Type": "application/json"}
     if req.method == "OPTIONS": return route.fulfill(status=204, headers={**h, "Access-Control-Allow-Headers": "Content-Type, X-Bridge-Token"})
-    if path == "/status": out = {"ok": True, "version": "1.34", "authorized": True, "who": "Tom", "pipe": {"name": "Pipe.xlsx", "found": True}, "bdd": {"name": "Suivi.xlsx", "found": True}, "contacts": {"name": "Contacts équipe.xlsx", "found": True}}
+    if path == "/status": out = {"ok": True, "version": "1.35", "authorized": True, "who": "Tom", "pipe": {"name": "Pipe.xlsx", "found": True}, "bdd": {"name": "Suivi.xlsx", "found": True}, "contacts": {"name": "Contacts équipe.xlsx", "found": True}}
     elif path == "/contacts/read": out = {"ok": True, "sheets": {"Contacts": sheet}}
     elif path == "/contacts/upsert": state["upserts"] += 1; out = {"ok": True, "results": upsert(body["rows"])}
     elif path == "/backup/write": out = {"ok": True, "dir": "C:\\x", "file": {"name": "todo.json", "size": 1}}

@@ -30,6 +30,9 @@
      et chaque case écrite est notée dans « Sauvegardes pont/journal-pont.csv » avec son ancienne valeur et qui l'a écrite
      (jamais effacé) ; la même ligne va dans « Journal ToDo », à côté du Pipe, un fichier par personne (journal de l'équipe).
 
+  v1.35 : le pont écrit toujours par Excel (le fichier ouvert, ou ouvert en arrière-plan puis refermé) : plus jamais
+  réécrit sans Excel, ce qui cassait la mise en forme (couleurs, mises en forme conditionnelles, listes déroulantes).
+
   v1.34 : les contacts de l'équipe (fichier « Contacts équipe », onglet « Contacts », un tableau ; une ligne est retrouvée par
   Prénom + Nom ; mêmes règles d'écriture), la sauvegarde locale de l'appli (OneDrive\ToDo\sauvegardes) et le journal de
   l'équipe (« Journal ToDo » à côté du Pipe, un fichier par personne).
@@ -41,7 +44,7 @@
 param([int]$Port = 8765, [switch]$Reconfigurer, [switch]$Mock)
 
 $ErrorActionPreference = 'Stop'
-$Version = '1.34'
+$Version = '1.35'
 $Here = Split-Path -Parent $MyInvocation.MyCommand.Path
 $LibDir = Join-Path $Here 'lib'
 # the settings (the two files, the key) live in the Windows profile, not next to the script: a new download, in any folder,
@@ -446,9 +449,10 @@ function New-MockAdapter($kind) {
 }
 function New-Adapter($kind) {
   if ($Mock) { return New-MockAdapter $kind }
-  if (Is-AlreadyOpen (Resolve-ConfigPath $kind)) { return New-ComAdapter $kind }   # someone has it open : write into that session
-  try { return New-DirectAdapter $kind }
-  catch { Write-Info ("Écriture directe impossible (" + $_.Exception.Message + ") : on passe par Excel.") 'DarkGray'; return New-ComAdapter $kind }
+  # v1.35 : always written by Excel itself (open in that session, or opened hidden then closed). The file rewritten
+  # by EPPlus 4.5 (New-DirectAdapter) lost what that library doesn't know of the shared Excel files : formatting,
+  # conditional formats, drop-down lists, checkboxes… — reported for real. New-DirectAdapter is kept, never used to write.
+  return New-ComAdapter $kind
 }
 
 # ---------------- Upsert ----------------
