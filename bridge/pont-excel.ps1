@@ -150,7 +150,7 @@ function Set-XmlCell($doc, $data, [string]$M, [int]$r, [int]$c, $v) {
   elseif ($v -is [datetime]) { $x = $doc.CreateElement('v', $M); $x.InnerText = $v.ToOADate().ToString($inv); $null = $cell.AppendChild($x) }
   elseif ($v -is [double] -or $v -is [int] -or $v -is [long] -or $v -is [decimal] -or $v -is [single]) { $x = $doc.CreateElement('v', $M); $x.InnerText = ([double]$v).ToString('R', $inv); $null = $cell.AppendChild($x) }
   else { $cell.SetAttribute('t', 'inlineStr'); $is = $doc.CreateElement('is', $M); $t = $doc.CreateElement('t', $M); $t.InnerText = [string]$v
-    $null = $t.SetAttribute('space', 'http://www.w3.org/XML/1998/namespace', 'preserve'); $null = $is.AppendChild($t); $null = $cell.AppendChild($is) }
+    $sp = $doc.CreateAttribute('xml', 'space', 'http://www.w3.org/XML/1998/namespace'); $sp.Value = 'preserve'; $null = $t.Attributes.Append($sp); $null = $is.AppendChild($t); $null = $cell.AppendChild($is) }
 }
 function Read-ZipXml($zip, [string]$name) {
   $e = $zip.GetEntry($name); if (-not $e) { return $null }

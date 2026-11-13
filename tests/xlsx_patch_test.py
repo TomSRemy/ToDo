@@ -45,6 +45,11 @@ p = subprocess.run([PWSH, "-NoProfile", "-File", str(work / "pont-excel.ps1"), "
 check(p.returncode == 0, f"the bridge writes the cells ({p.stdout.decode(errors='replace')[-400:]} {p.stderr.decode(errors='replace')[-800:]})")
 
 after = {n: zipfile.ZipFile(f).read(n) for n in zipfile.ZipFile(f).namelist()}
+import xml.dom.minidom
+for n in ("xl/worksheets/sheet2.xml", "xl/workbook.xml"):
+    try: xml.dom.minidom.parseString(after[n]); ok = b"xml:space=\"preserve\"" in after[n] or n.endswith("workbook.xml")
+    except Exception as e: ok = False; print(n, e, after[n][:900])
+    check(ok, f"{n} : valid XML, as Excel reads it")
 changed = sorted(n for n in set(before) | set(after) if before.get(n) != after.get(n))
 check(set(changed) <= {"xl/worksheets/sheet2.xml", "xl/workbook.xml"}, f"only the written sheet (and the recalculation flag) changed in the file ({changed})")
 
