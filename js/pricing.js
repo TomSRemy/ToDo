@@ -4,7 +4,7 @@
 // found by its business code across all installations (js/conditions.js). Loaded before js/app.js.
 window.TodoPricing=(function(){
   const api={};
-  const ESSENTIAL=['c_fgP1', 'c_finP1', 'c_fgP2', 'c_finP2', 'c_pu', 'c_puGo', 'c_pilotage', 'c_fgGestion', 'c_fgFixe', 'c_fgMarge'];
+  const ESSENTIAL=['c_fgP1', 'c_finP1', 'c_fgP2', 'c_finP2', 'c_pu', 'c_formule', 'c_exemple', 'c_puGo', 'c_pilotage', 'c_fgGestion', 'c_fgFixe', 'c_fgMarge'];
   const WAIT=new Set(['pricing_indicatif', 'pricing_ferme']);
   api.init=function(app){
     const { $, escapeHtml, isExited, stageIndex, stageLabel, daysInStage, oppName, touchCrm, saveCrm, openOppDetail, fillHandle, pqFullDate, notify, bridgeConfigured }=app;   // app.codeAffaire : read when used
@@ -12,11 +12,14 @@ window.TodoPricing=(function(){
     let view='wait', cols='essential', q='';
     try{ view=localStorage.getItem('pricing-view')||'wait'; cols=localStorage.getItem('pricing-cols')||'essential'; }catch(e){ /* defaults */ }
     const installs=()=>app.opportunities.filter(o=>!o.deleted && o.kind==='installation');
-    const priced=o=>!!(o.prixValeur || o.c_pu || o.c_fgP1 || o.c_m0P1 || o.c_pePrix);
+    const priced=o=>!!(o.prixValeur || o.c_pu || o.c_fgP1 || o.c_m0P1 || o.c_pePrix || o.c_formule || o.c_grpFormule);
     const waiting=o=>!isExited(o) && WAIT.has(o.stage) && !priced(o);
     const relevant=o=>priced(o) || (!isExited(o) && stageIndex(o.stage)>=stageIndex('pricing_indicatif'));
     api.waitingCount=()=>installs().filter(waiting).length;
-    const fields=()=>{ const F=C().FIELDS.filter(f=>f.part==='back'); return cols==='all' ? F : ESSENTIAL.map(k=>F.find(f=>f.k===k)).filter(Boolean); };
+    // the pricing's own extra columns (kept under their header) : shown with « Toutes les colonnes »
+    const extras=list=>[...new Set(list.flatMap(o=>Object.keys(o.pricingExtra||{})))].map(h=>({ k:'x:'+h, label:h, type:'text', hint:'colonne du mail du pricing' }));
+    const fields=list=>{ const F=C().FIELDS.filter(f=>f.part==='back'); return cols==='all' ? F.concat(extras(list||[])) : ESSENTIAL.map(k=>F.find(f=>f.k===k)).filter(Boolean); };
+    const valOf=(o, k)=>{ const v=k.startsWith('x:') ? (o.pricingExtra||{})[k.slice(2)] : o[k]; return v==null ? '' : String(v); };
     const fold=s=>String(s||'').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
     function shown(){
       const list=installs().filter(view==='wait' ? waiting : view==='done' ? priced : relevant);
@@ -31,14 +34,14 @@ window.TodoPricing=(function(){
         return { title:(req && req.label) || members[0].producteur || members[0].company || '(sans producteur)', members, days:Math.max(...members.map(o=>daysInStage(o)||0)) }; });
     }
     function cellHtml(o, f){
-      const v=o[f.k]==null?'':String(o[f.k]);
+      const v=valOf(o, f.k);
       return '<td class="pr-cell"><input class="req-in pr-in" data-id="'+escapeHtml(o.id)+'" data-k="'+f.k+'" value="'+escapeHtml(v)+'" placeholder="—" aria-label="'+escapeHtml(oppName(o)+' · '+f.label)+'"></td>';
     }
     function rowHtml(o, F){
       const d=daysInStage(o), st=WAIT.has(o.stage) ? stageLabel(o.stage, o)+(d!=null?' · '+d+' j':'') : stageLabel(o.stage, o);
       return '<tr><td class="pr-name"><b>'+escapeHtml(oppName(o))+'</b><span>'+escapeHtml([app.codeAffaire(o), o.kwc?o.kwc+' kWc':''].filter(Boolean).join(' · '))+'</span></td>'
         +'<td class="pr-st"><span class="pr-tag'+(waiting(o)?' wait':'')+'">'+escapeHtml(st)+'</span></td>'+F.map(f=>cellHtml(o, f)).join('')
-        +'<td class="pr-act"><button type="button" class="ghost-btn pr-open" data-id="'+escapeHtml(o.id)+'">Fiche</button></td></tr>';
+        +'<td class="pr-act">'+((o.pricingMails||[]).length?'<button type="button" class="ghost-btn pr-mails-btn" data-id="'+escapeHtml(o.id)+'" title="Les mails du pricing gardés pour cette installation">\u2709 '+o.pricingMails.length+'</button> ':'')+'<button type="button" class="ghost-btn pr-open" data-id="'+escapeHtml(o.id)+'">Fiche</button></td></tr>';
     }
     // the plants of a group, lot by lot (those without a lot last) ; a lot gets a line of its own to price it once
     function lotsOf(members){
@@ -46,14 +49,14 @@ window.TodoPricing=(function(){
       return [...by.entries()].sort((a, b)=>(a[0]==='')-(b[0]===''));
     }
     function lotRowHtml(lot, ms, F){
-      const ids=ms.map(o=>o.id).join(','), val=f=>{ const v=[...new Set(ms.map(o=>o[f.k]==null?'':String(o[f.k])))]; return v.length===1 ? v[0] : ''; };
+      const ids=ms.map(o=>o.id).join(','), val=f=>{ const v=[...new Set(ms.map(o=>valOf(o, f.k)))]; return v.length===1 ? v[0] : ''; };
       return '<tr class="pr-lot"><td class="pr-name"><b>Lot · '+escapeHtml(lot)+'</b><span>'+ms.length+' installation'+(ms.length>1?'s':'')+' · un prix pour tout le lot</span></td><td></td>'
-        +F.map(f=>{ const v=val(f), mixed=!v && ms.some(o=>o[f.k]);
+        +F.map(f=>{ const v=val(f), mixed=!v && ms.some(o=>valOf(o, f.k));
           return '<td class="pr-cell"><input class="req-in pr-in pr-lot-in" data-ids="'+escapeHtml(ids)+'" data-k="'+f.k+'" value="'+escapeHtml(v)+'" placeholder="'+(mixed?'différents':'—')+'" aria-label="'+escapeHtml('Lot '+lot+' · '+f.label)+'"></td>'; }).join('')
         +'<td></td></tr>';
     }
     function tableHtml(list){
-      const F=fields();
+      const F=fields(list);
       let t='<table class="req-table pr-table"><thead><tr><th>Installation</th><th>Étape</th>'+F.map(f=>'<th>'+escapeHtml(f.label)+(f.hint?'<small>'+escapeHtml(f.hint)+'</small>':'')+'</th>').join('')+'<th></th></tr></thead>';
       groups(list).forEach(g=>{ t+='<tbody><tr class="pr-grp"><td colspan="'+(F.length+3)+'">'+escapeHtml(g.title)+' <span>· '+g.members.length+' installation'+(g.members.length>1?'s':'')+(g.days?' · depuis '+g.days+' j à cette étape':'')+'</span></td></tr>'
         +lotsOf(g.members).map(([lot, ms])=>(lot ? lotRowHtml(lot, ms, F) : '')+ms.map(o=>rowHtml(o, F)).join('')).join('')+'</tbody>'; });
@@ -62,13 +65,14 @@ window.TodoPricing=(function(){
     // a cell saved ; a lot's cell : the value goes to every plant of the lot (their own cells follow)
     function save(inp){
       const ids=inp.dataset.ids ? inp.dataset.ids.split(',') : [inp.dataset.id], list=app.opportunities.filter(x=>ids.includes(x.id)); if(!list.length) return;
-      const f=C().FIELDS.find(x=>x.k===inp.dataset.k); let v=inp.value.trim();
+      const k=inp.dataset.k, f=C().FIELDS.find(x=>x.k===k); let v=inp.value.trim();
       if(f && f.type==='date' && v){ const fd=pqFullDate(v); if(fd) v=fd; }
       if(inp.dataset.ids && !v) return;   // an empty lot cell never clears its plants
-      const changed=list.filter(o=>(o[f.k]||'')!==v); if(!changed.length) return;
-      changed.forEach(o=>{ if(v) o[f.k]=v; else delete o[f.k]; touchCrm(o); });
+      const changed=list.filter(o=>valOf(o, k)!==v); if(!changed.length) return;
+      changed.forEach(o=>{ if(k.startsWith('x:')){ const x=Object.assign({}, o.pricingExtra||{}); if(v) x[k.slice(2)]=v; else delete x[k.slice(2)]; o.pricingExtra=x; }
+        else if(v) o[k]=v; else delete o[k]; touchCrm(o); });
       saveCrm(); inp.value=v;
-      if(inp.dataset.ids) ids.forEach(id=>{ const x=inp.closest('table').querySelector('.pr-in[data-id="'+id+'"][data-k="'+f.k+'"]'); if(x) x.value=v; });
+      if(inp.dataset.ids) ids.forEach(id=>{ const x=[...inp.closest('table').querySelectorAll('.pr-in[data-id="'+id+'"]')].find(i=>i.dataset.k===k); if(x) x.value=v; });
       const td=inp.closest('td'); td.classList.add('saved'); setTimeout(()=>td.classList.remove('saved'), 900);
       paintCount();
     }
@@ -94,6 +98,7 @@ window.TodoPricing=(function(){
         inp.addEventListener('paste', e=>{ const t=e.clipboardData && e.clipboardData.getData('text'); if(t && pasteRange(inp, t)) e.preventDefault(); });
       });
       box.querySelectorAll('.pr-open').forEach(b=>{ b.onclick=()=>openOppDetail(b.dataset.id); });
+      box.querySelectorAll('.pr-mails-btn').forEach(b=>{ b.onclick=()=>{ const o=app.opportunities.find(x=>x.id===b.dataset.id), l=o && o.pricingMails || []; if(l.length) C().showMail(l[l.length-1]); }; });
       fillHandle(box);
     }
     function seg(name, opts, cur){ return '<div class="pr-seg" data-seg="'+name+'">'+opts.map(([v, l])=>'<button type="button" data-v="'+v+'" class="'+(v===cur?'on':'')+'">'+l+'</button>').join('')+'</div>'; }

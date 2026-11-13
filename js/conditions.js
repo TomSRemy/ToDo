@@ -39,12 +39,16 @@ window.TodoConditions=(function(){
     ['c_remu', 'Remu_prod', 87, 'text'], ['c_puGo', 'Pu/Go', 90, 'number'],
     // the detail of the aggregation fee as the pricing's mail gives it (no column in the Suivi : kept in the app)
     ['c_fgGestion', 'Frais de gestion (€/MWh)', null, 'number'], ['c_fgFixe', 'Frais fixe (€/MWh)', null, 'number'], ['c_fgMarge', 'Marge (€/MWh)', null, 'number'],
-    ['c_pilotage', 'Pilotage (€/MWh)', null, 'number']
+    ['c_pilotage', 'Pilotage (€/MWh)', null, 'number'],
+    // a baseload offer indexed on the CAL (« 38.5% x CAL - 1.7 »), and the same for several plants together
+    ['c_blMW', 'Puissance BL (MW)', null, 'number'], ['c_formule', 'Formule', null, 'text'], ['c_exemple', 'Prix exemple (€/MWh)', null, 'number'], ['c_exempleRef', 'Base de l\u2019exemple', null, 'text'],
+    ['c_grpNom', 'Offre groupée', null, 'text'], ['c_grpBlMW', 'Offre groupée · Puissance BL (MW)', null, 'number'], ['c_grpFormule', 'Offre groupée · Formule', null, 'text'], ['c_grpExemple', 'Offre groupée · Prix exemple (€/MWh)', null, 'number']
   ];
   // the Suivi's own words above its headers (the lines « Période tarifaire », « M0 − FG », « CAPA », « GO »…), shown under each line
   const HINT={ c_fgAcc:'Prix forfaitaire par an pour la gestion d\u2019une ACC', c_pu:'Prix fixe', c_fgP1:'Période tarifaire 1 (P1) · M0 − FG', c_finP1:'Période tarifaire 1 (P1)',
     c_fgP2:'Période tarifaire 2 (P2) · M0 − FG', c_finP2:'Période tarifaire 2 (P2)', c_m0P1:'Période tarifaire 1 (P1) · FG% × M0', c_finM0P1:'Période tarifaire 1 (P1)',
     c_m0P2:'Période tarifaire 2 (P2) · FG% × M0', c_finM0P2:'Période tarifaire 2 (P2)', c_garanties:'GAPD', c_capa:'CAPA', c_remu:'CAPA', c_goRegistre:'GO', c_selfee:'GO', c_puGo:'GO',
+    c_blMW:'baseload, sur la base du P50', c_formule:'prix indexé, ex. 38,5 % × CAL − 1,7', c_exemple:'le prix pour la valeur de l\u2019exemple', c_grpNom:'les installations prises ensemble',
     c_pilotage:'noté à part, dans le mail du pricing ou l\u2019échange qui suit', c_fgGestion:'détail du mail du pricing', c_fgFixe:'détail du mail du pricing', c_fgMarge:'détail du mail du pricing' };
   const def=([k, label, col, type, opts, need], part)=>({ k, label, col, type, opts:opts||null, need:!!need, part, hint:HINT[k]||'' });
   const FIELDS=ASK.map(x=>def(x, 'ask')).concat(EXPLOIT.map(x=>def(x, 'exploit')), BACK.map(x=>def(x, 'back')));
@@ -75,6 +79,9 @@ window.TodoConditions=(function(){
   function pricingField(h){
     const f=foldS(h);
     if(/pilotage/.test(f)) return 'c_pilotage';
+    if(/puissancebl|baseload/.test(f)) return 'c_blMW';
+    if(/formule/.test(f)) return 'c_formule';
+    if(/exemple/.test(f)) return 'c_exemple';
     if(/fraisdagregation|totalfrais/.test(f)) return 'c_fgP1';
     if(/fraisdegestion/.test(f)) return 'c_fgGestion';
     if(/fraisfixe/.test(f)) return 'c_fgFixe';
@@ -85,7 +92,45 @@ window.TodoConditions=(function(){
     if(/^pu|prix/.test(f)) return 'c_pu';
     return null;
   }
+  // a table copied with its tabs (Outlook / Excel) : the header may run over several lines (a cell with a line break) ;
+  // its columns are found by their words, in order, then each line « name, value, value… » is read under them
+  const TAB_COLS=[[/puissance\s*bl|puissance\s*baseload/i, 'c_blMW'], [/formule/i, 'c_formule'], [/exemple/i, 'c_exemple'], [/frais\s+d.agr/i, 'c_fgP1'], [/frais\s+de\s+gestion/i, 'c_fgGestion'],
+    [/frais\s+fixe/i, 'c_fgFixe'], [/marge/i, 'c_fgMarge'], [/pilotage/i, 'c_pilotage'], [/pu\s*\/\s*go|prix\s+go/i, 'c_puGo'], [/p[ée]riode\s+d.essai/i, 'c_pePrix'], [/%\s*m0|fg\s*%/i, 'c_m0P1'], [/^|\bprix\b/i, null]];
+  const isValue=v=>NUM.test(v) || /%|\bcal\b|\bm0\b|spot/i.test(v);
+  // the header's cells put back together : a cell with a line break in it comes over several lines, its continuation
+  // first on the next line (before the first tab), the next cells after the tabs
+  function headCells(lines){
+    const cells=[];
+    lines.forEach((l, n)=>{ const seg=l.split('\t').map(x=>x.trim());
+      if(n && cells.length) cells[cells.length-1]=(cells[cells.length-1]+' '+seg.shift()).trim();
+      seg.forEach(x=>cells.push(x)); });
+    return cells;
+  }
+  // a header cell → the sheet's field ; a column the app doesn't know is kept under its own name (« x: » + its header)
+  const colKey=h=>{ const hit=TAB_COLS.find(([re, k])=>k && re.test(h)); return hit ? hit[1] : 'x:'+h.replace(/\s+/g, ' ').trim(); };
+  function tabTables(text){
+    const lines=String(text||'').replace(/ /g, ' ').split(/\r?\n/), rows=[];
+    const isData=l=>{ const c=l.split('\t').map(x=>x.trim()); return c.length>1 && c[0] && !FIRST_COL.test(foldS(c[0])) && c.slice(1).some(x=>x && isValue(x)); };
+    for(let i=0; i<lines.length; i++){
+      if(!FIRST_COL.test(foldS(lines[i].split('\t')[0]))) continue;
+      let j=i; while(j<lines.length && !isData(lines[j])) j++;
+      const head=headCells(lines.slice(i, j)), cols=head.slice(1).map(colKey), ref=(/(cal\s*=\s*[\d.,]+\s*€\s*\/\s*mwh)/i.exec(head.join(' '))||[])[1]||'';
+      if(!cols.length){ i=j-1; continue; }
+      for(; j<lines.length && isData(lines[j]); j++){
+        const c=lines[j].split('\t').map(x=>x.trim()), r={ name:c[0], values:{} };
+        cols.forEach((k, n)=>{ const v=c[n+1]; if(v && k!=='x:') r.values[k]=NUM.test(v) ? v.replace(/\s*[€%]$/, '').replace('.', ',') : v; });
+        if(ref && r.values.c_exemple) r.values.c_exempleRef=ref.replace(/\s+/g, ' ');
+        rows.push(r);
+      }
+      i=j-1;
+    }
+    return rows;
+  }
   function pricingTables(text){
+    const a=flatTables(text), seen=new Set(a.map(r=>foldS(r.name)));
+    return a.concat(tabTables(text).filter(r=>!seen.has(foldS(r.name))));
+  }
+  function flatTables(text){
     const cells=String(text||'').split(/\r?\n/).flatMap(l=>l.split('\t')).map(c=>c.replace(/\u00a0/g, ' ').trim()).filter(Boolean), rows=[];
     for(let i=0; i<cells.length; i++){
       if(!FIRST_COL.test(foldS(cells[i]))) continue;
@@ -171,9 +216,22 @@ window.TodoConditions=(function(){
       const lot=lots.filter(l=>fold(l).length>2 && n.includes(fold(l))).sort((a, b)=>fold(b).length-fold(a).length)[0];
       return lot ? list.filter(o=>o.lot===lot) : [];
     }
+    // « Plouisy + Moutonnerie - Baseload » : an offer for several plants together, kept on each of them as the group's offer
+    const GRP={ c_blMW:'c_grpBlMW', c_formule:'c_grpFormule', c_exemple:'c_grpExemple', c_exempleRef:'c_exempleRef' };
+    function groupLine(r, list){
+      if(!/\+|\bet\b/i.test(r.name)) return null;
+      const n=fold(r.name), plants=list.filter(o=>{ const c=fold(o.centrale||o.title); return c.length>3 && n.includes(c); });
+      if(plants.length<2) return null;
+      const values={ c_grpNom:r.name.replace(/\s*[-–]\s*(baseload|bl)\s*$/i, '').trim() };
+      Object.keys(r.values).forEach(k=>{ values[GRP[k]||k]=r.values[k]; });
+      return { plants, values };
+    }
     function pricingChanges(text, list, from){
-      const out=[], hit=new Set(), put=(o, k, v)=>{ const f=FIELDS.find(x=>x.k===k); if(f && v!=='' && !same(o[k], v)) out.push({ o, label:f.label, now:String(o[k]==null?'':o[k]), val:v, set:x=>{ o[k]=x; }, from }); };
-      pricingTables(text).forEach(r=>{ const o=sheetForLine(r, list) || (list.length===1 && pricingTables(text).length===1 ? list[0] : null), lot=o ? [] : lotFor(r, list), loose=o || lot.length ? null : sheetByName(r, list);
+      const out=[], hit=new Set(), put=(o, k, v)=>{
+        if(k.startsWith('x:')){ const h=k.slice(2), now=(o.pricingExtra||{})[h]; if(v!=='' && !same(now, v)) out.push({ o, label:h, now:String(now==null?'':now), val:v, set:x=>{ o.pricingExtra=Object.assign({}, o.pricingExtra||{}, { [h]:x }); }, from }); return; }
+        const f=FIELDS.find(x=>x.k===k); if(f && v!=='' && !same(o[k], v)) out.push({ o, label:f.label, now:String(o[k]==null?'':o[k]), val:v, set:x=>{ o[k]=x; }, from }); };
+      pricingTables(text).forEach(r=>{ const g=groupLine(r, list); if(g){ g.plants.forEach(x=>{ hit.add(x); Object.keys(g.values).forEach(k=>put(x, k, g.values[k])); }); return; }
+        const o=sheetForLine(r, list) || (list.length===1 && pricingTables(text).length===1 ? list[0] : null), lot=o ? [] : lotFor(r, list), loose=o || lot.length ? null : sheetByName(r, list);
         (o ? [o] : lot.length ? lot : loose ? [loose] : []).forEach(x=>{ hit.add(x); Object.keys(r.values).forEach(k=>put(x, k, r.values[k])); }); });
       // the steering's price, said once for the whole mail : on the plants of its table (or the only sheet)
       const pil=api.pilotageIn(text);
@@ -187,11 +245,36 @@ window.TodoConditions=(function(){
       await apply(rows, got, list);
     }
     // the text of a mail pasted (the pricing's answer copied out of Outlook)
-    async function fillText(text, list){ await apply(pricingChanges(text, list, 'texte collé'), { names:['le texte collé'], installs:[] }, list); }
+    async function fillText(text, list){ await apply(pricingChanges(text, list, 'texte collé'), { names:['le texte collé'], installs:[], text }, list); }
+    // the pricing's mails kept on the sheets they filled (the text, read back later ; at most 20 000 characters, the last 10)
+    const mailHash=t=>{ let h=5381; for(let i=0; i<t.length; i++) h=((h*33)^t.charCodeAt(i))>>>0; return h.toString(36); };
+    function keepMail(sheets, got){
+      const text=String(got.text).slice(0, 20000), h=mailHash(text), subj=(/^Objet\s*:\s*(.+)$/mi.exec(text)||[])[1]||'';
+      sheets.forEach(o=>{ const l=(o.pricingMails||[]).filter(m=>m.h!==h); l.push({ at:Date.now(), name:got.names.join(', '), subject:subj.trim(), text, h }); o.pricingMails=l.slice(-10); });
+    }
+    // the mails of a sheet : a line each, a click shows its text
+    function mailsBlock(o){
+      const l=(o.pricingMails||[]).slice().reverse(); if(!l.length) return null;
+      const box=document.createElement('div'); box.className='pr-mails';
+      l.forEach(m=>{ const b=document.createElement('button'); b.type='button'; b.className='pr-mail';
+        b.textContent='\u2709 '+new Date(m.at).toLocaleDateString('fr-FR')+' \u00b7 '+(m.subject||m.name);
+        b.onclick=()=>showMail(m); box.appendChild(b); });
+      return box;
+    }
+    function showMail(m){
+      const ov=document.createElement('div'); ov.className='modal-overlay'; ov.id='pmail-overlay';
+      ov.innerHTML='<div class="modal-box wide fill-box" role="dialog" aria-labelledby="pmail-title"><div class="opp-detail-head"><h3 id="pmail-title"></h3></div><pre class="pr-mail-text"></pre><div class="crm-form-actions"><button type="button" class="ghost-btn pm-copy">Copier</button><button type="button" class="ghost-btn pm-close">Fermer</button></div></div>';
+      ov.querySelector('#pmail-title').textContent=(m.subject||m.name)+' \u00b7 '+new Date(m.at).toLocaleDateString('fr-FR');
+      ov.querySelector('.pr-mail-text').textContent=m.text;
+      const close=()=>ov.remove(); ov.querySelector('.pm-close').onclick=close; ov.addEventListener('keydown', e=>{ if(e.key==='Escape'){ e.stopPropagation(); close(); } });
+      ov.querySelector('.pm-copy').onclick=()=>{ try{ navigator.clipboard.writeText(m.text); notify('Mail copié.'); }catch(e){ notify('Copie impossible.'); } };
+      document.body.appendChild(ov); ov.querySelector('.pm-close').focus();
+    }
     async function apply(rows, got, list){
       if(!rows.length){ notify(got.installs && got.installs.length ? 'Rien de nouveau dans '+got.names.join(', ')+' pour cette fiche.' : 'Rien trouvé pour cette fiche dans '+got.names.join(', ')+' : ni centrale (Excel Caractéristiques Centrales ou du producteur), ni tableau de prix du pricing (« Nom du marché » + colonnes en €/MWh, avec le code affaire de la fiche).'); return; }
       const ok=await preview(rows, 'Remplir depuis « '+got.names.join(', ')+' »'); if(!ok || !ok.length) return;
       ok.forEach(r=>r.set(r.val));
+      if(got.text && pricingTables(got.text).length) keepMail(new Set(ok.map(r=>r.o)), got);
       new Set(ok.map(r=>r.o)).forEach(o=>touchCrm(o)); await saveCrm();
       notify(ok.length+' case'+(ok.length>1?'s':'')+' remplie'+(ok.length>1?'s':'')+'.'); reopen();
     }
@@ -222,7 +305,7 @@ window.TodoConditions=(function(){
       ov.addEventListener('keydown', e=>{ if(e.key==='Escape'){ e.stopPropagation(); close(); } });
       ov.querySelector('.paste-go').onclick=()=>{ const t=ta.value; close(); fillText(t, list); };
     }
-    Object.assign(api, { dropZone, fill, fillText, escapeHtml });
+    Object.assign(api, { dropZone, fill, fillText, escapeHtml, mailsBlock, showMail });
   };
   return api;
 })();

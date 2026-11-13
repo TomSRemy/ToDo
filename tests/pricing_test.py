@@ -65,10 +65,26 @@ with sync_playwright() as p:
     check(o["a"].get("c_fgP1") == "5,99" and o["b"].get("c_fgP1") == "5,21" and o["a"].get("c_pilotage") == "0,4" and o["b"].get("c_fgGestion") == "2,91", "« Remplir » : every installation named in the mail gets its prices")
     check(o["e"].get("c_fgP1") == "4,30" and o["f"].get("c_fgP1") == "4,30" and o["f"].get("c_fgGestion") == "2,10", "a line of the mail priced for a lot : every plant of the lot gets it")
     check(pg.inner_text("#pricing-badge") == "" and "Aucune installation en attente de prix" in pg.inner_text("#pricing-root"), "no more waiting : the menu's count and the page say so")
+    # a baseload offer indexed on the CAL, pasted as copied (tabs, a header over several lines), with a line for both plants together
+    bl = "Nom du marché\tPuissance BL (MW)\nsur la base du P50\tFormule\tPlancher (€/MWh)\n\tExemple \nCAL = 60 €/MWh\nMoutonnerie - Baseload\t1.25\t38.5% x CAL - 1.7\t15\t21.40\nPlouisy - Baseload\t0.32\t77.5% x CAL - 1.8\t15\t44.70\nPlouisy + Moutonnerie - Baseload\t1.60\t48.9% x CAL - 1.6\t15\t27.74"
+    pg.click("#pricing-root .fill-paste"); pg.fill("#paste-overlay textarea", bl); pg.click("#paste-overlay .paste-go"); pg.wait_for_selector("#fill-overlay", timeout=5000)
+    look = pg.inner_text("#fill-overlay")
+    check("38.5% x CAL - 1.7" in look and "77.5% x CAL - 1.8" in look and "Offre groupée" in look and "Plouisy + Moutonnerie" in look, f"a CAL-indexed baseload table : formulas, power, example, and the offer for both plants ({look[:220]!r})")
+    pg.click("#fill-overlay .fill-go"); pg.wait_for_timeout(600)
+    o = by()
+    check(o["a"].get("c_formule") == "38.5% x CAL - 1.7" and o["a"].get("c_blMW") == "1,25" and o["a"].get("c_exemple") == "21,40" and o["a"].get("c_exempleRef") == "CAL = 60 €/MWh"
+          and o["b"].get("c_formule") == "77.5% x CAL - 1.8" and o["a"].get("c_grpNom") == "Plouisy + Moutonnerie" and o["b"].get("c_grpFormule") == "48.9% x CAL - 1.6",
+          f"each plant gets its formula, both keep the group's offer ({ {k: o['a'].get(k) for k in ['c_formule', 'c_blMW', 'c_exemple', 'c_grpNom', 'c_grpFormule']} })")
+    check((o["a"].get("pricingExtra") or {}).get("Plancher (€/MWh)") == "15", f"a column the app doesn't know is kept under its own header ({o['a'].get('pricingExtra')})")
+    check(len(o["a"].get("pricingMails") or []) >= 1 and "38.5% x CAL" in o["a"]["pricingMails"][-1]["text"], "the pricing's mail (here pasted) is kept on the sheets it filled")
+    pg.click("#pricing-root .pr-seg[data-seg='view'] button[data-v='done']"); pg.wait_for_timeout(300)
+    pg.click("#pricing-root .pr-mails-btn[data-id='a']"); pg.wait_for_selector("#pmail-overlay", timeout=3000)
+    check("77.5% x CAL - 1.8" in pg.inner_text("#pmail-overlay"), "the ✉ button shows the kept mail")
+    pg.click("#pmail-overlay .pm-close")
     pg.click("#pricing-root .pr-seg[data-seg='view'] button[data-v='done']"); pg.wait_for_timeout(300)
     check(all(x in pg.inner_text("#pricing-root") for x in ["MOUTONNERIE", "PLOUISY", "TOIT"]), "« Prix reçus » : the priced ones, to correct")
     pg.click("#pricing-root .pr-seg[data-seg='cols'] button[data-v='all']"); pg.wait_for_timeout(300)
-    check("FG_%M0_P1" in pg.inner_text("#pricing-root") and "Remu_prod" in pg.inner_text("#pricing-root"), "« Toutes les colonnes » : every line of the Retour pricing")
+    check("FG_%M0_P1" in pg.inner_text("#pricing-root") and "Remu_prod" in pg.inner_text("#pricing-root") and "Plancher (€/MWh)" in pg.inner_text("#pricing-root"), "« Toutes les colonnes » : every line of the Retour pricing, and the pricing's own columns")
     pg.click("#pricing-root .pr-open[data-id='c']"); pg.wait_for_timeout(500)
     check(not pg.locator("#opp-detail-overlay").evaluate("e=>e.classList.contains('hidden')") and "TOIT" in pg.inner_text("#opp-detail-title"), "« Fiche » opens the installation's sheet")
     check(not err, f"no page errors ({err})")

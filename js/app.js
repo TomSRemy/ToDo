@@ -4595,6 +4595,7 @@
       const sheet=buildInstallSheet(o);
       box.appendChild(sheetSection('Détails de la centrale', [o.install, o.contrat, fmtKwc(o.kwc, o.install)].filter(Boolean).join(' · '), stageIndex(o.stage)<=stageIndex('qualif_en_cours') || isExited(o), sheet));
       if(!window.TODO_LITE) box.appendChild(window.TodoConditions.dropZone(siblings.length>1?siblings:[o], box));   // a file dropped fills the sheet, after a look
+      { const mb=window.TodoConditions.mailsBlock(o); if(mb) box.appendChild(sheetSection('Mails du pricing', (o.pricingMails||[]).length+' gardé'+((o.pricingMails||[]).length>1?'s':'')+(o.pricingExtra?' · '+Object.entries(o.pricingExtra).map(([h, v])=>h+' : '+v).join(' · '):''), false, mb)); }
       const cmp=buildRequestCompare(siblings.length>1?siblings:[o], o.id);   // every line of the « Caractéristiques Centrales » file, to fill in place
       if(!o.requestId){ const fr=document.createElement('div'), pm=appendPricingMail(fr, { company:o.company }, [o]);   // a plant on its own has its pricing mail too, first at the pricing steps
         if(pm.mailNow){ box.append(...fr.childNodes); box.appendChild(cmp); } else { box.appendChild(cmp); box.append(...fr.childNodes); } }
@@ -5093,7 +5094,7 @@
     qualif_en_cours:[{ id:'rdv2', label:'RDV 2', date:'rdv2' },{ id:'decision', label:'Décision Go / No Go prise' }],
     pricing_indicatif:[{ id:'mail', label:'Mail de demande envoyé', auto:l=>l.every(o=>o.mailSentAt), act:{ label:'Copier le mail', show:l=>!l.every(o=>o.mailSentAt), fn:(l,btn)=>{ const ml=pricingMail(reqOfList(l), l); copyToClipboard(ml.subject+'\n\n'+ml.body, btn); markMailSent(l); } } },
       { id:'caract', label:'Fichier Caractéristiques joint', auto:l=>l.every(o=>o.caractSentAt), act:{ label:'Créer le fichier', show:l=>!l.every(o=>o.caractSentAt), fn:(l,btn)=>downloadCaract(l, btn) } },
-      { id:'ops', label:'Retour d’Ops reçu' },{ id:'prix', label:'Prix noté dans la fiche', auto:l=>l.every(o=>o.prixValeur || o.c_pu || o.c_fgP1), act:{ label:'Saisir les prix', show:l=>!l.every(o=>o.prixValeur || o.c_pu || o.c_fgP1), fn:l=>goToPricingAnswer(l) } }],
+      { id:'ops', label:'Retour d’Ops reçu' },{ id:'prix', label:'Prix noté dans la fiche', auto:l=>l.every(o=>o.prixValeur || o.c_pu || o.c_fgP1 || o.c_formule || o.c_grpFormule), act:{ label:'Saisir les prix', show:l=>!l.every(o=>o.prixValeur || o.c_pu || o.c_fgP1 || o.c_formule || o.c_grpFormule), fn:l=>goToPricingAnswer(l) } }],
     offre_remise:[{ id:'prete', label:'Offre préparée' },{ id:'envoyee', label:'Offre remise au producteur', date:'dateOffre' }],
     offre_attente:[{ id:'relance', label:'Relance faite', note:l=>{ const t=pqDateOf(l[0].dateOffre); if(!t) return ''; const n=Math.floor((Date.now()-t)/864e5); return n>0?'offre remise il y a '+n+' jour'+(n>1?'s':''):''; } },{ id:'reponse', label:'Réponse du producteur reçue' }],
     kyc:[{ id:'docs', label:'Documents KYC reçus' },{ id:'solva', label:'Solvabilité validée (Juridique)' }],
