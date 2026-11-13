@@ -194,7 +194,66 @@ window.TodoConditions=(function(){
       return out.filter(r=>{ const k=fold(r.now)+'|'+fold(r.val); if(seen.has(k)) return false; seen.add(k); return true; });
     }
     // the look before filling : every change, the old value beside it ; a value already there and different starts unticked
+    // the preview of a pricing mail over several installations : one line per line of the mail (a lot, a plant), its
+    // values in columns like the table sent ; opened, its installations by business code — a value already typed
+    // differently in orange, kept unless ticked
+    const SHORT={ c_pu:'Prix fixe', c_fgP1:'Frais €/MWh P1', c_m0P1:'Frais % M0 P1', c_finP1:'Jusqu’au P1', c_fgP2:'Frais €/MWh P2', c_m0P2:'Frais % M0 P2', c_finP2:'Jusqu’au P2',
+      c_pePrix:'Prix essai', c_fgAcc:'ACC €/an', c_puGo:'Prix GO', c_pilotage:'Pilotage', c_fgGestion:'Gestion €/MWh', c_fgGestionPct:'Gestion % M0', c_fgFixe:'Fixes €/MWh',
+      c_fgFixePct:'Fixes % M0', c_fgMarge:'Marge €/MWh', c_fgMargePct:'Marge % M0', c_blMW:'Baseload MW', c_formule:'Formule', c_exemple:'Exemple' };
+    const shortOf=k=>SHORT[k] || (String(k).startsWith('x:') ? k.slice(2) : (FIELDS.find(f=>f.k===k)||{}).label || k);
+    const refOf=o=>codeAffaire(o) || o.centrale || o.title || '?';
+    function previewGroups(rows){
+      const groups=[], at=new Map();
+      rows.forEach((r, i)=>{ const g=r.line || ('Fiche · '+refOf(r.o)); if(!at.has(g)){ at.set(g, groups.length); groups.push({ name:g, variant:r.variant||'', idx:[] }); } groups[at.get(g)].idx.push(i); });
+      return groups;
+    }
+    function previewHtml(rows, groups, keys){
+      const cell=(g, k)=>{ const rs=g.idx.map(i=>rows[i]).filter(r=>(r.k||r.label)===k); if(!rs.length) return '<td class="fg-v fg-e">—</td>';
+        const vals=[...new Set(rs.map(r=>r.val))], conf=rs.filter(r=>r.now).length;
+        return '<td class="fg-v'+(conf?' conf':'')+'"'+(conf?' title="'+conf+' installation'+(conf>1?'s ont':' a')+' déjà une autre valeur : ouvre la ligne pour choisir"':'')+'>'+escapeHtml(vals.length===1 ? vals[0] : 'variable')+(conf?' <i>'+conf+'</i>':'')+'</td>'; };
+      const sub=(g, n)=>[...new Set(g.idx.map(i=>rows[i].o))].map(o=>'<tr class="fg-sub" data-g="'+n+'" hidden><td><input type="checkbox" class="fg-p" data-g="'+n+'" data-o="'+escapeHtml(o.id)+'" aria-label="'+escapeHtml(refOf(o))+'"></td><td class="fg-ref"><b>'+escapeHtml(refOf(o))+'</b><span>'+escapeHtml([o.centrale||o.title, o.producteur||o.company].filter(Boolean).join(' · '))+'</span></td><td></td>'
+        +keys.map(k=>{ const ri=g.idx.find(i=>rows[i].o===o && (rows[i].k||rows[i].label)===k); if(ri==null) return '<td class="fg-v fg-e"></td>'; const r=rows[ri];
+          return r.now ? '<td class="fg-v conf"><label><input type="checkbox" class="fg-c" data-i="'+ri+'"> <s>'+escapeHtml(r.now)+'</s> '+escapeHtml(r.val)+'</label></td>' : '<td class="fg-v">'+escapeHtml(r.val)+'</td>'; }).join('')+'</tr>').join('');
+      return '<table class="fill-table fg-table"><thead><tr><th></th><th>Ligne du mail</th><th>Inst.</th>'+keys.map(k=>'<th>'+escapeHtml(shortOf(k))+'</th>').join('')+'</tr></thead><tbody>'
+        +groups.map((g, n)=>{ const os=new Set(g.idx.map(i=>rows[i].o)), conf=g.idx.some(i=>rows[i].now);
+          return '<tr class="fg-grp'+(conf?' has-conf':'')+'"><td><input type="checkbox" class="fg-g" data-g="'+n+'" aria-label="'+escapeHtml(g.name)+'"></td><td class="fg-name"><button type="button" class="fg-x pr-fold" data-g="'+n+'" aria-expanded="false" title="Voir les installations">▸</button><b>'+escapeHtml(g.name)+'</b>'+(g.variant?'<span>variante « '+escapeHtml(g.variant)+' », gardée à part</span>':'')+'</td><td class="fg-n">'+os.size+'</td>'
+            +keys.map(k=>cell(g, k)).join('')+'</tr>'+sub(g, n); }).join('')+'</tbody></table>';
+    }
+    function previewGrouped(rows, title){
+      return new Promise(res=>{
+        const order=k=>{ const i=FIELDS.findIndex(f=>f.k===k); return i<0 ? 999 : i; };
+        const keys=[...new Set(rows.map(r=>r.k||r.label))].sort((a, b)=>order(a)-order(b)), groups=previewGroups(rows);
+        const sel=new Set(rows.map((r, i)=>r.now ? -1 : i).filter(i=>i>=0)), nPlants=new Set(rows.map(r=>r.o)).size, nConf=rows.filter(r=>r.now).length;
+        const ov=document.createElement('div'); ov.className='modal-overlay'; ov.id='fill-overlay';
+        ov.innerHTML='<div class="modal-box wide fill-box fg-box" role="dialog" aria-labelledby="fill-title"><div class="opp-detail-head"><h3 id="fill-title"></h3></div><p class="modal-hint"></p>'
+          +'<div class="fill-scroll">'+previewHtml(rows, groups, keys)+'</div>'
+          +'<div class="crm-form-actions"><button type="button" class="ghost-btn fill-cancel">Annuler</button><button type="button" class="fill-go"></button></div></div>';
+        ov.querySelector('#fill-title').textContent=title;
+        ov.querySelector('.modal-hint').textContent=groups.length+' ligne'+(groups.length>1?'s':'')+' du mail · '+nPlants+' installations. ▸ pour voir les installations d’une ligne, par code affaire.'
+          +(nConf ? ' '+nConf+' valeur'+(nConf>1?'s':'')+' déjà saisie'+(nConf>1?'s':'')+' autrement (en orange) : gardée'+(nConf>1?'s':'')+', sauf si tu coches.' : '');
+        const tb=ov.querySelector('tbody'), go=ov.querySelector('.fill-go'), plain=i=>!rows[i].now;
+        const ofG=n=>groups[n].idx, ofP=(n, id)=>groups[n].idx.filter(i=>rows[i].o.id===id);
+        const tick=(box, idx)=>{ const p=idx.filter(plain), on=p.length ? p.filter(i=>sel.has(i)).length : idx.filter(i=>sel.has(i)).length, all=p.length||idx.length; box.checked=on===all && all>0; box.indeterminate=on>0 && on<all; };
+        const paint=()=>{ tb.querySelectorAll('.fg-g').forEach(b=>tick(b, ofG(+b.dataset.g))); tb.querySelectorAll('.fg-p').forEach(b=>tick(b, ofP(+b.dataset.g, b.dataset.o)));
+          tb.querySelectorAll('.fg-c').forEach(b=>{ b.checked=sel.has(+b.dataset.i); });
+          const os=new Set([...sel].map(i=>rows[i].o)).size; go.textContent=sel.size ? 'Remplir '+os+' installation'+(os>1?'s':'')+' ('+sel.size+' cases)' : 'Rien à remplir'; go.disabled=!sel.size; };
+        tb.addEventListener('change', e=>{ const b=e.target, set=(idx, on)=>idx.forEach(i=>{ if(on) sel.add(i); else sel.delete(i); });
+          if(b.classList.contains('fg-g')) set(b.checked ? ofG(+b.dataset.g).filter(plain) : ofG(+b.dataset.g), b.checked);
+          else if(b.classList.contains('fg-p')) set(b.checked ? ofP(+b.dataset.g, b.dataset.o).filter(plain) : ofP(+b.dataset.g, b.dataset.o), b.checked);
+          else if(b.classList.contains('fg-c')) set([+b.dataset.i], b.checked);
+          paint(); });
+        tb.addEventListener('click', e=>{ const x=e.target.closest('.fg-x'); if(!x) return; const open=x.getAttribute('aria-expanded')!=='true';
+          x.setAttribute('aria-expanded', String(open)); x.textContent=open?'▾':'▸'; tb.querySelectorAll('.fg-sub[data-g="'+x.dataset.g+'"]').forEach(tr=>{ tr.hidden=!open; }); });
+        paint();
+        const done=v=>{ ov.remove(); res(v); };
+        ov.querySelector('.fill-cancel').onclick=()=>done(null);
+        go.onclick=()=>done([...sel].sort((a, b)=>a-b).map(i=>rows[i]));
+        ov.addEventListener('keydown', e=>{ if(e.key==='Escape'){ e.stopPropagation(); done(null); } });
+        document.body.appendChild(ov); go.focus();
+      });
+    }
     function preview(rows, title){
+      if(new Set(rows.map(r=>r.o)).size>1) return previewGrouped(rows, title);
       return new Promise(res=>{
         const ov=document.createElement('div'); ov.className='modal-overlay'; ov.id='fill-overlay';
         ov.innerHTML='<div class="modal-box wide fill-box" role="dialog" aria-labelledby="fill-title"><div class="opp-detail-head"><h3 id="fill-title"></h3></div><p class="modal-hint"></p>'
@@ -264,23 +323,24 @@ window.TodoConditions=(function(){
     // the lines of the table, each onto its sheets : an option or a variant (« Lot Brownfield - 2028 », Option « MES 2028 ») kept
     // apart under its own name ; the lines nobody is found for come back in `left`, to be assigned by hand
     function pricingChanges(text, list, from, assigned){
-      const out=[], hit=new Set(), left=[], put=(o, k, v)=>{
-        if(k.startsWith('x:')){ const h=k.slice(2), now=(o.pricingExtra||{})[h]; if(v!=='' && !same(now, v)) out.push({ o, label:h, now:String(now==null?'':now), val:v, set:x=>{ o.pricingExtra=Object.assign({}, o.pricingExtra||{}, { [h]:x }); }, from }); return; }
-        const f=FIELDS.find(x=>x.k===k); if(f && v!=='' && !same(o[k], v)) out.push({ o, label:f.label, now:String(o[k]==null?'':o[k]), val:v, set:x=>{ o[k]=x; }, from }); };
+      // m : where the value comes from, for the preview (the mail's line, the field without its variant, the variant)
+      const out=[], hit=new Set(), left=[], put=(o, k, v, m)=>{ const meta=m||{ line:'', k };
+        if(k.startsWith('x:')){ const h=k.slice(2), now=(o.pricingExtra||{})[h]; if(v!=='' && !same(now, v)) out.push(Object.assign({ o, label:h, now:String(now==null?'':now), val:v, set:x=>{ o.pricingExtra=Object.assign({}, o.pricingExtra||{}, { [h]:x }); }, from }, meta)); return; }
+        const f=FIELDS.find(x=>x.k===k); if(f && v!=='' && !same(o[k], v)) out.push(Object.assign({ o, label:f.label, now:String(o[k]==null?'':o[k]), val:v, set:x=>{ o[k]=x; }, from }, meta)); };
       const label=k=>{ if(k.startsWith('x:')) return k.slice(2); const f=FIELDS.find(x=>x.k===k); return f ? f.label : k; };
-      const onto=(targets, r, variant)=>targets.forEach(x=>{ hit.add(x); Object.keys(r.values).forEach(k=>put(x, variant ? 'x:'+variant+' \u00b7 '+label(k) : k, r.values[k])); });
+      const onto=(targets, r, variant)=>targets.forEach(x=>{ hit.add(x); Object.keys(r.values).forEach(k=>put(x, variant ? 'x:'+variant+' \u00b7 '+label(k) : k, r.values[k], { line:r.name, k, variant })); });
       const rows=pricingTables(text);
       rows.forEach((r, i)=>{
         const opt=r.option && !/^(base|principale?|standard|-)$/i.test(r.option) ? r.option : '';
         if(assigned && assigned[i]){ onto(assigned[i], r, opt); return; }
-        const g=groupLine(r, list); if(g){ g.plants.forEach(x=>{ hit.add(x); Object.keys(g.values).forEach(k=>put(x, k, g.values[k])); }); return; }
+        const g=groupLine(r, list); if(g){ g.plants.forEach(x=>{ hit.add(x); Object.keys(g.values).forEach(k=>put(x, k, g.values[k], { line:r.name, k })); }); return; }
         const t=targetsFor(r, list, rows.length);
         if(!t.plants.length){ left.push(i); return; }
         onto(t.plants, r, opt || t.extra);
       });
       // the steering's price, said once for the whole mail : on the plants of its table (or the only sheet)
       const pil=api.pilotageIn(text);
-      if(pil) (hit.size ? [...hit] : list.length===1 ? list : []).forEach(o=>put(o, 'c_pilotage', pil));
+      if(pil) (hit.size ? [...hit] : list.length===1 ? list : []).forEach(o=>put(o, 'c_pilotage', pil, { line:'Pilotage (dit dans le mail)', k:'c_pilotage' }));
       return { out, left, rows };
     }
     // the lines found for no sheet : chosen by hand (a lot, or an installation), or left aside
@@ -304,7 +364,7 @@ window.TodoConditions=(function(){
       return '<div class="as-sec">Lots <i>'+ls.length+'</i></div>'+(ls.length ? ls.slice(0, SHOW).map(lotItem).join('')+more(ls.length) : '<p class="as-more">Aucun lot</p>')
         +(rs.length ? '<div class="as-sec">Autres demandes <i>'+rs.length+'</i></div>'+rs.slice(0, SHOW).map(lotItem).join('')+more(rs.length) : '')
         +'<div class="as-sec">Installations <i>'+ps.length+'</i> <small>coche celles du lot</small></div>'
-        +ps.slice(0, SHOW).map(({ o })=>'<label class="as-opt"><input type="checkbox" value="'+escapeHtml(o.id)+'"'+(st.ids.has(o.id)?' checked':'')+'><b>'+escapeHtml(o.centrale||o.title||'?')+'</b><span>'+escapeHtml(prodOf(o)+(o.lot?' · lot '+o.lot:''))+'</span></label>').join('')+more(ps.length);
+        +ps.slice(0, SHOW).map(({ o })=>'<label class="as-opt"><input type="checkbox" value="'+escapeHtml(o.id)+'"'+(st.ids.has(o.id)?' checked':'')+'><b>'+escapeHtml(refOf(o))+'</b><span>'+escapeHtml([codeAffaire(o) ? o.centrale||o.title : '', prodOf(o), o.lot ? 'lot '+o.lot : ''].filter(Boolean).join(' · '))+'</span></label>').join('')+more(ps.length);
     }
     function assignDialog(rows, left, list, app){
       return new Promise(res=>{
@@ -395,7 +455,8 @@ window.TodoConditions=(function(){
       const lotted=saveLots(rows.lots);
       if(got.text && pricingTables(got.text).length) keepMail(new Set(ok.map(r=>r.o)), got);
       new Set(ok.map(r=>r.o).concat(lotted)).forEach(o=>touchCrm(o)); await saveCrm();
-      notify(ok.length+' case'+(ok.length>1?'s':'')+' remplie'+(ok.length>1?'s':'')+'.'); reopen();
+      const filled=[...new Set(ok.map(r=>r.o))];
+      notify(filled.length>1 ? filled.length+' installations remplies ('+ok.length+' cases).' : ok.length+' case'+(ok.length>1?'s':'')+' remplie'+(ok.length>1?'s':'')+'.'); reopen(filled.map(o=>o.id));
     }
     // the zone at the top of a sheet ; the whole sheet takes a drop too
     function dropZone(list, host, title){

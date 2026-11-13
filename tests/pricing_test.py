@@ -60,13 +60,14 @@ with sync_playwright() as p:
     pg.set_input_files("#pricing-root .fill-drop input[type=file]", str(eml)); pg.wait_for_selector("#fill-overlay", timeout=8000)
     look = pg.inner_text("#fill-overlay")
     check("MOUTONNERIE" in look and "PLOUISY" in look and "5,99" in look and "0,4" in look, f"the mail : both plants found by their business code, shown before filling ({look[:200]!r})")
-    check(not pg.locator("#fill-overlay tr.conf input").first.is_checked(), "a price already typed and different starts unticked")
-    pg.locator("#fill-overlay tr.conf input").evaluate_all("l=>l.forEach(x=>{ x.checked=true; x.dispatchEvent(new Event('change', { bubbles:true })); })")
+    check(not pg.locator("#fill-overlay .fg-c").first.is_checked(), "a price already typed and different starts unticked")
+    pg.locator("#fill-overlay .fg-c").evaluate_all("l=>l.forEach(x=>{ x.checked=true; x.dispatchEvent(new Event('change', { bubbles:true })); })")
     pg.click("#fill-overlay .fill-go"); pg.wait_for_timeout(700)
     o = by()
     check(o["a"].get("c_fgP1") == "5,99" and o["b"].get("c_fgP1") == "5,21" and o["a"].get("c_pilotage") == "0,4" and o["b"].get("c_fgGestion") == "2,91", "« Remplir » : every installation named in the mail gets its prices")
     check(o["e"].get("c_fgP1") == "4,30" and o["f"].get("c_fgP1") == "4,30" and o["f"].get("c_fgGestion") == "2,10", "a line of the mail priced for a lot : every plant of the lot gets it")
-    check(pg.inner_text("#pricing-badge") == "" and "Aucune installation en attente de prix" in pg.inner_text("#pricing-root"), "no more waiting : the menu's count and the page say so")
+    check(pg.inner_text("#pricing-badge") == "" and pg.locator("#pricing-root .pr-seg[data-seg='view'] button.on").get_attribute("data-v") == "done" and pg.locator("#pricing-root tr.pr-focus").count() >= 2,
+          "no more waiting : the menu's count says so, and the page shows what was just filled (« Prix reçus », rows marked)")
     # a baseload offer indexed on the CAL, pasted as copied (tabs, a header over several lines), with a line for both plants together
     bl = "Nom du marché\tPuissance BL (MW)\nsur la base du P50\tFormule\tPlancher (€/MWh)\n\tExemple \nCAL = 60 €/MWh\nMoutonnerie - Baseload\t1.25\t38.5% x CAL - 1.7\t15\t21.40\nPlouisy - Baseload\t0.32\t77.5% x CAL - 1.8\t15\t44.70\nPlouisy + Moutonnerie - Baseload\t1.60\t48.9% x CAL - 1.6\t15\t27.74"
     pg.click("#pricing-root .fill-paste"); pg.fill("#paste-overlay textarea", bl); pg.click("#paste-overlay .paste-go"); pg.wait_for_selector("#fill-overlay", timeout=5000)

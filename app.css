@@ -2951,3 +2951,16 @@ html.widget .dup-banner{ display:none; }
 .as-more{ color:var(--tx3); font-size:11.5px; margin:4px 6px; }
 .as-foot{ display:flex; align-items:center; gap:8px; margin-top:8px; }
 .as-save-l{ flex:1; color:var(--tx2); font-size:12px; }
+.modal-box.wide.fg-box{ max-width:min(1280px, 96vw); }
+.fg-table{ white-space:nowrap; }
+.fg-table th{ position:sticky; top:0; background:var(--panel); z-index:1; }
+.fg-table .fg-grp td{ background:var(--panel-2); }
+.fg-table .fg-name b{ font-weight:600; } .fg-table .fg-name span{ display:block; padding-left:22px; font-size:11px; color:var(--tx3); }
+.fg-table .fg-n{ color:var(--tx3); font-family:var(--font-mono, monospace); }
+.fg-table .fg-v{ font-family:var(--font-mono, monospace); text-align:right; }
+.fg-table .fg-e{ color:var(--tx3); opacity:.6; }
+.fg-table .fg-v.conf{ color:var(--amber, #E5B54F); } .fg-table .fg-v.conf i{ font-style:normal; font-size:10.5px; border:1px solid currentColor; border-radius:8px; padding:0 5px; margin-left:4px; }
+.fg-table .fg-v.conf s{ color:var(--tx3); margin-right:2px; } .fg-table .fg-v label{ cursor:pointer; }
+.fg-table .fg-sub .fg-ref{ padding-left:30px; } .fg-table .fg-ref b{ font:600 12px var(--font-mono, monospace); } .fg-table .fg-ref span{ margin-left:8px; font-size:11px; color:var(--tx3); }
+.pr-table tr[data-in]:not(.pr-lot) .pr-name b{ font:600 12px var(--font-mono, monospace); }
+.as-opt input + b{ font-family:var(--font-mono, monospace); font-size:12px; }

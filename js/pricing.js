@@ -42,7 +42,8 @@ window.TodoPricing=(function(){
     const foldBtn=(key, label)=>'<button type="button" class="pr-fold" data-fold="'+escapeHtml(key)+'" aria-expanded="'+(!folded.has(key))+'" title="Replier / déplier '+escapeHtml(label)+'">'+(folded.has(key)?'\u25b8':'\u25be')+'</button>';
     function rowHtml(o, F, keys){
       const hide=(keys||[]).some(k=>folded.has(k)), d=daysInStage(o), st=WAIT.has(o.stage) ? stageLabel(o.stage, o)+(d!=null?' · '+d+' j':'') : stageLabel(o.stage, o);
-      return '<tr data-in="'+escapeHtml((keys||[]).join('|'))+'"'+(hide?' hidden':'')+'><td class="pr-name"><b>'+escapeHtml(oppName(o))+'</b><span>'+escapeHtml([app.codeAffaire(o), o.kwc?o.kwc+' kWc':''].filter(Boolean).join(' · '))+'</span></td>'
+      const ref=app.codeAffaire(o);
+      return '<tr data-in="'+escapeHtml((keys||[]).join('|'))+'"'+(hide?' hidden':'')+'><td class="pr-name"><b>'+escapeHtml(ref||oppName(o))+'</b><span>'+escapeHtml([ref?oppName(o):'', o.kwc?o.kwc+' kWc':''].filter(Boolean).join(' · '))+'</span></td>'
         +'<td class="pr-st"><span class="pr-tag'+(waiting(o)?' wait':'')+'">'+escapeHtml(st)+'</span></td>'+F.map(f=>cellHtml(o, f)).join('')
         +'<td class="pr-act">'+((o.pricingMails||[]).length?'<button type="button" class="pipe-bar-btn pr-mails-btn" data-id="'+escapeHtml(o.id)+'" title="Les mails du pricing gardés pour cette installation">\u2709 '+o.pricingMails.length+'</button> ':'')+'<button type="button" class="pipe-bar-btn pr-open" data-id="'+escapeHtml(o.id)+'">Fiche</button></td></tr>';
     }
@@ -170,7 +171,16 @@ window.TodoPricing=(function(){
       const first=rows.map(tr=>[...tr.querySelectorAll('.pr-in')].find(i=>!i.value)).find(Boolean) || (rows[0] && rows[0].querySelector('.pr-in'));
       if(first) setTimeout(()=>{ first.focus(); first.select(); }, 60);
     }
-    Object.assign(api, { render, paintCount, focusOn });
+    // after a pricing mail filled : the view where they now are, their requests and lots unfolded, their rows marked
+    function showFilled(ids){
+      const list=app.opportunities.filter(o=>ids.includes(o.id)); if(!list.length){ render(); return; }
+      q=''; view=list.every(waiting) ? 'wait' : list.every(priced) ? 'done' : 'all';
+      list.forEach(o=>[...folded].forEach(k=>{ if(o.requestId && (k===o.requestId || k.startsWith(o.requestId+'/'))) folded.delete(k); else if(k==='o'+o.id) folded.delete(k); })); keepFolded();
+      render();
+      const root=$('pricing-root'), rows=[...new Set(ids.map(id=>root.querySelector('.pr-in[data-id="'+id+'"]')).filter(Boolean).map(x=>x.closest('tr')))];
+      rows.forEach(tr=>tr.classList.add('pr-focus')); if(rows[0]) rows[0].scrollIntoView({ block:'center' });
+    }
+    Object.assign(api, { render, paintCount, focusOn, showFilled });
   };
   return api;
 })();
