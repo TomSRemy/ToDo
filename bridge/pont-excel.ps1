@@ -340,8 +340,12 @@ function Close-Book($book) {
 function Find-Table($wb, $kind) {
   $k = $Kinds[$kind]
   $ws = $null
-  foreach ($w in $wb.Worksheets) { if ((Norm $w.Name) -eq (Norm $k.sheet)) { $ws = $w; break } }
-  if (-not $ws) { throw ("Onglet « " + $k.sheet + " » introuvable dans « " + $(if ($wb.Name) { $wb.Name } else { [IO.Path]::GetFileName([string]$Config.$kind) }) + " » : rien n'est écrit (le pont n'écrit que dans cet onglet).") }
+  $names = @(); foreach ($w in $wb.Worksheets) { $names += [string]$w.Name; if ((Norm $w.Name) -eq (Norm $k.sheet)) { $ws = $w; break } }
+  if (-not $ws) {
+    $file = $(if ($wb.Name) { $wb.Name } else { [IO.Path]::GetFileName([string]$Config.$kind) })
+    # no sheet at all : Excel didn't answer (a dialog box open, the file in protected view, an Excel left without window)
+    if (-not $names.Count) { throw ("Excel ne répond pas pour « " + $file + " » (aucun onglet lu) : une fenêtre de dialogue est peut-être ouverte dans Excel, ou le fichier est en mode protégé (« Activer la modification »). Ferme les fenêtres de dialogue d'Excel, puis réessaie ; sinon ferme tous les Excel et rouvre le fichier.") }
+    throw ("Onglet « " + $k.sheet + " » introuvable dans « " + $file + " » (onglets lus : " + ($names -join ', ') + ") : rien n'est écrit (le pont n'écrit que dans cet onglet).") }
   foreach ($lo in $ws.ListObjects) {
     $h = $lo.HeaderRowRange.Value2
     for ($c = 1; $c -le $lo.ListColumns.Count; $c++) { if ((Norm $h[1, $c]) -eq (Norm $k.header)) { return $lo } }
