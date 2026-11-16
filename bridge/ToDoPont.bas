@@ -61,7 +61,12 @@ Public Sub ToDo_Tour()
     Dim f As String, n As Long
     f = Dir(Dossier() & "\*.req")
     Do While f <> "" And n < 20
-        Traiter Dossier() & "\" & f
+        If Not Traiter(Dossier() & "\" & f) Then
+            On Error Resume Next
+            Name Dossier() & "\" & f As Dossier() & "\" & f & ".illisible"
+            Kill Dossier() & "\" & f
+            On Error GoTo suite
+        End If
         n = n + 1
         f = Dir(Dossier() & "\*.req")
     Loop
@@ -69,9 +74,12 @@ suite:
     Planifier
 End Sub
 
-Private Sub Traiter(ByVal chemin As String)
+Private Function Traiter(ByVal chemin As String) As Boolean
     Dim txt As String, id As String, res As String
+    On Error Resume Next
     txt = LireTexte(chemin)
+    If Err.Number <> 0 Then Exit Function
+    On Error GoTo 0
     On Error Resume Next
     Kill chemin
     On Error GoTo 0
@@ -82,7 +90,8 @@ Private Sub Traiter(ByVal chemin As String)
     Kill Dossier() & "\" & id & ".res"
     EcrireTexte Dossier() & "\" & id & ".tmp", res
     Name Dossier() & "\" & id & ".tmp" As Dossier() & "\" & id & ".res"
-End Sub
+    Traiter = True
+End Function
 
 ' une demande : FILE / PATH / SHEET / HEADER, puis ROW, NEW et SET, une par ligne (séparateur : tabulation)
 Private Function Executer(ByVal txt As String) As String
@@ -120,6 +129,8 @@ Private Function Executer(ByVal txt As String) As String
             If c Is Nothing Then Executer = sortie & "ERR" & vbTab & i & vbTab & Echapper("Colonne « " & Desechapper(p(2)) & " » introuvable dans le tableau : rien n'est écrit."): Exit Function
             If c.HasFormula Then
                 ' une formule n'est jamais remplacée
+            ElseIf Pareil(c.Value, p(5), Desechapper(p(6))) Then
+                ok = ok + 1   ' déjà la bonne valeur (écrite juste avant) : rien à faire
             ElseIf Pareil(c.Value, p(3), Desechapper(p(4))) Then
                 Ecrire c, p(5), Desechapper(p(6))
                 ok = ok + 1
@@ -159,7 +170,11 @@ Private Function Classeur(ByVal nom As String, ByVal chemin As String) As Workbo
     If Len(chemin) > 0 Then
         If Len(Dir(chemin)) > 0 Then
             On Error Resume Next
-            Set Classeur = Application.Workbooks.Open(chemin)
+            Set Classeur = Application.Workbooks.Open(Filename:=chemin, UpdateLinks:=0)
+            ' ouvert en lecture seule (déjà ouvert ailleurs, verrouillé) : refermé, rien n'est écrit dans une copie
+            If Not Classeur Is Nothing Then
+                If Classeur.ReadOnly Then Classeur.Close SaveChanges:=False: Set Classeur = Nothing
+            End If
         End If
     End If
 End Function

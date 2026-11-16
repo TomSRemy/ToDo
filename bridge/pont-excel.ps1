@@ -589,7 +589,10 @@ function New-VbaAdapter($kind) {
   $a.baseGet = $a.Get; $a.baseHasFormula = $a.HasFormula
   # a row added in this request : nothing in it yet ; a formula column of the table (calculated) filled by Excel itself
   $a.Get = { param($a, $r, $c) if ($r -gt $a.lastData) { return $a.newVals["$r|$c"] }; & $a.baseGet $a $r $c }
-  $a.HasFormula = { param($a, $r, $c) if ($r -gt $a.lastData) { if ($a.lastData -lt 1) { return $false }; return (& $a.baseHasFormula $a $a.lastData $c) }; & $a.baseHasFormula $a $r $c }
+  # a new row : a column is « calculated » only when the TABLE defines it so — never because the last row happens to hold
+  # a formula (the Suivi has rows copying the row above, « =C9 ») : otherwise its values would be left out of the new row
+  $a.calcCols = @{}; try { for ($c = 1; $c -le $a.Headers.Count; $c++) { $col = $a.table.Columns[$c - 1]; if ($col -and [string]$col.CalculatedColumnFormula) { $a.calcCols[$c] = $true } } } catch { }
+  $a.HasFormula = { param($a, $r, $c) if ($r -gt $a.lastData) { return [bool]$a.calcCols[$c] }; & $a.baseHasFormula $a $r $c }
   $a.RowRef = { param($a, $r)
     if ($a.vbaRefs.ContainsKey($r)) { return $a.vbaRefs[$r] }
     $ref = 'r' + $r; $line = 'ROW' + "`t" + $ref + "`t" + ($a.firstRow + $r); $keys = ''
