@@ -30,7 +30,9 @@
      et chaque case écrite est notée dans « Sauvegardes pont/journal-pont.csv » avec son ancienne valeur et qui l'a écrite
      (jamais effacé) ; la même ligne va dans « Journal ToDo », à côté du Pipe, un fichier par personne (journal de l'équipe).
 
-  v1.38 : un fichier en enregistrement automatique qui refuse un instant d'être enregistré n'est plus une erreur ;
+  v1.38 : la ligne Total d'un tableau n'est jamais prise pour une ligne vide (elle l'était en écrivant sans Excel :
+  une nouvelle ligne pouvait s'y écrire et la détruire) ;
+  un fichier en enregistrement automatique qui refuse un instant d'être enregistré n'est plus une erreur ;
   messages clairs quand Excel refuse une case ou l'enregistrement (quelle case, quoi faire).
 
   v1.37 : le pont écrit toujours par Excel (le fichier ouvert chez toi, sinon ouvert en arrière-plan, écrit,
@@ -474,7 +476,10 @@ function New-DirectAdapter($kind) {
     $firstRow = $table.Address.Start.Row; $firstCol = $table.Address.Start.Column; $lastCol = $table.Address.End.Column
     $headers = @(); for ($c = $firstCol; $c -le $lastCol; $c++) { $headers += [string]$ws.Cells.get_Item($firstRow, $c).Text }
   } catch { $pkg.Dispose(); $ms.Dispose(); throw }
-  $a = @{ kind = $kind; pkg = $pkg; ms = $ms; ws = $ws; table = $table; Headers = $headers; FirstCol = $firstCol; firstRow = $firstRow; lastRow = $table.Address.End.Row; path = $path }
+  # the table's Total row (when shown) is NOT a data row : never counted, read as empty, reused or cleared (it was,
+  # for real : a new line written into it destroyed the Total row of the Suivi)
+  $lastData = $table.Address.End.Row; try { if ($table.ShowTotal) { $lastData-- } } catch { }
+  $a = @{ kind = $kind; pkg = $pkg; ms = $ms; ws = $ws; table = $table; Headers = $headers; FirstCol = $firstCol; firstRow = $firstRow; lastRow = $lastData; path = $path }
   $a.RowCount = { param($a) $a.lastRow - $a.firstRow }
   $a.Cell = { param($a, $r, $c) $a.ws.Cells.get_Item($a.firstRow + $r, $a.FirstCol + $c - 1) }
   $a.Get = { param($a, $r, $c) (& $a.Cell $a $r $c).Value }
