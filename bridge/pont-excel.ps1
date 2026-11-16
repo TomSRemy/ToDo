@@ -30,6 +30,9 @@
      et chaque case écrite est notée dans « Sauvegardes pont/journal-pont.csv » avec son ancienne valeur et qui l'a écrite
      (jamais effacé) ; la même ligne va dans « Journal ToDo », à côté du Pipe, un fichier par personne (journal de l'équipe).
 
+  v1.38 : un fichier en enregistrement automatique qui refuse un instant d'être enregistré n'est plus une erreur ;
+  messages clairs quand Excel refuse une case ou l'enregistrement (quelle case, quoi faire).
+
   v1.37 : le pont écrit toujours par Excel (le fichier ouvert chez toi, sinon ouvert en arrière-plan, écrit,
   enregistré et refermé aussitôt) : il ne remplace plus jamais le fichier sur le disque, ce qui troublait Excel et
   OneDrive ; les nouvelles lignes du tableau marchent dans tous les cas, la mise en forme n'est pas touchée.
@@ -52,7 +55,7 @@
 param([int]$Port = 8765, [switch]$Reconfigurer, [switch]$Mock, [string]$PatchTest = '')
 
 $ErrorActionPreference = 'Stop'
-$Version = '1.37'
+$Version = '1.38'
 $Here = Split-Path -Parent $MyInvocation.MyCommand.Path
 $LibDir = Join-Path $Here 'lib'
 # the settings (the two files, the key) live in the Windows profile, not next to the script: a new download, in any folder,
@@ -372,7 +375,10 @@ function New-ComAdapter($kind) {
         elseif ($b -is [bool]) { $cell.Formula = $(if ($b) { 'TRUE' } else { 'FALSE' }) }
         elseif ($b -is [datetime]) { $cell.Formula = '=DATE(' + $b.Year + ',' + $b.Month + ',' + $b.Day + ')' }
         else { $cell.Formula = Quote-Formula $b }
-      } catch { $cell.Value = $b }   # a cell the formula bar won't accept (e.g. over Excel's 255-character formula-text limit) : last resort
+      } catch {   # a cell the formula bar won't accept (e.g. over Excel's 255-character formula-text limit) : last resort
+        try { $cell.Value = $b }
+        catch { throw ("Case « " + $a.Headers[$c - 1] + " » (ligne " + (& $a.ExcelRow $a $r) + ") refusée par Excel pour « " + (Show-Value $b) + " » : " + $_.Exception.Message + ". Une fenêtre de dialogue ouverte dans Excel, ou une case en cours de saisie, bloque souvent l'écriture.") }
+      }
     } }
   $a.BeforeWrite = { param($a) }
   # the table found again before adding : a workbook updated meanwhile (AutoSave, a colleague) can leave the old
@@ -388,7 +394,16 @@ function New-ComAdapter($kind) {
   $a.WasClosed = [bool]$book.opened
   $a.Backup = { param($a, $dir, $stamp) $n = [IO.Path]::GetFileNameWithoutExtension($a.book.wb.Name); $e = [IO.Path]::GetExtension($a.book.wb.Name); $p = Join-Path $dir ($n + "-" + $stamp + $e); $a.book.wb.SaveCopyAs($p); $p }
   $a.BackupPattern = { param($a) [IO.Path]::GetFileNameWithoutExtension($a.book.wb.Name) + "-*" + [IO.Path]::GetExtension($a.book.wb.Name) }
-  $a.Save = { param($a) $a.book.wb.Save() }
+  # v1.38 : a busy Excel retried ; a file with AutoSave on (co-authoring) that refuses Save() while it uploads : Excel
+  # saves it by itself, so not an error when the file was already open there (never for one the bridge opened)
+  $a.Save = { param($a) $wb = $a.book.wb; $auto = $false; try { $auto = [bool]$wb.AutoSaveOn } catch { }
+    for ($try = 1; $try -le 4; $try++) {
+      try { $wb.Save(); return }
+      catch {
+        if ($auto -and -not $a.book.opened) { Write-Info 'Enregistrement laissé à l''enregistrement automatique d''Excel (fichier partagé en cours d''envoi).' 'DarkGray'; return }
+        if ($try -lt 4) { Start-Sleep -Seconds 2; continue }
+        throw ("Excel refuse d'enregistrer « " + $wb.Name + " » (" + $_.Exception.Message + "). Souvent : une fenêtre de ce fichier qui a perdu son fichier sur le disque, ou deux copies ouvertes. Ferme toutes les fenêtres de ce fichier, rouvre-le depuis le dossier, puis réessaie.")
+      } } }
   $a.Close = { param($a) Close-Book $a.book }
   return $a
 }
