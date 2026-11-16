@@ -30,6 +30,10 @@
      et chaque case écrite est notée dans « Sauvegardes pont/journal-pont.csv » avec son ancienne valeur et qui l'a écrite
      (jamais effacé) ; la même ligne va dans « Journal ToDo », à côté du Pipe, un fichier par personne (journal de l'équipe).
 
+  v1.37 : le pont écrit toujours par Excel (le fichier ouvert chez toi, sinon ouvert en arrière-plan, écrit,
+  enregistré et refermé aussitôt) : il ne remplace plus jamais le fichier sur le disque, ce qui troublait Excel et
+  OneDrive ; les nouvelles lignes du tableau marchent dans tous les cas, la mise en forme n'est pas touchée.
+
   v1.36 : les Excel ne sont relus que s'ils ont changé, et toujours depuis le fichier (Excel n'est plus sollicité pour
   lire, même quand le fichier y est ouvert) : le PC est soulagé.
 
@@ -48,7 +52,7 @@
 param([int]$Port = 8765, [switch]$Reconfigurer, [switch]$Mock, [string]$PatchTest = '')
 
 $ErrorActionPreference = 'Stop'
-$Version = '1.36'
+$Version = '1.37'
 $Here = Split-Path -Parent $MyInvocation.MyCommand.Path
 $LibDir = Join-Path $Here 'lib'
 # the settings (the two files, the key) live in the Windows profile, not next to the script: a new download, in any folder,
@@ -371,7 +375,9 @@ function New-ComAdapter($kind) {
       } catch { $cell.Value = $b }   # a cell the formula bar won't accept (e.g. over Excel's 255-character formula-text limit) : last resort
     } }
   $a.BeforeWrite = { param($a) }
-  $a.AddRow = { param($a) $null = $a.lo.ListRows.Add(); $a.lo.ListRows.Count }
+  # the table found again before adding : a workbook updated meanwhile (AutoSave, a colleague) can leave the old
+  # reference empty (« méthode dans une expression Null », reported for real)
+  $a.AddRow = { param($a) try { $a.lo = Find-Table $a.book.wb $a.kind } catch { }; $null = $a.lo.ListRows.Add(); $a.lo.ListRows.Count }
   $a.ExcelRow = { param($a, $r) $a.lo.DataBodyRange.Row + $r - 1 }
   # empty = every cell that is not a formula is blank (the table's calculated columns fill a new row by themselves)
   $a.RowEmpty = { param($a, $r) $rg = $a.lo.ListRows.Item($r).Range; $v = $rg.Value2; $f = $rg.Formula
@@ -527,10 +533,11 @@ function New-MockAdapter($kind) {
 }
 function New-Adapter($kind) {
   if ($Mock) { return New-MockAdapter $kind }
-  if (Is-AlreadyOpen (Resolve-ConfigPath $kind)) { return New-ComAdapter $kind }   # someone has it open : write into that session
-  # closed : written without Excel (no lock), only the written cells changed inside the file (v1.35, Write-XlsxCells)
-  try { return New-DirectAdapter $kind }
-  catch { Write-Info ("Écriture directe impossible (" + $_.Exception.Message + ") : on passe par Excel.") 'DarkGray'; return New-ComAdapter $kind }
+  # v1.37 : always written by Excel (into the session where the file is open, else opened hidden, written, saved and
+  # closed at once). Writing the file without Excel replaced it on disk : with the workbook open elsewhere or being
+  # synced by OneDrive, Excel lost track of it (a line added twice, « Impossible d'accéder » on saving — reported for
+  # real), and a new line of the table was never possible that way. New-DirectAdapter is kept, never used to write.
+  return New-ComAdapter $kind
 }
 
 # ---------------- Upsert ----------------
