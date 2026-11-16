@@ -15,6 +15,25 @@ Attribute VB_Name = "ToDoPont"
 ' ==========================================================================================
 Option Explicit
 
+' le temps depuis la dernière frappe ou le dernier clic (Windows) : le complément te laisse finir avant d'écrire
+Private Type DERNIERE_ACTION
+    cbSize As Long
+    dwTime As Long
+End Type
+#If VBA7 Then
+Private Declare PtrSafe Function GetLastInputInfo Lib "user32" (ByRef info As DERNIERE_ACTION) As Long
+Private Declare PtrSafe Function GetTickCount Lib "kernel32" () As Long
+#Else
+Private Declare Function GetLastInputInfo Lib "user32" (ByRef info As DERNIERE_ACTION) As Long
+Private Declare Function GetTickCount Lib "kernel32" () As Long
+#End If
+Private Const PAUSE_SECONDES As Long = 20   ' attendre que tu fasses une pause de 20 s dans le fichier visé…
+Private Const ATTENTE_MAX As Long = 40      ' …mais jamais plus de 40 s (le pont attend la réponse)
+
+' les cases écrites au dernier passage, avec leur contenu d'avant : Ctrl+Z les remet
+Private annulCases As Collection
+Private courant As Collection   ' celles du passage en cours
+
 Private prochain As Date
 Private actif As Boolean
 Private tours As Long
@@ -58,10 +77,14 @@ Public Sub ToDo_Tour()
     On Error GoTo suite
     tours = tours + 1
     If tours Mod 10 = 1 Then EcrireTexte Dossier() & "\alive.txt", Format$(Now, "yyyy-mm-dd hh:nn:ss")
-    Dim f As String, n As Long
+    Dim f As String, n As Long, ecrit As Boolean, r As Long
+    Set courant = New Collection
     f = Dir(Dossier() & "\*.req")
     Do While f <> "" And n < 20
-        If Not Traiter(Dossier() & "\" & f) Then
+        r = Traiter(Dossier() & "\" & f)
+        If r = 2 Then Exit Do   ' tu travailles dans ce fichier : on attend ta pause (la demande reste là)
+        If r = 1 Then ecrit = True
+        If r = 0 Then
             On Error Resume Next
             Name Dossier() & "\" & f As Dossier() & "\" & f & ".illisible"
             Kill Dossier() & "\" & f
@@ -70,15 +93,19 @@ Public Sub ToDo_Tour()
         n = n + 1
         f = Dir(Dossier() & "\*.req")
     Loop
+    ' Ctrl+Z juste après : remet les cases que le complément vient d'écrire
+    If courant.Count > 0 Then Set annulCases = courant: Application.OnUndo "Annuler l'écriture ToDo", "'" & ThisWorkbook.Name & "'!ToDo_Annuler"
 suite:
     Planifier
 End Sub
 
-Private Function Traiter(ByVal chemin As String) As Boolean
+' 0 illisible, 1 traitée, 2 remise à plus tard (tu es en train de travailler dans le fichier visé)
+Private Function Traiter(ByVal chemin As String) As Long
     Dim txt As String, id As String, res As String
     On Error Resume Next
     txt = LireTexte(chemin)
     If Err.Number <> 0 Then Exit Function
+    If TuTravaillesDedans(txt) And DateDiff("s", FileDateTime(chemin), Now) < ATTENTE_MAX Then Traiter = 2: Exit Function
     On Error GoTo 0
     On Error Resume Next
     Kill chemin
@@ -90,8 +117,34 @@ Private Function Traiter(ByVal chemin As String) As Boolean
     Kill Dossier() & "\" & id & ".res"
     EcrireTexte Dossier() & "\" & id & ".tmp", res
     Name Dossier() & "\" & id & ".tmp" As Dossier() & "\" & id & ".res"
-    Traiter = True
+    Traiter = 1
 End Function
+
+' le fichier visé est la fenêtre active d'Excel et tu as tapé ou cliqué il y a moins de 20 s
+Private Function TuTravaillesDedans(ByVal txt As String) As Boolean
+    Dim l As Variant, fichier As String, info As DERNIERE_ACTION
+    For Each l In Split(Replace(txt, vbCr, ""), vbLf)
+        If Left$(l, 5) = "FILE" & vbTab Then fichier = LCase$(Desechapper(Mid$(l, 6))): Exit For
+    Next
+    If Len(fichier) = 0 Or Application.ActiveWorkbook Is Nothing Then Exit Function
+    If LCase$(Application.ActiveWorkbook.Name) <> fichier Then Exit Function
+    info.cbSize = Len(info)
+    If GetLastInputInfo(info) = 0 Then Exit Function
+    TuTravaillesDedans = (GetTickCount() - info.dwTime) < PAUSE_SECONDES * 1000&
+End Function
+
+' Ctrl+Z après une écriture du complément : chaque case reprend son contenu d'avant
+Public Sub ToDo_Annuler()
+    Dim it As Variant
+    On Error Resume Next
+    If annulCases Is Nothing Then Exit Sub
+    For Each it In annulCases
+        With Application.Workbooks(it(0)).Worksheets(it(1)).Range(it(2))
+            If Len(it(3)) > 0 Then .Formula = it(3) Else .ClearContents
+        End With
+    Next
+    Set annulCases = New Collection
+End Sub
 
 ' une demande : FILE / PATH / SHEET / HEADER, puis ROW, NEW et SET, une par ligne (séparateur : tabulation)
 Private Function Executer(ByVal txt As String) As String
@@ -132,6 +185,7 @@ Private Function Executer(ByVal txt As String) As String
             ElseIf Pareil(c.Value, p(5), Desechapper(p(6))) Then
                 ok = ok + 1   ' déjà la bonne valeur (écrite juste avant) : rien à faire
             ElseIf Pareil(c.Value, p(3), Desechapper(p(4))) Then
+                If Not courant Is Nothing Then courant.Add Array(wb.Name, c.Worksheet.Name, c.Address, c.Formula)
                 Ecrire c, p(5), Desechapper(p(6))
                 ok = ok + 1
             Else
