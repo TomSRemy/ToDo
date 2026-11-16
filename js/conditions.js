@@ -207,9 +207,19 @@ window.TodoConditions=(function(){
       rows.forEach((r, i)=>{ const g=r.line || ('Fiche · '+refOf(r.o)); if(!at.has(g)){ at.set(g, groups.length); groups.push({ name:g, variant:r.variant||'', idx:[] }); } groups[at.get(g)].idx.push(i); });
       return groups;
     }
+    // the total fee must be the sum of its detail (management + fixed + margin), in €/MWh and in % M0 ; a value missing : not checked
+    const SUMS=[['c_fgP1', ['c_fgGestion', 'c_fgFixe', 'c_fgMarge']], ['c_m0P1', ['c_fgGestionPct', 'c_fgFixePct', 'c_fgMargePct']]];
+    const num=v=>{ const n=Number(String(v==null?'':v).replace(/\s/g, '').replace(',', '.')); return String(v==null?'':v).trim()!=='' && isFinite(n) ? n : null; };
+    const fr=n=>String(Math.round(n*100)/100).replace('.', ',');
+    api.sumIssues=get=>SUMS.map(([t, parts])=>{ const tot=num(get(t)), ps=parts.map(k=>num(get(k)));
+      if(tot==null || ps.some(x=>x==null)) return null; const sum=ps.reduce((a, b)=>a+b, 0);
+      return Math.abs(sum-tot)>0.011 ? { k:t, tot, sum, text:'≠ '+ps.map(fr).join(' + ')+' = '+fr(sum) } : null; }).filter(Boolean);
+    function groupValue(rows, g, k){ const v=[...new Set(g.idx.map(i=>rows[i]).filter(r=>(r.k||r.label)===k).map(r=>r.val))]; return v.length===1 ? v[0] : null; }
     function previewHtml(rows, groups, keys){
-      const cell=(g, k)=>{ const rs=g.idx.map(i=>rows[i]).filter(r=>(r.k||r.label)===k); if(!rs.length) return '<td class="fg-v fg-e">—</td>';
-        const vals=[...new Set(rs.map(r=>r.val))], conf=rs.filter(r=>r.now).length;
+      const bad=groups.map(g=>new Map(api.sumIssues(k=>groupValue(rows, g, k)).map(x=>[x.k, x])));
+      const cell=(g, k, n)=>{ const rs=g.idx.map(i=>rows[i]).filter(r=>(r.k||r.label)===k); if(!rs.length) return '<td class="fg-v fg-e">—</td>';
+        const vals=[...new Set(rs.map(r=>r.val))], conf=rs.filter(r=>r.now).length, b=bad[n].get(k);
+        if(b) return '<td class="fg-v fg-bad" title="Le total n\u2019est pas la somme du détail : '+escapeHtml(b.text)+'">'+escapeHtml(vals[0])+' <i>⚠ '+escapeHtml(b.text)+'</i></td>';
         return '<td class="fg-v'+(conf?' conf':'')+'"'+(conf?' title="'+conf+' installation'+(conf>1?'s ont':' a')+' déjà une autre valeur : ouvre la ligne pour choisir"':'')+'>'+escapeHtml(vals.length===1 ? vals[0] : 'variable')+(conf?' <i>'+conf+'</i>':'')+'</td>'; };
       const sub=(g, n)=>[...new Set(g.idx.map(i=>rows[i].o))].map(o=>'<tr class="fg-sub" data-g="'+n+'" hidden><td><input type="checkbox" class="fg-p" data-g="'+n+'" data-o="'+escapeHtml(o.id)+'" aria-label="'+escapeHtml(refOf(o))+'"></td><td class="fg-ref"><b>'+escapeHtml(refOf(o))+'</b><span>'+escapeHtml([o.centrale||o.title, o.producteur||o.company].filter(Boolean).join(' · '))+'</span></td><td></td>'
         +keys.map(k=>{ const ri=g.idx.find(i=>rows[i].o===o && (rows[i].k||rows[i].label)===k); if(ri==null) return '<td class="fg-v fg-e"></td>'; const r=rows[ri];
@@ -217,12 +227,13 @@ window.TodoConditions=(function(){
       return '<table class="fill-table fg-table"><thead><tr><th></th><th>Ligne du mail</th><th>Inst.</th>'+keys.map(k=>'<th>'+escapeHtml(shortOf(k))+'</th>').join('')+'</tr></thead><tbody>'
         +groups.map((g, n)=>{ const os=new Set(g.idx.map(i=>rows[i].o)), conf=g.idx.some(i=>rows[i].now);
           return '<tr class="fg-grp'+(conf?' has-conf':'')+'"><td><input type="checkbox" class="fg-g" data-g="'+n+'" aria-label="'+escapeHtml(g.name)+'"></td><td class="fg-name"><button type="button" class="fg-x pr-fold" data-g="'+n+'" aria-expanded="false" title="Voir les installations">▸</button><b>'+escapeHtml(g.name)+'</b>'+(g.variant?'<span>variante « '+escapeHtml(g.variant)+' », gardée à part</span>':'')+'</td><td class="fg-n">'+os.size+'</td>'
-            +keys.map(k=>cell(g, k)).join('')+'</tr>'+sub(g, n); }).join('')+'</tbody></table>';
+            +keys.map(k=>cell(g, k, n)).join('')+'</tr>'+sub(g, n); }).join('')+'</tbody></table>';
     }
     function previewGrouped(rows, title){
       return new Promise(res=>{
         const order=k=>{ const i=FIELDS.findIndex(f=>f.k===k); return i<0 ? 999 : i; };
         const keys=[...new Set(rows.map(r=>r.k||r.label))].sort((a, b)=>order(a)-order(b)), groups=previewGroups(rows);
+        const nBad=groups.filter(g=>api.sumIssues(k=>groupValue(rows, g, k)).length).length;
         const sel=new Set(rows.map((r, i)=>r.now ? -1 : i).filter(i=>i>=0)), nPlants=new Set(rows.map(r=>r.o)).size, nConf=rows.filter(r=>r.now).length;
         const ov=document.createElement('div'); ov.className='modal-overlay'; ov.id='fill-overlay';
         ov.innerHTML='<div class="modal-box wide fill-box fg-box" role="dialog" aria-labelledby="fill-title"><div class="opp-detail-head"><h3 id="fill-title"></h3></div><p class="modal-hint"></p>'
@@ -230,6 +241,7 @@ window.TodoConditions=(function(){
           +'<div class="crm-form-actions"><button type="button" class="ghost-btn fill-cancel">Annuler</button><button type="button" class="fill-go"></button></div></div>';
         ov.querySelector('#fill-title').textContent=title;
         ov.querySelector('.modal-hint').textContent=groups.length+' ligne'+(groups.length>1?'s':'')+' du mail · '+nPlants+' installations. ▸ pour voir les installations d’une ligne, par code affaire.'
+          +(nBad ? ' ⚠ '+nBad+' ligne'+(nBad>1?'s':'')+' où le total des frais n\u2019est pas la somme du détail (en rouge) : à vérifier avec le pricing.' : '')
           +(nConf ? ' '+nConf+' valeur'+(nConf>1?'s':'')+' déjà saisie'+(nConf>1?'s':'')+' autrement (en orange) : gardée'+(nConf>1?'s':'')+', sauf si tu coches.' : '');
         const tb=ov.querySelector('tbody'), go=ov.querySelector('.fill-go'), plain=i=>!rows[i].now;
         const ofG=n=>groups[n].idx, ofP=(n, id)=>groups[n].idx.filter(i=>rows[i].o.id===id);

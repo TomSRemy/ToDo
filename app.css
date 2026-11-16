@@ -2973,3 +2973,5 @@ html.widget .dup-banner{ display:none; }
 .as-how.ok{ color:var(--accent); background:color-mix(in srgb, var(--accent) 12%, transparent); }
 .as-how.chk{ color:#E5B54F; background:#E5B54F18; }
 .as-how.none{ color:var(--tx3); background:var(--panel-3, rgba(255,255,255,.04)); }
+.fg-table .fg-v.fg-bad{ color:var(--crit, #ED6965); font-weight:600; } .fg-table .fg-v.fg-bad i{ display:block; font-style:normal; font-weight:400; font-size:10.5px; }
+.pr-table td.pr-bad .pr-in{ color:var(--crit, #ED6965); box-shadow:inset 0 0 0 1px color-mix(in srgb, var(--crit, #ED6965) 60%, transparent); }

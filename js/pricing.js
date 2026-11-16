@@ -41,9 +41,10 @@ window.TodoPricing=(function(){
       return [...prods.entries()].sort((x, y)=>x[0].localeCompare(y[0], 'fr'))
         .map(([p, m])=>({ p, items:[...m.values()].sort((x, y)=>(!x.name)-(!y.name) || x.name.localeCompare(y.name, 'fr')) }));
     }
+    // the total fee that isn't the sum of its detail : marked, the sum in the tooltip
     function cellHtml(o, f){
-      const v=valOf(o, f.k);
-      return '<td class="pr-cell"><input class="req-in pr-in" data-id="'+escapeHtml(o.id)+'" data-k="'+f.k+'" value="'+escapeHtml(v)+'" placeholder="—" aria-label="'+escapeHtml(oppName(o)+' · '+f.label)+'"></td>';
+      const v=valOf(o, f.k), bad=(f.k==='c_fgP1' || f.k==='c_m0P1') && C().sumIssues(k=>valOf(o, k)).find(x=>x.k===f.k);
+      return '<td class="pr-cell'+(bad?' pr-bad':'')+'"'+(bad?' title="Le total n\u2019est pas la somme du détail : '+escapeHtml(bad.text)+'"':'')+'><input class="req-in pr-in" data-id="'+escapeHtml(o.id)+'" data-k="'+f.k+'" value="'+escapeHtml(v)+'" placeholder="—" aria-label="'+escapeHtml(oppName(o)+' · '+f.label)+'"></td>';
     }
     const foldBtn=(key, label)=>'<button type="button" class="pr-fold" data-fold="'+escapeHtml(key)+'" aria-expanded="'+(!folded.has(key))+'" title="Replier / déplier '+escapeHtml(label)+'">'+(folded.has(key)?'\u25b8':'\u25be')+'</button>';
     function rowHtml(o, F, keys, inLot){
@@ -83,7 +84,14 @@ window.TodoPricing=(function(){
       saveCrm(); inp.value=v;
       if(inp.dataset.ids) ids.forEach(id=>{ const x=[...inp.closest('table').querySelectorAll('.pr-in[data-id="'+id+'"]')].find(i=>i.dataset.k===k); if(x) x.value=v; });
       const td=inp.closest('td'); td.classList.add('saved'); setTimeout(()=>td.classList.remove('saved'), 900);
+      list.forEach(o=>markSums(inp.closest('table'), o));
       paintCount();
+    }
+    // the total cells of a plant marked again after a change of the total or of its detail
+    function markSums(table, o){
+      const issues=C().sumIssues(k=>valOf(o, k));
+      ['c_fgP1', 'c_m0P1'].forEach(k=>{ const x=table.querySelector('.pr-in[data-id="'+o.id+'"][data-k="'+k+'"]'); if(!x) return; const b=issues.find(i=>i.k===k), cell=x.closest('td');
+        cell.classList.toggle('pr-bad', !!b); if(b) cell.title='Le total n\u2019est pas la somme du détail : '+b.text; else cell.removeAttribute('title'); });
     }
     // Excel-like keys : Enter / ↓ the cell below, ↑ the one above ; a range pasted from Excel fills the cells from here
     function move(inp, dr, dc){
