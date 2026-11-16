@@ -391,3 +391,139 @@ Private Sub EcrireTexte(ByVal chemin As String, ByVal txt As String)
     st.SaveToFile chemin, 2
     st.Close
 End Sub
+
+
+' ==========================================================================================
+'  Auto-test : ToDo_AutoTest. Crée un classeur de test (dossier TEMP) qui imite le Suivi (tableau,
+'  ligne Total, liste déroulante, mise en forme conditionnelle, colonne calculée, un autre onglet),
+'  y fait passer des écritures comme le pont, et vérifie le résultat. Aucun vrai fichier n'est touché.
+' ==========================================================================================
+Private rapport As String, nOk As Long, nKo As Long
+
+Private Sub Verifier(ByVal nom As String, ByVal cond As Boolean, Optional ByVal detail As String = "")
+    If cond Then
+        nOk = nOk + 1: rapport = rapport & "OK      " & nom & vbLf
+    Else
+        nKo = nKo + 1: rapport = rapport & "ECHEC   " & nom
+        If Len(detail) > 0 Then rapport = rapport & " (" & Replace(detail, vbLf, " | ") & ")"
+        rapport = rapport & vbLf
+    End If
+End Sub
+
+Private Function Cl(ByVal prod As String, ByVal cent As String) As String
+    Cl = "KEY" & vbTab & "Nom_prod" & vbTab & prod & vbTab & "Nom_Installation_prod" & vbTab & cent
+End Function
+
+Private Function Ord(ParamArray parts() As Variant) As String
+    Dim i As Long, s As String
+    For i = LBound(parts) To UBound(parts)
+        If i > LBound(parts) Then s = s & vbTab
+        s = s & parts(i)
+    Next
+    Ord = s & vbLf
+End Function
+
+Public Sub ToDo_AutoTest()
+    Dim wb As Workbook, ws As Worksheet, cst As Worksheet, rp As Worksheet, lo As ListObject
+    Dim chemin As String, base As String, res As String, etape As String, l As Variant, i As Long, nCf As Long
+    rapport = "Auto-test du complément ToDo - " & Format$(Now, "dd/mm/yyyy hh:nn") & " - Excel " & Application.Version & vbLf
+    nOk = 0: nKo = 0
+    On Error GoTo plante
+    etape = "création du classeur de test"
+    Application.ScreenUpdating = False
+    Set wb = Application.Workbooks.Add(xlWBATWorksheet)
+    Set ws = wb.Worksheets(1): ws.Name = "BDD Agrégation"
+    Set cst = wb.Worksheets.Add(After:=ws): cst.Name = "Cst"
+    cst.Range("A1").Value = "En attente": cst.Range("A2").Value = "Gagné": cst.Range("A3").Value = "Perdu"
+    cst.Range("C1").Value = "ne pas toucher"
+    ws.Range("A3").Value = "Titre de bloc"
+    ws.Range("A4:G4").Value = Array("Nom_prod", "Nom_Installation_prod", "Statut", "P_installée (KWc)", "Date_fin", "Double", "Commentaire")
+    ws.Range("A5:E5").Value = Array("PROD A", "CENTRALE A", "En attente", 100, DateSerial(2030, 12, 31))
+    ws.Range("A6:E6").Value = Array("PROD B", "CENTRALE B", "Perdu", 50, DateSerial(2029, 6, 30))
+    ws.Range("A7:D7").Value = Array("PROD C", "CENTRALE C", "Gagné", 70)
+    ws.Range("G5").Value = "rien": ws.Range("G6").Value = "collègue"
+    Set lo = ws.ListObjects.Add(xlSrcRange, ws.Range("A4:G7"), , xlYes)
+    lo.ListColumns("Double").DataBodyRange.Formula = "=[@[P_installée (KWc)]]*2"
+    lo.ShowTotals = True
+    lo.ListColumns("P_installée (KWc)").TotalsCalculation = xlTotalsCalculationSum
+    lo.ListColumns("Statut").DataBodyRange.Validation.Add Type:=xlValidateList, AlertStyle:=xlValidAlertStop, Formula1:="=Cst!$A$1:$A$3"
+    lo.DataBodyRange.FormatConditions.Add(Type:=xlExpression, Formula1:="=$C5=""Gagné""").Interior.Color = RGB(198, 239, 206)
+    nCf = ws.Cells.FormatConditions.Count
+    chemin = Environ$("TEMP") & "\ToDo_AutoTest_" & Format$(Now, "yyyymmdd_hhnnss") & ".xlsx"
+    Application.DisplayAlerts = False
+    wb.SaveAs Filename:=chemin, FileFormat:=xlOpenXMLWorkbook
+    Application.DisplayAlerts = True
+    base = Ord("FILE", Echapper(wb.Name)) & Ord("PATH", Echapper(chemin)) & Ord("SHEET", "BDD Agrégation") & Ord("HEADER", "Nom_prod")
+
+    etape = "1 mise à jour"
+    res = Executer(base & Ord("ROW", "r1", "5", Cl("PROD A", "CENTRALE A")) & Ord("SET", "r1", "P_installée (KWc)", "n", "100", "n", "120") & Ord("SET", "r1", "Statut", "s", "En attente", "s", "Gagné"))
+    Verifier "Mise à jour d'une ligne existante (nombre et liste)", ws.Range("D5").Value = 120 And ws.Range("C5").Value = "Gagné" And Left$(res, 4) = "DONE", res
+
+    etape = "2 case changée par un collègue"
+    res = Executer(base & Ord("ROW", "r1", "6", Cl("PROD B", "CENTRALE B")) & Ord("SET", "r1", "Commentaire", "s", "autre chose", "s", "nouveau"))
+    Verifier "Case changée par un collègue : laissée telle quelle et signalée", ws.Range("G6").Value = "collègue" And InStr(res, "CONFLICT") > 0, res
+
+    etape = "3 ligne déplacée"
+    res = Executer(base & Ord("ROW", "r1", "6", Cl("PROD C", "CENTRALE C")) & Ord("SET", "r1", "Commentaire", "e", "", "s", "trouvée"))
+    Verifier "Ligne qui a bougé : retrouvée par sa clé", ws.Range("G7").Value = "trouvée" And ws.Range("G6").Value = "collègue", res
+
+    etape = "4 nouvelle ligne"
+    res = Executer(base & Ord("NEW", "n1") & Ord("SET", "n1", "Nom_prod", "e", "", "s", "PROD D") & Ord("SET", "n1", "Nom_Installation_prod", "e", "", "s", "CENTRALE D") & _
+        Ord("SET", "n1", "P_installée (KWc)", "e", "", "n", "30") & Ord("SET", "n1", "Statut", "e", "", "s", "En attente"))
+    Verifier "Nouvelle ligne ajoutée dans le tableau", lo.ListRows.Count = 4 And ws.Range("A8").Value = "PROD D" And ws.Range("D8").Value = 30, res
+    Verifier "Ligne Total toujours en dernier, avec sa formule", lo.ShowTotals And InStr(LCase$(ws.Range("D9").Formula), "subtotal") > 0 And ws.Range("D9").Value = 270, ws.Range("D9").Formula & " = " & CStr(ws.Range("D9").Value)
+    Verifier "Colonne calculée remplie par Excel sur la nouvelle ligne", ws.Range("F8").HasFormula And ws.Range("F8").Value = 60
+
+    etape = "5 formule"
+    res = Executer(base & Ord("ROW", "r1", "5", Cl("PROD A", "CENTRALE A")) & Ord("SET", "r1", "Double", "n", "240", "n", "999"))
+    Verifier "Une formule n'est jamais remplacée", ws.Range("F5").HasFormula And ws.Range("F5").Value = 240, res
+
+    etape = "6 texte commençant par ="
+    res = Executer(base & Ord("ROW", "r1", "5", Cl("PROD A", "CENTRALE A")) & Ord("SET", "r1", "Commentaire", "s", "rien", "s", Echapper("=pas une formule")))
+    Verifier "Texte commençant par = gardé comme texte", ws.Range("G5").Text = "=pas une formule" And Not ws.Range("G5").HasFormula, res
+
+    etape = "7 valeur déjà écrite"
+    res = Executer(base & Ord("ROW", "r1", "5", Cl("PROD A", "CENTRALE A")) & Ord("SET", "r1", "P_installée (KWc)", "n", "100", "n", "120"))
+    Verifier "Valeur déjà écrite juste avant : pas de faux conflit", InStr(res, "CONFLICT") = 0 And Left$(res, 4) = "DONE", res
+
+    etape = "8 onglet inconnu"
+    res = Executer(Replace(base, "BDD Agrégation", "Inexistant") & Ord("ROW", "r1", "5", Cl("PROD A", "CENTRALE A")) & Ord("SET", "r1", "Commentaire", "s", "=pas une formule", "s", "NON"))
+    Verifier "Onglet inconnu : refusé, rien écrit", Left$(res, 3) = "ERR" And ws.Range("G5").Text = "=pas une formule", res
+
+    etape = "9 ligne vide prévue mais occupée"
+    res = Executer(base & Ord("ROW", "r1", "5", "EMPTY") & Ord("SET", "r1", "Nom_prod", "e", "", "s", "PROD E") & Ord("SET", "r1", "Nom_Installation_prod", "e", "", "s", "CENTRALE E"))
+    Verifier "Ligne vide prévue mais remplie entre-temps : nouvelle ligne, l'autre intacte", lo.ListRows.Count = 5 And ws.Range("A5").Value = "PROD A" And ws.Range("A9").Value = "PROD E", res
+
+    etape = "10 annulation"
+    Set courant = New Collection
+    res = Executer(base & Ord("ROW", "r1", "7", Cl("PROD C", "CENTRALE C")) & Ord("SET", "r1", "P_installée (KWc)", "n", "70", "n", "75"))
+    Set annulCases = courant: Set courant = Nothing
+    ToDo_Annuler
+    Verifier "Ctrl+Z (Annuler l'écriture ToDo) remet la valeur d'avant", ws.Range("D7").Value = 70, CStr(ws.Range("D7").Value)
+
+    etape = "11 reste intact"
+    Verifier "Autre onglet et titre hors tableau intacts", cst.Range("C1").Value = "ne pas toucher" And ws.Range("A3").Value = "Titre de bloc"
+    Verifier "Liste déroulante toujours là", lo.ListColumns("Statut").DataBodyRange.Cells(1, 1).Validation.Type = xlValidateList
+    Verifier "Mise en forme conditionnelle toujours là", ws.Cells.FormatConditions.Count >= nCf And nCf > 0, CStr(ws.Cells.FormatConditions.Count)
+    GoTo fin
+plante:
+    nKo = nKo + 1
+    rapport = rapport & "ECHEC   le test s'est arrêté à l'étape « " & etape & " » : " & Err.Description & vbLf
+    Resume fin
+fin:
+    On Error Resume Next
+    Application.DisplayAlerts = True
+    Application.ScreenUpdating = True
+    rapport = rapport & nOk & " OK, " & nKo & " échec(s)" & vbLf
+    If Not wb Is Nothing Then
+        Set rp = wb.Worksheets.Add(Before:=wb.Worksheets(1)): rp.Name = "Rapport"
+        i = 1
+        For Each l In Split(rapport, vbLf)
+            rp.Cells(i, 1).Value = "'" & l: i = i + 1
+        Next
+        rp.Columns(1).ColumnWidth = 110
+        rp.Activate
+        wb.Save
+    End If
+    MsgBox nOk & " OK, " & nKo & " échec(s)." & vbLf & vbLf & "Le détail est dans l'onglet « Rapport » du classeur de test ToDo_AutoTest (dans le dossier TEMP, aucun vrai fichier touché) : copie la colonne A et envoie-la à Tom.", IIf(nKo = 0, vbInformation, vbExclamation), "Auto-test ToDo"
+End Sub
