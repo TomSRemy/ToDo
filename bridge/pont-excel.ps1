@@ -30,6 +30,10 @@
      et chaque case écrite est notée dans « Sauvegardes pont/journal-pont.csv » avec son ancienne valeur et qui l'a écrite
      (jamais effacé) ; la même ligne va dans « Journal ToDo », à côté du Pipe, un fichier par personne (journal de l'équipe).
 
+  v1.39 : avec le complément Excel « ToDo » (ToDoPont.bas, dans les macros personnelles), c'est Excel lui-même qui
+  écrit, dans le seul tableau de l'onglet visé, comme une saisie ; le pont décide toujours quelles cases. Sans le
+  complément, rien ne change.
+
   v1.38 : la ligne Total d'un tableau n'est jamais prise pour une ligne vide (elle l'était en écrivant sans Excel :
   une nouvelle ligne pouvait s'y écrire et la détruire) ;
   un fichier en enregistrement automatique qui refuse un instant d'être enregistré n'est plus une erreur ;
@@ -57,7 +61,7 @@
 param([int]$Port = 8765, [switch]$Reconfigurer, [switch]$Mock, [string]$PatchTest = '')
 
 $ErrorActionPreference = 'Stop'
-$Version = '1.38'
+$Version = '1.39'
 $Here = Split-Path -Parent $MyInvocation.MyCommand.Path
 $LibDir = Join-Path $Here 'lib'
 # the settings (the two files, the key) live in the Windows profile, not next to the script: a new download, in any folder,
@@ -555,8 +559,78 @@ function New-MockAdapter($kind) {
   $a.Close = { param($a) }
   return $a
 }
+# ---------------- v1.39 : writing through the « ToDo » Excel add-in (VBA, bridge/ToDoPont.bas) ----------------
+# The bridge still decides everything (which row, which cells, a colleague's cell never overwritten), reading the file
+# on disk ; the add-in, inside the user's own Excel, only writes those cells in the target sheet's table — like typing :
+# no Excel driven from outside, no file replaced, a new row added above the Total row. Used when the add-in is alive
+# (it touches alive.txt every 10 s) ; otherwise Excel driven by the bridge, as in 1.37.
+$VbaDir = if ($env:LOCALAPPDATA) { Join-Path $env:LOCALAPPDATA 'TodoPontExcel\excel' } else { $null }
+function Vba-Alive {
+  if ($Mock -or -not $VbaDir) { return $false }
+  $f = Join-Path $VbaDir 'alive.txt'; if (-not (Test-Path -LiteralPath $f)) { return $false }
+  return (([DateTime]::Now - (Get-Item -LiteralPath $f).LastWriteTime).TotalSeconds -lt 60)
+}
+function Vba-Esc($s) { ([string]$s).Replace('\', '\\').Replace("`t", '\t').Replace("`n", '\n').Replace("`r", '\r') }
+function Vba-Unesc($s) { [regex]::Replace([string]$s, '\\(.)', { param($m) switch ($m.Groups[1].Value) { 't' { "`t" } 'n' { "`n" } 'r' { "`r" } default { $m.Groups[1].Value } } }) }
+function Vba-Val($v) {   # type (e empty, b yes/no, d date, n number, s text) and text
+  $inv = [Globalization.CultureInfo]::InvariantCulture
+  if ($null -eq $v -or ($v -is [string] -and $v.Trim() -eq '')) { return @('e', '') }
+  if ($v -is [bool]) { return @('b', $(if ($v) { '1' } else { '0' })) }
+  if ($v -is [datetime]) { return @('d', $v.ToOADate().ToString('R', $inv)) }
+  if ($v -is [double] -or $v -is [int] -or $v -is [long] -or $v -is [decimal] -or $v -is [single]) { return @('n', ([double]$v).ToString('R', $inv)) }
+  return @('s', (Vba-Esc $v))
+}
+function New-VbaAdapter($kind) {
+  $a = New-DirectAdapter $kind
+  if (-not (Test-Path -LiteralPath $VbaDir)) { $null = New-Item -ItemType Directory -Path $VbaDir }
+  $a.WasClosed = $false; $a.NoTrim = $true
+  $a.vbaOps = New-Object System.Collections.ArrayList; $a.vbaRefs = @{}; $a.newVals = @{}; $a.lastData = $a.lastRow - $a.firstRow
+  $a.keyIdx = @(); foreach ($kh in $Kinds[$kind].keys) { for ($c = 0; $c -lt $a.Headers.Count; $c++) { if ((Norm $a.Headers[$c]) -eq (Norm $kh)) { $a.keyIdx += ($c + 1); break } } }
+  $a.baseGet = $a.Get; $a.baseHasFormula = $a.HasFormula
+  # a row added in this request : nothing in it yet ; a formula column of the table (calculated) filled by Excel itself
+  $a.Get = { param($a, $r, $c) if ($r -gt $a.lastData) { return $a.newVals["$r|$c"] }; & $a.baseGet $a $r $c }
+  $a.HasFormula = { param($a, $r, $c) if ($r -gt $a.lastData) { if ($a.lastData -lt 1) { return $false }; return (& $a.baseHasFormula $a $a.lastData $c) }; & $a.baseHasFormula $a $r $c }
+  $a.RowRef = { param($a, $r)
+    if ($a.vbaRefs.ContainsKey($r)) { return $a.vbaRefs[$r] }
+    $ref = 'r' + $r; $line = 'ROW' + "`t" + $ref + "`t" + ($a.firstRow + $r); $keys = ''
+    foreach ($k in $a.keyIdx) { $v = & $a.Get $a $r $k; if (-not (Is-Blank $v)) { $keys += "`t" + (Vba-Esc $a.Headers[$k - 1]) + "`t" + (Vba-Esc ([string]$v).Trim()) } }
+    $line += $(if ($keys) { "`tKEY" + $keys } else { "`tEMPTY" })
+    [void]$a.vbaOps.Add($line); $a.vbaRefs[$r] = $ref; return $ref }
+  $a.Set = { param($a, $r, $c, $v)
+    $old = & $a.Get $a $r $c; $ref = & $a.RowRef $a $r; $o = Vba-Val $old; $n = Vba-Val $v
+    [void]$a.vbaOps.Add((@('SET', $ref, (Vba-Esc $a.Headers[$c - 1]), $o[0], $o[1], $n[0], $n[1])) -join "`t")
+    if ($r -gt $a.lastData) { $a.newVals["$r|$c"] = $v } else { $cell = & $a.Cell $a $r $c; $cell.Value = $v } }
+  $a.AddRow = { param($a) $r = ($a.lastRow - $a.firstRow) + 1; $a.lastRow++; $ref = 'n' + $r; [void]$a.vbaOps.Add('NEW' + "`t" + $ref); $a.vbaRefs[$r] = $ref; $r }
+  $a.DeleteRow = { param($a, $r) }   # never deletes anything
+  $a.DeleteRows = { param($a, $first, $count) }
+  $a.Backup = { param($a, $dir, $stamp) $n = [IO.Path]::GetFileNameWithoutExtension($a.path); $e = [IO.Path]::GetExtension($a.path); $p = Join-Path $dir ($n + "-" + $stamp + $e)
+    $fs = [IO.File]::Open($a.path, [IO.FileMode]::Open, [IO.FileAccess]::Read, ([IO.FileShare]::ReadWrite -bor [IO.FileShare]::Delete))
+    try { $out = [IO.File]::Create($p); try { $fs.CopyTo($out) } finally { $out.Dispose() } } finally { $fs.Dispose() }; $p }
+  # the cells of this row handed to the add-in, then its answer awaited (60 s at most)
+  $a.Save = { param($a)
+    if (-not $a.vbaOps.Count) { return }
+    $id = [guid]::NewGuid().ToString('N')
+    $head = @(('FILE' + "`t" + (Vba-Esc ([IO.Path]::GetFileName($a.path)))), ('PATH' + "`t" + (Vba-Esc $a.path)), ('SHEET' + "`t" + (Vba-Esc $a.ws.Name)), ('HEADER' + "`t" + (Vba-Esc $Kinds[$a.kind].header)))
+    $tmp = Join-Path $VbaDir ($id + '.tmp'); $req = Join-Path $VbaDir ($id + '.req'); $res = Join-Path $VbaDir ($id + '.res')
+    [IO.File]::WriteAllText($tmp, ((@($head) + @($a.vbaOps)) -join "`n") + "`n", (New-Object Text.UTF8Encoding $false)); Move-Item -LiteralPath $tmp -Destination $req
+    $a.vbaOps.Clear(); $a.vbaRefs = @{}
+    $t0 = [DateTime]::Now
+    while (-not (Test-Path -LiteralPath $res)) {
+      if (([DateTime]::Now - $t0).TotalSeconds -gt 60) { Remove-Item -LiteralPath $req -ErrorAction SilentlyContinue; throw "Le complément Excel « ToDo » n'a pas répondu en 60 s : Excel est-il ouvert, sans case en cours de saisie ni fenêtre de dialogue ? Rien n'a été écrit pour cette ligne." }
+      Start-Sleep -Milliseconds 250 }
+    Start-Sleep -Milliseconds 150
+    $out = [IO.File]::ReadAllText($res, [Text.Encoding]::UTF8); Remove-Item -LiteralPath $res -ErrorAction SilentlyContinue
+    $errs = @(); $done = $false
+    foreach ($l in ($out.TrimStart([char]0xFEFF) -split "`r?`n")) { $p = $l -split "`t"
+      if ($p[0] -eq 'DONE') { $done = $true; Write-Info ("Écrit par le complément Excel : " + $p[1] + " case(s)") 'DarkGray' }
+      elseif ($p[0] -eq 'ERR') { $errs += (Vba-Unesc $p[2]) }
+      elseif ($p[0] -eq 'CONFLICT') { $errs += ('« ' + (Vba-Unesc $p[3]) + ' » a changé dans l''Excel entre-temps (« ' + (Vba-Unesc $p[2]) + ' ») : laissé tel quel') } }
+    if ($errs.Count -or -not $done) { throw ($(if ($errs.Count) { $errs -join ' ; ' } else { 'Réponse incomplète du complément Excel.' })) } }
+  return $a
+}
 function New-Adapter($kind) {
   if ($Mock) { return New-MockAdapter $kind }
+  if (Vba-Alive) { try { return New-VbaAdapter $kind } catch { Write-Info ("Complément Excel indisponible (" + $_.Exception.Message + ") : on passe par Excel.") 'DarkGray' } }
   # v1.37 : always written by Excel (into the session where the file is open, else opened hidden, written, saved and
   # closed at once). Writing the file without Excel replaced it on disk : with the workbook open elsewhere or being
   # synced by OneDrive, Excel lost track of it (a line added twice, « Impossible d'accéder » on saving — reported for
@@ -707,7 +781,7 @@ function Upsert-Rows($kind, $rows) {
     $n = & $a.RowCount $a; $last = $n
     while ($last -ge 2 -and (& $a.RowEmpty $a $last)) { $last-- }
     $trail = $n - $last
-    if ($trail -gt 0) {
+    if ($trail -gt 0 -and -not $a.NoTrim) {
       Ensure-Backup $a $state
       & $a.DeleteRows $a ($last + 1) $trail
       $state.wrote = $true
@@ -1073,7 +1147,7 @@ function Handle($req) {
   if ($req.method -eq 'OPTIONS') { return @(204, $null) }
   $authorized = (Token-Matches $req.headers['x-bridge-token'] $Config.token)
   if ($req.path -eq '/status') {
-    return @(200, @{ ok = $true; version = $Version; authorized = $authorized; mock = [bool]$Mock;
+    return @(200, @{ ok = $true; version = $Version; authorized = $authorized; mock = [bool]$Mock; writer = $(if (Vba-Alive) { 'complement' } else { 'excel' });
         pipe = @{ name = [IO.Path]::GetFileName([string](Resolve-ConfigPath 'pipe')); found = ($Mock -or (Test-Path ([string]$Config.pipe))) };
         bdd = @{ name = [IO.Path]::GetFileName([string](Resolve-ConfigPath 'bdd')); found = ($Mock -or (Test-Path ([string]$Config.bdd))) };
         contacts = @{ name = [IO.Path]::GetFileName([string](Get-Prop $Config 'contacts')); found = [bool]((Get-Prop $Config 'contacts') -and ($Mock -or (Test-Path ([string]$Config.contacts)))) };

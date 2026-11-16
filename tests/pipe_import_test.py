@@ -25,7 +25,7 @@ def bridge(route):
     since = qs[6:] if qs.startswith("since=") else None
     h = {"Access-Control-Allow-Origin": "*", "Content-Type": "application/json"}
     if req.method == "OPTIONS": return route.fulfill(status=204, headers={**h, "Access-Control-Allow-Headers": "Content-Type, X-Bridge-Token"})
-    if path == "/status": out = {"ok": True, "version": "1.38", "authorized": True, "who": "Tom", "pipe": {"name": "Pipe.xlsx", "found": True}, "bdd": {"name": "Suivi.xlsx", "found": True}, "contacts": {"name": "", "found": False}}
+    if path == "/status": out = {"ok": True, "version": "1.39", "authorized": True, "who": "Tom", "pipe": {"name": "Pipe.xlsx", "found": True}, "bdd": {"name": "Suivi.xlsx", "found": True}, "contacts": {"name": "", "found": False}}
     elif path == "/pipe/read":
         stamp = str(abs(hash(json.dumps(pipe["rows"], default=str))))   # like the bridge 1.36 : the file's date and size
         if since == stamp: reads["unchanged"] += 1; out = {"ok": True, "unchanged": True, "stamp": stamp}

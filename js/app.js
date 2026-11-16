@@ -5697,7 +5697,7 @@
       const r=document.createElement('button'); r.type='button'; r.className='bridge-retry'; r.textContent='Réessayer'; r.onclick=()=>{ el.textContent='Test…'; bridgeCheck(); }; el.appendChild(document.createTextNode(' ')); el.appendChild(r); return; }
     if(!s.authorized){ el.textContent='Pont détecté, mais la clé ne correspond pas.'; el.className='bridge-status off'; return; }
     el.textContent='Connecté · Pipe : '+(s.info.pipe.found?s.info.pipe.name:'fichier introuvable')+' · BDD : '+(s.info.bdd.found?s.info.bdd.name:'fichier introuvable')
-      +(window.TodoExcelSync.bridgeLatest(s.info)?' · pont v'+s.info.version:bridgeUpToDate(s.info)?' · pont v'+s.info.version+' (la '+window.TodoExcelSync.BRIDGE_LATEST+' est disponible, plus sûre : télécharge pont-excel.ps1 ci-dessus quand tu veux)':' · ⚠ ton pont est en version '+(s.info.version||'?')+', la '+window.TodoExcelSync.BRIDGE_LATEST+' est disponible : télécharge pont-excel.ps1 ci-dessus, remplace l\u2019ancien fichier et relance le pont');
+      +(window.TodoExcelSync.bridgeLatest(s.info)?' · pont v'+s.info.version+(s.info.writer==='complement'?' · écriture par le complément Excel':''):bridgeUpToDate(s.info)?' · pont v'+s.info.version+' (la '+window.TodoExcelSync.BRIDGE_LATEST+' est disponible, plus sûre : télécharge pont-excel.ps1 ci-dessus quand tu veux)':' · ⚠ ton pont est en version '+(s.info.version||'?')+', la '+window.TodoExcelSync.BRIDGE_LATEST+' est disponible : télécharge pont-excel.ps1 ci-dessus, remplace l\u2019ancien fichier et relance le pont');
     el.className='bridge-status '+(bridgeUpToDate(s.info)?'on':'off');
   }
   // gsTab : not yet defined at this point in the file (const, no hoisting) — deferred to call time, same way
