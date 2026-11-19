@@ -41,7 +41,7 @@ Tout le code est dans le dossier (bibliothèques dans `vendor/`) : aucun CDN, au
 
 L'édition vient du fichier `profil.json` à côté de `index.html`, mis par le paquet entreprise (`profils/entreprise.json`) : `edition`, `marche`, `sauvegardeMinutes`, `domainesInternes` (les domaines mail de l'entreprise, jamais pris pour un producteur). Sans ce fichier, c'est ToDo perso, comme avant. En édition entreprise, le pont n'accepte que la page locale (jamais les adresses web) et garde ses copies d'Excel dans `%APPDATA%`, pas dans le dossier partagé.
 
-**Publier une version entreprise** : pousser un tag `entreprise-vAAAA.MM.JJ` ; `.github/workflows/entreprise.yml` relance les tests du mode local et fabrique `ToDo-Entreprise.zip` (appli, pont avec sa bibliothèque Excel, profil, `LISEZMOI.txt` ; ni tests ni GitHub) dans les Releases. Remplacer le contenu du dossier SharePoint « ToDo équipe/appli » par celui du zip : OneDrive le recopie sur chaque PC. Test : `python tests/entreprise_test.py`.
+**Publier une version entreprise** : sur GitHub, Releases › Draft a new release, tag `entreprise-vAAAA.MM.JJ` sur la branche voulue, Publish (ou pousser ce tag depuis git) ; `.github/workflows/entreprise.yml` relance les tests du mode local et fabrique `ToDo-Entreprise.zip` (appli, pont avec sa bibliothèque Excel, profil, `LISEZMOI.txt` ; ni tests ni GitHub) dans les Releases. Remplacer le contenu du dossier SharePoint « ToDo équipe/appli » par celui du zip : OneDrive le recopie sur chaque PC. Test : `python tests/entreprise_test.py`.
 
 ## Contenu
 

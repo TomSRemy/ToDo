@@ -1,8 +1,11 @@
 name: ToDo Entreprise (zip)
 
-# A tag « entreprise-vAAAA.MM.JJ » makes a release with ToDo-Entreprise.zip, to drop into the team's SharePoint folder.
+# A release published on GitHub (Releases > Draft a new release, tag « entreprise-vAAAA.MM.JJ ») gets ToDo-Entreprise.zip
+# attached, to drop into the team's SharePoint folder. A tag « entreprise-v… » pushed from git does the same.
 # Run by hand (Actions > ToDo Entreprise > Run workflow) : the zip is only kept as a download of the run.
 on:
+  release:
+    types: [published]
   push:
     tags: ['entreprise-v*']
   workflow_dispatch:
@@ -37,7 +40,12 @@ jobs:
         with:
           name: ToDo-Entreprise
           path: dist/ToDo-Entreprise.zip
-      - if: startsWith(github.ref, 'refs/tags/entreprise-v')
+      # a release made on GitHub : the zip is added to it ; a tag pushed from git : the release is made here
+      - if: github.event_name == 'release'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "${{ github.event.release.tag_name }}" dist/ToDo-Entreprise.zip --clobber
+      - if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/entreprise-v')
         env:
           GH_TOKEN: ${{ github.token }}
         run: gh release create "${GITHUB_REF_NAME}" dist/ToDo-Entreprise.zip --title "ToDo Entreprise ${GITHUB_REF_NAME#entreprise-v}" --notes "Remplacer le contenu du dossier SharePoint « ToDo équipe/appli » par celui de ce zip. Les données ne bougent pas."
