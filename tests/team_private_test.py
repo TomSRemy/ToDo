@@ -136,7 +136,7 @@ with sync_playwright() as p:
     page.evaluate("window.__team.mfa='need'; window.TodoTeamUI.renderTeamStatus()"); page.wait_for_timeout(400)
     check("double authentification" in page.inner_text("#team-alert") and page.is_visible("#team-mfa-code"), "a second factor awaited : the banner says so and Réglages asks the code")
     lost = page.get_attribute("#team-mfa-lost", "href") or ""
-    check(page.is_visible("#team-mfa-lost") and lost.startswith("mailto:admin%40exemple.fr") and "t%40x" in lost, f"code lost : a mail to the administrator, ready to send ({lost[:90]!r})")
+    check(page.is_visible("#team-mfa-lost") and lost.startswith("mailto:admin%40exemple.test") and "t%40x" in lost, f"code lost : a mail to the administrator, ready to send ({lost[:90]!r})")
     page.fill("#team-mfa-code", "000000"); page.click("#team-mfa-ok"); page.wait_for_timeout(300)
     check("refusé" in page.inner_text("#team-mfa-status"), "a wrong code is refused")
     page.fill("#team-mfa-code", "123456"); page.click("#team-mfa-ok"); page.wait_for_timeout(600)
