@@ -157,7 +157,7 @@ window.TodoParse=(function(){
   }
 
   // Relays forward a lead without being the prospect: Crédit Agricole and colleagues (own domain).
-  const PQ_INTERNAL_DOMAINS=['selfee.fr'];
+  const PQ_INTERNAL_DOMAINS=(typeof window!=='undefined' && window.TODO_PROFILE && Array.isArray(window.TODO_PROFILE.domainesInternes) && window.TODO_PROFILE.domainesInternes.length) ? window.TODO_PROFILE.domainesInternes.map(d=>String(d).toLowerCase()) : ['selfee.fr'];   // the company's own mail domains (profile), else these
   const pqIsInternal=e=>PQ_INTERNAL_DOMAINS.includes((e.split('@')[1]||'').toLowerCase());
   const pqIsRelay=e=>pqIsCa(e)||pqIsInternal(e);
   const PQ_GENERIC_DOMAINS=/^(gmail|googlemail|hotmail|outlook|live|msn|yahoo|orange|wanadoo|free|sfr|laposte|neuf|icloud|me|aol|bbox|numericable|proton|protonmail)\./;

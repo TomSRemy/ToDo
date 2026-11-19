@@ -270,10 +270,12 @@
   window.TodoHealth.init({ $, lsGet, lsSet, notify, gsTab:(...a)=>gsTab(...a) });
 
   async function loadSyncConfig(){
+    // company edition : never GitHub (the page could not reach it anyway), whatever this browser kept from elsewhere
+    if(window.TODO_EDITION==='entreprise'){ syncConfig={owner:'',repo:'',token:'',enabled:false}; return; }
     try{ const r=await window.storage.get(SYNC_CONFIG_KEY,false); syncConfig=r&&r.value?JSON.parse(r.value):{owner:'',repo:'',token:'',enabled:false}; }
     catch(e){ syncConfig={owner:'',repo:'',token:'',enabled:false}; }
   }
-  async function saveSyncConfig(){ try{ await window.storage.set(SYNC_CONFIG_KEY,JSON.stringify(syncConfig),false); }catch(e){} }
+  async function saveSyncConfig(){ if(window.TODO_EDITION==='entreprise') return; try{ await window.storage.set(SYNC_CONFIG_KEY,JSON.stringify(syncConfig),false); }catch(e){} }
 
   // every call to GitHub gives up after a while (audit A6): on a phone whose network drops, a request could hang for
   // minutes, the sync pill stayed on « Synchronisation… » and the next pushes piled up behind it

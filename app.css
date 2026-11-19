@@ -2978,3 +2978,5 @@ html.widget .dup-banner{ display:none; }
 
 /* Local mode (served by the Excel bridge, bridge/ToDo-local.bat): features that need the Internet are hidden */
 html.local #ai-section, html.local #card-scan-btn, html.local .tm-opt:has(input[value="supabase"]){ display:none !important; }
+/* Company edition (profil.json) : no GitHub sync, Marché only if the profile turns it on */
+html.entreprise #sync-section, html.no-market .tab[data-tab="market"]{ display:none !important; }

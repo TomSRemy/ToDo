@@ -1910,10 +1910,11 @@ with sync_playwright() as p:
         sl.querySelectorAll('.ps-fill > table').forEach(t=>{ if(t.offsetHeight>t.parentNode.clientHeight+2) out.push('overflow '+k); });
         document.querySelector('#present-overlay').dispatchEvent(new KeyboardEvent('keydown',{key:'ArrowRight',bubbles:true})); } return out; })()""")
     check(not any(isinstance(x, str) for x in fits) and all(x > -3 for x in fits if not isinstance(x, str)), f"presentation: nothing runs over a slide ({fits})")
-    page.route("**/vendor/pptxgenjs-*.js", lambda r: r.fulfill(status=200, content_type="application/javascript", body="""
+    # the library is a local file (vendor/), which page.route cannot replace on a file:// page : the stub is put in place first
+    page.evaluate("""() => {
       window.__pp={ slides:[], file:null }; window.PptxGenJS=function(){ this.addSlide=()=>{ const s={ texts:[], tables:0, shapes:0 }; window.__pp.slides.push(s);
         return { addText:(t)=>s.texts.push(Array.isArray(t)?t.map(x=>x.text).join(''):String(t)), addShape:()=>s.shapes++, addTable:()=>s.tables++, set background(v){ s.bg=v; } }; };
-        this.writeFile=o=>{ window.__pp.file=o.fileName; return Promise.resolve(); }; };"""))
+        this.writeFile=o=>{ window.__pp.file=o.fileName; return Promise.resolve(); }; };}""")
     page.click("#present-overlay .ps-pptx"); page.wait_for_function("window.__pp && window.__pp.file", timeout=5000)
     pp = page.evaluate("window.__pp"); nsl = int(page.inner_text("#present-overlay .ps-count").split("/")[1])
     check(len(pp["slides"]) == nsl and pp["file"].endswith(".pptx") and any("probables" in t for t in pp["slides"][0]["texts"]) and any(s["tables"] for s in pp["slides"])

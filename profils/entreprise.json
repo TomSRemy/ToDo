@@ -1,0 +1,7 @@
+{
+  "edition": "entreprise",
+  "nom": "ToDo Entreprise",
+  "marche": false,
+  "sauvegardeMinutes": 60,
+  "domainesInternes": ["selfee.fr"]
+}

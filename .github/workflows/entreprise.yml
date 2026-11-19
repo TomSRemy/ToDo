@@ -1,0 +1,43 @@
+name: ToDo Entreprise (zip)
+
+# A tag « entreprise-vAAAA.MM.JJ » makes a release with ToDo-Entreprise.zip, to drop into the team's SharePoint folder.
+# Run by hand (Actions > ToDo Entreprise > Run workflow) : the zip is only kept as a download of the run.
+on:
+  push:
+    tags: ['entreprise-v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  zip:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install playwright==1.63.0 openpyxl==3.1.5
+      - run: timeout 180 python -m playwright install --with-deps chromium || python -m playwright install chromium
+      # the company edition's promises, checked again on the exact code that goes into the zip
+      - run: python tests/entreprise_test.py
+      - run: python tests/local_mode_test.py
+      - run: python tests/bridge_test.py
+      # the bridge's Excel library, shipped with it : no download on the PCs
+      - run: |
+          curl -sSfL -o epplus.zip https://api.nuget.org/v3-flatcontainer/epplus/4.5.3.3/epplus.4.5.3.3.nupkg
+          unzip -p epplus.zip lib/net40/EPPlus.dll > EPPlus.dll
+          echo "0889cc0aa254d77c4a6914e298b8a3d9f2aaad5d117df4ba35868ed1595d57fa  EPPlus.dll" | sha256sum -c -   # the exact file checked once : any other is refused
+      - run: python scripts/build_entreprise.py --epplus EPPlus.dll --out dist
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ToDo-Entreprise
+          path: dist/ToDo-Entreprise.zip
+      - if: startsWith(github.ref, 'refs/tags/entreprise-v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "${GITHUB_REF_NAME}" dist/ToDo-Entreprise.zip --title "ToDo Entreprise ${GITHUB_REF_NAME#entreprise-v}" --notes "Remplacer le contenu du dossier SharePoint « ToDo équipe/appli » par celui de ce zip. Les données ne bougent pas."

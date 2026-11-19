@@ -13,6 +13,9 @@ window.TodoMarket=(function(){
   // Plain GET, no key (https://tomsremy.github.io/PowerKlock/data/api.json). Every block names its source (the API's rule).
   // Only the few numbers shown are kept on this device, so the page and the call screen still show the last ones offline.
   const MK_BASE='https://tomsremy.github.io/PowerKlock/data/';
+  // company edition : Marché off unless the profile turns it on (« marche » : true) ; then not a single request goes out
+  const MK_OFF=window.TODO_EDITION==='entreprise' && !(window.TODO_PROFILE||{}).marche;
+  const mkFetch=(u, o)=>MK_OFF ? Promise.reject(new Error('Marché désactivé dans cette édition')) : fetch(u, o);
   const MK_SRC={ spot:'ENTSO-E Transparency Platform, via PowerKlock', m0:'CRE open data (Licence Ouverte) ; estimation et prévision PowerKlock', cap:'PowerKlock, à partir de RTE éCO2mix et ENTSO-E' };
   const MK_ZONES=[['FR','France'],['DE_LU','Allemagne'],['BE','Belgique'],['NL','Pays-Bas'],['ES','Espagne'],['CH','Suisse'],['IT_NORD','Italie Nord']];
   let marketData=null, marketLoading=null;
@@ -23,7 +26,7 @@ window.TodoMarket=(function(){
   async function loadMarket(force){
     if(marketLoading) return marketLoading;
     if(!force && marketData && Date.now()-marketData.at<30*60000) return marketData;
-    const get=async f=>{ const r=await fetch(MK_BASE+f, { cache:'no-cache' }); if(!r.ok) throw new Error(f+' '+r.status); return r.json(); };
+    const get=async f=>{ const r=await mkFetch(MK_BASE+f, { cache:'no-cache' }); if(!r.ok) throw new Error(f+' '+r.status); return r.json(); };
     const now=new Date(), ym=d=>d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0'), prevM=new Date(now.getFullYear(), now.getMonth()-1, 1);
     marketLoading=(async()=>{
       const [prices, cur, prev, m0, cap]=await Promise.all([get('prices.json'), get('history/monthly/'+ym(now)+'.json').catch(()=>null), get('history/monthly/'+ym(prevM)+'.json').catch(()=>null), get('cre_m0.json').catch(()=>null), get('history/fr_capture.json').catch(()=>null)]);
@@ -189,7 +192,7 @@ window.TodoMarket=(function(){
   async function loadTiles(force){
     if(tilesLoading) return tilesLoading;
     if(!force && tilesData && Date.now()-tilesData.at<30*60000) return tilesData;
-    const get=async f=>{ const r=await fetch(MK_BASE+f, { cache:'no-cache' }); if(!r.ok) throw new Error(f+' '+r.status); return f.endsWith('.csv')?r.text():r.json(); };
+    const get=async f=>{ const r=await mkFetch(MK_BASE+f, { cache:'no-cache' }); if(!r.ok) throw new Error(f+' '+r.status); return f.endsWith('.csv')?r.text():r.json(); };
     tilesLoading=(async()=>{
       const [fr, com, go, chain]=await Promise.all([get('fr_market.json').catch(()=>null), get('commodities.json').catch(()=>null), get('go_prices.csv').catch(()=>null), get('history/fr_market_calchain.json').catch(()=>null)]);
       const jp=await spotDay(1).catch(()=>null);
@@ -285,7 +288,7 @@ window.TodoMarket=(function(){
   }
   // ---------- a tile opened : the history in a window (periods, series to tick, hover), from PowerKlock's open files ----------
   const histCache={};
-  const getHist=f=>histCache[f]||(histCache[f]=fetch(MK_BASE+f, { cache:'no-cache' }).then(r=>{ if(!r.ok) throw new Error(f+' '+r.status); return f.endsWith('.csv')?r.text():r.json(); }).catch(e=>{ delete histCache[f]; throw e; }));
+  const getHist=f=>histCache[f]||(histCache[f]=mkFetch(MK_BASE+f, { cache:'no-cache' }).then(r=>{ if(!r.ok) throw new Error(f+' '+r.status); return f.endsWith('.csv')?r.text():r.json(); }).catch(e=>{ delete histCache[f]; throw e; }));
   const COLORS=['#14D3A9','#7DB4F5','#C9A55A','#E5B54F','#E88FD0'];
   const zip=(dates, vals)=>dates.map((d,i)=>[d, vals[i]]).filter(p=>p[1]!=null && !isNaN(p[1]));
   async function chartSeries(id){
@@ -452,6 +455,6 @@ window.TodoMarket=(function(){
     try{ await loadTiles(); }catch(e){}
     paintTiles(root);
   }
-  window.todoExtraCommands=(window.todoExtraCommands||[]).concat([{ t:'Marché : prix spot, M0, captures', k:'marche prix spot m0 cre capture powerklock electricite', go:()=>gsTab('market') }]);
+  if(!MK_OFF) window.todoExtraCommands=(window.todoExtraCommands||[]).concat([{ t:'Marché : prix spot, M0, captures', k:'marche prix spot m0 cre capture powerklock electricite', go:()=>gsTab('market') }]);
   return { init:a=>{ app=a; }, renderMarket, loadMarket, marketLine, renderTiles, openMarketChart, openSpotChart };
 })();

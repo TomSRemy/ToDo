@@ -1,0 +1,37 @@
+ToDo Entreprise
+===============
+
+ToDo tourne entierement sur ce PC. Rien a installer, aucun droit administrateur.
+La page ne peut joindre que ce PC : aucune donnee ne part sur Internet.
+Les donnees restent dans Edge (sur ce PC) et dans OneDrive / SharePoint (sauvegardes, Excel de l'equipe).
+
+Installer (une fois par personne)
+---------------------------------
+1. Ce dossier est dans le dossier SharePoint de l'equipe, synchronise par OneDrive.
+   Clic droit sur le dossier > "Toujours conserver sur cet appareil".
+2. Double-clic sur bridge\Creer-raccourci-ToDo.bat : un raccourci "ToDo" apparait sur le bureau
+   (et au demarrage de Windows si on le demande).
+3. Double-clic sur "ToDo". Au premier lancement, le pont Excel demande le fichier du Pipe puis celui du Suivi.
+   Ensuite la fenetre ToDo s'ouvre.
+
+Recuperer des donnees d'une autre version de ToDo
+-------------------------------------------------
+Sur l'ancienne version : Reglages > Exporter. Dans ToDo Entreprise : Reglages > Importer.
+
+Sauvegardes
+-----------
+- Toutes les heures, tout ToDo est copie dans OneDrive\ToDo\sauvegardes (un fichier par jour, 30 jours).
+  Restaurer : Reglages > Sauvegarde locale.
+- Avant toute ecriture dans un Excel, le pont en garde une copie du jour (%APPDATA%\Todo Pont Excel\Sauvegardes pont).
+
+Nouvelle version
+----------------
+Le contenu de ce dossier est remplace par la nouvelle version. Les donnees ne bougent pas.
+Si le pont tournait, fermer sa fenetre "Pont Excel - Todo" : il redemarre au prochain lancement de ToDo.
+
+Macro Outlook (option)
+----------------------
+Dossier outlook-vba : installation dans README.txt. Garder INBOX_MODE = "dossier" (aucun jeton, rien sur Internet).
+
+Ce que la page a le droit de joindre : ce PC (127.0.0.1). Rien d'autre.
+Desactive dans cette edition : synchro GitHub, Supabase, IA, lecture de cartes de visite, onglet Marche.

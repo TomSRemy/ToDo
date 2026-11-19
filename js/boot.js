@@ -11,6 +11,12 @@
   // the page; nothing then loads from the Internet (the bridge's rules forbid it), Internet-only features are hidden.
   window.TODO_LOCAL=!!document.querySelector('meta[name="todo-local"]');
   if(window.TODO_LOCAL) document.documentElement.classList.add('local');
+  // Company edition (profil.json of ToDo-Entreprise.zip, handed over by the bridge) : no GitHub, no Supabase, Marché only
+  // if the profile says so ; the profile also carries the company's own settings (internal mail domains…)
+  window.TODO_PROFILE={};
+  if(window.TODO_LOCAL){ const m=document.querySelector('meta[name="todo-profile"]'); try{ window.TODO_PROFILE=JSON.parse(m && m.content || '{}')||{}; }catch(e){ window.TODO_PROFILE={}; } }
+  window.TODO_EDITION=window.TODO_PROFILE.edition==='entreprise' ? 'entreprise' : 'perso';
+  if(window.TODO_EDITION==='entreprise'){ document.documentElement.classList.add('entreprise'); if(!window.TODO_PROFILE.marche) document.documentElement.classList.add('no-market'); }
   window.TODO_WIDGET=/[?&]widget\b/.test(location.search) && !window.TODO_LITE;
   window.TODO_PIP=window.TODO_WIDGET && /[?&]pip\b/.test(location.search);
   if(window.TODO_WIDGET){ document.documentElement.classList.add('widget'); if(window.TODO_PIP) document.documentElement.classList.add('pip'); }

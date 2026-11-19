@@ -17,9 +17,14 @@ window.TodoLocalBackup=(function(){
       return r;
     }
     // once a day, as soon as the bridge answers ; three days without one : said once a day
+    // company edition (no GitHub copy) : every « sauvegardeMinutes » of the profile (60 by default), today's file rewritten
+    const everyMin=window.TODO_EDITION==='entreprise' ? Math.max(5, Number((window.TODO_PROFILE||{}).sauvegardeMinutes)||60) : 0;
+    let timer=null;
     async function auto(){
       if(!bridgeConfigured()) return;
-      const at=lastAt(); if(at && new Date(at).toDateString()===new Date().toDateString()) return;
+      if(everyMin && !timer) timer=setInterval(()=>{ auto(); }, 5*60000);
+      const at=lastAt();
+      if(everyMin ? (at && Date.now()-at<everyMin*60000) : (at && new Date(at).toDateString()===new Date().toDateString())) return;
       try{ await writeNow(); }catch(e){ nag(); }
     }
     function nag(){

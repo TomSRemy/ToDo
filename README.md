@@ -30,6 +30,19 @@ Tout le code est dans le dossier (bibliothèques dans `vendor/`) : aucun CDN, au
 
 **Mettre à jour** : remplacer le dossier par la nouvelle version (les réglages du pont sont dans `%APPDATA%\Todo Pont Excel`, les données dans Edge : rien n'est perdu).
 
+## Deux éditions
+
+| | ToDo perso | ToDo Entreprise |
+|---|---|---|
+| Adresse | le web (Cloudflare / GitHub Pages), ou en local | en local seulement, servi par le pont |
+| Ce que la page peut joindre | GitHub, PowerKlock, CDN… (`_headers`) | **ce PC seulement** (+ PowerKlock si `"marche": true`) |
+| Synchro | GitHub chiffré, téléphone | aucune : sauvegarde toutes les heures dans OneDrive (30 jours) |
+| Supabase, IA, cartes de visite | oui | non |
+
+L'édition vient du fichier `profil.json` à côté de `index.html`, mis par le paquet entreprise (`profils/entreprise.json`) : `edition`, `marche`, `sauvegardeMinutes`, `domainesInternes` (les domaines mail de l'entreprise, jamais pris pour un producteur). Sans ce fichier, c'est ToDo perso, comme avant. En édition entreprise, le pont n'accepte que la page locale (jamais les adresses web) et garde ses copies d'Excel dans `%APPDATA%`, pas dans le dossier partagé.
+
+**Publier une version entreprise** : pousser un tag `entreprise-vAAAA.MM.JJ` ; `.github/workflows/entreprise.yml` relance les tests du mode local et fabrique `ToDo-Entreprise.zip` (appli, pont avec sa bibliothèque Excel, profil, `LISEZMOI.txt` ; ni tests ni GitHub) dans les Releases. Remplacer le contenu du dossier SharePoint « ToDo équipe/appli » par celui du zip : OneDrive le recopie sur chaque PC. Test : `python tests/entreprise_test.py`.
+
 ## Contenu
 
 | Fichier | Rôle |

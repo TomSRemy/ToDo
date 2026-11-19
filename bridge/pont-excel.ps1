@@ -69,6 +69,17 @@ $ErrorActionPreference = 'Stop'
 $Version = '1.40'
 $Here = Split-Path -Parent $MyInvocation.MyCommand.Path
 $LibDir = Join-Path $Here 'lib'
+# v1.40 : the app's folder (the one above bridge\) and its profile. profil.json, put there by the company package
+# (ToDo-Entreprise.zip), turns on the company edition : the app served from this PC only, nothing sent to the Internet.
+$AppDir = Split-Path -Parent $Here
+$AppServed = (Test-Path -LiteralPath (Join-Path $AppDir 'index.html')) -and (Test-Path -LiteralPath (Join-Path $AppDir 'js\app.js'))
+$AppProfile = $null
+$ProfilePath = Join-Path $AppDir 'profil.json'
+if (Test-Path -LiteralPath $ProfilePath) {
+  try { $AppProfile = Get-Content -LiteralPath $ProfilePath -Raw -Encoding UTF8 | ConvertFrom-Json }
+  catch { Write-Host ('profil.json illisible (' + $_.Exception.Message + ') : il est ignoré.') -ForegroundColor Red }
+}
+$Entreprise = [bool]($AppProfile -and [string]$AppProfile.edition -eq 'entreprise')
 # the settings (the two files, the key) live in the Windows profile, not next to the script: a new download, in any folder,
 # finds them again (no new key to copy into the app). An older settings file next to the script is taken over once.
 $LegacyConfig = Join-Path $Here 'pont-excel-config.json'
@@ -82,7 +93,9 @@ if (-not $Mock -and $env:APPDATA) {
 # the app's addresses: GitHub Pages, and its own Cloudflare Pages address (an address given by hand: "origins" in pont-excel-config.json)
 $AllowedOrigins = @('https://tomsremy.github.io', 'https://todo-tom.pages.dev', 'http://localhost:8000', 'http://127.0.0.1:8000')
 if ($Mock) { $AllowedOrigins += 'null' }   # pages opened from a file, for tests only
-# v1.40 : the app served by the bridge itself (local mode, ToDo-local.bat) : same address as the bridge
+# v1.40 : the app served by the bridge itself (local mode, ToDo-local.bat) : same address as the bridge.
+# Company edition : ONLY that page ; the web addresses (and any « origins » of the settings) are never accepted.
+if ($Entreprise) { $AllowedOrigins = @() }
 $AllowedOrigins += @("http://127.0.0.1:$Port", "http://localhost:$Port")
 $Kinds = @{
   pipe = @{ label = 'Pipe agrégation'; header = 'Nom Producteur'; keys = @('Nom Producteur', 'Nom Centrale'); sheet = 'Pipe agrégation' }
@@ -241,7 +254,7 @@ if (-not $Config -or $Reconfigurer) {
   $Config = [pscustomobject]@{ pipe = $pipe; bdd = $bdd; token = $token }
   ($Config | ConvertTo-Json) | Set-Content -Path $ConfigPath -Encoding UTF8
 }
-if ($Config.origins) { $AllowedOrigins += @($Config.origins | ForEach-Object { [string]$_ }) }
+if ($Config.origins -and -not $Entreprise) { $AllowedOrigins += @($Config.origins | ForEach-Object { [string]$_ }) }
 # the exact file chosen once can get renamed later (a date bumped by hand in the filename, a new version) : rather
 # than fail outright, look once more in the same folder for the obvious match before giving up. Only acts when the
 # configured path is actually missing ; never overrides a file that's still there, even if a newer one also exists.
@@ -652,6 +665,8 @@ function New-Adapter($kind) {
 $ClosedStatus = @('perdu', 'abandonne', 'nogo', 'resilie')
 $RecentDays = 183
 $BackupDir = Join-Path $Here 'Sauvegardes pont'
+# company edition : the app folder is shared (SharePoint) and replaced at each version ; the bridge's own copies stay on this PC
+if ($Entreprise -and -not $Mock -and $env:APPDATA) { $BackupDir = Join-Path (Join-Path $env:APPDATA 'Todo Pont Excel') 'Sauvegardes pont' }
 $KeepBackups = 3   # en jours, pas en nombre de fichiers : plusieurs envois le même jour ne comptent que pour un seul jour
 function Is-Blank($v) { return ($null -eq $v -or ([string]$v).Trim() -eq '') }
 # a cell of a new line counts as empty when blank or FALSE (an unticked checkbox: Excel fills checkbox columns by itself)
@@ -1115,14 +1130,16 @@ function LocalBackup-SetDir($dir) {
 # the bridge runs, as before. Only the app's own files are served (pages, js\, vendor\, icons\), never the bridge, the
 # tests or anything else on the disk. The pages carry rules that let them reach this PC, the GitHub API and PowerKlock's
 # public data, nothing else : no code, font or image from the Internet, no data sent anywhere else.
-$AppDir = Split-Path -Parent $Here
-$AppServed = (Test-Path -LiteralPath (Join-Path $AppDir 'index.html')) -and (Test-Path -LiteralPath (Join-Path $AppDir 'js\app.js'))
 $StaticTypes = @{ '.html' = 'text/html; charset=utf-8'; '.js' = 'application/javascript; charset=utf-8'; '.css' = 'text/css; charset=utf-8';
   '.json' = 'application/json; charset=utf-8'; '.png' = 'image/png'; '.svg' = 'image/svg+xml'; '.ico' = 'image/x-icon' }
+# what the page may reach. Company edition : this PC only (and PowerKlock's public prices only if the profile says
+# « marche » : true). Personal local use : also the GitHub API (encrypted sync) and PowerKlock.
+$Marche = (-not $Entreprise) -or [bool]($AppProfile.marche)
+$Outside = @(); if (-not $Entreprise) { $Outside += 'https://api.github.com' }; if ($Marche) { $Outside += 'https://tomsremy.github.io' }
 $LocalCsp = "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; worker-src 'self' blob:; " +
-  "connect-src 'self' http://127.0.0.1:$Port http://localhost:$Port https://api.github.com https://tomsremy.github.io data: blob:; " +
+  "connect-src 'self' http://127.0.0.1:$Port http://localhost:$Port " + (($Outside + @('data:', 'blob:')) -join ' ') + "; " +
   "img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; font-src 'self' data:; media-src 'self' data: blob:; " +
-  "frame-src https://tomsremy.github.io; frame-ancestors 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; manifest-src 'self'"
+  "frame-src " + $(if ($Marche) { 'https://tomsremy.github.io' } else { "'none'" }) + "; frame-ancestors 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; manifest-src 'self'"
 function Is-StaticRequest($req) {
   return (($req.method -eq 'GET' -or $req.method -eq 'HEAD') -and ($req.path -eq '/' -or $req.path -eq '/app' -or $req.path.StartsWith('/app/')))
 }
@@ -1155,6 +1172,7 @@ function Send-Static($stream, $req) {
     # and the bridge's key (readable only by pages of this address : no other site can read this answer)
     $html = [Text.Encoding]::UTF8.GetString($bytes)
     $local = '<meta name="todo-local" content="1"><meta name="todo-bridge-token" content="' + [Net.WebUtility]::HtmlEncode([string]$Config.token) + '">'
+    if ($AppProfile) { $local += '<meta name="todo-profile" content="' + [Net.WebUtility]::HtmlEncode((ConvertTo-Json -InputObject $AppProfile -Depth 6 -Compress)) + '">' }
     $m = [regex]::Match($html, '<meta http-equiv="Content-Security-Policy" content="[^"]*">')
     if ($m.Success) { $html = $html.Substring(0, $m.Index) + $local + '<meta http-equiv="Content-Security-Policy" content="' + $LocalCsp + '">' + $html.Substring($m.Index + $m.Length) }
     else { $i = $html.IndexOf('<head>'); if ($i -ge 0) { $html = $html.Insert($i + 6, $local) } }
@@ -1322,6 +1340,7 @@ Write-Host ''
 Write-Host "Pont Excel pour Todo v$Version — http://127.0.0.1:$Port" -ForegroundColor Cyan
 Write-Host ('  Pipe : ' + (Resolve-ConfigPath 'pipe'))
 Write-Host ('  BDD  : ' + (Resolve-ConfigPath 'bdd'))
+if ($Entreprise) { Write-Host '  Édition entreprise : la page ne joint que ce PC.' -ForegroundColor Green }
 if ($AppServed) { Write-Host ("  ToDo en local : http://127.0.0.1:$Port/app/ (ouvert par ToDo-local.bat, la clé est donnée à l'appli)") -ForegroundColor Green }
 Write-Host ('  Clé à recopier dans l''app (Réglages → Pont Excel) : ' + $Config.token) -ForegroundColor Yellow
 Write-Host '  Laisse cette fenêtre ouverte (tu peux la réduire). Ctrl+C pour arrêter.'
