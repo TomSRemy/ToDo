@@ -24,6 +24,7 @@ window.TodoTeam=(function(){
   function loadSdk(){
     if(window.supabase) return Promise.resolve();
     if(sdkPromise) return sdkPromise;
+    if(window.TODO_LOCAL) return Promise.reject(new Error('Supabase est désactivé en mode local : les données restent sur ce PC et dans SharePoint.'));
     sdkPromise=new Promise((res,rej)=>{
       const s=document.createElement('script'); s.src=SDK_URL;
       s.onload=res; s.onerror=()=>rej(new Error('Bibliothèque Supabase introuvable (réseau ?)'));

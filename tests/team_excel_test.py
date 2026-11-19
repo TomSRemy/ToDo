@@ -12,7 +12,7 @@ def check(c, m):
     if not c: failures.append(m)
 URL = (pathlib.Path(__file__).resolve().parent.parent / "index.html").as_uri()
 H = ["Prénom", "Nom", "Société", "Fonction", "Email", "Téléphone", "Téléphone 2", "Commentaire", "ID", "Modifié le", "Modifié par"]
-sheet = [H, ["Claire", "Martin", "Solaris", "", "c.martin@solaris.fr", "", "", "", "", "", ""]]
+sheet = [H, ["Claire", "Martin", "Solaris", "", "c.martin@solaris.test", "", "", "", "", "", ""]]
 state = {"upserts": 0, "supabase": 0}
 def norm(v): return "" if v is None else str(v).strip()
 

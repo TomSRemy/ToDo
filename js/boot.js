@@ -7,6 +7,10 @@
   if(window.TODO_LITE){ document.getElementById('app-manifest').href='manifest-lite.json'; document.documentElement.classList.add('lite'); }
   // Widget: index.html?widget (widget.html redirects here) — a bubble and a small task panel, same code and data as the app;
   // ?widget&pip is the same panel inside the always-on-top mini window (Chrome/Edge).
+  // Local mode: the Excel bridge serves the app from this PC (http://127.0.0.1:8765/app/, bridge/ToDo-local.bat) and marks
+  // the page; nothing then loads from the Internet (the bridge's rules forbid it), Internet-only features are hidden.
+  window.TODO_LOCAL=!!document.querySelector('meta[name="todo-local"]');
+  if(window.TODO_LOCAL) document.documentElement.classList.add('local');
   window.TODO_WIDGET=/[?&]widget\b/.test(location.search) && !window.TODO_LITE;
   window.TODO_PIP=window.TODO_WIDGET && /[?&]pip\b/.test(location.search);
   if(window.TODO_WIDGET){ document.documentElement.classList.add('widget'); if(window.TODO_PIP) document.documentElement.classList.add('pip'); }

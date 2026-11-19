@@ -67,7 +67,7 @@ with sync_playwright() as p:
     body = "\n".join(["Oui c'est ça !", "", "De : Tom", "On est à 0.4 €/MWh pour le pilotage c'est bien ça ?", "", "Bonjour Tom,", "", "Voici les frais d'agrégation pour les centrales de SOLEO.", "", "Nom du marché", "", "Frais de gestion (€/MWh)", "", "Frais fixe (€/MWh)", "", "Marge (€/MWh)", "",
                       "Frais d'agrégation (€/MWh)", "", "27(07)29 – SOLEO_TOIT A – A", "", "2.10", "", "1.70", "", "0.5", "", "4.30", "", "27(07)29 – SOLEO_HANGAR B – A", "", "2.20", "", "1.90", "", "0.5", "", "4.60", "", "Bon dépôt,"])
     eml = pathlib.Path(tempfile.mkdtemp()) / "RE Pricing Agrégation.eml"
-    eml.write_text("From: pricing@exemple.fr\r\nSubject: Pricing Agregation\r\nContent-Type: text/plain; charset=utf-8\r\n\r\n" + body.replace("\n", "\r\n"), encoding="utf-8")
+    eml.write_text("From: pricing@exemple.test\r\nSubject: Pricing Agregation\r\nContent-Type: text/plain; charset=utf-8\r\n\r\n" + body.replace("\n", "\r\n"), encoding="utf-8")
     pg.evaluate("location.hash='fiche/o2'"); pg.wait_for_timeout(800)
     pg.set_input_files("#opp-detail-body .fill-drop input[type=file]", str(eml)); pg.wait_for_selector("#fill-overlay", timeout=10000)
     look = pg.inner_text("#fill-overlay")

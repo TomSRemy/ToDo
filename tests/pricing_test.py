@@ -57,7 +57,7 @@ with sync_playwright() as p:
     body = "\r\n".join(["Nom du marché", "Frais de gestion (€/MWh)", "Frais fixe (€/MWh)", "Marge (€/MWh)", "Frais d'agrégation (€/MWh)",
                         "27(07)29 – IEL_MOUTONNERIE – A", "2.93", "2.56", "0.5", "5.99", "27(07)29 – IEL_PLOUISY – A", "2.91", "1.80", "0.5", "5.21", "Lot 1 toitures – SOLEO", "2.10", "1.70", "0.5", "4.30", "", "On est à 0.4 €/MWh pour le pilotage"])
     eml = pathlib.Path(tempfile.mkdtemp()) / "Pricing.eml"
-    eml.write_text("From: pricing@exemple.fr\r\nSubject: Pricing\r\nContent-Type: text/plain; charset=utf-8\r\n\r\n" + body, encoding="utf-8")
+    eml.write_text("From: pricing@exemple.test\r\nSubject: Pricing\r\nContent-Type: text/plain; charset=utf-8\r\n\r\n" + body, encoding="utf-8")
     pg.set_input_files("#pricing-root .fill-drop input[type=file]", str(eml)); pg.wait_for_selector("#assign-overlay", timeout=8000)
     rows_txt = [pg.locator("#assign-overlay .as-row").nth(k).inner_text() for k in range(pg.locator("#assign-overlay .as-row").count())]
     check(len(rows_txt) == 3 and "code affaire" in rows_txt[0] and "nom du lot" in rows_txt[2] and "Lot 1 toitures" in rows_txt[2],

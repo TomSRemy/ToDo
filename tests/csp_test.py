@@ -43,7 +43,7 @@ JS = "application/javascript"
 def fake(route):
     u = route.request.url
     if "pptxgen" in u: route.fulfill(status=200, content_type=JS, body="window.PptxGenJS=function(){ this.addSlide=()=>({ addText(){}, addShape(){}, addTable(){}, set background(v){} }); this.writeFile=()=>Promise.resolve(); };")
-    elif "tesseract" in u: route.fulfill(status=200, content_type=JS, body="window.Tesseract={ recognize: async()=>({ data:{ text:'Claire Test\\nclaire@test.fr' } }) };")
+    elif "tesseract" in u: route.fulfill(status=200, content_type=JS, body="window.Tesseract={ recognize: async()=>({ data:{ text:'Claire Test\\nclaire@test.test' } }) };")
     elif "exceljs" in u: route.fulfill(status=200, content_type=JS, body="window.ExcelJS={};")
     elif "PowerKlock" in u: route.fulfill(status=200, content_type="text/html", body="<!doctype html><p>PK</p>")
     else: route.fulfill(status=200, content_type="application/json", headers={"access-control-allow-origin": "*"}, body="{}")
@@ -55,6 +55,7 @@ with sync_playwright() as p:
     for host in ["https://cdn.jsdelivr.net/**", "https://cdnjs.cloudflare.com/**", "https://tomsremy.github.io/**", "https://api.github.com/**",
                  "http://127.0.0.1:8765/**", "https://tessdata.projectnaptha.com/**", "https://example.org/**"]:
         ctx.route(host, fake)
+    ctx.route("**/vendor/pptxgenjs-*.js", fake); ctx.route("**/vendor/exceljs-*.js", fake)   # kept with the app, faked like the rest
     ctx.route("**/fonts.g*/**", lambda r: r.abort())
     pg = ctx.new_page(); errors = []; pg.on("pageerror", lambda e: errors.append(str(e)))
     def wait_for(expr, timeout=10000):   # Playwright's wait_for_function evaluates a string, which these rules forbid: poll instead

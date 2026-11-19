@@ -13,7 +13,7 @@ files = {}   # name -> content, what the stubbed bridge holds
 who, asked = ["tom.remy"], []
 moved = []
 inbox = [{"id": "inbox_1", "title": "Relancer Hélio sur le KYC", "sender": "Marc Hélio", "urgency": "haute", "_file": "task-20261112-083000-000001.json"},
-         {"id": "ct_1", "firstName": "Marc", "lastName": "Hélio", "email": "marc@helio.fr", "company": "Hélio", "_file": "contact-20261112-083100-000002.json"}]
+         {"id": "ct_1", "firstName": "Marc", "lastName": "Hélio", "email": "marc@helio.test", "company": "Hélio", "_file": "contact-20261112-083100-000002.json"}]
 def task(i, title): return {"id": i, "title": title, "status": "a_faire", "urgency": "normale", "createdAt": 1, "updatedAt": 1, "deleted": False, "archived": False}
 
 def bridge(route):

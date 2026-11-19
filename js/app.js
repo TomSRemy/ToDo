@@ -27,7 +27,7 @@
   const buildQuickNotes=(...a)=>window.TodoCall.buildQuickNotes(...a);   // js/call.js
   const openCallMode=(...a)=>window.TodoCall.openCallMode(...a);   // js/call.js
   // « Compléter avec l'IA » is set aside (js/ai.js): hidden unless turned on for this device (localStorage feat-ai = 1)
-  const aiOn=()=>{ try{ return localStorage.getItem('feat-ai')==='1'; }catch(e){ return false; } };
+  const aiOn=()=>{ if(window.TODO_LOCAL) return false; try{ return localStorage.getItem('feat-ai')==='1'; }catch(e){ return false; } };
   const aiKey=()=>{ try{ return localStorage.getItem('ai-key')||''; }catch(e){ return ''; } };
   const openAiFill=(...a)=>window.TodoAI.openAiFill(...a);   // js/ai.js
   const openPhoneImport=(...a)=>window.TodoPhone.openPhoneImport(...a);   // js/phone.js
@@ -2906,6 +2906,8 @@
   const scriptLoads=new Map();
   function loadScript(src, ready, failMsg){
     if(ready && ready()) return Promise.resolve();
+    // local mode: no code from the Internet, whatever the feature (the bridge's rules would block it anyway)
+    if(window.TODO_LOCAL && /^https?:/i.test(src)) return Promise.reject(new Error('Indisponible en mode local : cette fonction chargerait du code depuis Internet.'));
     if(!scriptLoads.has(src)) scriptLoads.set(src, new Promise((res, rej)=>{ const sc=document.createElement('script'); sc.src=src;
       sc.onload=()=>res(); sc.onerror=()=>{ scriptLoads.delete(src); sc.remove(); rej(new Error(failMsg||('Chargement impossible : '+src))); }; document.head.appendChild(sc); }));
     return scriptLoads.get(src);
@@ -5471,7 +5473,7 @@
   // The « Caractéristiques Centrales » file in the template's own design: Arial 11, no gridlines, the « Nom Installation » line
   // on light blue, the labels on light grey in bold navy, thin grey borders, a thick blue line after « Productible » and a
   // medium one after each « Champ », values worked out by the app on yellow (« infos en jaune extrapolées »).
-  const loadExcelJs=()=>loadScript('https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js', ()=>!!window.ExcelJS, 'Bibliothèque Excel indisponible (hors ligne ?)');
+  const loadExcelJs=()=>loadScript('vendor/exceljs-4.4.0.min.js', ()=>!!window.ExcelJS, 'Bibliothèque Excel indisponible (hors ligne ?)');
 
   const CARACT_PLAIN=new Set(['Commune','P50 annuel (indicatif) (MWh/an)','P90 annuel (indicatif) (MWh/an)'].map(caractKey));
   function caractGuessed(o, label){   // worked out by the app rather than given by the producer
@@ -5656,6 +5658,9 @@
   // The page calls http://127.0.0.1:<port>; the bridge writes into the synced Excel files through Excel itself.
   let bridgeCfg={ port:8765, token:'' }, bridgeState={ ok:false, authorized:false, checkedAt:0, info:null };
   try{ const r=localStorage.getItem('todo_bridge-config'); if(r) bridgeCfg=Object.assign(bridgeCfg, JSON.parse(r)); }catch(e){}
+  // local mode: the page comes from the bridge itself, which gives its key and port (no key to copy by hand)
+  if(window.TODO_LOCAL){ const m=document.querySelector('meta[name="todo-bridge-token"]'), tk=m && m.content, port=+location.port||8765;
+    if(tk && (tk!==bridgeCfg.token || port!==bridgeCfg.port)){ bridgeCfg.token=tk; bridgeCfg.port=port; lsSet('todo_bridge-config', JSON.stringify(bridgeCfg)); } }
   function saveBridgeCfg(){ lsSet('todo_bridge-config', JSON.stringify(bridgeCfg)); }
   // Writing into the Excel files is for the computer only: on a phone or tablet (phone version, or the full
   // version opened there) the bridge is off whatever is stored — no button, no call, no automatic refresh.

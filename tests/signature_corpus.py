@@ -15,12 +15,12 @@ Président
 SAS SOLAIRE DU MIDI
 12 route de Pézenas, 34500 Béziers
 Tél : 04 67 11 22 33 - Mob. : 06 12 34 56 78
-jean.dupont@solairedumidi.fr
-www.solairedumidi.fr""",
-     "expect": {"prenom": "Jean", "nom": "DUPONT", "qualite": "Président", "societe": "SAS SOLAIRE DU MIDI", "mail": "jean.dupont@solairedumidi.fr",
+jean.dupont@solairedumidi.test
+www.solairedumidi.test""",
+     "expect": {"prenom": "Jean", "nom": "DUPONT", "qualite": "Président", "societe": "SAS SOLAIRE DU MIDI", "mail": "jean.dupont@solairedumidi.test",
                 "tel": "06 12 34 56 78", "tel2": "04 67 11 22 33"}},
-    {"name": "Tout sur une ligne avec barres", "text": "Hugo Faure | Directeur | LUMEN ENERGIE SAS | 04 73 00 00 03 | hugo.faure@lumen-energie.fr",
-     "expect": {"prenom": "Hugo", "nom": "FAURE", "qualite": "Directeur", "societe": "LUMEN ENERGIE SAS", "tel": "04 73 00 00 03", "mail": "hugo.faure@lumen-energie.fr"}},
+    {"name": "Tout sur une ligne avec barres", "text": "Hugo Faure | Directeur | LUMEN ENERGIE SAS | 04 73 00 00 03 | hugo.faure@lumen-energie.test",
+     "expect": {"prenom": "Hugo", "nom": "FAURE", "qualite": "Directeur", "societe": "LUMEN ENERGIE SAS", "tel": "04 73 00 00 03", "mail": "hugo.faure@lumen-energie.test"}},
     {"name": "Nom de famille d'abord", "text": """DURAND Pierre
 Exploitant agricole
 EARL DURAND
@@ -29,19 +29,19 @@ EARL DURAND
     {"name": "Tout en capitales, nom identifié par le mail", "text": """JEAN-MARC LEROY
 DIRECTEUR GÉNÉRAL
 ENERGIES NOUVELLES
-jm.leroy@energies-nouvelles.com
+jm.leroy@energies-nouvelles.test
 +33 (0)3 26 45 67 89""",
-     "expect": {"prenom": "Jean-Marc", "nom": "LEROY", "qualite": "DIRECTEUR GÉNÉRAL", "societe": "ENERGIES NOUVELLES", "mail": "jm.leroy@energies-nouvelles.com", "tel": "03 26 45 67 89"}},
+     "expect": {"prenom": "Jean-Marc", "nom": "LEROY", "qualite": "DIRECTEUR GÉNÉRAL", "societe": "ENERGIES NOUVELLES", "mail": "jm.leroy@energies-nouvelles.test", "tel": "03 26 45 67 89"}},
     {"name": "Libellés Tél / Mob / Email, images Outlook", "text": """[cid:image001.png@01DB2F3A.5E8C2D10]
 Camille DUBOIS
 Responsable financement de projets
 RHÔNE ÉNERGIES SAS
 T. 04 75 00 00 06
 M. 06 77 00 00 06
-E. camille.dubois@rhone-energies.fr
+E. camille.dubois@rhone-energies.test
 [cid:image002.png@01DB2F3A.5E8C2D10]""",
      "expect": {"prenom": "Camille", "nom": "DUBOIS", "qualite": "Responsable financement de projets", "societe": "RHÔNE ÉNERGIES SAS",
-                "tel": "06 77 00 00 06", "tel2": "04 75 00 00 06", "mail": "camille.dubois@rhone-energies.fr"}},
+                "tel": "06 77 00 00 06", "tel2": "04 75 00 00 06", "mail": "camille.dubois@rhone-energies.test"}},
     {"name": "Avertissement légal en dessous", "text": """Nicolas Bernard
 Responsable développement
 OMBRELIA SAS
@@ -53,8 +53,8 @@ P Pensez à l'environnement avant d'imprimer ce message.""",
 Asset Manager
 GreenYield Capital
 +44 20 7946 0000
-m.thompson@greenyield-capital.com""",
-     "expect": {"prenom": "Mark", "nom": "THOMPSON", "qualite": "Asset Manager", "societe": "GreenYield Capital", "mail": "m.thompson@greenyield-capital.com"}},
+m.thompson@greenyield-capital.test""",
+     "expect": {"prenom": "Mark", "nom": "THOMPSON", "qualite": "Asset Manager", "societe": "GreenYield Capital", "mail": "m.thompson@greenyield-capital.test"}},
     {"name": "Société avant le nom", "text": """VENTS DE PICARDIE SAS
 Valérie Noël
 Directrice des opérations
@@ -77,17 +77,17 @@ GAEC du Moulin Blanc
     {"name": "Société en casse normale reconnue par le domaine", "text": """Thomas Petit
 Chef de projet
 Solaire du Midi
-thomas.petit@solairedumidi.fr""",
-     "expect": {"prenom": "Thomas", "nom": "PETIT", "qualite": "Chef de projet", "societe": "Solaire du Midi", "mail": "thomas.petit@solairedumidi.fr"}},
+thomas.petit@solairedumidi.test""",
+     "expect": {"prenom": "Thomas", "nom": "PETIT", "qualite": "Chef de projet", "societe": "Solaire du Midi", "mail": "thomas.petit@solairedumidi.test"}},
     {"name": "Lecture OCR bruitée", "text": """Isabelle  Garnier
 Chargée de mission énergies renouvelables
 Syndicat Départemental d'Énergie 35
 Tél.: 02 99 23 15 15
-i.garnier@sde35.fr
+i.garnier@sde35.test
 —
-www.sde35.fr""",
+www.sde35.test""",
      "expect": {"prenom": "Isabelle", "nom": "GARNIER", "qualite": "Chargée de mission énergies renouvelables", "societe": "Syndicat Départemental d'Énergie 35",
-                "tel": "02 99 23 15 15", "mail": "i.garnier@sde35.fr"}},
+                "tel": "02 99 23 15 15", "mail": "i.garnier@sde35.test"}},
     {"name": "Mairie, élu", "text": """Bernard Collin
 Maire de Saint-Julien
 Mairie de Saint-Julien
@@ -102,14 +102,14 @@ Standard : 02 41 00 00 00""",
     {"name": "Salutation en tête et prénom seul en dessous (signature courte)", "text": """Bien cordialement,
 Julie
 Julie Lemaire | Chargée d'affaires | Crédit Agricole Transitions & Energies
-julie.lemaire@ca-transitions.com""",
-     "expect": {"prenom": "Julie", "nom": "LEMAIRE", "qualite": "Chargée d'affaires", "societe": "Crédit Agricole Transitions & Energies", "mail": "julie.lemaire@ca-transitions.com"}},
+julie.lemaire@ca-transitions.test""",
+     "expect": {"prenom": "Julie", "nom": "LEMAIRE", "qualite": "Chargée d'affaires", "societe": "Crédit Agricole Transitions & Energies", "mail": "julie.lemaire@ca-transitions.test"}},
     {"name": "LinkedIn et site", "text": """Arnaud Morel
 Fondateur
 AGRISOLAIRE
 06 12 45 78 90
 linkedin.com/in/arnaudmorel
-agrisolaire.fr""",
+agrisolaire.test""",
      "expect": {"prenom": "Arnaud", "nom": "MOREL", "qualite": "Fondateur", "societe": "AGRISOLAIRE", "tel": "06 12 45 78 90"}},
     {"name": "Nom collé au rôle par une virgule", "text": """Agnès Perrin, Gérante
 PERRIN ENERGIE EURL
@@ -141,14 +141,14 @@ Envoyé de mon iPhone""",
 Coordinateur
 SCIC ENERGIES CITOYENNES
 04 76 00 00 02
-m.roux@enercoop-test.fr""",
-     "expect": {"prenom": "Mathieu", "nom": "ROUX", "qualite": "Coordinateur", "societe": "SCIC ENERGIES CITOYENNES", "tel": "04 76 00 00 02", "mail": "m.roux@enercoop-test.fr"}},
+m.roux@enercoop-test.test""",
+     "expect": {"prenom": "Mathieu", "nom": "ROUX", "qualite": "Coordinateur", "societe": "SCIC ENERGIES CITOYENNES", "tel": "04 76 00 00 02", "mail": "m.roux@enercoop-test.test"}},
     {"name": "Initiale du prénom dans le mail", "text": """Claire Fontaine
 Responsable d'exploitation
 METHA VENDEE
-c.fontaine@metha-vendee.fr
+c.fontaine@metha-vendee.test
 02 51 33 44 55""",
-     "expect": {"prenom": "Claire", "nom": "FONTAINE", "qualite": "Responsable d'exploitation", "societe": "METHA VENDEE", "mail": "c.fontaine@metha-vendee.fr", "tel": "02 51 33 44 55"}},
+     "expect": {"prenom": "Claire", "nom": "FONTAINE", "qualite": "Responsable d'exploitation", "societe": "METHA VENDEE", "mail": "c.fontaine@metha-vendee.test", "tel": "02 51 33 44 55"}},
 ]
 
 # Written after tuning, to measure honestly.
@@ -157,8 +157,8 @@ SIGNATURES_HELDOUT = [
 François Morin
 SOLARIS INVEST SAS
 Mobile : 06 50 60 70 80
-f.morin@solaris-invest.fr""",
-     "expect": {"prenom": "François", "nom": "MORIN", "qualite": "Directeur Général", "societe": "SOLARIS INVEST SAS", "tel": "06 50 60 70 80", "mail": "f.morin@solaris-invest.fr"}},
+f.morin@solaris-invest.test""",
+     "expect": {"prenom": "François", "nom": "MORIN", "qualite": "Directeur Général", "societe": "SOLARIS INVEST SAS", "tel": "06 50 60 70 80", "mail": "f.morin@solaris-invest.test"}},
     {"name": "Points médians et société en casse normale", "text": "Élodie Vasseur · Head of Energy Sales · Voltalis Energy · +33 6 70 80 90 10",
      "expect": {"prenom": "Élodie", "nom": "VASSEUR", "qualite": "Head of Energy Sales", "tel": "06 70 80 90 10"}},
     {"name": "Nom seul en majuscules et prénom en minuscules", "text": """BERTRAND julien
@@ -179,8 +179,8 @@ Tél : 03 88 00 00 14 | Fax : 03 88 00 00 15""",
     {"name": "Prénom composé avec espace", "text": """Anne Sophie Leclerc
 Responsable achats énergie
 Leclerc Distribution
-anne-sophie.leclerc@leclerc-distribution.fr""",
-     "expect": {"prenom": "Anne Sophie", "nom": "LECLERC", "qualite": "Responsable achats énergie", "societe": "Leclerc Distribution", "mail": "anne-sophie.leclerc@leclerc-distribution.fr"}},
+anne-sophie.leclerc@leclerc-distribution.test""",
+     "expect": {"prenom": "Anne Sophie", "nom": "LECLERC", "qualite": "Responsable achats énergie", "societe": "Leclerc Distribution", "mail": "anne-sophie.leclerc@leclerc-distribution.test"}},
     {"name": "Signature avec slogan", "text": """Olivier Brun
 Gérant
 SUDSOL SARL

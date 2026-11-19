@@ -6,16 +6,39 @@ Application web (PWA) sans serveur : HTML, CSS et JavaScript, sans étape de bui
 - **Données personnelles** (tâches, post-it) : dans le navigateur (IndexedDB), synchronisées dans un **dépôt GitHub privé** séparé (`data/tasks.json`, `notes.json`, `tasks-inbox.json`, `contacts-inbox.json`). Chaque synchro est un commit : toutes les versions passées restent dans l'historique de ce dépôt.
 - **Données d'équipe** (pipeline, contacts, sociétés, rendez-vous) : en migration vers Supabase (`supabase/schema.sql`), pour un pipeline partagé entre plusieurs personnes avec une vraie authentification ; voir `js/supabase-sync.js`. Pas encore branché sur les écrans — en attendant, ces données restent sur `data/crm.json` comme avant.
 - **Hébergement** : Cloudflare Pages (adresse propre à l'appli, règles de sécurité de `_headers`), et GitHub Pages en secours.
+- **ToDo en local (recommandé au bureau)** : le pont Excel sert aussi l'appli, depuis ce PC, sur `http://127.0.0.1:8765/app/`. Voir [ToDo en local](#todo-en-local).
+
+## ToDo en local
+
+L'appli tourne entièrement sur le PC : le pont Excel (`bridge/pont-excel.ps1`, déjà utilisé pour les Excel) sert aussi ses fichiers, et Edge l'ouvre dans sa propre fenêtre. Aucun droit administrateur, rien à installer.
+
+**Ce qui sort du PC, et rien d'autre** (règles imposées par le pont à la page, vérifiées par `tests/local_mode_test.py`) :
+
+| Vers | Quoi | Pourquoi |
+|---|---|---|
+| Ce PC (`127.0.0.1`) | tout le reste | l'appli, le pont, les Excel dans OneDrive / SharePoint |
+| `api.github.com` | la sauvegarde **chiffrée** (phrase de passe), dans un dépôt privé | synchro entre appareils, historique |
+| `tomsremy.github.io` | lecture seule des données publiques de marché (PowerKlock) | onglet Marché ; rien n'y est envoyé |
+
+Tout le code est dans le dossier (bibliothèques dans `vendor/`) : aucun CDN, aucune police ni image d'Internet. Le pont ne sert que les fichiers de l'appli (pages, `js/`, `vendor/`, `icons/`), jamais le reste du disque, et seulement aux adresses `127.0.0.1` / `localhost`. Désactivés en local : Supabase, « Compléter avec l'IA » (API Claude), la lecture de cartes de visite (moteur OCR chargé d'Internet).
+
+**Installer (5 min)**
+1. Télécharger ce dépôt (Code › Download ZIP) et le dézipper dans son profil, par exemple `C:\Users\<toi>\ToDo`.
+2. Double-clic sur `bridge\Creer-raccourci-ToDo.bat` : raccourci « ToDo » sur le bureau (et au démarrage de Windows si on le veut).
+3. Double-clic sur « ToDo » : le pont démarre (fenêtre réduite ; au premier lancement, choisir le Pipe et le Suivi), puis la fenêtre ToDo s'ouvre. La clé du pont est donnée à l'appli, rien à recopier.
+4. **Récupérer ses données** (l'adresse change, le navigateur range les données par adresse) : Réglages › Synchro, renseigner le dépôt de données, le jeton et la phrase de passe, comme sur un nouvel appareil ; ou Réglages › Exporter sur l'ancienne adresse, puis Importer dans ToDo local.
+
+**Mettre à jour** : remplacer le dossier par la nouvelle version (les réglages du pont sont dans `%APPDATA%\Todo Pont Excel`, les données dans Edge : rien n'est perdu).
 
 ## Contenu
 
 | Fichier | Rôle |
 |---|---|
 | `index.html`, `app.css`, `js/` | L'appli : voir [Architecture](#architecture) |
-| `vendor/` | Lecteur Excel SheetJS 0.20.3, gardé avec l'appli (marche hors ligne) |
+| `vendor/` | Bibliothèques gardées avec l'appli (marche hors ligne, aucun CDN en local) : SheetJS 0.20.3, ExcelJS 4.4.0, PptxGenJS 3.12.0 |
 | `sw.js` | Hors ligne : le code d'abord par le réseau, le cache en secours ; les données GitHub ne sont jamais mises en cache |
 | `_headers` | Règles de sécurité de la page (Cloudflare Pages) |
-| `bridge/` | Pont Excel local (PowerShell) : lit et écrit le Pipe et le Suivi sur le PC |
+| `bridge/` | Pont Excel local (PowerShell) : lit et écrit le Pipe et le Suivi sur le PC, et sert l'appli en local (`ToDo-local.bat`, `Creer-raccourci-ToDo.bat`) |
 | `supabase/schema.sql` | Schéma de la base d'équipe (pipeline, contacts, sociétés, rendez-vous), à appliquer sur un projet Supabase (beta puis prod) |
 | `outlook-vba/` | Copie de secours de la macro Outlook (sans jeton) |
 | `tests/` | Tests de bout en bout (Playwright), lancés à chaque push par GitHub Actions |
@@ -92,7 +115,7 @@ flowchart LR
 3. **Hébergement Cloudflare Pages** : dash.cloudflare.com › Workers & Pages › Create › Pages › Connect to Git › ce dépôt. Nom du projet `todo-tom`, sans commande de build, dossier de sortie `/`. L'adresse devient `https://todo-tom.pages.dev`. Chaque push republie l'appli.
 4. **Écran de connexion (option)** : Cloudflare Zero Trust › Access › Applications › Self-hosted › `todo-tom.pages.dev`. Règle : ton adresse mail (code à usage unique).
 5. **Dans l'appli** : Réglages › Synchro. Renseigner le propriétaire, le dépôt de données et le jeton, avec sa date d'expiration. Les données reviennent depuis GitHub.
-6. **Pont Excel** (PC Windows, Excel installé) : lancer `bridge/Lancer-pont-excel.bat`, choisir le Pipe et le Suivi, puis recopier la clé affichée dans Réglages › Pont Excel. Pour une autre adresse de l'appli, l'ajouter dans `pont-excel-config.json` : `"origins": ["https://…"]`.
+6. **Pont Excel** (PC Windows, Excel installé) : en local, rien à faire (voir [ToDo en local](#todo-en-local)) ; sinon lancer `bridge/Lancer-pont-excel.bat`, choisir le Pipe et le Suivi, puis recopier la clé affichée dans Réglages › Pont Excel. Pour une autre adresse de l'appli, l'ajouter dans `pont-excel-config.json` : `"origins": ["https://…"]`.
 7. **Macro Outlook** (option) : drapeau → tâche dans « Boîte mail », catégorie « CRM Contact » → contact. Copie de secours dans `outlook-vba/` (sans jeton ; installation dans son README). Le jeton se colle seulement dans la copie installée sur le PC, jamais ici.
 8. **Téléphone** : ouvrir `…/mobile.html`, puis « Sur l'écran d'accueil ».
 
@@ -113,5 +136,6 @@ python tests/mail_accuracy.py --all --min 0.95
 python tests/extraction_accuracy.py --all --min 0.95
 python tests/bridge_test.py       # le pont (PowerShell requis)
 python tests/bridge_e2e.py        # l'appli et le vrai pont ensemble (tableau en mémoire)
+python tests/local_mode_test.py   # ToDo en local : servi par le pont, rien d'Internet hors GitHub et PowerKlock
 python tests/bridge_backtest.py   # des centaines de jours de travail simulés sur des tableaux de la forme des vrais
 ```

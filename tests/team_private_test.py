@@ -27,14 +27,14 @@ server = {"contacts": [ct("c2", "Bob-serveur", upd=9000), ct("c3", "Chloé")]}
 STUB = """
 window.__team = { pushed: [], removed: [], server: %s };
 window.TodoTeam = {
-  init: async()=>{}, loadConfig: async()=>({ url:'x', anonKey:'y', adminEmail:'admin@exemple.fr' }), saveConfig: async()=>{}, isConfigured: ()=>true, isSignedIn: ()=>!window.__team.out,
+  init: async()=>{}, loadConfig: async()=>({ url:'x', anonKey:'y', adminEmail:'admin@exemple.test' }), saveConfig: async()=>{}, isConfigured: ()=>true, isSignedIn: ()=>!window.__team.out,
   currentUser: ()=>({ email:'t@x' }), signIn: async()=>{}, signOut: async()=>{},
   pullAll: async t=>{ if(window.__team.down) throw new TypeError('Failed to fetch'); return JSON.parse(JSON.stringify(window.__team.server[t]||[])); },
   pushItem: async (t, it)=>{ if(window.__team.down) throw new TypeError('Failed to fetch'); window.__team.pushed.push([t, it.id]); (window.__team.last=window.__team.last||{})[it.id]=JSON.parse(JSON.stringify(it)); const L=(window.__team.server[t]=window.__team.server[t]||[]), i=L.findIndex(x=>x.id===it.id); if(i>=0) L[i]=JSON.parse(JSON.stringify(it)); else L.push(JSON.parse(JSON.stringify(it))); return true; },
   getItem: async (t, id)=>{ if(window.__team.down) throw new TypeError('Failed to fetch'); const now=(window.__team.now||{})[id]; if(now){ const o=JSON.parse(JSON.stringify(now)); if(now._by) Object.defineProperty(o, '_by', { value:now._by, enumerable:false }); return o; } const r=(window.__team.server[t]||[]).find(x=>x.id===id); return r ? JSON.parse(JSON.stringify(r)) : null; },
   removeItem: async (t, id)=>{ if(window.__team.down) throw new TypeError('Failed to fetch'); window.__team.removed.push([t, id]); return (window.__team.refuse||[]).includes(id) ? 'refused' : 'deleted'; },
   mfaState: async ()=>window.__team.mfa||'ok',
-  adminMembers: async ()=>window.__team.admin ? [{ email:'admin@exemple.fr', display_name:'Tom', is_admin:true, mfa_factors:2, is_self:true }, { email:'paul@exemple.fr', display_name:'Paul', is_admin:false, mfa_factors:1, is_self:false }] : null,
+  adminMembers: async ()=>window.__team.admin ? [{ email:'admin@exemple.test', display_name:'Tom', is_admin:true, mfa_factors:2, is_self:true }, { email:'paul@exemple.test', display_name:'Paul', is_admin:false, mfa_factors:1, is_self:false }] : null,
   adminResetMfa: async e=>{ window.__team.reset=e; return 1; },
   mfaVerify: async code=>{ if(code!=='123456') throw new Error('bad'); window.__team.mfa='ok'; return true; },
   mfaEnroll: async ()=>({ id:'f1', qr:'data:image/svg+xml;utf8,<svg xmlns=%%22http://www.w3.org/2000/svg%%22 width=%%2210%%22 height=%%2210%%22/>', secret:'JBSWY3DPEHPK3PXP' }),
@@ -149,9 +149,9 @@ with sync_playwright() as p:
     check(not page.is_visible("#team-admin-box"), "not an administrator : no Administration part")
     page.evaluate("window.__team.admin=true; window.TodoTeamUI.renderTeamStatus()"); page.wait_for_timeout(500)
     adm = page.inner_text("#team-admin-box") if page.is_visible("#team-admin-box") else ""
-    check("paul@exemple.fr" in adm and "double authentification active" in adm, f"the administrator sees the members and their second factor ({adm[:120]!r})")
+    check("paul@exemple.test" in adm and "double authentification active" in adm, f"the administrator sees the members and their second factor ({adm[:120]!r})")
     page.locator("#team-admin-list .hist-row", has_text="paul@").locator("button").click(); page.click("#choice-btns button:has-text('Réinitialiser')"); page.wait_for_timeout(400)
-    check(page.evaluate("window.__team.reset") == "paul@exemple.fr", "« Réinitialiser » resets the colleague's second factor")
+    check(page.evaluate("window.__team.reset") == "paul@exemple.test", "« Réinitialiser » resets the colleague's second factor")
     check(page.locator("#team-admin-list .hist-row", has_text="admin@").locator("button").count() == 0, "no reset button on one's own account")
 
     check("1 contact privé" in page.inner_text("#team-share-summary"), f"Réglages says what is shared and what stays mine ({page.inner_text('#team-share-summary')!r})")

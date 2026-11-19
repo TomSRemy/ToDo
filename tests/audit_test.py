@@ -34,7 +34,7 @@ SEED = {
                                   opp("o6", "Breizh Test", "Toit Neuf", "collecte", stageLog=[{"stage": "a_qualifier", "at": now - 30 * DAY}, {"stage": "collecte", "at": now - 2 * DAY}]),
                                   opp("o7", "Nouvelle SAS", "Toit Frais", "a_qualifier", createdAt=now - DAY),
                                   opp("o8", "Perdue SAS", "Toit Perdu", "perdu", lostAt=now - 3 * DAY, stageBeforeExit="offre_attente")],
-    "todo-widget-contacts": [{"id": "p1", "firstName": "Claire", "lastName": "MARTIN", "company": "Solaris Ouest", "email": "claire@exemple.fr", "phone1": "06 12 34 56 00",
+    "todo-widget-contacts": [{"id": "p1", "firstName": "Claire", "lastName": "MARTIN", "company": "Solaris Ouest", "email": "claire@exemple.test", "phone1": "06 12 34 56 00",
                               "role": "Gérante", "createdAt": 1, "updatedAt": 1, "deleted": False}],
     "todo-widget-companies": [{"id": "c1", "name": "Solaris Ouest", "type": "Producteur", "createdAt": 1, "updatedAt": 1, "deleted": False}],
     "parc-data": {"fileName": "Suivi test.xlsx", "importedAt": now, "objectives": {"2026": 10, "2027": 20},
@@ -81,7 +81,7 @@ with sync_playwright() as p:
     check("Claire MARTIN" in side and "contact de Solaris Ouest" in side and "Aucun contact" not in side, f"sheet: the company's contact instead of « Aucun contact » ({side[:120]!r})")
     page.click("#opp-detail-overlay .sp-side >> text=Lier à la fiche")
     o1 = next(o for o in json.loads(page.evaluate("window.storage.peek('todo-widget-opportunities')")) if o["id"] == "o1")
-    check(o1.get("nom") == "MARTIN" and o1.get("mail") == "claire@exemple.fr", "« Lier à la fiche » writes the contact on the sheet")
+    check(o1.get("nom") == "MARTIN" and o1.get("mail") == "claire@exemple.test", "« Lier à la fiche » writes the contact on the sheet")
     page.keyboard.press("Escape"); page.wait_for_timeout(200)
     # 4. delete, undo, and the bin
     page.evaluate("location.hash='#fiche/o2'"); page.wait_for_selector("#opp-detail-overlay:not(.hidden)")

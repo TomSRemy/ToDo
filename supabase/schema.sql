@@ -278,7 +278,7 @@ drop policy if exists change_log_mfa on public.change_log;
 create policy change_log_mfa on public.change_log as restrictive for select to authenticated using ((select auth.jwt()->>'aal') = 'aal2');
 -- Réinitialiser la double authentification d'un collègue (téléphone perdu) : supprimer ses facteurs, il en recrée un
 -- à la prochaine connexion. Remplacer l'email :
---   delete from auth.mfa_factors where user_id = (select id from auth.users where email = 'collegue@exemple.fr');
+--   delete from auth.mfa_factors where user_id = (select id from auth.users where email = 'collegue@exemple.test');
 
 -- 2026-11-11 · Administration : l'administrateur (et lui seul, validé par sa double authentification) voit les membres
 -- et réinitialise la double authentification d'un collègue qui a perdu son téléphone. Personne ne peut se déclarer

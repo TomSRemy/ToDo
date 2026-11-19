@@ -30,6 +30,11 @@
      et chaque case écrite est notée dans « Sauvegardes pont/journal-pont.csv » avec son ancienne valeur et qui l'a écrite
      (jamais effacé) ; la même ligne va dans « Journal ToDo », à côté du Pipe, un fichier par personne (journal de l'équipe).
 
+  v1.40 : ToDo en local. Le pont sert aussi l'appli, depuis le dossier où il se trouve (le dossier de l'appli, dont
+  bridge\ est un sous-dossier), sur http://127.0.0.1:8765/app/ : « ToDo-local.bat » l'ouvre dans sa propre fenêtre Edge.
+  Rien ne vient alors d'Internet : la page n'a le droit de joindre que ce PC, l'API GitHub (sauvegarde chiffrée) et
+  les données publiques de PowerKlock (onglet Marché). La clé du pont est donnée à la page, plus rien à recopier.
+
   v1.39 : avec le complément Excel « ToDo » (ToDoPont.bas, dans les macros personnelles), c'est Excel lui-même qui
   écrit, dans le seul tableau de l'onglet visé, comme une saisie ; le pont décide toujours quelles cases. Sans le
   complément, rien ne change.
@@ -61,7 +66,7 @@
 param([int]$Port = 8765, [switch]$Reconfigurer, [switch]$Mock, [string]$PatchTest = '')
 
 $ErrorActionPreference = 'Stop'
-$Version = '1.39'
+$Version = '1.40'
 $Here = Split-Path -Parent $MyInvocation.MyCommand.Path
 $LibDir = Join-Path $Here 'lib'
 # the settings (the two files, the key) live in the Windows profile, not next to the script: a new download, in any folder,
@@ -77,6 +82,8 @@ if (-not $Mock -and $env:APPDATA) {
 # the app's addresses: GitHub Pages, and its own Cloudflare Pages address (an address given by hand: "origins" in pont-excel-config.json)
 $AllowedOrigins = @('https://tomsremy.github.io', 'https://todo-tom.pages.dev', 'http://localhost:8000', 'http://127.0.0.1:8000')
 if ($Mock) { $AllowedOrigins += 'null' }   # pages opened from a file, for tests only
+# v1.40 : the app served by the bridge itself (local mode, ToDo-local.bat) : same address as the bridge
+$AllowedOrigins += @("http://127.0.0.1:$Port", "http://localhost:$Port")
 $Kinds = @{
   pipe = @{ label = 'Pipe agrégation'; header = 'Nom Producteur'; keys = @('Nom Producteur', 'Nom Centrale'); sheet = 'Pipe agrégation' }
   bdd  = @{ label = 'BDD Agrégation'; header = 'Nom_prod'; keys = @('Nom_prod', 'Nom_Installation_prod'); sheet = 'BDD Agrégation' }
@@ -1103,6 +1110,61 @@ function LocalBackup-SetDir($dir) {
   return @(200, @{ ok = $true; dir = $dir })
 }
 
+# ---------------- v1.40 : the app itself, served from this PC (local mode) ----------------
+# The app's folder is the one above bridge\ (the repository as downloaded) ; without index.html and js\app.js there, only
+# the bridge runs, as before. Only the app's own files are served (pages, js\, vendor\, icons\), never the bridge, the
+# tests or anything else on the disk. The pages carry rules that let them reach this PC, the GitHub API and PowerKlock's
+# public data, nothing else : no code, font or image from the Internet, no data sent anywhere else.
+$AppDir = Split-Path -Parent $Here
+$AppServed = (Test-Path -LiteralPath (Join-Path $AppDir 'index.html')) -and (Test-Path -LiteralPath (Join-Path $AppDir 'js\app.js'))
+$StaticTypes = @{ '.html' = 'text/html; charset=utf-8'; '.js' = 'application/javascript; charset=utf-8'; '.css' = 'text/css; charset=utf-8';
+  '.json' = 'application/json; charset=utf-8'; '.png' = 'image/png'; '.svg' = 'image/svg+xml'; '.ico' = 'image/x-icon' }
+$LocalCsp = "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; worker-src 'self' blob:; " +
+  "connect-src 'self' http://127.0.0.1:$Port http://localhost:$Port https://api.github.com https://tomsremy.github.io data: blob:; " +
+  "img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; font-src 'self' data:; media-src 'self' data: blob:; " +
+  "frame-src https://tomsremy.github.io; frame-ancestors 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; manifest-src 'self'"
+function Is-StaticRequest($req) {
+  return (($req.method -eq 'GET' -or $req.method -eq 'HEAD') -and ($req.path -eq '/' -or $req.path -eq '/app' -or $req.path.StartsWith('/app/')))
+}
+function Send-Raw($stream, $status, $reason, $headers, [byte[]]$body, $headOnly) {
+  $h = "HTTP/1.1 $status $reason`r`nConnection: close`r`nContent-Length: $(if ($body) { $body.Length } else { 0 })`r`nX-Content-Type-Options: nosniff`r`nReferrer-Policy: no-referrer`r`n" + $headers + "`r`n"
+  $head = [Text.Encoding]::ASCII.GetBytes($h); $stream.Write($head, 0, $head.Length)
+  if ($body -and $body.Length -and -not $headOnly) { $stream.Write($body, 0, $body.Length) }
+  $stream.Flush()
+}
+function Send-Static($stream, $req) {
+  $headOnly = ($req.method -eq 'HEAD')
+  $notFound = { param($msg) Send-Raw $stream 404 'Not Found' "Content-Type: text/plain; charset=utf-8`r`nCache-Control: no-store`r`n" ([Text.Encoding]::UTF8.GetBytes($msg)) $headOnly }
+  # same guard as the bridge's API (DNS rebinding) : only this PC's own addresses
+  $hostHeader = $req.headers['host']
+  if ($hostHeader -and $hostHeader -notmatch ('^(127\.0\.0\.1|localhost):' + $Port + '$')) { & $notFound 'Hôte non autorisé.'; return }
+  if (-not $AppServed) { & $notFound ('L''appli n''est pas à côté du pont (' + $AppDir + ') : télécharge le dossier ToDo complet.'); return }
+  if ($req.path -eq '/' -or $req.path -eq '/app') { Send-Raw $stream 302 'Found' "Location: /app/`r`nCache-Control: no-store`r`n" $null $headOnly; return }
+  $rel = ''
+  try { $rel = [Uri]::UnescapeDataString($req.path.Substring(5)) } catch { & $notFound 'Adresse invalide.'; return }
+  if ($rel -eq '') { $rel = 'index.html' }
+  # the app's own files only : a page or file at the top, or a file in js\, vendor\ or icons\ ; no other folder, no « .. »
+  if ($rel -notmatch '^((js|vendor|icons)/)?[A-Za-z0-9][A-Za-z0-9._-]*$' -or $rel.Contains('..')) { & $notFound 'Fichier introuvable.'; return }
+  $ext = [IO.Path]::GetExtension($rel).ToLowerInvariant()
+  if (-not $StaticTypes.ContainsKey($ext)) { & $notFound 'Fichier introuvable.'; return }
+  $full = Join-Path $AppDir ($rel -replace '/', '\')
+  if (-not (Test-Path -LiteralPath $full -PathType Leaf)) { & $notFound 'Fichier introuvable.'; return }
+  [byte[]]$bytes = [IO.File]::ReadAllBytes($full)
+  if ($ext -eq '.html') {
+    # the page's own rules (for the web address) are replaced by the local ones, and the page learns it runs locally
+    # and the bridge's key (readable only by pages of this address : no other site can read this answer)
+    $html = [Text.Encoding]::UTF8.GetString($bytes)
+    $local = '<meta name="todo-local" content="1"><meta name="todo-bridge-token" content="' + [Net.WebUtility]::HtmlEncode([string]$Config.token) + '">'
+    $m = [regex]::Match($html, '<meta http-equiv="Content-Security-Policy" content="[^"]*">')
+    if ($m.Success) { $html = $html.Substring(0, $m.Index) + $local + '<meta http-equiv="Content-Security-Policy" content="' + $LocalCsp + '">' + $html.Substring($m.Index + $m.Length) }
+    else { $i = $html.IndexOf('<head>'); if ($i -ge 0) { $html = $html.Insert($i + 6, $local) } }
+    $bytes = (New-Object Text.UTF8Encoding $false).GetBytes($html)
+  }
+  $hdr = "Content-Type: " + $StaticTypes[$ext] + "`r`nCache-Control: no-cache`r`nContent-Security-Policy: $LocalCsp`r`n" +
+    "Cross-Origin-Opener-Policy: same-origin-allow-popups`r`nPermissions-Policy: geolocation=(), microphone=(), camera=(self), payment=(), usb=()`r`n"
+  Send-Raw $stream 200 'OK' $hdr $bytes $headOnly
+}
+
 # ---------------- Minimal HTTP server on 127.0.0.1 (no admin rights needed) ----------------
 function Send-Response($stream, $status, $obj, $origin) {
   $json = if ($null -ne $obj) { ConvertTo-Json -InputObject $obj -Depth 8 -Compress } else { '' }
@@ -1260,6 +1322,7 @@ Write-Host ''
 Write-Host "Pont Excel pour Todo v$Version — http://127.0.0.1:$Port" -ForegroundColor Cyan
 Write-Host ('  Pipe : ' + (Resolve-ConfigPath 'pipe'))
 Write-Host ('  BDD  : ' + (Resolve-ConfigPath 'bdd'))
+if ($AppServed) { Write-Host ("  ToDo en local : http://127.0.0.1:$Port/app/ (ouvert par ToDo-local.bat, la clé est donnée à l'appli)") -ForegroundColor Green }
 Write-Host ('  Clé à recopier dans l''app (Réglages → Pont Excel) : ' + $Config.token) -ForegroundColor Yellow
 Write-Host '  Laisse cette fenêtre ouverte (tu peux la réduire). Ctrl+C pour arrêter.'
 Write-Host ''
@@ -1281,6 +1344,7 @@ while ($true) {
     $stream = $client.GetStream()
     $req = Read-Request $stream
     if ($null -eq $req) { continue }
+    if (Is-StaticRequest $req) { Send-Static $stream $req; continue }   # v1.40 : the app's own files (local mode)
     $origin = $req.headers['origin']
     $res = $null; $tries = 0
     while ($null -eq $res) {

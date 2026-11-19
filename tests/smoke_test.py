@@ -351,7 +351,7 @@ with sync_playwright() as p:
 
     # --- Global search (Ctrl+K): everything in one list, Enter alone still creates the task
     gs_seed = {"todo_todo-widget-tasks": json.dumps([task("g1", "Envoyer ARPE Durand", client="Solaris"), task("g2", "Vieille relance Durand", archived=True)]),
-               "todo_todo-widget-contacts": json.dumps([{"id": "gc1", "firstName": "Paul", "lastName": "Durand", "role": "Gérant", "company": "Solaris", "email": "p@solaris.fr",
+               "todo_todo-widget-contacts": json.dumps([{"id": "gc1", "firstName": "Paul", "lastName": "Durand", "role": "Gérant", "company": "Solaris", "email": "p@solaris.test",
                                                           "phone1": "06 12 00 00 99", "phone2": "", "relevance": 0, "comment": "", "createdAt": 1, "updatedAt": 1, "deleted": False}]),
                "todo_todo-widget-opportunities": json.dumps([{"id": "go1", "kind": "installation", "company": "Solaris", "centrale": "Toit Durand", "title": "Toit Durand",
                                                               "stage": "collecte", "kwc": "250", "createdAt": 1, "updatedAt": 1, "deleted": False}])}
@@ -475,7 +475,7 @@ with sync_playwright() as p:
     # --- hover preview: a mini sheet on a company, a contact ([[link]]) or in the pipeline
     page, errors = new_page(browser, {
         "todo_todo-widget-tasks": json.dumps([task("pk1", "Rappeler [[Paul Durand]] pour l'offre", client="Solaris", due=(TODAY + datetime.timedelta(days=3)).isoformat())]),
-        "todo_todo-widget-contacts": json.dumps([{"id": "pc1", "firstName": "Paul", "lastName": "Durand", "role": "Gérant", "company": "Solaris", "phone1": "06 11 22 33 44", "email": "paul@exemple.fr", "createdAt": 1, "updatedAt": 1, "deleted": False}]),
+        "todo_todo-widget-contacts": json.dumps([{"id": "pc1", "firstName": "Paul", "lastName": "Durand", "role": "Gérant", "company": "Solaris", "phone1": "06 11 22 33 44", "email": "paul@exemple.test", "createdAt": 1, "updatedAt": 1, "deleted": False}]),
         "todo_todo-widget-opportunities": json.dumps([{"id": "po1", "kind": "installation", "company": "Solaris", "centrale": "Toit Sud", "title": "Toit Sud", "kwc": "2500", "stage": "kyc", "createdAt": 1, "updatedAt": 1, "deleted": False}])},
         viewport={"width": 1300, "height": 850})
     page.goto(URL); page.click('[data-tab="tasks"]'); page.wait_for_timeout(200)
@@ -507,10 +507,10 @@ with sync_playwright() as p:
     # --- Réseau: every connection between companies, contacts, installations, tasks, meetings
     nw_seed = {
         "todo_todo-widget-tasks": json.dumps([task("n1", "Relancer pour le CR", client="Solaris")]),
-        "todo_todo-widget-contacts": json.dumps([{"id": "nc1", "firstName": "Paul", "lastName": "Durand", "company": "Solaris", "email": "p@solaris.fr", "createdAt": 1, "updatedAt": 1, "deleted": False},
-                                                 {"id": "nc2", "firstName": "Marie", "lastName": "Leroy", "company": "Ventus", "email": "m@ventus.fr", "createdAt": 1, "updatedAt": 1, "deleted": False}]),
+        "todo_todo-widget-contacts": json.dumps([{"id": "nc1", "firstName": "Paul", "lastName": "Durand", "company": "Solaris", "email": "p@solaris.test", "createdAt": 1, "updatedAt": 1, "deleted": False},
+                                                 {"id": "nc2", "firstName": "Marie", "lastName": "Leroy", "company": "Ventus", "email": "m@ventus.test", "createdAt": 1, "updatedAt": 1, "deleted": False}]),
         "todo_todo-widget-meetings": json.dumps([{"id": "nm1", "contactId": "nc1", "label": "Salon", "date": TODAY.isoformat(), "createdAt": 1, "updatedAt": 1, "deleted": False}]),
-        "todo_todo-widget-opportunities": json.dumps([{"id": "no1", "kind": "installation", "company": "Solaris", "centrale": "Toit Durand", "title": "Toit Durand", "stage": "collecte", "mail": "p@solaris.fr", "createdAt": 1, "updatedAt": 1, "deleted": False}])}
+        "todo_todo-widget-opportunities": json.dumps([{"id": "no1", "kind": "installation", "company": "Solaris", "centrale": "Toit Durand", "title": "Toit Durand", "stage": "collecte", "mail": "p@solaris.test", "createdAt": 1, "updatedAt": 1, "deleted": False}])}
     page, errors = new_page(browser, nw_seed,
         viewport={"width": 1300, "height": 850})
     page.goto(URL); page.click('[data-tab="network"]'); page.wait_for_timeout(600)
@@ -581,10 +581,10 @@ with sync_playwright() as p:
     page.close()
     # contacts joined to their company even when written « Solaris SAS », or with no company but the colleagues' mail domain
     page, errors = new_page(browser, {"todo_todo-widget-contacts": json.dumps([
-        {"id": "a1", "firstName": "Anne", "lastName": "Un", "company": "Solaris", "email": "anne@solaris-energie.fr", "createdAt": 1, "updatedAt": 1, "deleted": False},
-        {"id": "a2", "firstName": "Bob", "lastName": "Deux", "company": "SOLARIS SAS", "email": "bob@solaris-energie.fr", "createdAt": 1, "updatedAt": 1, "deleted": False},
-        {"id": "a3", "firstName": "Cléo", "lastName": "Trois", "company": "", "email": "cleo@solaris-energie.fr", "createdAt": 1, "updatedAt": 1, "deleted": False},
-        {"id": "a4", "firstName": "Dan", "lastName": "Quatre", "company": "", "email": "dan@gmail.com", "createdAt": 1, "updatedAt": 1, "deleted": False}])},
+        {"id": "a1", "firstName": "Anne", "lastName": "Un", "company": "Solaris", "email": "anne@solaris-energie.test", "createdAt": 1, "updatedAt": 1, "deleted": False},
+        {"id": "a2", "firstName": "Bob", "lastName": "Deux", "company": "SOLARIS SAS", "email": "bob@solaris-energie.test", "createdAt": 1, "updatedAt": 1, "deleted": False},
+        {"id": "a3", "firstName": "Cléo", "lastName": "Trois", "company": "", "email": "cleo@solaris-energie.test", "createdAt": 1, "updatedAt": 1, "deleted": False},
+        {"id": "a4", "firstName": "Dan", "lastName": "Quatre", "company": "", "email": "dan@gmail.test", "createdAt": 1, "updatedAt": 1, "deleted": False}])},
         viewport={"width": 1300, "height": 850})
     page.goto(URL); page.click('[data-tab="network"]'); page.wait_for_timeout(500)
     st = page.evaluate("window.todoNetworkState()")
@@ -682,7 +682,7 @@ with sync_playwright() as p:
     late_day = (TODAY - datetime.timedelta(days=2)).isoformat()
     cs_seed = {"todo_todo-widget-tasks": json.dumps([task("s1", "Relancer pour le CR", client="Solaris", due=late_day),
                                                     task("s2", "Envoyer la proposition", client="Solaris", archived=True, archivedAt=now_ms - 86400000)]),
-               "todo_todo-widget-contacts": json.dumps([{"id": "sc1", "firstName": "Paul", "lastName": "Durand", "role": "Gérant", "company": "Solaris", "email": "p@solaris.fr",
+               "todo_todo-widget-contacts": json.dumps([{"id": "sc1", "firstName": "Paul", "lastName": "Durand", "role": "Gérant", "company": "Solaris", "email": "p@solaris.test",
                                                         "phone1": "06 12 00 00 99", "phone2": "", "relevance": 0, "comment": "", "createdAt": 1, "updatedAt": 1, "deleted": False}]),
                "todo_todo-widget-meetings": json.dumps([{"id": "sm1", "contactId": "sc1", "label": "Salon EnerGaïa", "date": (TODAY - datetime.timedelta(days=5)).isoformat(),
                                                         "createdAt": 1, "updatedAt": 1, "deleted": False}]),
@@ -821,16 +821,16 @@ with sync_playwright() as p:
 
     # --- sheet: « Pricing engageant », the contact's phone as a link, « Historique », « Plus ▾ », the firm pricing included
     nowms = int(time.time() * 1000)
-    hs = [{"id": "h1", "kind": "installation", "company": "HISTO", "centrale": "Toit H", "title": "Toit H", "stage": "pricing_indicatif", "nature": "Engageante", "mail": "luc@histo.fr",
+    hs = [{"id": "h1", "kind": "installation", "company": "HISTO", "centrale": "Toit H", "title": "Toit H", "stage": "pricing_indicatif", "nature": "Engageante", "mail": "luc@histo.test",
            "goDate": "2026-09-01", "createdAt": nowms - 60 * 86400000, "updatedAt": nowms, "deleted": False,
            "stageLog": [{"stage": "collecte", "at": nowms - 60 * 86400000}, {"stage": "pricing_indicatif", "at": nowms - 50 * 86400000}]}]
     page, errors = new_page(browser, {"todo_todo-widget-opportunities": json.dumps(hs),
-        "todo_todo-widget-contacts": json.dumps([{"id": "hc", "firstName": "Luc", "lastName": "Histo", "company": "HISTO", "email": "luc@histo.fr", "phone1": "06 98 76 54 32", "createdAt": 1, "updatedAt": 1, "deleted": False}]),
+        "todo_todo-widget-contacts": json.dumps([{"id": "hc", "firstName": "Luc", "lastName": "Histo", "company": "HISTO", "email": "luc@histo.test", "phone1": "06 98 76 54 32", "createdAt": 1, "updatedAt": 1, "deleted": False}]),
         "todo_todo-widget-tasks": json.dumps([task("ht", "Appeler Luc", archived=True, archivedAt=nowms - 55 * 86400000, opportunityId="h1")])}, viewport={"width": 1300, "height": 900})
     page.goto(URL); page.click('[data-tab="pipeline"]')
     check("Pricing engageant" in page.inner_text(".pipe-card[data-id=h1]"), "pricing: an offer engageante shows « Pricing engageant »")
     page.click(".pipe-card[data-id=h1]")
-    check(page.get_attribute("#opp-detail-body a.os-link[href^='tel:']", "href") == "tel:0698765432" and page.locator("#opp-detail-body a.os-link[href='mailto:luc@histo.fr']").count() >= 1,
+    check(page.get_attribute("#opp-detail-body a.os-link[href^='tel:']", "href") == "tel:0698765432" and page.locator("#opp-detail-body a.os-link[href='mailto:luc@histo.test']").count() >= 1,
           "sheet: the contact's phone and mail are links (found by the mail)")
     page.click("#opp-detail-body .opp-history > summary"); hist = page.inner_text("#opp-detail-body .opp-history")
     check("Opportunité créée" in hist and "Go" in hist and "Fait : Appeler Luc" in hist and "Pricing engageant" in hist, f"sheet: the history lists what happened ({hist[:160]!r})")
@@ -1072,13 +1072,13 @@ with sync_playwright() as p:
     page.close()
 
     # --- Duplicate contacts: offered for merging, links follow the kept card
-    dup_cts = [{"id": "d1", "firstName": "Louis", "lastName": "Catroux", "role": "", "company": "GPX", "email": "l.catroux@exemple.fr", "phone1": "07 00 00 96 58",
+    dup_cts = [{"id": "d1", "firstName": "Louis", "lastName": "Catroux", "role": "", "company": "GPX", "email": "l.catroux@exemple.test", "phone1": "07 00 00 96 58",
                 "phone2": "", "relevance": 0, "comment": "", "createdAt": 1, "updatedAt": 1, "deleted": False},
-               {"id": "d2", "firstName": "Louise", "lastName": "Catroux", "role": "Chargée d'affaires", "company": "GPX", "email": "L.Catroux@exemple.fr",
+               {"id": "d2", "firstName": "Louise", "lastName": "Catroux", "role": "Chargée d'affaires", "company": "GPX", "email": "L.Catroux@exemple.test",
                 "phone1": "07 00 00 96 58", "phone2": "02 00 00 00 11", "relevance": 0, "comment": "", "createdAt": 1, "updatedAt": 5, "deleted": False},
-               {"id": "d3", "firstName": "Paul", "lastName": "Autre", "role": "", "company": "GPX", "email": "p.autre@exemple.fr", "phone1": "", "phone2": "",
+               {"id": "d3", "firstName": "Paul", "lastName": "Autre", "role": "", "company": "GPX", "email": "p.autre@exemple.test", "phone1": "", "phone2": "",
                 "relevance": 0, "comment": "", "createdAt": 1, "updatedAt": 1, "deleted": False}]
-    dup_opp = [{"id": "do", "kind": "installation", "company": "GPX", "centrale": "Toit", "title": "Toit", "prenom": "Louise", "nom": "CATROUX", "mail": "l.catroux@exemple.fr",
+    dup_opp = [{"id": "do", "kind": "installation", "company": "GPX", "centrale": "Toit", "title": "Toit", "prenom": "Louise", "nom": "CATROUX", "mail": "l.catroux@exemple.test",
                 "otherContactIds": ["d1", "d3"], "stage": "collecte", "createdAt": 1, "updatedAt": 1, "deleted": False}]
     dup_mt = [{"id": "m1", "contactId": "d1", "label": "Salon", "date": "2026-10-01", "createdAt": 1, "updatedAt": 1, "deleted": False}]
     page, errors = new_page(browser, {"todo_todo-widget-contacts": json.dumps(dup_cts), "todo_todo-widget-opportunities": json.dumps(dup_opp),
@@ -1166,10 +1166,10 @@ with sync_playwright() as p:
     page.close()
 
     # --- Contacts import: a conflict says which field and where each value comes from
-    imp_ct = [{"id": "ic1", "firstName": "Anne", "lastName": "Roux", "role": "", "company": "Solaris", "email": "anne@exemple.fr", "phone1": "06 11 22 33 44",
+    imp_ct = [{"id": "ic1", "firstName": "Anne", "lastName": "Roux", "role": "", "company": "Solaris", "email": "anne@exemple.test", "phone1": "06 11 22 33 44",
                "phone2": "", "relevance": 0, "comment": "", "createdAt": 1, "updatedAt": 1, "deleted": False}]
     wb = openpyxl.Workbook(); ws = wb.active
-    ws.append(["Prénom", "Nom", "Société", "Email", "Téléphone"]); ws.append(["Anne", "Roux", "Solaris", "anne@exemple.fr", "06 99 88 77 66"])
+    ws.append(["Prénom", "Nom", "Société", "Email", "Téléphone"]); ws.append(["Anne", "Roux", "Solaris", "anne@exemple.test", "06 99 88 77 66"])
     imp = pathlib.Path(tempfile.mkdtemp()) / "contacts.xlsx"; wb.save(imp)
     page, errors = new_page(browser, {"todo_todo-widget-contacts": json.dumps(imp_ct)}, viewport={"width": 1300, "height": 900})
     page.goto(URL); page.click('[data-tab="contacts"]')
@@ -1522,7 +1522,7 @@ with sync_playwright() as p:
 
     # --- Contacts on a phone: no horizontal overflow, delete available in the card
     contacts = [{"id": "c1", "firstName": "Julien", "lastName": "Marchand", "role": "Directeur Commercial", "company": "Alpha Energy",
-                 "email": "j@alpha.fr", "phone1": "0612345678", "phone2": "", "relevance": 4, "comment": "", "createdAt": 1, "updatedAt": 1, "deleted": False}]
+                 "email": "j@alpha.test", "phone1": "0612345678", "phone2": "", "relevance": 4, "comment": "", "createdAt": 1, "updatedAt": 1, "deleted": False}]
     page, errors = new_page(browser, {"todo_todo-widget-contacts": json.dumps(contacts)},
                             viewport={"width": 390, "height": 844}, is_mobile=True, has_touch=True)
     page.goto(URL + "?full")
@@ -1578,12 +1578,12 @@ with sync_playwright() as p:
     page.close()
 
     # --- Pipeline: client → contact → mail, installations grouped in a pricing request, Go, Excel rows
-    MAIL = ("De : Pierre Lacombe <p.lacombe@vergersdulot.fr>\nObjet : Projet centrale PV\n\n"
+    MAIL = ("De : Pierre Lacombe <p.lacombe@vergersdulot.test>\nObjet : Projet centrale PV\n\n"
             "Nous mettrons en service en juin 2027 une centrale photovoltaïque au sol de 2,4 MWc à Prayssac (46220), "
             "lauréate de l'appel d'offres simplifié de la CRE. Production attendue : environ 3 100 MWh par an.\n\n"
             "Cordialement,\nPierre Lacombe\nGérant\nSCEA LES VERGERS DU LOT\n06 71 23 45 89")
     legacy = [{"id": "o1", "company": "Solaris", "title": "AO Q3", "stage": "pricing", "taskId": None, "createdAt": 1, "updatedAt": 1, "deleted": False}]
-    anne = [{"id": "c1", "firstName": "Anne", "lastName": "Roux", "role": "Asset manager", "company": "Solaris", "email": "anne@urba.fr",
+    anne = [{"id": "c1", "firstName": "Anne", "lastName": "Roux", "role": "Asset manager", "company": "Solaris", "email": "anne@urba.test",
              "phone1": "0611223344", "phone2": "", "relevance": 3, "comment": "", "createdAt": 1, "updatedAt": 1, "deleted": False}]
     page, errors = new_page(browser, {"todo_todo-widget-opportunities": json.dumps(legacy), "todo_todo-widget-contacts": json.dumps(anne),
                                       "todo_todo-widget-clients": json.dumps(["Solaris"])}, viewport={"width": 1300, "height": 850})
@@ -1594,7 +1594,7 @@ with sync_playwright() as p:
     page.click("#opp-add-btn"); page.fill("#pq1-company", "solaris")
     check("Client existant" in page.inner_text("#pq1-company-hint"), "step 1 recognises a known client")
     page.click("#pq-next-btn")
-    check(page.input_value("#pq-s-mail") == "anne@urba.fr", "its only contact is used by default")
+    check(page.input_value("#pq-s-mail") == "anne@urba.test", "its only contact is used by default")
     page.click("#pq-cancel-btn")
     page.click("#opp-add-btn"); page.fill("#pq1-company", "SCEA Les Vergers du Lot")
     check("Nouveau client" in page.inner_text("#pq1-company-hint"), "step 1 flags a new client")
@@ -1609,7 +1609,7 @@ with sync_playwright() as p:
     inst = [o for o in opps() if o.get("kind") == "installation" and o["company"] == "SCEA Les Vergers du Lot"]
     req = [o for o in opps() if o.get("kind") == "request"]
     check(len(inst) == 2 and len(req) == 1 and all(o["requestId"] == req[0]["id"] for o in inst), "two installations grouped in one request")
-    check(any(c["email"] == "p.lacombe@vergersdulot.fr" for c in stored(page, "todo-widget-contacts")), "contact created from the mail")
+    check(any(c["email"] == "p.lacombe@vergersdulot.test" for c in stored(page, "todo-widget-contacts")), "contact created from the mail")
     t = [t for t in stored(page, "todo-widget-tasks") if t.get("opportunityId") == req[0]["id"]]
     check(len(t) == 1 and t[0]["title"].startswith("Appeler Pierre"), "one call task for the whole request")
     page.click(".pipe-req-card .pipe-card-title")
@@ -1705,10 +1705,10 @@ with sync_playwright() as p:
     # --- Contacts: « Coller une signature » pre-fills the contact form
     page, errors = new_page(browser)
     page.goto(URL); page.click('[data-tab="contacts"]'); page.click("#contacts-in-btn"); page.click("#sig-paste-btn")
-    page.fill("#sig-paste-text", "M. Jean DUPONT\nPrésident\nSAS SOLAIRE DU MIDI\nTél : 04 67 11 22 33 - Mob. : 06 12 34 56 78\njean.dupont@solairedumidi.fr")
+    page.fill("#sig-paste-text", "M. Jean DUPONT\nPrésident\nSAS SOLAIRE DU MIDI\nTél : 04 67 11 22 33 - Mob. : 06 12 34 56 78\njean.dupont@solairedumidi.test")
     page.click("#sig-paste-analyze")
     got = [page.input_value(s_) for s_ in ("#ct-first", "#ct-last", "#ct-role", "#ct-company", "#ct-email", "#ct-phone1", "#ct-phone2")]
-    check(got == ["Jean", "Dupont", "Président", "SAS SOLAIRE DU MIDI", "jean.dupont@solairedumidi.fr", "06 12 34 56 78", "04 67 11 22 33"], f"signature fills the contact form ({got})")
+    check(got == ["Jean", "Dupont", "Président", "SAS SOLAIRE DU MIDI", "jean.dupont@solairedumidi.test", "06 12 34 56 78", "04 67 11 22 33"], f"signature fills the contact form ({got})")
     check(not errors, f"no page errors ({errors})")
     page.close()
 
@@ -1716,13 +1716,13 @@ with sync_playwright() as p:
     page, errors = new_page(browser)
     page.goto(URL); page.click('[data-tab="pipeline"]'); page.click("#opp-add-btn")
     page.click("#pq1-sig-box summary")
-    page.fill("#pq1-sig", "Camille DUBOIS\nResponsable financement de projets\nRHÔNE ÉNERGIES SAS\nT. 04 75 00 00 06\nM. 06 77 00 00 06\ncamille.dubois@rhone-energies.fr")
+    page.fill("#pq1-sig", "Camille DUBOIS\nResponsable financement de projets\nRHÔNE ÉNERGIES SAS\nT. 04 75 00 00 06\nM. 06 77 00 00 06\ncamille.dubois@rhone-energies.test")
     page.wait_for_timeout(500)
     got = [page.input_value(x) for x in ("#pq1-company", "#pq1-prenom", "#pq1-nom", "#pq1-qualite", "#pq1-tel", "#pq1-tel2", "#pq1-mail")]
-    check(got == ["RHÔNE ÉNERGIES SAS", "Camille", "DUBOIS", "Responsable financement de projets", "06 77 00 00 06", "04 75 00 00 06", "camille.dubois@rhone-energies.fr"],
+    check(got == ["RHÔNE ÉNERGIES SAS", "Camille", "DUBOIS", "Responsable financement de projets", "06 77 00 00 06", "04 75 00 00 06", "camille.dubois@rhone-energies.test"],
           f"step 1: a pasted signature fills client and contact ({got})")
     # a second signature (another person) becomes an additional contact; the main one stays
-    page.fill("#pq1-sig", "Marc LEROY\nDirecteur technique\nRHÔNE ÉNERGIES SAS\n06 11 11 11 11\nmarc.leroy@rhone-energies.fr")
+    page.fill("#pq1-sig", "Marc LEROY\nDirecteur technique\nRHÔNE ÉNERGIES SAS\n06 11 11 11 11\nmarc.leroy@rhone-energies.test")
     check(eventually(lambda: page.input_value("#pq1-prenom") == "Camille" and page.input_value("#pq1-extras input[data-xk='prenom']") == "Marc", 3000), "a second signature adds a second contact")
     page.click("#pq1-add-extra"); page.fill("#pq1-extras input[data-x='1'][data-xk='prenom']", "Lucie"); page.fill("#pq1-extras input[data-x='1'][data-xk='nom']", "Roy")
     check(page.locator("#pq1-principal [data-principal]").count() == 3, "the main contact can be chosen among the three people")
@@ -1759,7 +1759,7 @@ with sync_playwright() as p:
     page, errors = new_page(browser)
     page.goto(URL); page.click('[data-tab="pipeline"]'); page.click("#opp-add-btn"); page.fill("#pq1-company", "SEM RESET"); page.click("#pq-next-btn")
     check(not page.is_visible("#pq-restart"), "form: nothing to start over before a mail is pasted")
-    page.fill("#pq-mail", "De : H R <h@sem.fr>\nObjet : Nos centrales\n\nNous avons deux projets :\n- Gymnase : 250 kWc\n- École : 100 kWc\nH R")
+    page.fill("#pq-mail", "De : H R <h@sem.test>\nObjet : Nos centrales\n\nNous avons deux projets :\n- Gymnase : 250 kWc\n- École : 100 kWc\nH R")
     check(eventually(lambda: page.input_value("#pq-0-centrale") == "Gymnase" and page.input_value("#pq-1-centrale") == "École" and page.is_visible("#pq-restart"), 3000), "form: the mail fills two installations")
     page.click("[data-clear='1']"); page.click("#choice-btns >> text=Vider"); page.wait_for_timeout(100)
     check(page.input_value("#pq-1-centrale") == "" and page.input_value("#pq-1-kwc") == "" and page.input_value("#pq-0-centrale") == "Gymnase", "form: « Vider » clears one installation only")
@@ -1774,7 +1774,7 @@ with sync_playwright() as p:
     # --- a mail listing its plants one per line: each one's P50, town and postal code; the shared terms (duration) on every plant
     page, errors = new_page(browser)
     page.goto(URL); page.click('[data-tab="pipeline"]'); page.click("#opp-add-btn"); page.fill("#pq1-company", "SCEA LIGNES"); page.click("#pq-next-btn")
-    page.fill("#pq-mail", "De : P L <p@lignes.fr>\nObjet : Projets PV\n\nNous avons deux centrales lauréates AO CRE :\n- Toiture Les Pins : 2,4 MWc, MES prévue juin 2027, P50 2 900 MWh/an, Prayssac (46220)\n"
+    page.fill("#pq-mail", "De : P L <p@lignes.test>\nObjet : Projets PV\n\nNous avons deux centrales lauréates AO CRE :\n- Toiture Les Pins : 2,4 MWc, MES prévue juin 2027, P50 2 900 MWh/an, Prayssac (46220)\n"
               "- Ombrière Le Lac : 1,8 MWc, MES septembre 2027, P50 2 100 MWh/an, Puy-l'Évêque (46700)\nPouvez-vous nous faire une offre d'agrégation sur 3 ans ?\nP L"); page.wait_for_timeout(500)
     got = [[page.input_value(f"#pq-{i}-{k}") for k in ("mwh", "commune", "cp", "duree", "particularites")] for i in (0, 1)]
     check(got == [["2900", "Prayssac", "46220", "3", "Toiture · Lauréat AO"], ["2100", "Puy-l'Évêque", "46700", "3", "Ombrière · Lauréat AO"]],
@@ -1785,7 +1785,7 @@ with sync_playwright() as p:
     # --- Qualification: the number of plants announced by the mail is checked against the installations found
     page, errors = new_page(browser)
     page.goto(URL); page.click('[data-tab="pipeline"]'); page.click("#opp-add-btn"); page.fill("#pq1-company", "SEM"); page.click("#pq-next-btn")
-    page.fill("#pq-mail", "De : H R <h@sem.fr>\nObjet : Nos centrales\n\nNous avons trois projets :\n- Gymnase : 250 kWc\n- École : 100 kWc\nSoit une puissance totale de 600 kWc.\nH R")
+    page.fill("#pq-mail", "De : H R <h@sem.test>\nObjet : Nos centrales\n\nNous avons trois projets :\n- Gymnase : 250 kWc\n- École : 100 kWc\nSoit une puissance totale de 600 kWc.\nH R")
     page.wait_for_timeout(500)
     box = page.inner_text("#pq-count-box")
     check("annonce 3 installations" in box and "600 kWc" in box, f"missing plant flagged against the mail ({box!r})")
@@ -1910,7 +1910,7 @@ with sync_playwright() as p:
         sl.querySelectorAll('.ps-fill > table').forEach(t=>{ if(t.offsetHeight>t.parentNode.clientHeight+2) out.push('overflow '+k); });
         document.querySelector('#present-overlay').dispatchEvent(new KeyboardEvent('keydown',{key:'ArrowRight',bubbles:true})); } return out; })()""")
     check(not any(isinstance(x, str) for x in fits) and all(x > -3 for x in fits if not isinstance(x, str)), f"presentation: nothing runs over a slide ({fits})")
-    page.route("https://cdn.jsdelivr.net/npm/pptxgenjs**", lambda r: r.fulfill(status=200, content_type="application/javascript", body="""
+    page.route("**/vendor/pptxgenjs-*.js", lambda r: r.fulfill(status=200, content_type="application/javascript", body="""
       window.__pp={ slides:[], file:null }; window.PptxGenJS=function(){ this.addSlide=()=>{ const s={ texts:[], tables:0, shapes:0 }; window.__pp.slides.push(s);
         return { addText:(t)=>s.texts.push(Array.isArray(t)?t.map(x=>x.text).join(''):String(t)), addShape:()=>s.shapes++, addTable:()=>s.tables++, set background(v){ s.bg=v; } }; };
         this.writeFile=o=>{ window.__pp.file=o.fileName; return Promise.resolve(); }; };"""))
@@ -2099,7 +2099,7 @@ with sync_playwright() as p:
     #     a contact from the Outlook macro is completed from its signature; no AI key kept while the AI is off
     b64 = lambda o: base64.b64encode(json.dumps(o).encode()).decode()
     puts, held = [], []
-    inbox = [{"id": "ci1", "firstName": "", "lastName": "", "email": "", "forwarded": True, "signature": "Claire Martin\nResponsable énergie\nHélio Ouest\nclaire.martin@helio-ouest.fr\n06 12 34 56 78"}]
+    inbox = [{"id": "ci1", "firstName": "", "lastName": "", "email": "", "forwarded": True, "signature": "Claire Martin\nResponsable énergie\nHélio Ouest\nclaire.martin@helio-ouest.test\n06 12 34 56 78"}]
     def gh3(route):
         u, m = route.request.url, route.request.method
         if u.endswith("/repos/o/r"): route.fulfill(status=200, content_type="application/json", body=json.dumps({"private": True}))
@@ -2162,9 +2162,9 @@ with sync_playwright() as p:
           f"sync merge on its own: one-side edits taken, deletions kept, logs and ticks united, newer wins a real clash, note lines merged ({mg})")
     rc = page.evaluate("""()=>{ const f=window.__todo.nextRecurDate; return [f('2026-01-31','mensuel',31), f('2028-01-31','mensuel',31), f('2026-12-28','hebdo'), f('2026-12-31','quotidien'), f('2026-02-28','mensuel',31), f('2026-10-24','mensuel')]; }""")
     check(rc == ["2026-02-28", "2028-02-29", "2027-01-04", "2027-01-01", "2026-03-31", "2026-11-24"], f"recurrences: month end, leap year, year change, the day kept ({rc})")
-    vc = page.evaluate("""()=>window.__todo.parseVcf('BEGIN:VCARD\\r\\nVERSION:3.0\\r\\nN:Lefèvre;Élodie;;;\\r\\nFN:Élodie Lefèvre\\r\\nORG:Hélio Ouest;\\r\\nTITLE:Directrice des achats et de l\\r\\n a logistique\\r\\nTEL;TYPE=CELL:+33 6 12 34 56 78\\r\\nTEL;TYPE=WORK:02 40 00 00 00\\r\\nEMAIL:E.Lefevre@Helio.fr\\r\\nEND:VCARD\\r\\nBEGIN:VCARD\\r\\nVERSION:3.0\\r\\nTEL:06 00 00 00 01\\r\\nEND:VCARD\\r\\n')""")
+    vc = page.evaluate("""()=>window.__todo.parseVcf('BEGIN:VCARD\\r\\nVERSION:3.0\\r\\nN:Lefèvre;Élodie;;;\\r\\nFN:Élodie Lefèvre\\r\\nORG:Hélio Ouest;\\r\\nTITLE:Directrice des achats et de l\\r\\n a logistique\\r\\nTEL;TYPE=CELL:+33 6 12 34 56 78\\r\\nTEL;TYPE=WORK:02 40 00 00 00\\r\\nEMAIL:E.Lefevre@Helio.test\\r\\nEND:VCARD\\r\\nBEGIN:VCARD\\r\\nVERSION:3.0\\r\\nTEL:06 00 00 00 01\\r\\nEND:VCARD\\r\\n')""")
     check(len(vc) >= 1 and vc[0]["firstName"] == "Élodie" and vc[0]["lastName"] == "Lefèvre" and vc[0]["company"] == "Hélio Ouest" and vc[0]["role"] == "Directrice des achats et de la logistique"
-          and vc[0]["phone1"] == "06 12 34 56 78" and vc[0]["phone2"] == "02 40 00 00 00" and vc[0]["email"] == "e.lefevre@helio.fr",
+          and vc[0]["phone1"] == "06 12 34 56 78" and vc[0]["phone2"] == "02 40 00 00 00" and vc[0]["email"] == "e.lefevre@helio.test",
           f"vCard: accents, folded line, two phones, mail in lower case ({vc[:1]})")
     check(not errors, f"no page errors ({errors})")
     page.close()
@@ -2247,7 +2247,7 @@ with sync_playwright() as p:
     page.close()
 
     # an Excel attachment that can't be read is said, not silently dropped
-    eml = ("From: Paul <paul@example.fr>\r\nSubject: Caracteristiques\r\nMIME-Version: 1.0\r\nContent-Type: multipart/mixed; boundary=XX\r\n\r\n--XX\r\nContent-Type: text/plain; charset=utf-8\r\n\r\n"
+    eml = ("From: Paul <paul@example.test>\r\nSubject: Caracteristiques\r\nMIME-Version: 1.0\r\nContent-Type: multipart/mixed; boundary=XX\r\n\r\n--XX\r\nContent-Type: text/plain; charset=utf-8\r\n\r\n"
            "Bonjour, ci-joint le fichier.\r\n--XX\r\nContent-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet; name=\"centrales.xlsx\"\r\nContent-Disposition: attachment; filename=\"centrales.xlsx\"\r\n"
            "Content-Transfer-Encoding: base64\r\n\r\n" + base64.b64encode(b"PK\x03\x04" + bytes(range(200))).decode() + "\r\n--XX--\r\n")
     ef = pathlib.Path(tempfile.mkdtemp()) / "mail.eml"; ef.write_text(eml, encoding="utf-8")
@@ -2402,20 +2402,20 @@ with sync_playwright() as p:
     page.close()
 
     # --- Phone → app: a .vcf file; a known contact only gets its empty boxes; a business card photo fills a new contact
-    known = [{"id": "kc", "firstName": "Anne", "lastName": "Roux", "company": "Solaris", "email": "anne@solaris.fr", "phone1": "", "phone2": "", "role": "", "comment": "", "relevance": 0, "createdAt": 1, "updatedAt": 1, "deleted": False}]
-    vcf = ("BEGIN:VCARD\r\nVERSION:3.0\r\nN:Roux;Anne;;;\r\nFN:Anne Roux\r\nEMAIL;TYPE=INTERNET:anne@solaris.fr\r\nTEL;TYPE=CELL:+33 6 11 22 33 44\r\nEND:VCARD\r\n"
-           "BEGIN:VCARD\r\nVERSION:3.0\r\nN:Martin;Paul;;;\r\nORG:Ventus;\r\nTITLE:Gérant\r\nEMAIL:paul@ventus.fr\r\nTEL;TYPE=WORK:01 02 03 04 05\r\nEND:VCARD\r\n")
+    known = [{"id": "kc", "firstName": "Anne", "lastName": "Roux", "company": "Solaris", "email": "anne@solaris.test", "phone1": "", "phone2": "", "role": "", "comment": "", "relevance": 0, "createdAt": 1, "updatedAt": 1, "deleted": False}]
+    vcf = ("BEGIN:VCARD\r\nVERSION:3.0\r\nN:Roux;Anne;;;\r\nFN:Anne Roux\r\nEMAIL;TYPE=INTERNET:anne@solaris.test\r\nTEL;TYPE=CELL:+33 6 11 22 33 44\r\nEND:VCARD\r\n"
+           "BEGIN:VCARD\r\nVERSION:3.0\r\nN:Martin;Paul;;;\r\nORG:Ventus;\r\nTITLE:Gérant\r\nEMAIL:paul@ventus.test\r\nTEL;TYPE=WORK:01 02 03 04 05\r\nEND:VCARD\r\n")
     vf = pathlib.Path(tempfile.mkdtemp()) / "contacts.vcf"; vf.write_text(vcf, encoding="utf-8")
     page, errors = new_page(browser, {"todo_todo-widget-contacts": json.dumps(known)}, viewport={"width": 1300, "height": 850})
     page.route("**/tesseract.min.js", lambda r: r.fulfill(status=200, content_type="application/javascript",
-               body="window.Tesseract={ recognize: async()=>({ data:{ text:'Claire Dubois\\nDirectrice des achats\\nHélio Ouest\\nclaire.dubois@helio-ouest.fr\\n06 12 34 56 78' } }) };"))
+               body="window.Tesseract={ recognize: async()=>({ data:{ text:'Claire Dubois\\nDirectrice des achats\\nHélio Ouest\\nclaire.dubois@helio-ouest.test\\n06 12 34 56 78' } }) };"))
     page.goto(URL); page.click('[data-tab="contacts"]')
     page.set_input_files("#vcf-import-input", str(vf)); page.wait_for_timeout(200)
     summ = page.inner_text("#phone-import-overlay .pi-sum")
     check("2 contacts lus : 1 nouveau, 1 déjà connu à compléter" in summ, f"phone import: new and known told apart ({summ!r})")
     page.click("#phone-import-overlay .pi-go"); page.wait_for_timeout(150)
     cs = {c["email"]: c for c in stored(page, "todo-widget-contacts") if not c.get("deleted")}
-    check(len(cs) == 2 and cs["anne@solaris.fr"]["phone1"] == "06 11 22 33 44" and cs["anne@solaris.fr"]["company"] == "Solaris" and cs["paul@ventus.fr"]["company"] == "Ventus" and cs["paul@ventus.fr"]["role"] == "Gérant",
+    check(len(cs) == 2 and cs["anne@solaris.test"]["phone1"] == "06 11 22 33 44" and cs["anne@solaris.test"]["company"] == "Solaris" and cs["paul@ventus.test"]["company"] == "Ventus" and cs["paul@ventus.test"]["role"] == "Gérant",
           f"phone import: the new one added, the known one only completed ({[(c['firstName'], c['phone1'], c['company']) for c in cs.values()]})")
     page.click("#phone-import-overlay .pi-close")
     # on an iPhone the address book can't be read: the app first says how to export it as a file
@@ -2424,7 +2424,7 @@ with sync_playwright() as p:
     page.click("#contacts-in-btn"); page.click("#vcf-import-btn"); page.wait_for_timeout(150); said = page.evaluate("window.__dlg.said")
     check(said and "Exporter" in said[0] and ".vcf" in said[0], f"phone import on iPhone: how to export the contacts first ({said})")
     page.set_input_files("#card-scan-input", files=[{"name": "carte.jpg", "mimeType": "image/jpeg", "buffer": b"fake"}])
-    check(eventually(lambda: page.input_value("#ct-first") == "Claire" and page.input_value("#ct-email") == "claire.dubois@helio-ouest.fr" and "Directrice" in page.input_value("#ct-role"), 3000),
+    check(eventually(lambda: page.input_value("#ct-first") == "Claire" and page.input_value("#ct-email") == "claire.dubois@helio-ouest.test" and "Directrice" in page.input_value("#ct-role"), 3000),
           f"business card: the photo's text fills a new contact ({page.input_value('#ct-first')!r}, {page.input_value('#ct-role')!r})")
     check(not errors, f"no page errors ({errors})")
     page.close()
@@ -2463,9 +2463,9 @@ with sync_playwright() as p:
     # --- Pipeline: a mail listing several plants gives one installation each; quotes in a mail never reach the HTML
     page, errors = new_page(browser)
     page.goto(URL); page.click('[data-tab="pipeline"]'); page.click("#opp-add-btn"); page.fill("#pq1-company", "HELIO OUEST SAS"); page.click("#pq-next-btn")
-    page.fill("#pq-mail", "De : R C <r@helio.fr>\nObjet : x\n\nBonjour,\n- Centrale de Cholet (49) : 1,2 MWc, MES 03/2027\n- Centrale de Saumur (49) : 800 kWc\nCordialement,\nRomain Chevalier")
+    page.fill("#pq-mail", "De : R C <r@helio.test>\nObjet : x\n\nBonjour,\n- Centrale de Cholet (49) : 1,2 MWc, MES 03/2027\n- Centrale de Saumur (49) : 800 kWc\nCordialement,\nRomain Chevalier")
     check(eventually(lambda: page.input_value("#pq-1-centrale") == "Centrale de Saumur" and page.input_value("#pq-0-mesPrev") == "Mars 2027", 3000), "mail listing two plants → two installations")
-    page.fill("#pq-mail", "De\tObjet\tReçu\tTaille\tCatégories\t\nPierre Dupont;  Paul Guérin\tRE: Projets PV\tlun. 16:07\t318 Ko\tTodo-synced")
+    page.fill("#pq-mail", "De\tObjet\tReçu\tTaille\tCatégories\t\nPierre Dupont;  Marc Testard\tRE: Projets PV\tlun. 16:07\t318 Ko\tTodo-synced")
     check(eventually(lambda: page.is_visible("#pq-mail-warning"), 3000), "pasting the Outlook list line explains how to get the mail content")
     page.fill("#pq-0-centrale", 'x" autofocus onfocus="window.__xss=1" y="')
     page.select_option("#pq-0-install", "Eolien"); page.wait_for_timeout(300)  # re-renders the form with the value in an attribute
@@ -2498,10 +2498,10 @@ with sync_playwright() as p:
     page.close()
 
     # --- A mail thread with several people: all detected, ticked or not, any of them can become the main contact
-    thread = """De : Jean Martin <j.martin@exemple-solaire.fr>
+    thread = """De : Jean Martin <j.martin@exemple-solaire.test>
 Envoyé : mardi 20 octobre 2026 10:12
 À : Paul Collègue <paul.collegue@selfee.fr>
-Cc : Sophie Durand <s.durand@exemple-solaire.fr>
+Cc : Sophie Durand <s.durand@exemple-solaire.test>
 Objet : RE: Centrale de Villers
 
 Bonjour,
@@ -2513,12 +2513,12 @@ Gérant
 
 De : Paul Collègue <paul.collegue@selfee.fr>
 Envoyé : lundi 19 octobre 2026 09:00
-À : Paul Bernard <p.bernard@exemple-solaire.fr>
+À : Paul Bernard <p.bernard@exemple-solaire.test>
 Objet : Centrale de Villers
 
 Bonjour, pouvez-vous m'envoyer les caractéristiques ?
 
-De : Paul Bernard <p.bernard@exemple-solaire.fr>
+De : Paul Bernard <p.bernard@exemple-solaire.test>
 Envoyé : vendredi 16 octobre 2026 17:40
 À : contact@selfee.fr
 Objet : Centrale de Villers
@@ -2589,10 +2589,10 @@ Responsable technique
     page.goto(URL); page.click('[data-tab="pipeline"]'); page.click("#opp-add-btn"); page.fill("#pq1-company", "SCEA Y"); page.click("#pq-next-btn")
     # a mail saved as .eml (new Outlook, Outlook web): its text and its attached Excel, also inside a forwarded mail
     from email.message import EmailMessage
-    inner = EmailMessage(); inner["From"] = "Jean Martin <j.martin@exemple-solaire.fr>"; inner["Subject"] = "Nos centrales"
+    inner = EmailMessage(); inner["From"] = "Jean Martin <j.martin@exemple-solaire.test>"; inner["Subject"] = "Nos centrales"
     inner.set_content("Bonjour,\nVoici la liste de nos centrales.\nJean MARTIN\nGérant\n06 10 20 30 40")
     inner.add_attachment(xlsx.read_bytes(), maintype="application", subtype="vnd.openxmlformats-officedocument.spreadsheetml.sheet", filename="Caractéristiques centrales.xlsx")
-    outer = EmailMessage(); outer["From"] = "Paul Collègue <paul@exemple-agregateur.fr>"; outer["Subject"] = "TR: Nos centrales"
+    outer = EmailMessage(); outer["From"] = "Paul Collègue <paul@exemple-agregateur.test>"; outer["Subject"] = "TR: Nos centrales"
     outer.set_content("Pour info, à qualifier.")
     outer.add_attachment(inner)
     eml = pathlib.Path(tempfile.mkdtemp()) / "mail.eml"; eml.write_bytes(bytes(outer))
@@ -2615,9 +2615,9 @@ Responsable technique
     ws.append(["", 2026, "PGU", None, "BOAMP", "N/A", "X", "", "CR", "", "Grand Est", "", "En attente", None, "", "X", "Toit", "PV", 500, 600, "", ""])
     d = wb.create_sheet("Dashboard"); d.append(["", "Désignation", "2026", "2027"]); d.append(["", "Object. Agrégation Vol.", 150, 300])
     parc = pathlib.Path(tempfile.mkdtemp()) / "suivi.xlsx"; wb.save(parc)
-    dupes = [{"id": "c1", "firstName": "Anne", "lastName": "Roux", "role": "Asset", "company": "Solaris", "email": "anne@urba.fr", "phone1": "0611223344", "phone2": "",
+    dupes = [{"id": "c1", "firstName": "Anne", "lastName": "Roux", "role": "Asset", "company": "Solaris", "email": "anne@urba.test", "phone1": "0611223344", "phone2": "",
               "relevance": 0, "comment": "", "createdAt": 1, "updatedAt": 1, "deleted": False},
-             {"id": "c2", "firstName": "Anne", "lastName": "Roux", "role": "", "company": "Solaris", "email": "ANNE@urba.fr", "phone1": "", "phone2": "",
+             {"id": "c2", "firstName": "Anne", "lastName": "Roux", "role": "", "company": "Solaris", "email": "ANNE@urba.test", "phone1": "", "phone2": "",
               "relevance": 0, "comment": "", "createdAt": 1, "updatedAt": 2, "deleted": False}]
     page, errors = new_page(browser, {"todo_todo-widget-contacts": json.dumps(dupes)}, accept_downloads=True)
     page.goto(URL); page.click('[data-tab="parc"]')
@@ -2697,7 +2697,7 @@ Responsable technique
     with page.expect_download() as dl:
         page.click("#vcf-go")
     card = pathlib.Path(dl.value.path()).read_text()
-    check(card.count("BEGIN:VCARD") == 1 and "TEL;TYPE=CELL:0611223344" in card and "anne@urba.fr" in card, "vcf: merged card keeps phone and email")
+    check(card.count("BEGIN:VCARD") == 1 and "TEL;TYPE=CELL:0611223344" in card and "anne@urba.test" in card, "vcf: merged card keeps phone and email")
     page.click("#vcf-close"); page.click("#contacts-out-btn"); page.click("#vcf-btn")
     check(page.inner_text("#vcf-new") == "0", "vcf: a second export only sends new contacts")
     check(not errors, f"no page errors ({errors})")

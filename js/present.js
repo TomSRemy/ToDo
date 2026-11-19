@@ -8,7 +8,7 @@ window.TodoPresent=(function(){
     let meetColsOpen=false;   // the « Colonnes ▾ » chips shown
   // ---------- « Présenter » : the meeting as a consultant's deck (pyramid principle): the answer on slide 1, then one message
   // per slide that details it — an action title (a sentence with a number), one exhibit, « À retenir », source and page; the deals in appendix ----------
-  const loadPptx=()=>loadScript('https://cdn.jsdelivr.net/npm/pptxgenjs@3.12.0/dist/pptxgen.bundle.js', ()=>!!window.PptxGenJS, 'PowerPoint');
+  const loadPptx=()=>loadScript('vendor/pptxgenjs-3.12.0.bundle.js', ()=>!!window.PptxGenJS, 'PowerPoint');
 
   const pxHex=c=>{ const m=/rgba?\(\s*([\d.]+)[,\s]+([\d.]+)[,\s]+([\d.]+)(?:\s*[,/]\s*([\d.]+))?/.exec(c||''); if(!m || (m[4]!=null && +m[4]<0.08)) return null; return [m[1],m[2],m[3]].map(x=>Math.round(+x).toString(16).padStart(2,'0')).join('').toUpperCase(); };
   function slideToPptx(pptx, el){

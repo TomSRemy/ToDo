@@ -17,12 +17,12 @@ Bien cordialement,
 Nathalie Vidal
 Chargée d’affaires Énergies
 Crédit Agricole Pyrénées Gascogne
-nathalie.vidal@ca-pyrenees-gascogne.fr
+nathalie.vidal@ca-pyrenees-gascogne.test
 
 -----Message d’origine-----
-De : Pierre Lacombe <p.lacombe@vergersdulot.fr>
+De : Pierre Lacombe <p.lacombe@vergersdulot.test>
 Envoyé : lundi 13 octobre 2026 09:42
-À : Nathalie Vidal <nathalie.vidal@ca-pyrenees-gascogne.fr>
+À : Nathalie Vidal <nathalie.vidal@ca-pyrenees-gascogne.test>
 Objet : Projet centrale PV
 
 Bonjour Madame,
@@ -36,12 +36,12 @@ Gérant
 SCEA LES VERGERS DU LOT
 06 71 23 45 89""",
         "expect": {"producteur": "SCEA LES VERGERS DU LOT", "prenom": "Pierre", "nom": "LACOMBE", "qualite": "Gérant", "tel": "06 71 23 45 89",
-                   "mail": "p.lacombe@vergersdulot.fr", "origine": "Crédit Agricole", "ca": "CR Pyrénées Gascogne", "dept": "46 - Lot",
+                   "mail": "p.lacombe@vergersdulot.test", "origine": "Crédit Agricole", "ca": "CR Pyrénées Gascogne", "dept": "46 - Lot",
                    "region": "Occitanie", "install": "PV", "contrat": "AOS CRE", "kwc": "2400", "mwh": "3100", "mesPrev": "Juin 2027", "duree": "3"},
     },
     {
         "name": "Direct, signature M. + Président, adresse complète",
-        "mail": """De : Jean Dupont <jean.dupont@solairedumidi.fr>
+        "mail": """De : Jean Dupont <jean.dupont@solairedumidi.test>
 Objet : Demande d'offre d'agrégation
 
 Bonjour,
@@ -56,14 +56,14 @@ Président
 SAS SOLAIRE DU MIDI
 12 route de Pézenas, 34500 Béziers
 Tél : 04 67 11 22 33 - Mob. : 06 12 34 56 78
-www.solairedumidi.fr""",
+www.solairedumidi.test""",
         "expect": {"producteur": "SAS SOLAIRE DU MIDI", "prenom": "Jean", "nom": "DUPONT", "qualite": "Président", "tel": "06 12 34 56 78",
-                   "mail": "jean.dupont@solairedumidi.fr", "origine": "Contact direct", "dept": "34 - Hérault", "region": "Occitanie",
+                   "mail": "jean.dupont@solairedumidi.test", "origine": "Contact direct", "dept": "34 - Hérault", "region": "Occitanie",
                    "install": "PV", "contrat": "AO CRE CR", "kwc": "4980", "mwh": "6900", "mesPrev": "15/09/2026", "duree": "5"},
     },
     {
         "name": "Signature avec tirets, nom composé, Directeur Général",
-        "mail": """De : Jean-Marc Leroy <jm.leroy@energies-nouvelles.com>
+        "mail": """De : Jean-Marc Leroy <jm.leroy@energies-nouvelles.test>
 Objet : Parc éolien de la Haute-Borne
 
 Madame, Monsieur,
@@ -78,7 +78,7 @@ Directeur Général
 ENERGIES NOUVELLES SARL
 +33 (0)3 26 45 67 89""",
         "expect": {"producteur": "ENERGIES NOUVELLES SARL", "prenom": "Jean-Marc", "nom": "LEROY", "qualite": "Directeur Général",
-                   "tel": "03 26 45 67 89", "mail": "jm.leroy@energies-nouvelles.com", "origine": "Contact direct", "dept": "51 - Marne",
+                   "tel": "03 26 45 67 89", "mail": "jm.leroy@energies-nouvelles.test", "origine": "Contact direct", "dept": "51 - Marne",
                    "region": "Grand Est", "install": "Eolien", "contrat": "AO CRE", "kwc": "18000", "mwh": "42000", "mesPrev": "Mars 2028",
                    "duree": "3", "centrale": "Parc éolien de la Haute-Borne"},
     },
@@ -91,14 +91,14 @@ Commune de Pau
 Objet du marché : agrégation et achat de l'électricité produite par 3 centrales photovoltaïques en toiture (puissance totale 750 kWc), sortie d'obligation d'achat.
 Département de publication : 64
 Date limite de réception des offres : 14/11/2026
-Contact : service énergie, energie@ville-pau.fr, 05 59 00 00 12""",
+Contact : service énergie, energie@ville-pau.test, 05 59 00 00 12""",
         "expect": {"producteur": "COMMUNE DE PAU", "origine": "BOAMP", "dept": "64 - Pyrénées-Atlantiques", "region": "Nouvelle-Aquitaine",
-                   "install": "PV", "contrat": "Sortie d'OA / CR", "kwc": "750", "tel": "05 59 00 00 12", "mail": "energie@ville-pau.fr"},
+                   "install": "PV", "contrat": "Sortie d'OA / CR", "kwc": "750", "tel": "05 59 00 00 12", "mail": "energie@ville-pau.test"},
     },
     {
         "name": "Gmail forward, signature sans formule",
         "mail": """---------- Forwarded message ---------
-De : Sophie Martin-Durand <sophie.martindurand@gmail.com>
+De : Sophie Martin-Durand <sophie.martindurand@gmail.test>
 Date: mar. 7 oct. 2026 à 18:02
 Subject: Centrale toiture GAEC
 To: <contact@selfee.fr>
@@ -110,29 +110,29 @@ Sophie Martin-Durand
 GAEC du Moulin Blanc
 06.45.78.12.90""",
         "expect": {"producteur": "GAEC DU MOULIN BLANC", "prenom": "Sophie", "nom": "MARTIN-DURAND", "tel": "06 45 78 12 90",
-                   "mail": "sophie.martindurand@gmail.com", "origine": "Contact direct", "dept": "56 - Morbihan", "region": "Bretagne",
+                   "mail": "sophie.martindurand@gmail.test", "origine": "Contact direct", "dept": "56 - Morbihan", "region": "Bretagne",
                    "install": "PV", "contrat": "Sortie d'OA / CR", "kwc": "500"},
     },
     {
         "name": "Crédit Agricole Toulouse 31 en clair, T3",
-        "mail": """De : Marc Rouanet <marc.rouanet@ca-toulouse31.fr>
+        "mail": """De : Marc Rouanet <marc.rouanet@ca-toulouse31.test>
 Objet : Mise en relation - EARL Bastide
 
 Bonjour,
 Mon client l'EARL Bastide (Haute-Garonne) met en service au T3 2027 une ombrière photovoltaïque de 1 200 kWc. Il souhaite être contacté.
-Ses coordonnées : Laurent Bastide, 06 78 90 12 34, earl.bastide@orange.fr
+Ses coordonnées : Laurent Bastide, 06 78 90 12 34, earl.bastide@orange.test
 
 Cordialement,
 Marc Rouanet
 Chargé d'affaires Agri
 Crédit Agricole Toulouse 31""",
-        "expect": {"producteur": "EARL BASTIDE", "prenom": "Laurent", "nom": "BASTIDE", "tel": "06 78 90 12 34", "mail": "earl.bastide@orange.fr",
+        "expect": {"producteur": "EARL BASTIDE", "prenom": "Laurent", "nom": "BASTIDE", "tel": "06 78 90 12 34", "mail": "earl.bastide@orange.test",
                    "origine": "Crédit Agricole", "ca": "CR Toulouse 31", "dept": "31 - Haute-Garonne", "region": "Occitanie", "install": "PV",
                    "kwc": "1200", "mesPrev": "T3 2027"},
     },
     {
         "name": "Hydro, débit, sortie OA",
-        "mail": """De : Patrick Gay <patrick.gay@hydro-savoie.fr>
+        "mail": """De : Patrick Gay <patrick.gay@hydro-savoie.test>
 Objet : Microcentrale - fin d'OA
 
 Bonjour,
@@ -145,12 +145,12 @@ Patrick GAY
 Gérant - SARL HYDRO SAVOIE
 04 79 24 00 11""",
         "expect": {"producteur": "SARL HYDRO SAVOIE", "prenom": "Patrick", "nom": "GAY", "qualite": "Gérant", "tel": "04 79 24 00 11",
-                   "mail": "patrick.gay@hydro-savoie.fr", "dept": "73 - Savoie", "region": "Auvergne-Rhône-Alpes", "install": "Hydro",
+                   "mail": "patrick.gay@hydro-savoie.test", "dept": "73 - Savoie", "region": "Auvergne-Rhône-Alpes", "install": "Hydro",
                    "contrat": "Sortie d'OA / CR", "kwc": "800", "mwh": "3200"},
     },
     {
         "name": "Biogaz / méthanisation",
-        "mail": """De : Claire Fontaine <c.fontaine@metha-vendee.fr>
+        "mail": """De : Claire Fontaine <c.fontaine@metha-vendee.test>
 Objet : Unité de méthanisation - cogénération
 
 Bonjour,
@@ -162,12 +162,12 @@ Claire Fontaine
 Responsable d'exploitation
 SAS METHA VENDEE""",
         "expect": {"producteur": "SAS METHA VENDEE", "prenom": "Claire", "nom": "FONTAINE", "qualite": "Responsable d'exploitation",
-                   "tel": "02 51 33 44 55", "mail": "c.fontaine@metha-vendee.fr", "dept": "85 - Vendée", "region": "Pays de la Loire",
+                   "tel": "02 51 33 44 55", "mail": "c.fontaine@metha-vendee.test", "dept": "85 - Vendée", "region": "Pays de la Loire",
                    "install": "BIOGAZ", "kwc": "1500", "mwh": "11500"},
     },
     {
         "name": "Productible en kWh/kWc (ne pas prendre pour un volume)",
-        "mail": """De : Thomas Petit <thomas@petit-energies.fr>
+        "mail": """De : Thomas Petit <thomas@petit-energies.test>
 Objet : Offre agrégation 3 MWc
 
 Bonjour,
@@ -176,32 +176,32 @@ Merci.
 Thomas Petit
 Président, PETIT ENERGIES SAS
 07 81 22 33 44""",
-        "expect": {"prenom": "Thomas", "nom": "PETIT", "tel": "07 81 22 33 44", "mail": "thomas@petit-energies.fr", "dept": "24 - Dordogne",
+        "expect": {"prenom": "Thomas", "nom": "PETIT", "tel": "07 81 22 33 44", "mail": "thomas@petit-energies.test", "dept": "24 - Dordogne",
                    "region": "Nouvelle-Aquitaine", "install": "PV", "kwc": "3000", "mesPrev": "fin 2027", "producteur": "PETIT ENERGIES SAS"},
     },
     {
         "name": "Mail court, téléphone collé, PPA",
-        "mail": """De : Arnaud Morel <arnaud.morel@agrisolaire.fr>
+        "mail": """De : Arnaud Morel <arnaud.morel@agrisolaire.test>
 Objet : PPA
 
 Bonjour, nous cherchons un PPA pour 2 centrales (total 5 MWc) dans le Gers. Rappelez-moi au 0612457890.
 Arnaud Morel
 AGRISOLAIRE""",
-        "expect": {"prenom": "Arnaud", "nom": "MOREL", "tel": "06 12 45 78 90", "mail": "arnaud.morel@agrisolaire.fr", "dept": "32 - Gers",
+        "expect": {"prenom": "Arnaud", "nom": "MOREL", "tel": "06 12 45 78 90", "mail": "arnaud.morel@agrisolaire.test", "dept": "32 - Gers",
                    "region": "Occitanie", "contrat": "PPA Spot", "kwc": "5000", "producteur": "AGRISOLAIRE"},
     },
     {
         "name": "Outlook RE:, réponse en haut, prospect plus bas",
-        "mail": """De : Paul Guérin <paul.guerin@selfee.fr>
+        "mail": """De : Marc Testard <marc.testard@selfee.fr>
 Envoyé : jeudi 9 octobre 2026 10:15
-À : Hélène Roussel <h.roussel@sem-energies-loire.fr>
+À : Hélène Roussel <h.roussel@sem-energies-loire.test>
 Objet : RE: Centrales de la SEM
 
 Bonjour Madame Roussel, je vous rappelle demain.
 
-De : Hélène Roussel <h.roussel@sem-energies-loire.fr>
+De : Hélène Roussel <h.roussel@sem-energies-loire.test>
 Envoyé : mercredi 8 octobre 2026 17:40
-À : Paul Guérin <paul.guerin@selfee.fr>
+À : Marc Testard <marc.testard@selfee.fr>
 Objet : Centrales de la SEM
 
 Bonjour,
@@ -212,11 +212,11 @@ Directrice
 SEM ENERGIES LOIRE
 04 77 12 34 56""",
         "expect": {"producteur": "SEM ENERGIES LOIRE", "prenom": "Hélène", "nom": "ROUSSEL", "qualite": "Directrice", "tel": "04 77 12 34 56",
-                   "mail": "h.roussel@sem-energies-loire.fr", "dept": "42 - Loire", "region": "Auvergne-Rhône-Alpes", "install": "PV", "kwc": "1800"},
+                   "mail": "h.roussel@sem-energies-loire.test", "dept": "42 - Loire", "region": "Auvergne-Rhône-Alpes", "install": "PV", "kwc": "1800"},
     },
     {
         "name": "Nom en majuscules d'abord (DURAND Pierre)",
-        "mail": """De : DURAND Pierre <pdurand@ferme-durand.fr>
+        "mail": """De : DURAND Pierre <pdurand@ferme-durand.test>
 Objet : contrat agrégation
 
 Bonjour, notre installation PV de 250 kWc à Chalon-sur-Saône (71100) est en service depuis 2019. Nous voulons changer d'agrégateur au 1er janvier 2027.
@@ -225,12 +225,12 @@ DURAND Pierre
 Exploitant agricole
 EARL DURAND
 03 85 00 11 22""",
-        "expect": {"producteur": "EARL DURAND", "prenom": "Pierre", "nom": "DURAND", "tel": "03 85 00 11 22", "mail": "pdurand@ferme-durand.fr",
+        "expect": {"producteur": "EARL DURAND", "prenom": "Pierre", "nom": "DURAND", "tel": "03 85 00 11 22", "mail": "pdurand@ferme-durand.test",
                    "dept": "71 - Saône-et-Loire", "region": "Bourgogne-Franche-Comté", "install": "PV", "kwc": "250"},
     },
     {
         "name": "Signature avec Mme et syndicat d'énergie",
-        "mail": """De : Isabelle Garnier <i.garnier@sde35.fr>
+        "mail": """De : Isabelle Garnier <i.garnier@sde35.test>
 Objet : Consultation agrégation - SDE 35
 
 Madame, Monsieur,
@@ -240,12 +240,12 @@ Mme Isabelle Garnier
 Chargée de mission énergies renouvelables
 Syndicat Départemental d'Énergie 35
 02 99 00 00 13""",
-        "expect": {"prenom": "Isabelle", "nom": "GARNIER", "tel": "02 99 00 00 13", "mail": "i.garnier@sde35.fr", "dept": "35 - Ille-et-Vilaine",
+        "expect": {"prenom": "Isabelle", "nom": "GARNIER", "tel": "02 99 00 00 13", "mail": "i.garnier@sde35.test", "dept": "35 - Ille-et-Vilaine",
                    "region": "Bretagne", "install": "PV", "kwc": "2600", "duree": "2", "producteur": "SYNDICAT DÉPARTEMENTAL D'ÉNERGIE 35"},
     },
     {
         "name": "Corse, code postal 20",
-        "mail": """De : Antoine Santoni <a.santoni@corsica-sole.fr>
+        "mail": """De : Antoine Santoni <a.santoni@corsica-sole.test>
 Objet : Centrale Ajaccio
 
 Bonjour, centrale PV de 900 kWc à Ajaccio (20090), MES janvier 2027, AO CRE bâtiment.
@@ -258,7 +258,7 @@ CORSICA SOLE SARL
     },
     {
         "name": "Réunion (974)",
-        "mail": """De : Kevin Payet <kevin.payet@soleil-reunion.re>
+        "mail": """De : Kevin Payet <kevin.payet@soleil-reunion.test>
 Objet : Projet agrivoltaïque
 
 Bonjour, projet agrivoltaïque de 1,1 MWc à Saint-Pierre (97410), mise en service 2028.
@@ -268,7 +268,7 @@ Kevin Payet, Ingénieur projet, SOLEIL REUNION SAS, 06 92 11 22 33""",
     },
     {
         "name": "Signature 'Cordialement,' puis nom avec titre sur la même ligne",
-        "mail": """De : Nicolas Bernard <nbernard@ombrelia.fr>
+        "mail": """De : Nicolas Bernard <nbernard@ombrelia.test>
 Objet : Ombrières parking
 
 Bonjour,
@@ -277,28 +277,28 @@ Cordialement,
 Nicolas Bernard – Responsable développement
 OMBRELIA SAS
 05 56 78 90 12""",
-        "expect": {"producteur": "OMBRELIA SAS", "prenom": "Nicolas", "nom": "BERNARD", "tel": "05 56 78 90 12", "mail": "nbernard@ombrelia.fr",
+        "expect": {"producteur": "OMBRELIA SAS", "prenom": "Nicolas", "nom": "BERNARD", "tel": "05 56 78 90 12", "mail": "nbernard@ombrelia.test",
                    "dept": "33 - Gironde", "region": "Nouvelle-Aquitaine", "install": "PV", "kwc": "2000", "mesPrev": "été 2027", "duree": "3"},
     },
     {
         "name": "CAT&E (Crédit Agricole Transitions & Énergies)",
-        "mail": """De : Julie Lemaire <julie.lemaire@ca-transitions.com>
+        "mail": """De : Julie Lemaire <julie.lemaire@ca-transitions.test>
 Objet : Opportunité agrégation - portefeuille éolien
 
 Bonjour,
 CA Transitions & Energies accompagne la société VENTS DU NORD SAS (parc éolien de 12 MW dans la Somme, MES décembre 2026).
-Le contact côté client est M. Hugo Lefebvre, hugo.lefebvre@ventsdunord.fr, 06 33 44 55 66.
+Le contact côté client est M. Hugo Lefebvre, hugo.lefebvre@ventsdunord.test, 06 33 44 55 66.
 Bien cordialement,
 Julie Lemaire
 Chargée d'affaires
 Crédit Agricole Transitions & Energies""",
-        "expect": {"origine": "Crédit Agricole", "ca": "CAT&E", "mail": "hugo.lefebvre@ventsdunord.fr", "tel": "06 33 44 55 66",
+        "expect": {"origine": "Crédit Agricole", "ca": "CAT&E", "mail": "hugo.lefebvre@ventsdunord.test", "tel": "06 33 44 55 66",
                    "dept": "80 - Somme", "region": "Hauts-de-France", "install": "Eolien", "kwc": "12000", "mesPrev": "Décembre 2026",
                    "producteur": "VENTS DU NORD SAS", "prenom": "Hugo", "nom": "LEFEBVRE"},
     },
     {
         "name": "Plusieurs centrales en liste",
-        "mail": """De : Romain Chevalier <r.chevalier@helio-ouest.fr>
+        "mail": """De : Romain Chevalier <r.chevalier@helio-ouest.test>
 Objet : Consultation 3 centrales
 
 Bonjour,
@@ -318,7 +318,7 @@ HELIO OUEST SAS
     },
     {
         "name": "Puissance collée à l'unité, 12MW",
-        "mail": """De : Lucie Robin <lucie.robin@eolia-centre.fr>
+        "mail": """De : Lucie Robin <lucie.robin@eolia-centre.test>
 Objet : Parc éolien
 
 Bonjour, parc de 12MW dans l'Indre (36), mise en service prévue en avril 2028, lauréat AO éolien terrestre.
@@ -331,17 +331,17 @@ EOLIA CENTRE SAS
     },
     {
         "name": "Domaine seul, sans société dans la signature",
-        "mail": """De : contact@ferme-solaire-des-pins.fr
+        "mail": """De : contact@ferme-solaire-des-pins.test
 Objet : Demande de contact
 
 Bonjour, nous avons une centrale PV de 350 kWc à Mont-de-Marsan (40000). Pouvez-vous nous rappeler ? 05 58 06 07 08
 Merci""",
-        "expect": {"mail": "contact@ferme-solaire-des-pins.fr", "tel": "05 58 06 07 08", "dept": "40 - Landes", "region": "Nouvelle-Aquitaine",
+        "expect": {"mail": "contact@ferme-solaire-des-pins.test", "tel": "05 58 06 07 08", "dept": "40 - Landes", "region": "Nouvelle-Aquitaine",
                    "install": "PV", "kwc": "350", "producteur": "FERME SOLAIRE DES PINS"},
     },
     {
         "name": "ACC (autoconsommation collective)",
-        "mail": """De : Mathieu Roux <m.roux@enercoop-test.fr>
+        "mail": """De : Mathieu Roux <m.roux@enercoop-test.test>
 Objet : Surplus ACC
 
 Bonjour,
@@ -355,7 +355,7 @@ SCIC ENERGIES CITOYENNES
     },
     {
         "name": "Date MES écrite '1er trimestre 2027'",
-        "mail": """De : Hugo Faure <hugo.faure@lumen-energie.fr>
+        "mail": """De : Hugo Faure <hugo.faure@lumen-energie.test>
 Objet : Centrale Clermont
 
 Bonjour, centrale au sol de 5 MWc près de Clermont-Ferrand (63000), mise en service au 1er trimestre 2027, lauréate AO PPE2.
@@ -365,7 +365,7 @@ Hugo Faure, Directeur, LUMEN ENERGIE SAS, 04 73 00 00 03""",
     },
     {
         "name": "Téléphone international +33 6",
-        "mail": """De : Emma Girard <emma.girard@girard-agri.fr>
+        "mail": """De : Emma Girard <emma.girard@girard-agri.test>
 Objet : Hangar PV
 
 Bonjour, hangar photovoltaïque 100 kWc à Niort (79000), en service depuis 2015 (obligation d'achat jusqu'en 2035). Nous voulons juste un renseignement.
@@ -378,17 +378,17 @@ EARL GIRARD
     },
     {
         "name": "Signature du transféreur interne seulement (Selfee)",
-        "mail": """De : Quentin Ray <quentin.ray@selfee.fr>
+        "mail": """De : Julien Essai <julien.essai@selfee.fr>
 Objet : TR: lead salon
 
-Pour info, lead du salon EnerGaïa : SARL SOLEIL D'OC, M. Bruno Vidal (b.vidal@soleil-doc.fr, 06 55 66 77 88), 3 toitures dans l'Aude, 600 kWc au total.
-Quentin""",
-        "expect": {"mail": "b.vidal@soleil-doc.fr", "tel": "06 55 66 77 88", "dept": "11 - Aude", "region": "Occitanie", "install": "PV", "kwc": "600",
+Pour info, lead du salon EnerGaïa : SARL SOLEIL D'OC, M. Bruno Vidal (b.vidal@soleil-doc.test, 06 55 66 77 88), 3 toitures dans l'Aude, 600 kWc au total.
+Julien""",
+        "expect": {"mail": "b.vidal@soleil-doc.test", "tel": "06 55 66 77 88", "dept": "11 - Aude", "region": "Occitanie", "install": "PV", "kwc": "600",
                    "producteur": "SARL SOLEIL D'OC", "prenom": "Bruno", "nom": "VIDAL"},
     },
     {
         "name": "Volume en MWh/an avec espace insécable",
-        "mail": """De : Paul Lambert <paul.lambert@lambert-sas.fr>
+        "mail": """De : Paul Lambert <paul.lambert@lambert-sas.test>
 Objet : Centrale Normandie
 
 Bonjour, centrale PV toiture 1 500 kWc à Caen (14000), production 1 450 MWh/an, en service en octobre 2026.
@@ -402,7 +402,7 @@ Paul Lambert, Président, LAMBERT SAS, 02 31 00 00 04""",
 HELDOUT = [
     {
         "name": "Relance courte avec signature Outlook mobile",
-        "mail": """De : Yannick Le Gall <ylegall@breizh-solar.bzh>
+        "mail": """De : Yannick Le Gall <ylegall@breizh-solar.test>
 Objet : Re: votre offre
 
 Bonjour, je reviens vers vous pour nos 2 toitures (420 kWc au total) à Quimper (29000). Le contrat OA se termine fin 2026.
@@ -410,28 +410,28 @@ Pouvez-vous m'appeler ?
 Yannick Le Gall
 Gérant BREIZH SOLAR
 Envoyé de mon iPhone""",
-        "expect": {"prenom": "Yannick", "nom": "LE GALL", "mail": "ylegall@breizh-solar.bzh", "dept": "29 - Finistère", "region": "Bretagne",
+        "expect": {"prenom": "Yannick", "nom": "LE GALL", "mail": "ylegall@breizh-solar.test", "dept": "29 - Finistère", "region": "Bretagne",
                    "install": "PV", "kwc": "420", "contrat": "Sortie d'OA / CR", "producteur": "BREIZH SOLAR", "origine": "Contact direct"},
     },
     {
         "name": "CA Alpes Provence, prospect en pièce jointe décrite",
-        "mail": """De : Sandrine Blanc <sandrine.blanc@ca-alpesprovence.fr>
+        "mail": """De : Sandrine Blanc <sandrine.blanc@ca-alpesprovence.test>
 Objet : Projet solaire - Domaine des Oliviers
 
 Bonjour,
 Je vous mets en relation avec M. Olivier Mercier, gérant de la SCEA Domaine des Oliviers à Aix-en-Provence (13100), qui étudie une centrale agrivoltaïque de 3,2 MWc (MES visée mi-2028).
-Contact : olivier.mercier@domaine-oliviers.fr – 06 11 22 33 44
+Contact : olivier.mercier@domaine-oliviers.test – 06 11 22 33 44
 Bonne journée,
 Sandrine Blanc
 Conseillère Énergie
 Crédit Agricole Alpes Provence""",
-        "expect": {"origine": "Crédit Agricole", "ca": "CR Alpes Provence", "prenom": "Olivier", "nom": "MERCIER", "mail": "olivier.mercier@domaine-oliviers.fr",
+        "expect": {"origine": "Crédit Agricole", "ca": "CR Alpes Provence", "prenom": "Olivier", "nom": "MERCIER", "mail": "olivier.mercier@domaine-oliviers.test",
                    "tel": "06 11 22 33 44", "dept": "13 - Bouches-du-Rhône", "region": "Provence-Alpes-Côte d'Azur", "install": "PV", "kwc": "3200",
                    "producteur": "SCEA DOMAINE DES OLIVIERS"},
     },
     {
         "name": "Anglais / investisseur",
-        "mail": """From: Mark Thompson <m.thompson@greenyield-capital.com>
+        "mail": """From: Mark Thompson <m.thompson@greenyield-capital.test>
 Subject: Aggregation services for French PV portfolio
 
 Hello,
@@ -441,12 +441,12 @@ Mark Thompson
 Asset Manager
 GreenYield Capital
 +44 20 7946 0000""",
-        "expect": {"prenom": "Mark", "nom": "THOMPSON", "mail": "m.thompson@greenyield-capital.com", "dept": "31 - Haute-Garonne", "region": "Occitanie",
+        "expect": {"prenom": "Mark", "nom": "THOMPSON", "mail": "m.thompson@greenyield-capital.test", "dept": "31 - Haute-Garonne", "region": "Occitanie",
                    "install": "PV", "qualite": "Asset Manager", "origine": "Contact direct"},
     },
     {
         "name": "Mairie, élu",
-        "mail": """De : Bernard Collin <maire@mairie-saint-julien.fr>
+        "mail": """De : Bernard Collin <maire@mairie-saint-julien.test>
 Objet : Centrale photovoltaïque communale
 
 Bonjour,
@@ -460,7 +460,7 @@ Maire de Saint-Julien
     },
     {
         "name": "Signature tableau Outlook (une info par ligne, avec libellés)",
-        "mail": """De : Camille Dubois <camille.dubois@rhone-energies.fr>
+        "mail": """De : Camille Dubois <camille.dubois@rhone-energies.test>
 Objet : Demande de cotation
 
 Bonjour,
@@ -477,15 +477,15 @@ M. 06 77 00 00 06""",
     },
     {
         "name": "Particulier sans société",
-        "mail": """De : jean.michel.roche@wanadoo.fr
+        "mail": """De : jean.michel.roche@wanadoo.test
 Objet : panneaux solaires
 
 Bonjour, j'ai 36 kWc sur le toit de ma grange à Aurillac (15000), je voudrais vendre mon électricité autrement qu'en OA. Merci de me dire si c'est possible. Jean-Michel Roche 06 31 00 00 07""",
-        "expect": {"mail": "jean.michel.roche@wanadoo.fr", "tel": "06 31 00 00 07", "dept": "15 - Cantal", "region": "Auvergne-Rhône-Alpes", "install": "PV", "kwc": "36"},
+        "expect": {"mail": "jean.michel.roche@wanadoo.test", "tel": "06 31 00 00 07", "dept": "15 - Cantal", "region": "Auvergne-Rhône-Alpes", "install": "PV", "kwc": "36"},
     },
     {
         "name": "Éolien repowering, puissance en MW et nombre de machines",
-        "mail": """De : Valérie Noël <v.noel@vents-de-picardie.fr>
+        "mail": """De : Valérie Noël <v.noel@vents-de-picardie.test>
 Objet : Repowering parc de Bray
 
 Bonjour,
@@ -499,12 +499,12 @@ VENTS DE PICARDIE SAS
     },
     {
         "name": "Collègue interne transfère un mail client complet",
-        "mail": """De : Pauline Garcia <pauline.garcia@selfee.fr>
+        "mail": """De : Léa Démo <lea.demo@selfee.fr>
 Objet : TR: contrat agrégation hydro
 
 Pour toi, c'est dans ton secteur.
 
-De : Gilles Vasseur <gilles.vasseur@moulin-hydro.fr>
+De : Gilles Vasseur <gilles.vasseur@moulin-hydro.test>
 Objet : contrat agrégation hydro
 
 Bonjour, notre moulin hydroélectrique (250 kW) à Pontarlier (25300) cherche un agrégateur, notre contrat actuel se termine au 31/12/2026.
@@ -512,12 +512,12 @@ Cordialement,
 Gilles Vasseur
 SARL MOULIN HYDRO
 06 44 00 00 09""",
-        "expect": {"prenom": "Gilles", "nom": "VASSEUR", "mail": "gilles.vasseur@moulin-hydro.fr", "tel": "06 44 00 00 09", "dept": "25 - Doubs",
+        "expect": {"prenom": "Gilles", "nom": "VASSEUR", "mail": "gilles.vasseur@moulin-hydro.test", "tel": "06 44 00 00 09", "dept": "25 - Doubs",
                    "region": "Bourgogne-Franche-Comté", "install": "Hydro", "kwc": "250", "producteur": "SARL MOULIN HYDRO", "origine": "Contact direct"},
     },
     {
         "name": "Code postal dans l'adresse de signature seulement, autre ville dans le texte",
-        "mail": """De : Olivier Brun <obrun@sudsol.fr>
+        "mail": """De : Olivier Brun <obrun@sudsol.test>
 Objet : Centrale de Narbonne
 
 Bonjour, notre centrale de Narbonne (2 MWc) sera mise en service en novembre 2027.
@@ -531,7 +531,7 @@ SUDSOL SARL
     },
     {
         "name": "Nombres avec points comme séparateur de milliers",
-        "mail": """De : Agnès Perrin <agnes.perrin@perrin-energie.fr>
+        "mail": """De : Agnès Perrin <agnes.perrin@perrin-energie.test>
 Objet : Offre
 
 Bonjour, centrale PV de 1.250 kWc à Albi (81000), production 1.600 MWh/an, MES 15 mars 2027.
@@ -552,17 +552,17 @@ Arnaud Morel
 Fondateur - AGRISOLAIRE
 06 12 45 78 90
 
-Le jeu. 9 oct. 2026 à 11:02, Paul Guérin <paul.guerin@selfee.fr> a écrit :
+Le jeu. 9 oct. 2026 à 11:02, Marc Testard <marc.testard@selfee.fr> a écrit :
 > Bonjour Monsieur Morel,
 > Pouvez-vous me confirmer la date de mise en service ?
-> Paul Guérin
+> Marc Testard
 > Selfee - 01 00 00 00 00""",
         "expect": {"prenom": "Arnaud", "nom": "MOREL", "qualite": "Fondateur", "producteur": "AGRISOLAIRE", "tel": "06 12 45 78 90", "dept": "32 - Gers",
                    "kwc": "3600", "mesPrev": "Mai 2027", "origine": "Contact direct"},
     },
     {
         "name": "Tableau collé depuis Excel (tabulations)",
-        "mail": """De : Romain Chevalier <r.chevalier@helio-ouest.fr>
+        "mail": """De : Romain Chevalier <r.chevalier@helio-ouest.test>
 Objet : Liste des centrales
 
 Bonjour, voici nos centrales :
@@ -578,9 +578,9 @@ HELIO OUEST SAS
     },
     {
         "name": "Outlook anglais avec avertissement et images",
-        "mail": """From: Mark Thompson <m.thompson@greenyield-capital.com>
+        "mail": """From: Mark Thompson <m.thompson@greenyield-capital.test>
 Sent: Thursday, October 9, 2026 4:12 PM
-To: Paul Guérin <paul.guerin@selfee.fr>
+To: Marc Testard <marc.testard@selfee.fr>
 Subject: RE: Aggregation offer
 
 Hi Paul,
@@ -591,12 +591,12 @@ Asset Manager | GreenYield Capital
 +44 20 7946 0000
 [cid:image001.png@01DB2F3A.5E8C2D10]
 This e-mail and any attachments are confidential and intended solely for the addressee. If you have received it in error, please notify the sender.""",
-        "expect": {"prenom": "Mark", "nom": "THOMPSON", "qualite": "Asset Manager", "producteur": "GREENYIELD CAPITAL", "mail": "m.thompson@greenyield-capital.com",
+        "expect": {"prenom": "Mark", "nom": "THOMPSON", "qualite": "Asset Manager", "producteur": "GREENYIELD CAPITAL", "mail": "m.thompson@greenyield-capital.test",
                    "dept": "81 - Tarn", "kwc": "9500", "mwh": "12400", "mesPrev": "Mars 2027"},
     },
     {
         "name": "Signature au-dessus de l'historique, relais CA en dessous",
-        "mail": """De : Laurent Bastide <earl.bastide@orange.fr>
+        "mail": """De : Laurent Bastide <earl.bastide@orange.test>
 Objet : RE: Mise en relation
 
 Bonjour,
@@ -606,18 +606,18 @@ Laurent Bastide
 EARL Bastide
 06 78 90 12 34
 
-De : Claire Marty <claire.marty@ca-toulouse31.fr>
+De : Claire Marty <claire.marty@ca-toulouse31.test>
 Objet : Mise en relation
 
 Bonjour M. Bastide, je vous présente Selfee, agrégateur partenaire.
 Claire Marty
 Crédit Agricole Toulouse 31""",
-        "expect": {"prenom": "Laurent", "nom": "BASTIDE", "producteur": "EARL BASTIDE", "tel": "06 78 90 12 34", "mail": "earl.bastide@orange.fr",
+        "expect": {"prenom": "Laurent", "nom": "BASTIDE", "producteur": "EARL BASTIDE", "tel": "06 78 90 12 34", "mail": "earl.bastide@orange.test",
                    "origine": "Crédit Agricole", "ca": "CR Toulouse 31", "kwc": "1200", "mesPrev": "T3 2027"},
     },
     {
         "name": "Adresses en mailto et numéro en lien",
-        "mail": """De : Claire Fontaine <c.fontaine@metha-vendee.fr<mailto:c.fontaine@metha-vendee.fr>>
+        "mail": """De : Claire Fontaine <c.fontaine@metha-vendee.test<mailto:c.fontaine@metha-vendee.test>>
 Objet : Méthanisation
 
 Bonjour, notre cogénération de 1,5 MW à Luçon (85400) produit 11 500 MWh/an.
@@ -625,12 +625,12 @@ Claire Fontaine
 Responsable d'exploitation
 METHA VENDEE
 Tél : 02 51 33 44 55<tel:0251334455>""",
-        "expect": {"prenom": "Claire", "nom": "FONTAINE", "mail": "c.fontaine@metha-vendee.fr", "tel": "02 51 33 44 55", "dept": "85 - Vendée",
+        "expect": {"prenom": "Claire", "nom": "FONTAINE", "mail": "c.fontaine@metha-vendee.test", "tel": "02 51 33 44 55", "dept": "85 - Vendée",
                    "install": "BIOGAZ", "kwc": "1500", "mwh": "11500", "producteur": "METHA VENDEE"},
     },
     {
         "name": "Tableau avec barres verticales (copié d'un PDF)",
-        "mail": """De : Hélène Roussel <h.roussel@sem-energies-loire.fr>
+        "mail": """De : Hélène Roussel <h.roussel@sem-energies-loire.test>
 Objet : Centrales SEM
 
 Bonjour,
@@ -654,21 +654,21 @@ A bientôt.
  <https://www.example-install.fr/logo.png>
 \tJean-Noël MARCHAL
  <https://www.example-install.fr/appel.png>  06 00 00 00 38
- <https://www.example-install.fr/courrier.png>  jn.marchal@install-lorraine.fr <mailto:jn.marchal@install-lorraine.fr>
+ <https://www.example-install.fr/courrier.png>  jn.marchal@install-lorraine.test <mailto:jn.marchal@install-lorraine.test>
 ________________________________
 INSTALL LORRAINE
  <https://www.example-install.fr/appel.png>  03 00 00 00 74
  <https://www.example-install.fr/emplacement.png>  8 rue des Lilas, 54000 Nancy
 SIRET : 91000000000015– RCS : 910 000 000 R.C.S. Nancy
 ________________________________
-De : Paul Guérin <paul.guerin@selfee.fr>
+De : Marc Testard <marc.testard@selfee.fr>
 Objet : TR: INSTALL LORRAINE - Demande d'accompagnement agrégateur – Projets photovoltaïques FAVIER, KORVAL et MERCADIER
 
 Bonjour Monsieur Marchal, je vous propose un échange en visio.
 Paul GUÉRIN
 Responsable Commercial
 
-De : Jean-Noël Marchal <jn.marchal@install-lorraine.fr <mailto:jn.marchal@install-lorraine.fr> >
+De : Jean-Noël Marchal <jn.marchal@install-lorraine.test <mailto:jn.marchal@install-lorraine.test> >
 Envoyé : vendredi 2 octobre 2026 08:30
 Objet : INSTALL LORRAINE - Demande d'accompagnement agrégateur – Projets photovoltaïques FAVIER, KORVAL et MERCADIER
 
@@ -685,7 +685,7 @@ ________________________________
 INSTALL LORRAINE
  <https://www.example-install.fr/appel.png>  03 00 00 00 74
 SIRET : 91000000000015– RCS : 910 000 000 R.C.S. Nancy""",
-    "expect": {"prenom": "Jean-Noël", "nom": "MARCHAL", "tel": "06 00 00 00 38", "mail": "jn.marchal@install-lorraine.fr", "producteur": "INSTALL LORRAINE",
+    "expect": {"prenom": "Jean-Noël", "nom": "MARCHAL", "tel": "06 00 00 00 38", "mail": "jn.marchal@install-lorraine.test", "producteur": "INSTALL LORRAINE",
                "origine": "Contact direct", "install": "PV", "centrale": "KORVAL", "kwc": "150"},
     "installs": [{"centrale": "KORVAL", "kwc": "150", "spv": "KORVAL", "commune": "SAINT-MIHIEL", "cp": "55300", "dept": "55 - Meuse",
                   "particularites": "Autoconsommation prévisionnelle de 15 %, à confirmer"},
@@ -699,7 +699,7 @@ SIRET : 91000000000015– RCS : 910 000 000 R.C.S. Nancy""",
 HARD += [
     {
         "name": "Centrales énumérées dans une phrase",
-        "mail": """De : Romain Chevalier <r.chevalier@helio-ouest.fr>
+        "mail": """De : Romain Chevalier <r.chevalier@helio-ouest.test>
 Objet : Agrégation
 
 Bonjour, nous souhaitons confier nos centrales de Cholet (1,2 MWc) et de Saumur (800 kWc), toutes deux en Maine-et-Loire, mises en service en 2027.
@@ -711,7 +711,7 @@ HELIO OUEST SAS""",
     },
     {
         "name": "Toitures municipales en phrase avec deux-points",
-        "mail": """De : Bernard Collin <maire@mairie-saint-julien.fr>
+        "mail": """De : Bernard Collin <maire@mairie-saint-julien.test>
 Objet : Nos trois toitures photovoltaïques
 
 Bonjour, la commune possède trois toitures photovoltaïques : l'école (36 kWc), le gymnase (100 kWc) et la mairie (60 kWc), soit 196 kWc au total, dans le Jura.
