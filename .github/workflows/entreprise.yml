@@ -28,6 +28,7 @@ jobs:
       - run: timeout 180 python -m playwright install --with-deps chromium || python -m playwright install chromium
       # the company edition's promises, checked again on the exact code that goes into the zip
       - run: python tests/entreprise_test.py
+      - run: python tests/bridge_store_test.py
       - run: python tests/local_mode_test.py
       - run: python tests/bridge_test.py
       # the bridge's Excel library, shipped with it : no download on the PCs

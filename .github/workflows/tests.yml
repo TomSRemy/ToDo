@@ -40,5 +40,6 @@ jobs:
       - run: python tests/bridge_e2e.py    # the app and the real bridge (in-memory table) together
       - run: python tests/local_mode_test.py   # local mode : the bridge serves the app, nothing from the Internet besides GitHub and PowerKlock
       - run: python tests/entreprise_test.py   # company edition : the page reaches this PC only, the web version can't use the company bridge
+      - run: python tests/bridge_store_test.py   # company edition : the bridge keeps the data (emptied browser, two windows, bridge stopped, cut write)
       - run: python scripts/build_entreprise.py --out dist   # the company zip can be built (every file the service worker keeps is in it)
       - run: python tests/bridge_backtest.py --days 30   # random days of work on tables shaped like the real files

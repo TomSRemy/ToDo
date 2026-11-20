@@ -1183,11 +1183,56 @@ function Send-Static($stream, $req) {
   Send-Raw $stream 200 'OK' $hdr $bytes $headOnly
 }
 
+# ---------------- v1.40 : the company edition's data, kept by the bridge (the browser only shows them) ----------------
+# One file per part of the data (tasks.json, crm.json, notes.json, parc.json) in the Windows profile, not in OneDrive
+# (no OneDrive conflict copies ; OneDrive gets the hourly backups). Each answer carries the file's version (a hash of
+# its content) ; a write names the version it started from and is refused (409) if the file changed meanwhile : the
+# app then reads, merges record by record and writes again, so two windows never overwrite each other. Written aside
+# then put in place in one move (never half a file) ; the previous version is kept next to it (.prev).
+$StoreName = '^[a-z][a-z0-9-]{0,30}\.json$'
+function Store-Dir {
+  $d = if ($Mock) { Join-Path $Here 'mock-store' } elseif ($env:APPDATA) { Join-Path (Join-Path $env:APPDATA 'Todo Pont Excel') 'donnees' } else { Join-Path $Here 'donnees' }
+  if (-not (Test-Path -LiteralPath $d)) { $null = New-Item -ItemType Directory -Path $d -Force }
+  return $d
+}
+function Store-Rev([byte[]]$bytes) {
+  $sha = [Security.Cryptography.SHA256]::Create()
+  try { return (-join ($sha.ComputeHash($bytes)[0..11] | ForEach-Object { $_.ToString('x2') })) } finally { $sha.Dispose() }
+}
+function Handle-Store($stream, $req) {
+  $json = { param($st, $reason, $obj) Send-Raw $stream $st $reason "Content-Type: application/json; charset=utf-8`r`nCache-Control: no-store`r`n" ([Text.Encoding]::UTF8.GetBytes((ConvertTo-Json -InputObject $obj -Compress))) $false }
+  $hostHeader = $req.headers['host']; $origin = $req.headers['origin']
+  if (($hostHeader -and $hostHeader -notmatch ('^(127\.0\.0\.1|localhost):' + $Port + '$')) -or ($origin -and -not ($AllowedOrigins -contains $origin))) { & $json 403 'Forbidden' @{ ok = $false; message = 'Non autorisé.' }; return }
+  if (-not $Entreprise) { & $json 404 'Not Found' @{ ok = $false; message = 'Réservé à l''édition entreprise.' }; return }
+  if (-not (Token-Matches $req.headers['x-bridge-token'] $Config.token)) { & $json 401 'Unauthorized' @{ ok = $false; message = 'Clé du pont incorrecte.' }; return }
+  $f = [string]$req.query['f']
+  if ($f -notmatch $StoreName) { & $json 400 'Bad Request' @{ ok = $false; message = 'Nom de fichier invalide.' }; return }
+  $path = Join-Path (Store-Dir) $f
+  $cur = $null; if (Test-Path -LiteralPath $path) { $cur = [IO.File]::ReadAllBytes($path) }
+  $curRev = if ($null -ne $cur) { Store-Rev $cur } else { '' }
+  if ($req.method -eq 'GET') {
+    if ($null -eq $cur) { & $json 404 'Not Found' @{ ok = $false; message = 'Pas encore de données.' }; return }
+    Send-Raw $stream 200 'OK' ("Content-Type: application/json; charset=utf-8`r`nCache-Control: no-store`r`nX-Store-Rev: " + $curRev + "`r`n") $cur $false
+    return
+  }
+  if ($req.method -ne 'POST') { & $json 400 'Bad Request' @{ ok = $false; message = 'Méthode non prise en charge.' }; return }
+  $body = [string]$req.body
+  if ($body.Length -lt 2 -or ($body[0] -ne '{' -and $body[0] -ne '[')) { & $json 400 'Bad Request' @{ ok = $false; message = 'Contenu invalide.' }; return }
+  # written only from the version the app read : otherwise the app merges and tries again
+  if ([string]$req.query['rev'] -ne $curRev) { & $json 409 'Conflict' @{ ok = $false; conflict = $true; rev = $curRev }; return }
+  [byte[]]$bytes = (New-Object Text.UTF8Encoding $false).GetBytes($body)
+  $tmp = $path + '.tmp'
+  [IO.File]::WriteAllBytes($tmp, $bytes)
+  if ($null -ne $cur) { [IO.File]::WriteAllBytes($path + '.prev', $cur) }
+  Move-Item -LiteralPath $tmp -Destination $path -Force
+  & $json 200 'OK' @{ ok = $true; rev = (Store-Rev $bytes) }
+}
+
 # ---------------- Minimal HTTP server on 127.0.0.1 (no admin rights needed) ----------------
 function Send-Response($stream, $status, $obj, $origin) {
   $json = if ($null -ne $obj) { ConvertTo-Json -InputObject $obj -Depth 8 -Compress } else { '' }
   $body = [Text.Encoding]::UTF8.GetBytes($json)
-  $reason = @{ 200 = 'OK'; 204 = 'No Content'; 400 = 'Bad Request'; 401 = 'Unauthorized'; 403 = 'Forbidden'; 404 = 'Not Found'; 500 = 'Internal Server Error' }[$status]
+  $reason = @{ 200 = 'OK'; 204 = 'No Content'; 400 = 'Bad Request'; 401 = 'Unauthorized'; 403 = 'Forbidden'; 404 = 'Not Found'; 409 = 'Conflict'; 500 = 'Internal Server Error' }[$status]
   $h = "HTTP/1.1 $status $reason`r`nContent-Type: application/json; charset=utf-8`r`nContent-Length: $($body.Length)`r`nConnection: close`r`nCache-Control: no-store`r`n"
   if ($origin -and ($AllowedOrigins -contains $origin)) {
     $h += "Access-Control-Allow-Origin: $origin`r`nVary: Origin`r`nAccess-Control-Allow-Methods: GET, POST, OPTIONS`r`nAccess-Control-Allow-Headers: Content-Type, X-Bridge-Token`r`nAccess-Control-Allow-Private-Network: true`r`nAccess-Control-Max-Age: 600`r`n"
@@ -1364,6 +1409,7 @@ while ($true) {
     $req = Read-Request $stream
     if ($null -eq $req) { continue }
     if (Is-StaticRequest $req) { Send-Static $stream $req; continue }   # v1.40 : the app's own files (local mode)
+    if ($req.path -eq '/store' -and $req.method -ne 'OPTIONS') { Handle-Store $stream $req; continue }   # v1.40 : the company edition's data
     $origin = $req.headers['origin']
     $res = $null; $tries = 0
     while ($null -eq $res) {

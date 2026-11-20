@@ -120,7 +120,7 @@
   function reportCorrupt(){
     if(!corruptKeys.length) return;
     showStorageAlert('crit', 'Une partie des données de cet appareil était illisible ('+corruptKeys.length+' ensemble'+(corruptKeys.length>1?'s':'')+'). Une copie brute est gardée sur cet appareil. '
-      +(syncConfig.enabled?'La synchro va reprendre le contenu depuis GitHub.':'Restaure ta dernière sauvegarde (Réglages › Importer), ou active la synchro.'));
+      +(window.TODO_EDITION==='entreprise'?'Le contenu va être repris depuis le pont Excel de ce PC.':syncConfig.enabled?'La synchro va reprendre le contenu depuis GitHub.':'Restaure ta dernière sauvegarde (Réglages › Importer), ou active la synchro.'));
   }
   async function loadAll(){
     tasks=await loadKey(TASKS_KEY, []);
@@ -180,7 +180,7 @@
     setInterval(()=>{ if(!document.hidden) fetchContactInbox(); }, 5 * 60 * 1000);
     checkDailyDigestNotification();
     undoRebase();   // the state as loaded is the starting point of the undo history
-    if(syncConfig.enabled){ syncPull(); syncPullCrm(); syncPullNotes(); syncPullParc(); setInterval(syncPull, 5 * 60 * 1000); setInterval(syncPullCrm, 5 * 60 * 1000); setInterval(syncPullNotes, 5 * 60 * 1000); setInterval(syncPullParc, 5 * 60 * 1000); }
+    if(syncOn()){ syncPull(); syncPullCrm(); syncPullNotes(); syncPullParc(); setInterval(syncPull, 5 * 60 * 1000); setInterval(syncPullCrm, 5 * 60 * 1000); setInterval(syncPullNotes, 5 * 60 * 1000); setInterval(syncPullParc, 5 * 60 * 1000); }
   }
   async function saveTasksLocalOnly(){ try{ await window.storage.set(TASKS_KEY,JSON.stringify(tasks),false); }catch(e){ console.error(e); } }
   // ---------- Undo / redo (Ctrl+Z / Ctrl+Maj+Z): every saved action is a step, several steps back ----------
@@ -310,6 +310,32 @@
     return { ok:true, status:200, sha:data.sha, json };
   }
   function setSyncStatus(msg){ const el=$('sync-status'); if(el) el.textContent=msg; }
+  // ---------- where the sync reads and writes : GitHub (personal) or the Excel bridge on this PC (company edition) ----------
+  // Company edition : the bridge keeps the data in files of the Windows profile ; the browser only keeps a copy. Same
+  // engine as GitHub (read, merge record by record, write from the version read, again if the file moved meanwhile).
+  const BRIDGE_STORE=window.TODO_EDITION==='entreprise';
+  const syncOn=()=>BRIDGE_STORE || !!syncConfig.enabled;
+  const storeToken=()=>{ const m=document.querySelector('meta[name="todo-bridge-token"]'); return m ? m.content : ''; };
+  const storeUrl=(path, rev)=>location.origin+'/store?f='+encodeURIComponent(String(path).split('/').pop())+(rev!=null?'&rev='+encodeURIComponent(rev):'');
+  async function storeGet(path){
+    if(!BRIDGE_STORE) return ghGetJson(path);
+    const res=await fetch(storeUrl(path), { headers:{ 'X-Bridge-Token':storeToken() }, cache:'no-store' }).catch(e=>{ syncNote(null); throw e; });
+    syncNote(res);
+    if(!res.ok) return { ok:false, status:res.status };
+    return { ok:true, status:200, sha:res.headers.get('X-Store-Rev')||'', json:await res.json() };
+  }
+  // the text written as it is ; sha : the version it was made from (none : the file must not exist yet)
+  async function storePut(path, text, sha, message){
+    if(!BRIDGE_STORE){
+      const body={ message, content:b64EncodeUtf8(await window.TodoCrypt.seal(text)), branch:'main' }; if(sha) body.sha=sha;
+      const res=await ghFetch(syncApiUrl(path), { method:'PUT', headers:{ 'Accept':'application/vnd.github+json', 'Content-Type':'application/json' }, body:JSON.stringify(body) });
+      syncNote(res);
+      return res.ok ? { ok:true, status:res.status, sha:(await res.json()).content.sha } : { ok:false, status:res.status };
+    }
+    const res=await fetch(storeUrl(path, sha||''), { method:'POST', headers:{ 'Content-Type':'application/json', 'X-Bridge-Token':storeToken() }, body:text }).catch(e=>{ syncNote(null); throw e; });
+    syncNote(res);
+    return res.ok ? { ok:true, status:200, sha:(await res.json()).rev } : { ok:false, status:res.status };
+  }
 
   // ---------- sync state, visible everywhere: pill in the sidebar (top right on the phone version) ----------
   // Every GitHub read/write of the sync reports here; a failure stays shown until a call succeeds again.
@@ -320,7 +346,7 @@
     paintSyncPill();
   }
   const trackSync=fn=>async function(){
-    if(!syncConfig.enabled) return fn.apply(this, arguments);
+    if(!syncOn()) return fn.apply(this, arguments);
     syncState.busy++; paintSyncPill();
     try{ return await fn.apply(this, arguments); } finally{ syncState.busy--; paintSyncPill(); }
   };
@@ -333,6 +359,11 @@
   function syncPillInfo(){
     const hhmm=t=>new Date(t).toLocaleTimeString('fr-FR',{ hour:'2-digit', minute:'2-digit' });
     const last=syncState.okAt?'Dernière synchro réussie à '+hhmm(syncState.okAt)+'.':'Pas encore de synchro réussie depuis l\u2019ouverture.';
+    if(BRIDGE_STORE){   // company edition : the data are kept by the bridge on this PC
+      if(syncState.busy) return { k:'busy', label:'Enregistrement…', title:last.replace('synchro','sauvegarde') };
+      if(syncState.errAt>syncState.okAt) return { k:'off', label:'Pont arrêté', title:'Le pont Excel ne répond pas : tes changements restent dans cette fenêtre et lui seront confiés dès qu\u2019il revient. Relance « ToDo ».' };
+      return { k:'ok', label:'Enregistré sur ce PC', title:'Tes données sont gardées par le pont sur ce PC (et sauvegardées chaque heure dans OneDrive). '+last.replace('synchro','sauvegarde') };
+    }
     if(!syncConfig.enabled) return { k:'off', label:'Synchro désactivée', title:'Ces données restent sur cet appareil. Clique pour activer la synchro.' };
     const days=tokenDaysLeft();
     if(days!=null && days<0) return { k:'err', label:'Jeton expiré', title:'Le jeton GitHub a expiré le '+syncConfig.tokenExpires.split('-').reverse().join('/')+' : plus rien ne se synchronise. Clique pour le renouveler.', fix:true };
@@ -420,9 +451,9 @@
   function syncEverythingNow(){ syncPull(); syncPullCrm(); syncPullNotes(); syncPullParc(); }
   function onSyncPillClick(){
     const info=syncPillInfo();
-    if(info.k==='off' && !syncConfig.enabled) return openSyncSettings();
+    if(info.k==='off' && !syncOn()) return openSyncSettings();
     if(info.fix) return openSyncSettings();
-    if(syncConfig.enabled) syncEverythingNow();
+    if(syncOn()) syncEverythingNow();
   }
 
   // Merge by id: for tasks present on both sides, keep whichever has the
@@ -495,11 +526,11 @@
     const st={ sha:null, timer:null }, hhmm=()=>new Date().toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'});
     const mergeIn=remote=>{ undoCommit(); d.write(d.merge(d.read(), remote, d.getBase())); undoRebase(); if(d.after) d.after(); };
     async function pull(){
-      if(!syncConfig.enabled) return;
-      if(d.checkPrivate && !(await checkRepoStillPrivate())) return;
+      if(!syncOn()) return;
+      if(d.checkPrivate && !BRIDGE_STORE && !(await checkRepoStillPrivate())) return;
       if(d.before) d.before();
       try{
-        const data=await ghGetJson(d.path);
+        const data=await storeGet(d.path);
         if(data.status===404){ schedule(); return; }
         if(!data.ok){ if(d.status) setSyncStatus('Erreur de synchro (lecture)'); return; }
         const remote=data.json;
@@ -513,24 +544,22 @@
       }catch(e){ console.error(d.key+' sync pull failed', e); if(d.status) setSyncStatus('Erreur de synchro'); }
     }
     function schedule(){
-      if(!syncConfig.enabled) return;
+      if(!syncOn()) return;
       clearTimeout(st.timer); st.timer=setTimeout(()=>{ st.timer=null; d.push(); }, 3000);
     }
     async function push(){
-      if(!syncConfig.enabled) return;
+      if(!syncOn()) return;
       if(d.before) d.before();
       try{
         let sha=st.sha;
-        const got=await ghGetJson(d.path);
+        const got=await storeGet(d.path);
         if(got.ok){ sha=got.sha; mergeIn(got.json); await d.saveLocal(); d.render(); }
         await saveConflicts(); updateConflictBadge();
         const sent=JSON.stringify(d.read());   // the reference copy becomes what is sent (audit A9)
-        const body={ message:d.message, content:b64EncodeUtf8(await window.TodoCrypt.seal(sent)), branch:'main' };
-        if(sha) body.sha=sha;
-        const putRes=await ghFetch(syncApiUrl(d.path), { method:'PUT', headers:{ 'Content-Type':'application/json' }, body:JSON.stringify(body) });
-        syncNote(putRes);
+        if(!got.ok && got.status!==404){ if(d.status) setSyncStatus('Erreur de synchro (lecture)'); return; }   // never written blind
+        const putRes=await storePut(d.path, sent, got.ok ? sha : null, d.message);
         if(putRes.ok){
-          st.sha=(await putRes.json()).content.sha;
+          st.sha=putRes.sha;
           // only now does the reference advance: after a failed write a stale reference would silently undo real local edits
           d.setBase(JSON.parse(sent)); await d.saveBase(); syncRetryDone(d.key);
           if(JSON.stringify(d.read())!==sent) schedule();   // changed while it was being sent: goes in the next write
@@ -628,9 +657,9 @@
   function parcHash(d){ const s=JSON.stringify(d&&d.items||[]); let x=2166136261; for(let i=0;i<s.length;i++){ x^=s.charCodeAt(i); x=Math.imul(x,16777619); } return (x>>>0).toString(36)+'.'+s.length; }
   function parcChanged(){ if(!$('tab-parc').classList.contains('hidden')) renderParc(); renderToday(); if(!$('tab-pipeline').classList.contains('hidden')) renderPipeline(); }
   async function syncPullParc(){
-    if(!syncConfig.enabled) return;
+    if(!syncOn()) return;
     try{
-      const r=await ghGetJson(SYNC_PARC_PATH);
+      const r=await storeGet(SYNC_PARC_PATH);
       if(r.status===404){ if(parcData) setTimeout(()=>syncPushParc(null), 0); return; }   // after this read (one at a time)
       if(!r.ok || !r.json || !Array.isArray(r.json.items)) return;
       const remote=r.json, mine=parcData?(parcData.importedAt||0):0;
@@ -640,17 +669,15 @@
     }catch(e){ console.error('parc sync pull failed', e); }
   }
   async function syncPushParc(sha){
-    if(!syncConfig.enabled || !parcData) return;
-    if(!(await syncRepoIsPrivate())){ parcSyncNote='Portefeuille gardé sur cet appareil : GitHub ne confirme pas que le repo de données est privé.'; setSyncStatus(parcSyncNote); return; }
+    if(!syncOn() || !parcData) return;
+    if(!BRIDGE_STORE && !(await syncRepoIsPrivate())){ parcSyncNote='Portefeuille gardé sur cet appareil : GitHub ne confirme pas que le repo de données est privé.'; setSyncStatus(parcSyncNote); return; }
     try{
       if(sha===undefined){
-        const g=await ghGetJson(SYNC_PARC_PATH);
+        const g=await storeGet(SYNC_PARC_PATH);
         if(g.ok && g.json){ if((g.json.importedAt||0)>=(parcData.importedAt||0) || parcHash(g.json)===parcHash(parcData)) return; sha=g.sha; }
+        else if(!g.ok && g.status!==404) return;
       }
-      const body={ message:'Sync Portefeuille', content:b64EncodeUtf8(await window.TodoCrypt.seal(JSON.stringify(parcData))), branch:'main' };
-      if(sha) body.sha=sha;
-      const res=await ghFetch(syncApiUrl(SYNC_PARC_PATH), { method:'PUT', headers:{ 'Accept':'application/vnd.github+json', 'Content-Type':'application/json' }, body:JSON.stringify(body) });
-      syncNote(res);
+      await storePut(SYNC_PARC_PATH, JSON.stringify(parcData), sha, 'Sync Portefeuille');
     }catch(e){ console.error('parc sync push failed', e); syncNote(null); }
   }
   // a new import: same lines as before → keep the previous date (nothing new to send)
@@ -1429,7 +1456,7 @@
   // no GitHub sync and no backup file for two weeks: a reminder at the top of the Synthèse (« Plus tard » = three days of peace)
   const BACKUP_DAYS=14;
   function backupDueDays(){
-    if(syncConfig.enabled || window.TODO_LITE || window.TODO_WIDGET) return 0;
+    if(syncOn() || window.TODO_LITE || window.TODO_WIDGET) return 0;
     const get=k=>{ try{ return +localStorage.getItem(k)||0; }catch(e){ return 0; } };
     let first=get('first-seen-at'); if(!first){ first=Date.now(); lsSet('first-seen-at', String(first)); }
     if(Date.now()<get('backup-snooze-until') || !(tasks.length+contacts.length+opportunities.length)) return 0;
@@ -1523,14 +1550,14 @@
   function welcomeBlock(){
     const w=document.createElement('div'); w.className='welcome'; w.id='welcome';
     w.innerHTML='<h2>Bienvenue dans ToDo Agrégation</h2><p>Ici : tes tâches du jour, tes affaires par étape (de la prise de contact à la mise en service) et ton portefeuille signé, au même endroit. Tout reste dans ce navigateur tant que tu n\u2019actives pas la synchro.</p>'
-      +(syncConfig.enabled?'':'<p class="welcome-other">Tu utilises déjà l\u2019outil sur un autre appareil ? Tes données y sont restées : active la synchro (Réglages › Synchro GitHub) pour les retrouver ici.</p>')
+      +(syncOn()?'':'<p class="welcome-other">Tu utilises déjà l\u2019outil sur un autre appareil ? Tes données y sont restées : active la synchro (Réglages › Synchro GitHub) pour les retrouver ici.</p>')
       +'<ol class="welcome-steps"></ol>';
     const ol=w.querySelector('ol');
     const step=(label, hint, fn)=>{ const li=document.createElement('li'); const b=document.createElement('button'); b.type='button'; b.textContent=label; b.onclick=fn; const s=document.createElement('span'); s.textContent=hint; li.append(b, s); ol.appendChild(li); };
     step('Ajouter ma première tâche', 'un appel, une relance, un document à envoyer', ()=>{ gsTab('tasks'); setTimeout(()=>$('quick-add-input').focus(), 50); });
     if(!window.TODO_LITE) step('Créer ma première affaire', 'une installation à suivre, étape par étape', ()=>openOppForm());
     if(!window.TODO_LITE) step('Charger le Suivi Agrégation', 'le fichier Excel des contrats signés (lu, jamais modifié)', ()=>gsTab('parc'));
-    if(!syncConfig.enabled && !window.TODO_LITE) step('Activer la synchro', 'pour retrouver tes données sur ton téléphone ou un autre ordinateur', ()=>openSyncSettings());
+    if(!syncOn() && !window.TODO_LITE) step('Activer la synchro', 'pour retrouver tes données sur ton téléphone ou un autre ordinateur', ()=>openSyncSettings());
     const h=document.createElement('button'); h.type='button'; h.className='welcome-help'; h.textContent='Lire le mode d\u2019emploi'; h.onclick=()=>$('help-btn').click(); w.appendChild(h);
     return w;
   }
@@ -7755,7 +7782,7 @@
   syncPullNotes=oneAtATime('notes', trackSync(syncPullNotes)); syncPushNotesNow=oneAtATime('notes', trackSync(syncPushNotesNow));
   syncPullParc=oneAtATime('parc', trackSync(syncPullParc)); syncPushParc=oneAtATime('parc', trackSync(syncPushParc));
   ['sync-pill','sync-pill-lite','sync-pill-w'].forEach(id=>{ const el=$(id); if(el) el.onclick=onSyncPillClick; });
-  window.addEventListener('online', ()=>{ if(syncConfig.enabled) syncEverythingNow(); else paintSyncPill(); });
+  window.addEventListener('online', ()=>{ if(syncOn()) syncEverythingNow(); else paintSyncPill(); });
   window.addEventListener('offline', paintSyncPill);
   $('storage-alert-close').onclick=()=>{ const el=$('storage-alert'); if(el.dataset.kind==='ios'){ lsSet('ios-hint-at', String(Date.now())); } el.hidden=true; };
   // iPhone / iPad in Safari, app not on the home screen: Safari may wipe a site's data after 7 days without a visit (audit A17)
@@ -7805,6 +7832,7 @@
   // ---------- What other files (js/network.js, the note), the tests and the console call in this one, in one place (code audit C12) ----------
   Object.assign(window, {
     todoSettingsChanged: prefsToNote,
+    todoSyncNow: syncEverythingNow,   // tests : read and write the sync (GitHub, or the bridge in the company edition) now
     todoOpenDayNote: openDayNotes,
     todoOpenWeek: openWeek,
     todoWeekText: w=>weekText(weekData(w||'this')),

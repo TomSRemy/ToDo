@@ -36,12 +36,14 @@ Tout le code est dans le dossier (bibliothèques dans `vendor/`) : aucun CDN, au
 |---|---|---|
 | Adresse | le web (Cloudflare / GitHub Pages), ou en local | en local seulement, servi par le pont |
 | Ce que la page peut joindre | GitHub, PowerKlock, CDN… (`_headers`) | **ce PC seulement** (+ PowerKlock si `"marche": true`) |
-| Synchro | GitHub chiffré, téléphone | aucune : sauvegarde toutes les heures dans OneDrive (30 jours) |
+| Données | le navigateur, synchro GitHub chiffrée, téléphone | **gardées par le pont** sur le PC (`%APPDATA%\Todo Pont Excel\donnees`, un fichier par partie, versionné) ; le navigateur n'a qu'une copie ; sauvegarde toutes les heures dans OneDrive (30 jours) |
 | Supabase, IA, cartes de visite | oui | non |
 
 L'édition vient du fichier `profil.json` à côté de `index.html`, mis par le paquet entreprise (`profils/entreprise.json`) : `edition`, `marche`, `sauvegardeMinutes`, `domainesInternes` (les domaines mail de l'entreprise, jamais pris pour un producteur). Sans ce fichier, c'est ToDo perso, comme avant. En édition entreprise, le pont n'accepte que la page locale (jamais les adresses web) et garde ses copies d'Excel dans `%APPDATA%`, pas dans le dossier partagé.
 
-**Publier une version entreprise** : sur GitHub, Releases › Draft a new release, tag `entreprise-vAAAA.MM.JJ` sur la branche voulue, Publish (ou pousser ce tag depuis git) ; `.github/workflows/entreprise.yml` relance les tests du mode local et fabrique `ToDo-Entreprise.zip` (appli, pont avec sa bibliothèque Excel, profil, `LISEZMOI.txt` ; ni tests ni GitHub) dans les Releases. Remplacer le contenu du dossier SharePoint « ToDo équipe/appli » par celui du zip : OneDrive le recopie sur chaque PC. Test : `python tests/entreprise_test.py`.
+**Publier une version entreprise** : sur GitHub, Releases › Draft a new release, tag `entreprise-vAAAA.MM.JJ` sur la branche voulue, Publish (ou pousser ce tag depuis git) ; `.github/workflows/entreprise.yml` relance les tests du mode local et fabrique `ToDo-Entreprise.zip` (appli, pont avec sa bibliothèque Excel, profil, `LISEZMOI.txt` ; ni tests ni GitHub) dans les Releases. Remplacer le contenu du dossier SharePoint « ToDo équipe/appli » par celui du zip : OneDrive le recopie sur chaque PC. Tests : `python tests/entreprise_test.py`, `python tests/bridge_store_test.py` (navigateur vidé, deux fenêtres à la fois, pont coupé puis relancé, écriture interrompue).
+
+**Les données gardées par le pont** : le moteur de synchro de l'appli (`makeSyncFile` : lecture, fusion fiche par fiche, écriture depuis la version lue, nouvel essai si le fichier a bougé) écrit chez le pont (`/store`) au lieu de GitHub. Chaque réponse porte la version du fichier (empreinte de son contenu) ; une écriture qui ne part pas de la version actuelle est refusée (409) et l'appli refusionne. Écriture à côté puis remplacement d'un coup ; la version précédente reste en `.prev`.
 
 ## Contenu
 

@@ -3,7 +3,8 @@ ToDo Entreprise
 
 ToDo tourne entierement sur ce PC. Rien a installer, aucun droit administrateur.
 La page ne peut joindre que ce PC : aucune donnee ne part sur Internet.
-Les donnees restent dans Edge (sur ce PC) et dans OneDrive / SharePoint (sauvegardes, Excel de l'equipe).
+Les donnees sont gardees par le pont, sur ce PC (%APPDATA%\Todo Pont Excel\donnees), quelques secondes apres
+chaque modification. Le navigateur n'en a qu'une copie : le vider, ou passer d'Edge a Chrome, ne perd rien.
 
 Installer (une fois par personne)
 ---------------------------------
@@ -17,6 +18,8 @@ Installer (une fois par personne)
 Recuperer des donnees d'une autre version de ToDo
 -------------------------------------------------
 Sur l'ancienne version : Reglages > Exporter. Dans ToDo Entreprise : Reglages > Importer.
+Le pont doit tourner (fenetre "Pont Excel - Todo") : sans lui ToDo marche, mais garde les changements
+dans la fenetre jusqu'a son retour (pastille "Pont arrete").
 
 Sauvegardes
 -----------
