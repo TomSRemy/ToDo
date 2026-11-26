@@ -2016,6 +2016,12 @@ with sync_playwright() as p:
     own = "https://tomsremy.github.io/PowerKlock/index.html#board=zAbC_d-1"
     dialog_once(page, text=own); page.select_option(".mk-board", "own")
     check(eventually(lambda: page.get_attribute(".mk-frame", "src") == own.replace("#board=", "#solo=") and page.input_value(".mk-board") == "own", 3000), "market: my own dashboard, from a link copied on the site")
+    # a link copied on the site today: powerklock.com, here a dashboard kept on its server (« r »); shown from GitHub Pages
+    for link in ("https://powerklock.com/#solo=r12ab", "https://www.powerklock.com/index.html#solo=zXy_9"):
+        page.select_option(".mk-board", "mu"); page.wait_for_timeout(150)
+        dialog_once(page, text=link); page.select_option(".mk-board", "own")
+        check(eventually(lambda: page.get_attribute(".mk-frame", "src") == "https://tomsremy.github.io/PowerKlock/index.html#solo=" + link.split("#solo=")[1] and page.input_value(".mk-board") == "own", 3000),
+              f"market: a dashboard link from powerklock.com is accepted ({link[:40]})")
     check(page.is_visible("#postit") and page.evaluate("parseFloat(getComputedStyle(document.getElementById('market-root')).paddingRight)") < 40, "market: the note floats over the dashboard, nothing moves for it")
     page.click(".mk-copy"); page.wait_for_timeout(300); txt = page.evaluate("navigator.clipboard.readText()")
     check("Spot France (day-ahead) : 61,5 €/MWh" in txt and "1,5 h à prix négatif" in txt and "août 2026 : 110,0 / 104,0 / 77,7 (CRE)" in txt and "estimation PowerKlock" in txt

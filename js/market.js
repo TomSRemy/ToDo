@@ -127,7 +127,10 @@ window.TodoMarket=(function(){
     return MK_SITE+'#solo=j'+mkB64u(raw);
   }
   const mkPick=()=>{ try{ return localStorage.getItem('market-board')||'mu'; }catch(e){ return 'mu'; } };
-  const mkOwn=v=>{ const m=/^https:\/\/tomsremy\.github\.io\/PowerKlock\/(?:index\.html)?#(?:solo|board)=([zj][A-Za-z0-9_-]+)$/.exec(String(v||'').trim()); return m?MK_SITE+'#solo='+m[1]:null; };
+  // a dashboard link copied on PowerKlock: its address today (powerklock.com, with or without www) or the old one (GitHub
+  // Pages), and its three forms: « z » or « j » (the dashboard inside the link) and « r » (a dashboard kept on the site's
+  // server). It is shown from GitHub Pages, the only PowerKlock address this page may frame (_headers › frame-src).
+  const mkOwn=v=>{ const m=/^https:\/\/(?:(?:www\.)?powerklock\.com|tomsremy\.github\.io\/PowerKlock)\/(?:index\.html)?#(?:solo|board)=([zjr][A-Za-z0-9_-]+)$/.exec(String(v||'').trim()); return m?MK_SITE+'#solo='+m[1]:null; };
   async function renderMarket(force){
     const root=$('market-root'); if(!root) return; const e=escapeHtml, pick=mkPick(), own=mkOwn(pick), bd=MK_BOARDS.find(b=>b.id===pick)||(own?null:MK_BOARDS[0]);
     loadMarket(force).catch(()=>{});   // the figures behind « Copier pour un mail » and the call screen
@@ -143,7 +146,7 @@ window.TodoMarket=(function(){
   function mkWire(root){
     const sel=root.querySelector('.mk-board');
     sel.onchange=async ()=>{ let v=sel.value;
-      if(v==='own'){ const u=await askText('Colle le lien de ton tableau de bord PowerKlock (General › API › « A whole dashboard ») :', mkOwn(mkPick())||''); if(u==null){ renderMarket(); return; } if(!mkOwn(u)){ tell('Ce n’est pas un lien de tableau PowerKlock (il contient « #solo= »).'); renderMarket(); return; } v=u.trim(); }
+      if(v==='own'){ const u=await askText('Colle le lien de ton tableau de bord PowerKlock (General › API › « A whole dashboard ») :', mkOwn(mkPick())||''); if(u==null){ renderMarket(); return; } if(!mkOwn(u)){ tell('Ce n’est pas un lien de tableau PowerKlock : il doit ressembler à https://powerklock.com/#solo=…'); renderMarket(); return; } v=u.trim(); }
       try{ localStorage.setItem('market-board', v); }catch(e2){} prefsToNote(); renderMarket(); };
     root.querySelector('.mk-copy').onclick=async ev=>{ const b=ev.currentTarget; try{ await loadMarket(); }catch(e2){}
       if(!marketData){ b.textContent='Pas de données (hors ligne ?)'; return; }
